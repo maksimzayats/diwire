@@ -4,92 +4,147 @@ line-length = 100
 select = ["ALL"]
 unfixable = ["T201"]
 ignore = [
-    "D100",
-    "D104",
-    "D103",
-    "D105",
-    "D107",
-    "ANN401",
-    "E501",
-    "TC002",
-    "TC001",
-    "TC003",
+    # Documentation (pydocstyle)
+    "D100", # Missing docstring in public module
+    "D103", # Missing docstring in public function
+    "D104", # Missing docstring in public package
+    "D105", # Missing docstring in magic method
+    "D107", # Missing docstring in __init__
+
+    # Type annotations (flake8-annotations)
+    "ANN401", # Dynamically typed expressions (Any) disallowed
+
+    # Line length (pycodestyle)
+    "E501", # Line too long (handled by formatter)
+
+    # Type checking imports (flake8-type-checking)
+    "TC001", # Move first-party import into TYPE_CHECKING block
+    "TC002", # Move third-party import into TYPE_CHECKING block
+    "TC003", # Move stdlib import into TYPE_CHECKING block
 ]
 
 [lint.per-file-ignores]
 "__init__.py" = [
-    "F401",  # Module imported but unused
+    "F401", # Module imported but unused
 ]
 "tests/**" = [
-    "S101",  # Use of assert detected
-    "PT003",
-    "ARG001",
-    "ARG002",
-    "PLR2004",
-    "PLR0913",
-    "SLF001",
-    "D",
-    "F841",  # Unused variables (common in context manager tests)
-    "SIM117",  # Nested with statements (intentional for testing scope nesting)
-    "PLC0415",  # Imports not at top-level (common test pattern)
-    "B007",  # Unused loop variable (common in iteration tests)
-    "TRY301",  # Abstract raise to inner function
-    "TRY003",  # Long exception messages
-    "EM101",  # String literal in exception
-    "BLE001",
-    "N801",   # Class naming (underscore convention for test clarity)
-    "PT012",  # pytest.raises with multiple statements (cleanup testing)
-    "ANN202",
-    "ANN001",
-    "ANN002",
-    "ANN003",
-    "PLR0206",
+    # Pytest assertions and style
+    "S101", # Use of assert detected
+    "PT003", # pytest.fixture with scope="function" is default
+    "PT012", # pytest.raises with multiple statements
+
+    # Unused arguments/variables
+    "ARG001", # Unused function argument
+    "ARG002", # Unused method argument
+    "F841", # Unused variable
+    "B007", # Unused loop control variable
+
+    # Code complexity
+    "PLR2004", # Magic value in comparison
+    "PLR0913", # Too many arguments
+    "PLR0206", # Property with parameters
+    "SIM117", # Nested with statements
+
+    # Private member access
+    "SLF001", # Private member access
+
+    # Exception handling
+    "TRY301", # raise within try block
+    "TRY003", # Long exception message
+    "EM101", # String literal in exception
+    "BLE001", # Blind except (catching Exception)
+
+    # Import style
+    "PLC0415", # Import outside top-level
+
+    # Naming conventions
+    "N801", # Invalid class name (non-CamelCase)
+
+    # Type annotations
+    "ANN001", # Missing type for function argument
+    "ANN002", # Missing type for *args
+    "ANN003", # Missing type for **kwargs
+    "ANN202", # Missing return type for private function
+
+    # Documentation
+    "D", # All docstring rules
 ]
 "examples/**" = [
-    "D",  # Examples are educational code, not API docs
-    "T201",  # Print statements (intentional for demo output)
-    "ERA001",  # Commented-out code (example code for users)
-    "INP001",
-    "S106",
-    "S311",
-    "S608",
-    "N999",    # Invalid module names (numbered files intentional)
-    "ANN",     # Missing type annotations (educational code)
-    "ARG001",  # Unused function argument
-    "ARG002",  # Unused method argument
-    "TRY003",  # Long exception messages
-    "EM101",   # String literal in exception
-    "RUF012",  # Mutable class attributes (ClassVar not needed)
-    "PLR2004", # Magic values
-    "PLC0415", # Imports not at top-level
-    "SLF001",  # Private member access
+    # Documentation (educational code)
+    "D", # All docstring rules
+
+    # Print and debugging
+    "T201", # Print statement found
+    "ERA001", # Commented-out code
+
+    # Package structure
+    "INP001", # Missing __init__.py (implicit namespace package)
+
+    # Security (demo code, not production)
+    "S106", # Hardcoded password in function argument
+    "S311", # Suspicious non-cryptographic random usage
+    "S608", # Hardcoded SQL expression
+
+    # Naming conventions
+    "N999", # Invalid module name
+
+    # Type annotations
+    "ANN", # All annotation rules
+
+    # Unused arguments
+    "ARG001", # Unused function argument
+    "ARG002", # Unused method argument
+
+    # Exception handling
+    "TRY003", # Long exception message
+    "EM101", # String literal in exception
+
+    # Code style
+    "RUF012", # Mutable class default
+    "PLR2004", # Magic value in comparison
+    "PLC0415", # Import outside top-level
+    "SLF001", # Private member access
 ]
 "src/diwire/container.py" = [
-    "PLR0913",  # Too many arguments (DI wrappers need context)
-    "C901",  # Too complex (resolve method handles many cases by design)
-    "PLR0911",  # Too many return statements
-    "PLR0912",  # Too many branches
-    "TRY300",  # Statement in try block (intentional early return pattern)
-    "FBT001",  # Boolean positional argument (is_async param)
+    # Complexity (DI container by design)
+    "C901", # Too complex (McCabe)
+    "PLR0911", # Too many return statements
+    "PLR0912", # Too many branches
+    "PLR0913", # Too many arguments
+
+    # Code patterns
+    "TRY300", # Return in try block
+    "FBT001", # Boolean positional argument
 ]
 "benchmarks/**" = [
-    "S101",     # Use of assert detected (normal in benchmarks)
-    "ARG001",   # Unused function argument
-    "ARG002",   # Unused method argument
-    "PLR2004",  # Magic value used in comparison
-    "PLR0913",  # Too many arguments
-    "SLF001",   # Private member access
-    "D",        # All docstring rules
-    "PLC0415",  # Imports not at top-level (fixture pattern)
-    "ANN201",   # Missing return type (fixtures)
-    "RUF022",   # __all__ not sorted (organized by library)
-    "EM101",    # String literal in exception
-    "N801",     # Class naming (intentional underscores for chain levels)
+    # Assertions and testing
+    "S101", # Use of assert detected
+
+    # Unused arguments
+    "ARG001", # Unused function argument
+    "ARG002", # Unused method argument
+
+    # Code style
+    "PLR2004", # Magic value in comparison
+    "PLR0913", # Too many arguments
+    "SLF001", # Private member access
+    "PLC0415", # Import outside top-level
+
+    # Documentation
+    "D", # All docstring rules
+
+    # Type annotations
+    "ANN201", # Missing return type for public function
+
+    # Naming and organization
+    "RUF022", # Unsorted __all__
+    "N801", # Invalid class name
+    "EM101", # String literal in exception
 ]
 "src/diwire/compiled_providers.py" = [
-    "D102",   # Missing docstring in __call__ (protocol implementations)
-    "ARG002", # Unused method argument (protocol signature requirement)
-    "PLC0415",  # Deferred asyncio import for performance
+    # Protocol implementations
+    "D102", # Missing docstring in public method
+    "ARG002", # Unused method argument (protocol signature)
 ]
 
 [lint.isort]
