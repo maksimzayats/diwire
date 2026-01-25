@@ -10,6 +10,29 @@ from diwire.exceptions import DIWireIgnoredServiceError, DIWireMissingDependenci
 from diwire.types import FromDI, Lifetime
 
 
+# Module-level classes for circular dependency tests
+# These need to be at module level for forward reference resolution
+class _CircularServiceA:
+    def __init__(self, b: "_CircularServiceB") -> None:
+        self.b = b
+
+
+class _CircularServiceB:
+    def __init__(self, a: _CircularServiceA) -> None:
+        self.a = a
+
+
+# Module-level classes for async circular dependency test
+class _AsyncCircularA:
+    def __init__(self, b: "_AsyncCircularB") -> None:
+        self.b = b
+
+
+class _AsyncCircularB:
+    def __init__(self, a: _AsyncCircularA) -> None:
+        self.a = a
+
+
 @pytest.fixture(scope="function")
 def auto_container() -> Container:
     return Container(
@@ -310,6 +333,7 @@ class TestIgnoredTypesWithDefaults:
 class TestAsyncResolveFunction:
     """Tests for aresolve() on sync functions."""
 
+    @pytest.mark.asyncio
     async def test_aresolve_on_sync_function_returns_injected(
         self,
         auto_container: Container,
@@ -329,3 +353,1073 @@ class TestAsyncResolveFunction:
         # Verify it's callable and works
         result = injected()
         assert isinstance(result, ServiceA)
+
+
+class TestAsyncCallableClassFactory:
+    """Tests for _is_async_factory with callable classes."""
+
+    def test_is_async_factory_with_async_callable_class(self) -> None:
+        """Test _is_async_factory() detects callable class with async __call__."""
+        from diwire.container import _is_async_factory
+
+        class AsyncCallableFactory:
+            async def __call__(self) -> str:
+                return "async result"
+
+        class SyncCallableFactory:
+            def __call__(self) -> str:
+                return "sync result"
+
+        # Class with async __call__ should be detected as async factory (line 122)
+        assert _is_async_factory(AsyncCallableFactory) is True
+
+        # Class with sync __call__ should not be detected as async factory
+        assert _is_async_factory(SyncCallableFactory) is False
+
+        # Regular class without __call__ should not be async
+        class RegularClass:
+            pass
+
+        assert _is_async_factory(RegularClass) is False
+
+
+class TestDescriptorProtocol:
+    """Tests for descriptor protocol __get__ methods returning self when obj is None."""
+
+    def test_injected_get_returns_self_when_obj_none(
+        self,
+        auto_container: Container,
+    ) -> None:
+        """Injected descriptor returns self when accessed on class (line 228)."""
+        from diwire.dependencies import DependenciesExtractor
+        from diwire.service_key import ServiceKey
+
+        class ServiceA:
+            pass
+
+        def my_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+            return service
+
+        service_key = ServiceKey.from_value(my_func)
+        deps_extractor = DependenciesExtractor()
+
+        injected = Injected(
+            func=my_func,
+            container=auto_container,
+            dependencies_extractor=deps_extractor,
+            service_key=service_key,
+        )
+
+        # When obj is None, __get__ should return self
+        result = injected.__get__(None, type(injected))
+        assert result is injected
+
+    def test_scoped_injected_get_returns_self_when_obj_none(
+        self,
+        auto_container: Container,
+    ) -> None:
+        """ScopedInjected descriptor returns self when accessed on class (line 364)."""
+        from diwire.container import ScopedInjected
+        from diwire.dependencies import DependenciesExtractor
+        from diwire.service_key import ServiceKey
+
+        class ServiceA:
+            pass
+
+        def my_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+            return service
+
+        service_key = ServiceKey.from_value(my_func)
+        deps_extractor = DependenciesExtractor()
+
+        scoped_injected = ScopedInjected(
+            func=my_func,
+            container=auto_container,
+            dependencies_extractor=deps_extractor,
+            service_key=service_key,
+            scope_name="request",
+        )
+
+        # When obj is None, __get__ should return self
+        result = scoped_injected.__get__(None, type(scoped_injected))
+        assert result is scoped_injected
+
+    def test_async_injected_get_returns_self_when_obj_none(
+        self,
+        auto_container: Container,
+    ) -> None:
+        """AsyncInjected descriptor returns self when accessed on class (line 433)."""
+        from diwire.container import AsyncInjected
+        from diwire.dependencies import DependenciesExtractor
+        from diwire.service_key import ServiceKey
+
+        class ServiceA:
+            pass
+
+        async def my_async_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+            return service
+
+        service_key = ServiceKey.from_value(my_async_func)
+        deps_extractor = DependenciesExtractor()
+
+        async_injected = AsyncInjected(
+            func=my_async_func,
+            container=auto_container,
+            dependencies_extractor=deps_extractor,
+            service_key=service_key,
+        )
+
+        # When obj is None, __get__ should return self
+        result = async_injected.__get__(None, type(async_injected))
+        assert result is async_injected
+
+    def test_async_scoped_injected_get_returns_self_when_obj_none(
+        self,
+        auto_container: Container,
+    ) -> None:
+        """AsyncScopedInjected descriptor returns self when accessed on class (line 503)."""
+        from diwire.container import AsyncScopedInjected
+        from diwire.dependencies import DependenciesExtractor
+        from diwire.service_key import ServiceKey
+
+        class ServiceA:
+            pass
+
+        async def my_async_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+            return service
+
+        service_key = ServiceKey.from_value(my_async_func)
+        deps_extractor = DependenciesExtractor()
+
+        async_scoped_injected = AsyncScopedInjected(
+            func=my_async_func,
+            container=auto_container,
+            dependencies_extractor=deps_extractor,
+            service_key=service_key,
+            scope_name="request",
+        )
+
+        # When obj is None, __get__ should return self
+        result = async_scoped_injected.__get__(None, type(async_scoped_injected))
+        assert result is async_scoped_injected
+
+
+class TestCompilationEdgeCases:
+    """Tests for compilation edge cases."""
+
+    def test_async_deps_cache_diwire_error_continues(self) -> None:
+        """DIWireError during async deps cache building is caught and continues (lines 765-766)."""
+        from diwire.container import Container
+        from diwire.types import Lifetime
+
+        container = Container(register_if_missing=False, auto_compile=False)
+
+        class ServiceA:
+            pass
+
+        class ServiceB:
+            def __init__(self, a: ServiceA) -> None:
+                self.a = a
+
+        # Register ServiceB but not ServiceA - this will cause DIWireError during deps extraction
+        container.register(ServiceB, lifetime=Lifetime.TRANSIENT)
+
+        # compile() should handle the error gracefully
+        container.compile()
+
+        # Container should be compiled
+        assert container._is_compiled is True
+
+    def test_factory_provider_chain_compilation(self) -> None:
+        """Factory registration compiles with provider chain (line 779)."""
+        from diwire.container import Container
+        from diwire.types import Lifetime
+
+        class ServiceA:
+            pass
+
+        class ServiceAFactory:
+            def __call__(self) -> ServiceA:
+                return ServiceA()
+
+        container = Container(auto_compile=False)
+        container.register(ServiceA, factory=ServiceAFactory, lifetime=Lifetime.TRANSIENT)
+        container.compile()
+
+        # Should have compiled the factory provider chain
+        from diwire.service_key import ServiceKey
+
+        service_key = ServiceKey.from_value(ServiceA)
+        assert service_key in container._compiled_providers
+
+    def test_non_type_service_key_returns_none_during_compilation(self) -> None:
+        """Non-type service keys return None during compilation (line 797)."""
+        from diwire.container import Container
+        from diwire.registry import Registration
+        from diwire.service_key import ServiceKey
+        from diwire.types import Lifetime
+
+        container = Container(auto_compile=False)
+
+        # Register a string key (non-type) - should skip during compilation
+        string_key = ServiceKey(value="string_key", component=None)
+        registration = Registration(
+            service_key=string_key,
+            lifetime=Lifetime.TRANSIENT,
+        )
+        container._registry[string_key] = registration
+
+        container.compile()
+
+        # String key should not have a compiled provider
+        assert string_key not in container._compiled_providers
+
+    def test_missing_required_ignored_dependency_during_compilation(self) -> None:
+        """Missing required ignored dep returns None during compilation (line 808)."""
+        from diwire.container import Container
+        from diwire.types import Lifetime
+
+        container = Container(register_if_missing=False, auto_compile=False)
+
+        class ServiceWithStr:
+            def __init__(self, name: str) -> None:  # str is ignored, no default
+                self.name = name
+
+        container.register(ServiceWithStr, lifetime=Lifetime.TRANSIENT)
+        container.compile()
+
+        # ServiceWithStr should not have a compiled provider because str has no default
+        from diwire.service_key import ServiceKey
+
+        service_key = ServiceKey.from_value(ServiceWithStr)
+        assert service_key not in container._compiled_providers
+
+    def test_auto_registration_provider_compilation_fallback(self) -> None:
+        """Auto-registration compiles providers during _compile_or_get_provider (lines 849-862)."""
+        from diwire.container import Container
+        from diwire.types import Lifetime
+
+        container = Container(register_if_missing=True, auto_compile=False)
+
+        class ServiceA:
+            pass
+
+        class ServiceB:
+            def __init__(self, a: ServiceA) -> None:
+                self.a = a
+
+        # Only register ServiceB, let ServiceA be auto-registered during compilation
+        container.register(ServiceB, lifetime=Lifetime.TRANSIENT)
+        container.compile()
+
+        # Both should be compiled
+        from diwire.service_key import ServiceKey
+
+        assert ServiceKey.from_value(ServiceA) in container._compiled_providers
+        assert ServiceKey.from_value(ServiceB) in container._compiled_providers
+
+    def test_non_type_scoped_compilation_returns_none(self) -> None:
+        """Non-type for scoped compilation returns None (line 884)."""
+        from diwire.container import Container
+        from diwire.registry import Registration
+        from diwire.service_key import ServiceKey
+        from diwire.types import Lifetime
+
+        container = Container(auto_compile=False)
+
+        # Register a string key with scope - should skip during scoped compilation
+        string_key = ServiceKey(value="string_scoped_key", component=None)
+        registration = Registration(
+            service_key=string_key,
+            lifetime=Lifetime.SCOPED_SINGLETON,
+            scope="request",
+        )
+        container._scoped_registry[(string_key, "request")] = registration
+
+        container.compile()
+
+        # String key should not have a compiled scoped provider
+        assert (string_key, "request") not in container._scoped_compiled_providers
+
+    def test_scoped_singleton_args_provider_creation_with_dependencies(self) -> None:
+        """Scoped singleton with deps creates ScopedSingletonArgsProvider (lines 894, 907)."""
+        from diwire.compiled_providers import ScopedSingletonArgsProvider
+        from diwire.container import Container
+        from diwire.service_key import ServiceKey
+        from diwire.types import Lifetime
+
+        container = Container(auto_compile=False)
+
+        class ServiceA:
+            pass
+
+        class ServiceB:
+            def __init__(self, a: ServiceA) -> None:
+                self.a = a
+
+        container.register(ServiceA, lifetime=Lifetime.TRANSIENT)
+        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        container.compile()
+
+        service_key_b = ServiceKey.from_value(ServiceB)
+        provider = container._scoped_compiled_providers.get((service_key_b, "request"))
+
+        assert provider is not None
+        assert isinstance(provider, ScopedSingletonArgsProvider)
+
+
+class TestForwardReferenceHandling:
+    """Tests for forward reference handling with NameError."""
+
+    def test_forward_reference_name_error_in_resolve(self) -> None:
+        """NameError for forward refs defaults to no scope in resolve (lines 1033-1036)."""
+        from diwire.container import Container, Injected
+
+        container = Container()
+
+        # Create a function with a forward reference that can't be resolved
+        # This simulates PEP 563 behavior where annotations are strings
+        def handler(service: "NonExistentService") -> None:  # type: ignore[name-defined] # noqa: F821
+            pass
+
+        # The resolve should catch the NameError and default to no scope
+        result = container.resolve(handler)
+
+        # Should return an Injected (not ScopedInjected) because scope detection failed
+        assert isinstance(result, Injected)
+
+    @pytest.mark.asyncio
+    async def test_aresolve_forward_reference_name_error(self) -> None:
+        """aresolve catches NameError for forward refs (lines 1299-1302)."""
+        from diwire.container import Container, Injected
+
+        container = Container()
+
+        # Create a function with a forward reference that can't be resolved
+        def handler(service: "AnotherNonExistentService") -> None:  # type: ignore[name-defined] # noqa: F821
+            pass
+
+        # The aresolve should catch the NameError and default to no scope
+        result = await container.aresolve(handler)
+
+        # Should return an Injected (not ScopedInjected)
+        assert isinstance(result, Injected)
+
+
+class TestAsyncResolutionEdgeCases:
+    """Tests for async resolution edge cases."""
+
+    @pytest.mark.asyncio
+    async def test_aresolve_decorator_pattern(self) -> None:
+        """aresolve(key=None) returns decorator (line 1279)."""
+        from diwire.container import Container
+
+        container = Container()
+
+        # aresolve with no key should return a decorator
+        decorator = await container.aresolve(scope="request")
+        assert callable(decorator)
+
+    @pytest.mark.asyncio
+    async def test_aresolve_type_singleton_cache_hit(self) -> None:
+        """aresolve uses type singleton cache (line 1285)."""
+        from diwire.container import Container
+        from diwire.types import Lifetime
+
+        container = Container()
+
+        class ServiceA:
+            pass
+
+        container.register(ServiceA, lifetime=Lifetime.SINGLETON)
+
+        # First resolve to populate cache
+        instance1 = container.resolve(ServiceA)
+
+        # aresolve should use the cached singleton
+        instance2 = await container.aresolve(ServiceA)
+
+        assert instance1 is instance2
+
+    @pytest.mark.asyncio
+    async def test_aresolve_circular_dependency_detection(self) -> None:
+        """aresolve detects circular dependencies (line 1355)."""
+        from diwire.container import Container
+        from diwire.exceptions import DIWireCircularDependencyError
+
+        container = Container()
+
+        # Use module-level classes for circular dependency detection
+        # These are defined at module level to avoid forward reference issues
+        from tests.test_container import _CircularServiceA
+
+        with pytest.raises(DIWireCircularDependencyError):
+            await container.aresolve(_CircularServiceA)
+
+    @pytest.mark.asyncio
+    async def test_aresolve_scope_mismatch(self) -> None:
+        """aresolve raises scope mismatch error (line 1370)."""
+        from diwire.container import Container
+        from diwire.exceptions import DIWireScopeMismatchError
+        from diwire.registry import Registration
+        from diwire.service_key import ServiceKey
+        from diwire.types import Lifetime
+
+        container = Container(register_if_missing=False)
+
+        class ServiceA:
+            pass
+
+        # Manually create registration with scope in global registry
+        # This triggers scope mismatch when resolved in wrong scope
+        service_key = ServiceKey.from_value(ServiceA)
+        registration = Registration(
+            service_key=service_key,
+            lifetime=Lifetime.SCOPED_SINGLETON,
+            scope="request",
+        )
+        container._registry[service_key] = registration
+
+        # Resolve within a different scope - should raise scope mismatch
+        with container.start_scope("wrong_scope"):
+            with pytest.raises(DIWireScopeMismatchError):
+                await container.aresolve(ServiceA)
+
+    @pytest.mark.asyncio
+    async def test_aresolve_instance_registration_with_scoped_cache(self) -> None:
+        """aresolve caches scoped instances (lines 1386-1390)."""
+        from diwire.container import Container
+        from diwire.types import Lifetime
+
+        container = Container()
+
+        class ServiceA:
+            pass
+
+        specific_instance = ServiceA()
+        container.register(
+            ServiceA,
+            instance=specific_instance,
+            scope="request",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        async with container.start_scope("request"):
+            result = await container.aresolve(ServiceA)
+            assert result is specific_instance
+
+    @pytest.mark.asyncio
+    async def test_aresolve_generator_factory_unsupported_lifetime(self) -> None:
+        """Singleton generator factory raises error (line 1407)."""
+        from collections.abc import Generator
+        from typing import Any
+
+        from diwire.container import Container
+        from diwire.exceptions import DIWireGeneratorFactoryUnsupportedLifetimeError
+        from diwire.types import Lifetime
+
+        class ServiceA:
+            pass
+
+        def generator_factory() -> Generator[ServiceA, Any, Any]:
+            yield ServiceA()
+
+        container = Container()
+        container.register(
+            ServiceA,
+            factory=generator_factory,
+            lifetime=Lifetime.SINGLETON,
+            scope="request",
+        )
+
+        async with container.start_scope("request"):
+            with pytest.raises(DIWireGeneratorFactoryUnsupportedLifetimeError):
+                await container.aresolve(ServiceA)
+
+    @pytest.mark.asyncio
+    async def test_aresolve_sync_generator_factory(self) -> None:
+        """aresolve handles sync generator factories (lines 1415-1427)."""
+        from collections.abc import Generator
+        from typing import Any
+
+        from diwire.container import Container
+        from diwire.types import Lifetime
+
+        cleanup_called = []
+
+        class ServiceA:
+            pass
+
+        def generator_factory() -> Generator[ServiceA, Any, Any]:
+            try:
+                yield ServiceA()
+            finally:
+                cleanup_called.append(True)
+
+        container = Container()
+        container.register(
+            ServiceA,
+            factory=generator_factory,
+            lifetime=Lifetime.SCOPED_SINGLETON,
+            scope="request",
+        )
+
+        async with container.start_scope("request"):
+            result = await container.aresolve(ServiceA)
+            assert isinstance(result, ServiceA)
+
+        # Cleanup should be called
+        assert cleanup_called == [True]
+
+    @pytest.mark.asyncio
+    async def test_aresolve_singleton_caching_in_factory_path(self) -> None:
+        """aresolve caches singleton from factory (line 1430)."""
+        from diwire.container import Container
+        from diwire.types import Lifetime
+
+        call_count = 0
+
+        class ServiceA:
+            pass
+
+        def factory() -> ServiceA:
+            nonlocal call_count
+            call_count += 1
+            return ServiceA()
+
+        container = Container()
+        container.register(ServiceA, factory=factory, lifetime=Lifetime.SINGLETON)
+
+        instance1 = await container.aresolve(ServiceA)
+        instance2 = await container.aresolve(ServiceA)
+
+        assert instance1 is instance2
+        assert call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_aresolve_missing_dependencies_error(self) -> None:
+        """aresolve raises missing deps error (line 1439)."""
+        from diwire.container import Container
+        from diwire.exceptions import DIWireMissingDependenciesError
+
+        container = Container(register_if_missing=False)
+
+        class ServiceA:
+            pass
+
+        class ServiceB:
+            def __init__(self, a: ServiceA) -> None:
+                self.a = a
+
+        container.register(ServiceB)  # ServiceA not registered
+
+        with pytest.raises(DIWireMissingDependenciesError):
+            await container.aresolve(ServiceB)
+
+    @pytest.mark.asyncio
+    async def test_aget_resolved_dependencies_async_fallback(self) -> None:
+        """Async dependency fallback paths in _aget_resolved_dependencies (lines 1473-1490)."""
+        from diwire.container import Container
+        from diwire.types import Lifetime
+
+        class ServiceA:
+            pass
+
+        async def async_factory() -> ServiceA:
+            return ServiceA()
+
+        class ServiceB:
+            def __init__(self, a: ServiceA) -> None:
+                self.a = a
+
+        container = Container(auto_compile=False)
+        container.register(ServiceA, factory=async_factory, lifetime=Lifetime.TRANSIENT)
+        container.register(ServiceB, lifetime=Lifetime.TRANSIENT)
+
+        # Without compilation, should fall back to registry check for async
+        result = await container.aresolve(ServiceB)
+        assert isinstance(result, ServiceB)
+        assert isinstance(result.a, ServiceA)
+
+    @pytest.mark.asyncio
+    async def test_aget_resolved_dependencies_diwire_error_with_defaults(self) -> None:
+        """DIWireError uses defaults in async resolution (lines 1499-1501)."""
+        from diwire.container import Container
+
+        container = Container(register_if_missing=False)
+
+        class UnregisteredService:
+            pass
+
+        default_service = UnregisteredService()
+
+        class MyClass:
+            def __init__(self, service: UnregisteredService = default_service) -> None:
+                self.service = service
+
+        container.register(MyClass)
+
+        # Should use default value when resolution fails
+        result = await container.aresolve(MyClass)
+        assert result.service is default_service
+
+    @pytest.mark.asyncio
+    async def test_scope_exit_stack_cleanup(self) -> None:
+        """aclear_scope cleans up exit stack (line 1545)."""
+        from diwire.container import Container
+        from diwire.types import Lifetime
+
+        cleanup_called = []
+
+        class ServiceA:
+            pass
+
+        def generator_factory():
+            try:
+                yield ServiceA()
+            finally:
+                cleanup_called.append(True)
+
+        container = Container()
+        container.register(
+            ServiceA,
+            factory=generator_factory,
+            lifetime=Lifetime.SCOPED_SINGLETON,
+            scope="request",
+        )
+
+        # Use sync context manager but call aresolve
+        with container.start_scope("request"):
+            result = container.resolve(ServiceA)
+            assert isinstance(result, ServiceA)
+
+        # Cleanup should be called via sync exit stack
+        assert cleanup_called == [True]
+
+    def test_return_scoped_registration(self) -> None:
+        """_get_registration returns scoped registration (line 1591)."""
+        from diwire.container import Container, ScopeId, _current_scope
+        from diwire.service_key import ServiceKey
+        from diwire.types import Lifetime
+
+        container = Container()
+
+        class ServiceA:
+            pass
+
+        specific_instance = ServiceA()
+        container.register(
+            ServiceA,
+            instance=specific_instance,
+            scope="request",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        # Create a scope context
+        scope_id = ScopeId(segments=(("request", 1),))
+        token = _current_scope.set(scope_id)
+        try:
+            service_key = ServiceKey.from_value(ServiceA)
+            registration = container._get_registration(service_key, scope_id)
+
+            assert registration.scope == "request"
+            assert registration.instance is specific_instance
+        finally:
+            _current_scope.reset(token)
+
+    @pytest.mark.asyncio
+    async def test_nested_scope_diwire_error_continues(self) -> None:
+        """DIWireError during nested scope detection continues (lines 1656-1657)."""
+        from diwire.container import Container
+        from diwire.types import Lifetime
+
+        container = Container(register_if_missing=False)
+
+        class ServiceA:
+            pass
+
+        class ServiceB:
+            def __init__(self, a: ServiceA) -> None:
+                self.a = a
+
+        # Register ServiceB with scope but don't register ServiceA
+        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        # _find_scope_in_dependencies should handle the DIWireError gracefully
+        # when checking nested deps of unregistered ServiceA
+        # This tests that the method doesn't crash on DIWireError
+
+        # This is an indirect test - we create a function that depends on ServiceB
+        def handler(b: Annotated[ServiceB, FromDI()]) -> ServiceB:
+            return b
+
+        # resolve should work without crashing on nested scope detection
+        injected = container.resolve(handler, scope="request")
+
+        # Verify it's a ScopedInjected (scope was detected from ServiceB registration)
+        from diwire.container import ScopedInjected
+
+        assert isinstance(injected, ScopedInjected)
+
+
+class TestMissingCoverageSync:
+    """Tests for sync resolution missing coverage."""
+
+    def test_sync_generator_factory_singleton_raises(self) -> None:
+        """Sync generator factory with SINGLETON lifetime raises error."""
+        from collections.abc import Generator
+        from typing import Any
+
+        from diwire.exceptions import DIWireGeneratorFactoryUnsupportedLifetimeError
+
+        container = Container()
+
+        class ServiceA:
+            pass
+
+        def generator_factory() -> Generator[ServiceA, Any, Any]:
+            yield ServiceA()
+
+        container.register(
+            ServiceA,
+            factory=generator_factory,
+            lifetime=Lifetime.SINGLETON,
+            scope="request",
+        )
+
+        with container.start_scope("request"):
+            with pytest.raises(DIWireGeneratorFactoryUnsupportedLifetimeError):
+                container.resolve(ServiceA)
+
+    def test_resolve_instance_registration_stores_singleton(self) -> None:
+        """Instance registration without scope stores in _singletons."""
+        from diwire.registry import Registration
+        from diwire.service_key import ServiceKey
+
+        container = Container(register_if_missing=False, auto_compile=False)
+
+        class ServiceA:
+            pass
+
+        instance = ServiceA()
+        service_key = ServiceKey.from_value(ServiceA)
+
+        # Directly add registration to registry (bypassing normal register path
+        # which already caches in _singletons)
+        container._registry[service_key] = Registration(
+            service_key=service_key,
+            instance=instance,
+            lifetime=Lifetime.SINGLETON,
+            scope=None,
+        )
+
+        resolved = container.resolve(ServiceA)
+        assert resolved is instance
+        assert service_key in container._singletons
+
+
+class TestCoverageEdgeCases:
+    """Tests for specific edge cases to improve coverage."""
+
+    def test_compile_dependency_from_registry(self) -> None:
+        """_compile_or_get_provider compiles dep from registry (line 851)."""
+        from diwire.service_key import ServiceKey
+
+        container = Container(auto_compile=False, register_if_missing=False)
+
+        class ServiceA:
+            pass
+
+        class ServiceB:
+            def __init__(self, a: ServiceA) -> None:
+                self.a = a
+
+        # Register ServiceB first, then ServiceA
+        # Dict iteration order is insertion order in Python 3.7+
+        # So ServiceB will be compiled first, and ServiceA will be found in registry
+        # but not yet in _compiled_providers
+        container.register(ServiceB, lifetime=Lifetime.TRANSIENT)
+        container.register(ServiceA, lifetime=Lifetime.TRANSIENT)
+
+        container.compile()
+
+        # Both should be compiled
+        service_key_a = ServiceKey.from_value(ServiceA)
+        service_key_b = ServiceKey.from_value(ServiceB)
+        assert service_key_a in container._compiled_providers
+        assert service_key_b in container._compiled_providers
+
+    def test_compile_auto_registration_returns_none(self) -> None:
+        """_compile_or_get_provider auto-registers but compilation fails (line 860->862)."""
+        from diwire.service_key import ServiceKey
+
+        container = Container(auto_compile=False, register_if_missing=True)
+
+        class ServiceA:
+            # str dependency without default - compilation will fail
+            def __init__(self, name: str) -> None:
+                self.name = name
+
+        class ServiceB:
+            def __init__(self, a: ServiceA) -> None:
+                self.a = a
+
+        # Only register ServiceB - ServiceA will be auto-registered
+        container.register(ServiceB, lifetime=Lifetime.TRANSIENT)
+
+        container.compile()
+
+        # ServiceB compilation fails because ServiceA (auto-registered) can't be compiled
+        # (str dependency without default)
+        service_key_b = ServiceKey.from_value(ServiceB)
+        assert service_key_b not in container._compiled_providers
+
+        # ServiceA was auto-registered but not compiled (returns None from line 862)
+        service_key_a = ServiceKey.from_value(ServiceA)
+        assert service_key_a not in container._compiled_providers
+        # But it should be in registry (auto-registered)
+        assert service_key_a in container._registry
+
+    def test_compile_scoped_registration_returns_none(self) -> None:
+        """_compile_registration returns None for scoped registrations."""
+        from diwire.service_key import ServiceKey
+
+        container = Container(auto_compile=False)
+
+        class ServiceA:
+            pass
+
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.compile()
+
+        # Scoped registrations are skipped in _compiled_providers
+        service_key = ServiceKey.from_value(ServiceA)
+        assert service_key not in container._compiled_providers
+
+        # But they should be in _scoped_compiled_providers
+        assert (service_key, "request") in container._scoped_compiled_providers
+
+    def test_compile_scoped_registration_with_scoped_dependency(self) -> None:
+        """Scoped registration compilation returns None when dep can't be compiled (line 907)."""
+        from diwire.service_key import ServiceKey
+
+        container = Container(auto_compile=False, register_if_missing=False)
+
+        class ServiceA:
+            pass
+
+        class ServiceB:
+            def __init__(self, a: ServiceA) -> None:
+                self.a = a
+
+        # Only register ServiceB (scoped), but NOT ServiceA
+        # When compiling ServiceB, _compile_or_get_provider(ServiceA) will return None
+        # because ServiceA is not in _compiled_providers, not in _registry, and auto_register is disabled
+        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        container.compile()
+
+        # ServiceB should NOT have a scoped compiled provider because its dependency
+        # (ServiceA) couldn't be compiled (line 907 returns None)
+        service_key_b = ServiceKey.from_value(ServiceB)
+        assert (service_key_b, "request") not in container._scoped_compiled_providers
+
+    def test_compiled_scoped_provider_uses_cache(self) -> None:
+        """Compiled scoped provider caches instances correctly (lines 1097-1117)."""
+        from diwire.service_key import ServiceKey
+
+        container = Container(auto_compile=False)
+
+        class ServiceA:
+            pass
+
+        # Register scoped singleton
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.compile()
+
+        # Verify compiled scoped provider exists
+        service_key = ServiceKey.from_value(ServiceA)
+        assert (service_key, "request") in container._scoped_compiled_providers
+
+        # Enter the matching scope - compiled provider path will be used
+        with container.start_scope("request"):
+            instance1 = container.resolve(ServiceA)
+            instance2 = container.resolve(ServiceA)
+
+            # Should be same instance (scoped singleton cached)
+            assert instance1 is instance2
+
+            # Verify it's in the scoped instances cache
+            assert any(
+                k[1] == service_key
+                for k in container._scoped_instances
+            )
+
+    @pytest.mark.asyncio
+    async def test_aresolve_type_singleton_fast_path_cache_hit(self) -> None:
+        """aresolve uses _type_singletons cache (line 1285)."""
+        container = Container()
+
+        class ServiceA:
+            pass
+
+        instance = ServiceA()
+        # Register with instance= which directly populates _type_singletons
+        container.register(ServiceA, instance=instance)
+
+        # aresolve should hit the fast path cache at line 1283-1285
+        result = await container.aresolve(ServiceA)
+        assert result is instance
+
+    @pytest.mark.asyncio
+    async def test_aresolve_circular_dependency_pure_async_path(self) -> None:
+        """aresolve detects circular deps in async resolution path (line 1355)."""
+        from diwire.exceptions import DIWireCircularDependencyError
+
+        container = Container()
+
+        # Use module-level classes to avoid forward reference issues
+        # _AsyncCircularA depends on _AsyncCircularB and vice versa
+
+        # Use async factories with FromDI annotation to enable injection
+        async def create_a(b: Annotated[_AsyncCircularB, FromDI()]) -> _AsyncCircularA:
+            return _AsyncCircularA(b)
+
+        async def create_b(a: Annotated[_AsyncCircularA, FromDI()]) -> _AsyncCircularB:
+            return _AsyncCircularB(a)
+
+        container.register(_AsyncCircularA, factory=create_a)
+        container.register(_AsyncCircularB, factory=create_b)
+
+        with pytest.raises(DIWireCircularDependencyError):
+            await container.aresolve(_AsyncCircularA)
+
+    @pytest.mark.asyncio
+    async def test_aresolve_async_generator_singleton_inside_scope(self) -> None:
+        """Async generator factory with SINGLETON lifetime raises inside scope (line 1407)."""
+        from collections.abc import AsyncGenerator
+
+        from diwire.exceptions import DIWireGeneratorFactoryUnsupportedLifetimeError
+
+        container = Container()
+
+        class ServiceA:
+            pass
+
+        async def async_gen_factory() -> AsyncGenerator[ServiceA, None]:
+            yield ServiceA()
+
+        container.register(
+            ServiceA,
+            factory=async_gen_factory,
+            lifetime=Lifetime.SINGLETON,
+            scope="request",
+        )
+
+        async with container.start_scope("request"):
+            # Inside scope, cache_scope is not None, so we hit line 1407
+            with pytest.raises(DIWireGeneratorFactoryUnsupportedLifetimeError):
+                await container.aresolve(ServiceA)
+
+    @pytest.mark.asyncio
+    async def test_aresolve_ignored_type_with_default(self) -> None:
+        """aresolve skips ignored type with default in _aget_resolved_dependencies (line 1474-1475)."""
+
+        class ServiceWithIgnoredDefault:
+            def __init__(self, name: str = "default") -> None:
+                self.name = name
+
+        container = Container(register_if_missing=True)
+        result = await container.aresolve(ServiceWithIgnoredDefault)
+        assert result.name == "default"
+
+    @pytest.mark.asyncio
+    async def test_aresolve_ignored_type_explicitly_registered(self) -> None:
+        """aresolve uses registered ignored type (branch 1473->1479)."""
+
+        class ServiceWithStr:
+            def __init__(self, name: str) -> None:
+                self.name = name
+
+        container = Container(register_if_missing=True)
+        # Explicitly register str - this is normally an ignored type
+        container.register(str, instance="explicit_value")
+        container.register(ServiceWithStr)
+
+        # When resolving, str is in ignores AND in registry,
+        # so we fall through to the normal resolution path at line 1479
+        result = await container.aresolve(ServiceWithStr)
+        assert result.name == "explicit_value"
+
+    def test_get_scoped_registration_with_anonymous_scopes(self) -> None:
+        """_get_scoped_registration iterates past anonymous scope segments (line 1571->1569)."""
+        from diwire.container import ScopeId, _current_scope
+        from diwire.service_key import ServiceKey
+
+        container = Container()
+
+        class Session:
+            pass
+
+        # Register a scoped singleton at "request" scope
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        # Create a scope ID with an anonymous segment (name=None)
+        # This simulates entering nested scopes where inner one is anonymous
+        scope_id = ScopeId(segments=(("request", 1), (None, 2)))
+        token = _current_scope.set(scope_id)
+        try:
+            service_key = ServiceKey.from_value(Session)
+            # This should iterate past the anonymous segment and find "request"
+            registration = container._get_scoped_registration(service_key, scope_id)
+            assert registration is not None
+            assert registration.scope == "request"
+        finally:
+            _current_scope.reset(token)
+
+    def test_find_scope_in_dependencies_with_extraction_error(self) -> None:
+        """_find_scope_in_dependencies catches DIWireError and continues (lines 1656-1657)."""
+        from diwire.container import ScopedInjected
+
+        container = Container(register_if_missing=False)
+
+        class ServiceA:
+            pass
+
+        class ServiceB:
+            def __init__(self, a: ServiceA) -> None:
+                self.a = a
+
+        # Register ServiceB with scope but don't register ServiceA
+        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        # Create a function that depends on ServiceB
+        def handler(b: Annotated[ServiceB, FromDI()]) -> ServiceB:
+            return b
+
+        # resolve should work without crashing - DIWireError during nested dep extraction is caught
+        injected = container.resolve(handler, scope="request")
+
+        # Should be ScopedInjected because scope was explicitly provided
+        assert isinstance(injected, ScopedInjected)
+
+    def test_resolve_dependencies_error_with_default(self) -> None:
+        """_resolve_dependencies handles error when param has default (line 1699->1686)."""
+        container = Container(register_if_missing=False)
+
+        class UnregisteredService:
+            pass
+
+        default_instance = UnregisteredService()
+
+        class ServiceWithDefault:
+            def __init__(self, dep: UnregisteredService = default_instance) -> None:
+                self.dep = dep
+
+        container.register(ServiceWithDefault)
+
+        # The UnregisteredService will fail to resolve, but has a default
+        # So the resolution should succeed with default value
+        result = container.resolve(ServiceWithDefault)
+        assert result.dep is default_instance

@@ -947,3 +947,115 @@ class TestSyncResolveReturnsAsyncInjected:
 
         assert isinstance(injected, ScopedInjected)
         assert not isinstance(injected, AsyncScopedInjected)  # type: ignore[unreachable]
+
+
+# =============================================================================
+# TestAsyncMissingCoverage - Tests for missing async coverage
+# =============================================================================
+
+
+class TestAsyncMissingCoverage:
+    """Tests for async resolution missing coverage."""
+
+    @pytest.mark.asyncio
+    async def test_aresolve_instance_non_scoped(self) -> None:
+        """Async resolve instance registration stores in _singletons."""
+        from diwire.registry import Registration
+        from diwire.service_key import ServiceKey
+
+        container = Container(register_if_missing=False, auto_compile=False)
+
+        instance = ServiceA()
+        service_key = ServiceKey.from_value(ServiceA)
+        container._registry[service_key] = Registration(
+            service_key=service_key,
+            instance=instance,
+            lifetime=Lifetime.SINGLETON,
+            scope=None,
+        )
+
+        resolved = await container.aresolve(ServiceA)
+        assert resolved is instance
+        assert service_key in container._singletons
+
+    @pytest.mark.asyncio
+    async def test_aresolve_sync_generator_without_scope(self) -> None:
+        """Sync generator factory in aresolve without scope raises error."""
+        from diwire.exceptions import DIWireGeneratorFactoryWithoutScopeError
+
+        container = Container()
+
+        def generator_factory():
+            yield ServiceA()
+
+        container.register(
+            ServiceA,
+            factory=generator_factory,
+            lifetime=Lifetime.TRANSIENT,
+        )
+
+        with pytest.raises(DIWireGeneratorFactoryWithoutScopeError):
+            await container.aresolve(ServiceA)
+
+    @pytest.mark.asyncio
+    async def test_aresolve_sync_generator_no_yield(self) -> None:
+        """Sync generator that doesn't yield in aresolve raises error."""
+        from diwire.exceptions import DIWireGeneratorFactoryDidNotYieldError
+
+        container = Container()
+
+        def empty_generator():
+            return
+            yield  # Make it a generator  # pyrefly: ignore[unreachable]
+
+        container.register(
+            ServiceA,
+            factory=empty_generator,
+            scope="request",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        async with container.start_scope("request"):
+            with pytest.raises(DIWireGeneratorFactoryDidNotYieldError):
+                await container.aresolve(ServiceA)
+
+    @pytest.mark.asyncio
+    async def test_aget_resolved_deps_ignored_type_missing(self) -> None:
+        """Async resolve with ignored type without default raises missing deps error."""
+        from diwire.exceptions import DIWireMissingDependenciesError
+
+        container = Container(register_if_missing=False, auto_compile=False)
+
+        class ServiceWithStr:
+            def __init__(self, name: str) -> None:  # str is ignored, no default
+                self.name = name
+
+        container.register(ServiceWithStr, lifetime=Lifetime.TRANSIENT)
+
+        with pytest.raises(DIWireMissingDependenciesError):
+            await container.aresolve(ServiceWithStr)
+
+    @pytest.mark.asyncio
+    async def test_aget_resolved_deps_uses_async_cache(self) -> None:
+        """Async resolution uses pre-built async deps cache."""
+        from diwire.service_key import ServiceKey
+
+        container = Container(auto_compile=False)
+
+        async def async_factory() -> ServiceA:
+            return ServiceA()
+
+        container.register(
+            ServiceA,
+            factory=async_factory,
+            lifetime=Lifetime.TRANSIENT,
+        )
+        container.register(ServiceB, lifetime=Lifetime.TRANSIENT)
+        container.compile()
+
+        # The cache should have ServiceB -> {ServiceA} since ServiceA is async
+        service_key_b = ServiceKey.from_value(ServiceB)
+        assert service_key_b in container._async_deps_cache
+
+        result = await container.aresolve(ServiceB)
+        assert isinstance(result.service_a, ServiceA)

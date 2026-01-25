@@ -250,6 +250,97 @@ class TestSingletonFactoryProvider:
         assert service_b1.service_a is service_a
 
 
+class TestCompiledProvidersCacheHit:
+    """Tests for compiled providers cache hit paths."""
+
+    def test_scoped_singleton_provider_cache_hit(self) -> None:
+        """Test ScopedSingletonProvider returns cached instance on second call with scoped_cache."""
+        from diwire.compiled_providers import ScopedSingletonProvider
+        from diwire.service_key import ServiceKey
+
+        service_key = ServiceKey.from_value(ServiceA)
+        provider = ScopedSingletonProvider(ServiceA, service_key)
+
+        singletons: dict[ServiceKey, object] = {}
+        scoped_cache: dict[ServiceKey, object] = {}
+
+        # First call - creates and caches instance
+        instance1 = provider(singletons, scoped_cache)
+        assert isinstance(instance1, ServiceA)
+        assert service_key in scoped_cache
+
+        # Second call - should return cached instance (lines 149-154)
+        instance2 = provider(singletons, scoped_cache)
+        assert instance2 is instance1
+
+    def test_scoped_singleton_args_provider_cache_hit(self) -> None:
+        """Test ScopedSingletonArgsProvider returns cached instance on second call with scoped_cache."""
+        from diwire.compiled_providers import (
+            InstanceProvider,
+            ScopedSingletonArgsProvider,
+        )
+        from diwire.service_key import ServiceKey
+
+        service_key_b = ServiceKey.from_value(ServiceB)
+        service_key_a = ServiceKey.from_value(ServiceA)
+
+        # Create provider for ServiceA (dependency)
+        dep_instance = ServiceA()
+        dep_provider = InstanceProvider(dep_instance)
+
+        # Create scoped singleton args provider for ServiceB
+        provider = ScopedSingletonArgsProvider(
+            ServiceB,
+            service_key_b,
+            ("service_a",),
+            (dep_provider,),
+        )
+
+        singletons: dict[ServiceKey, object] = {}
+        scoped_cache: dict[ServiceKey, object] = {}
+
+        # First call - creates and caches instance
+        instance1 = provider(singletons, scoped_cache)
+        assert isinstance(instance1, ServiceB)
+        assert service_key_b in scoped_cache
+
+        # Second call - should return cached instance (lines 181-190)
+        instance2 = provider(singletons, scoped_cache)
+        assert instance2 is instance1
+        assert instance2.service_a is dep_instance
+
+    def test_singleton_factory_provider_cache_hit(self) -> None:
+        """Test SingletonFactoryProvider returns cached instance without calling factory again."""
+        from diwire.compiled_providers import InstanceProvider, SingletonFactoryProvider
+        from diwire.service_key import ServiceKey
+
+        call_count = 0
+
+        class CountingFactory:
+            def __call__(self) -> ServiceA:
+                nonlocal call_count
+                call_count += 1
+                return ServiceA(id=f"call-{call_count}")
+
+        service_key = ServiceKey.from_value(ServiceA)
+        factory_instance = CountingFactory()
+        factory_provider = InstanceProvider(factory_instance)
+
+        provider = SingletonFactoryProvider(service_key, factory_provider)
+
+        singletons: dict[ServiceKey, object] = {}
+
+        # First call - creates instance
+        instance1 = provider(singletons, None)
+        assert call_count == 1
+        assert isinstance(instance1, ServiceA)
+
+        # Second call - should return cached instance without calling factory (line 250)
+        instance2 = provider(singletons, None)
+        assert instance2 is instance1
+        assert call_count == 1  # Factory not called again
+
+
 class TestCompiledProviderIntegration:
     """Integration tests for compiled providers."""
 
@@ -294,3 +385,94 @@ class TestCompiledProviderIntegration:
         # Second resolution uses fast path
         instance2 = container.resolve(ServiceA)
         assert instance1 is instance2
+
+
+class TestCompilationMissingCoverage:
+    """Tests for compilation missing coverage."""
+
+    def test_compile_or_get_provider_registration_found(self) -> None:
+        """Registration found in registry and compiled (lines 849-852)."""
+        from diwire.service_key import ServiceKey
+
+        container = Container(register_if_missing=False, auto_compile=False)
+
+        class ServiceALocal:
+            pass
+
+        class ServiceBLocal:
+            def __init__(self, a: ServiceALocal) -> None:
+                self.a = a
+
+        # Register both services BEFORE compilation
+        container.register(ServiceALocal, lifetime=Lifetime.TRANSIENT)
+        container.register(ServiceBLocal, lifetime=Lifetime.TRANSIENT)
+
+        # Compile - when compiling ServiceB, it finds ServiceA in registry
+        container.compile()
+
+        assert ServiceKey.from_value(ServiceALocal) in container._compiled_providers
+        assert ServiceKey.from_value(ServiceBLocal) in container._compiled_providers
+
+    def test_scoped_compilation_ignored_type_without_default(self) -> None:
+        """Scoped registration with ignored type (str) without default returns None."""
+        from diwire.service_key import ServiceKey
+
+        container = Container(register_if_missing=False, auto_compile=False)
+
+        class ServiceWithStr:
+            def __init__(self, name: str) -> None:
+                self.name = name
+
+        container.register(
+            ServiceWithStr,
+            scope="request",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+        container.compile()
+
+        service_key = ServiceKey.from_value(ServiceWithStr)
+        # Should NOT have a compiled scoped provider
+        assert (service_key, "request") not in container._scoped_compiled_providers
+
+    def test_scoped_compilation_dependency_fails(self) -> None:
+        """Scoped registration where dependency compilation fails."""
+        from diwire.service_key import ServiceKey
+
+        container = Container(register_if_missing=False, auto_compile=False)
+
+        class UnregisteredDep:
+            pass
+
+        class ServiceBLocal:
+            def __init__(self, dep: UnregisteredDep) -> None:
+                self.dep = dep
+
+        # Add UnregisteredDep to ignores so it can't be auto-registered
+        container._autoregister_ignores.add(UnregisteredDep)
+        container.register(
+            ServiceBLocal,
+            scope="request",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+        container.compile()
+
+        service_key = ServiceKey.from_value(ServiceBLocal)
+        assert (service_key, "request") not in container._scoped_compiled_providers
+
+    def test_async_deps_cache_non_class_key(self) -> None:
+        """Non-class service key causes DIWireError during dependency extraction."""
+        from diwire.registry import Registration
+        from diwire.service_key import ServiceKey
+
+        container = Container(register_if_missing=False, auto_compile=False)
+
+        # Register a string service key - dependency extraction will fail
+        string_key = ServiceKey(value="string_service", component=None)
+        container._registry[string_key] = Registration(
+            service_key=string_key,
+            lifetime=Lifetime.TRANSIENT,
+        )
+
+        # compile() should not crash - DIWireError is caught
+        container.compile()
+        assert container._is_compiled is True

@@ -122,7 +122,7 @@ class DependenciesExtractor:
 
         args = get_args(hint)
         if len(args) < MIN_ANNOTATED_ARGS:
-            return None
+            return None  # pragma: no cover - Annotated requires at least 2 args
 
         # Check if any metadata is a FromDI marker
         for metadata in args[1:]:

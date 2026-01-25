@@ -119,7 +119,7 @@ def _is_async_factory(factory: Any) -> bool:
             return inspect.iscoroutinefunction(call_method) or inspect.isasyncgenfunction(
                 call_method,
             )
-        return False
+        return False  # pragma: no cover - __call__ is never None for a normal class
 
     return inspect.iscoroutinefunction(factory) or inspect.isasyncgenfunction(factory)
 
