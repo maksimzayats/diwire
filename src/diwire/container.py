@@ -6,7 +6,7 @@ import itertools
 import logging
 import types
 from collections.abc import AsyncGenerator, Callable, Coroutine, Generator
-from contextlib import AsyncExitStack, ExitStack, contextmanager
+from contextlib import AsyncExitStack, ExitStack
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from functools import wraps
@@ -18,7 +18,6 @@ from typing_extensions import Self, overload
 
 from diwire.compiled_providers import (
     ArgsTypeProvider,
-    AsyncCompiledProvider,
     CompiledProvider,
     FactoryProvider,
     InstanceProvider,
@@ -518,7 +517,6 @@ class Container:
     _scope_counter: ClassVar[itertools.count[int]] = itertools.count()
 
     __slots__ = (
-        "_async_compiled_providers",
         "_async_deps_cache",
         "_async_scope_exit_stacks",
         "_auto_compile",
@@ -574,7 +572,6 @@ class Container:
 
         # Compiled providers for optimized resolution
         self._compiled_providers: dict[ServiceKey, CompiledProvider] = {}
-        self._async_compiled_providers: dict[ServiceKey, AsyncCompiledProvider] = {}
         # Compiled scoped providers: (service_key, scope_name) -> provider
         self._scoped_compiled_providers: dict[tuple[ServiceKey, str], CompiledProvider] = {}
         self._is_compiled: bool = False
@@ -590,20 +587,6 @@ class Container:
         self._async_deps_cache: dict[ServiceKey, frozenset[ServiceKey]] = {}
 
         self.register(type(self), instance=self, lifetime=Lifetime.SINGLETON)
-
-    @contextmanager
-    def _track_resolution(self, service_key: ServiceKey) -> Generator[None, None, None]:
-        """Track service resolution to detect circular dependencies."""
-        stack = _get_resolution_stack()
-
-        if service_key in stack:
-            raise DIWireCircularDependencyError(service_key, list(stack))
-
-        stack.append(service_key)
-        try:
-            yield
-        finally:
-            stack.pop()
 
     def register(
         self,
