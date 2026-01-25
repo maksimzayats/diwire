@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import inspect
 import itertools
-import logging
 import types
 from collections.abc import AsyncGenerator, Callable, Coroutine, Generator
 from contextlib import AsyncExitStack, ExitStack
@@ -56,8 +55,6 @@ from diwire.service_key import ServiceKey
 from diwire.types import Factory, FromDI, Lifetime
 
 T = TypeVar("T", bound=Any)
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)

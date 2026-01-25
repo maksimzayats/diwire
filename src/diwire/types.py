@@ -1,4 +1,4 @@
-from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
+from collections.abc import Callable, Generator
 from enum import Enum
 from typing import Any, TypeAlias
 
@@ -31,16 +31,6 @@ FactoryFunction: TypeAlias = Callable[..., FactoryReturn]
 
 Factory: TypeAlias = type[FactoryClassProtocol] | FactoryFunction
 """A type alias for either a factory class or a factory function."""
-
-
-AsyncFactoryReturn: TypeAlias = Awaitable[Any] | AsyncGenerator[Any, None]
-"""Return type for async factories, including async generator factories."""
-
-AsyncFactoryFunction: TypeAlias = Callable[..., AsyncFactoryReturn]
-"""A type alias for async factory functions that create instances of a specific type."""
-
-AsyncFactory: TypeAlias = AsyncFactoryFunction
-"""A type alias for async factory functions."""
 
 
 class FromDI:

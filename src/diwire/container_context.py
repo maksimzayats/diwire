@@ -38,7 +38,6 @@ class _ContextInjected:
     ) -> None:
         self._func = func
         self._proxy = proxy
-        self._injected: Any | None = None
 
         wraps(func)(self)
         self.__name__: str = getattr(func, "__name__", repr(func))
