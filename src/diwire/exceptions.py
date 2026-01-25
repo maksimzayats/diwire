@@ -1,0 +1,183 @@
+"""Custom exceptions for the diwire dependency injection library."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from diwire.service_key import ServiceKey
+
+
+class DIWireError(Exception):
+    """Base exception for all diwire errors."""
+
+
+class DIWireServiceNotRegisteredError(DIWireError):
+    """Service not registered and auto-registration disabled."""
+
+    def __init__(self, service_key: ServiceKey) -> None:
+        self.service_key = service_key
+        super().__init__(f"Service {service_key} is not registered.")
+
+
+class DIWireMissingDependenciesError(DIWireError):
+    """Service cannot be resolved due to missing dependencies."""
+
+    def __init__(self, service_key: ServiceKey, missing: list[ServiceKey]) -> None:
+        self.service_key = service_key
+        self.missing = missing
+        super().__init__(
+            f"Cannot resolve service {service_key} due to missing dependencies: {missing}",
+        )
+
+
+class DIWireAutoRegistrationError(DIWireError):
+    """Base for auto-registration failures."""
+
+
+class DIWireComponentSpecifiedError(DIWireAutoRegistrationError):
+    """Cannot auto-register service key with a component."""
+
+    def __init__(self, service_key: ServiceKey) -> None:
+        self.service_key = service_key
+        super().__init__(
+            f"Cannot auto-register service key {service_key!r} which has a component specified.",
+        )
+
+
+class DIWireIgnoredServiceError(DIWireAutoRegistrationError):
+    """Cannot auto-register service in ignore list."""
+
+    def __init__(self, service_key: ServiceKey) -> None:
+        self.service_key = service_key
+        super().__init__(
+            f"Cannot auto-register service key {service_key!r} which is in the ignore list.",
+        )
+
+
+class DIWireNotAClassError(DIWireAutoRegistrationError):
+    """Cannot auto-register non-class value."""
+
+    def __init__(self, service_key: ServiceKey) -> None:
+        self.service_key = service_key
+        super().__init__(f"Cannot auto-register service key {service_key!r} which is not a class.")
+
+
+class DIWireCircularDependencyError(DIWireError):
+    """Circular dependency detected during resolution."""
+
+    def __init__(self, service_key: ServiceKey, resolution_chain: list[ServiceKey]) -> None:
+        self.service_key = service_key
+        self.resolution_chain = resolution_chain
+        chain_str = " -> ".join(
+            str(sk.value.__name__ if hasattr(sk.value, "__name__") else sk.value)
+            for sk in resolution_chain
+        )
+        chain_str += f" -> {service_key.value.__name__ if hasattr(service_key.value, '__name__') else service_key.value}"
+        super().__init__(f"Circular dependency detected: {chain_str}")
+
+
+class DIWireScopeMismatchError(DIWireError):
+    """Service is being resolved outside its registered scope."""
+
+    def __init__(
+        self,
+        service_key: ServiceKey,
+        registered_scope: str,
+        current_scope: str | None,
+    ) -> None:
+        self.service_key = service_key
+        self.registered_scope = registered_scope
+        self.current_scope = current_scope
+        current = current_scope or "no active scope"
+        super().__init__(
+            f"Service {service_key} is registered for scope '{registered_scope}' "
+            f"but is being resolved in '{current}'.",
+        )
+
+
+class DIWireScopedSingletonWithoutScopeError(DIWireError):
+    """SCOPED_SINGLETON registered without a scope."""
+
+    def __init__(self, service_key: ServiceKey) -> None:
+        self.service_key = service_key
+        super().__init__(
+            f"Service {service_key} is registered as SCOPED_SINGLETON but no scope was provided. "
+            f"SCOPED_SINGLETON requires a scope parameter.",
+        )
+
+
+class DIWireGeneratorFactoryWithoutScopeError(DIWireError):
+    """Factory returned a generator without an active scope."""
+
+    def __init__(self, service_key: ServiceKey) -> None:
+        self.service_key = service_key
+        super().__init__(
+            f"Factory for service {service_key} returned a generator, but no active scope exists. "
+            "Resolve the service within a scope (start_scope) to ensure cleanup.",
+        )
+
+
+class DIWireGeneratorFactoryDidNotYieldError(DIWireError):
+    """Factory returned a generator that yielded no value."""
+
+    def __init__(self, service_key: ServiceKey) -> None:
+        self.service_key = service_key
+        super().__init__(
+            f"Factory for service {service_key} returned a generator that did not yield a value.",
+        )
+
+
+class DIWireGeneratorFactoryUnsupportedLifetimeError(DIWireError):
+    """Factory returned a generator for an unsupported lifetime."""
+
+    def __init__(self, service_key: ServiceKey) -> None:
+        self.service_key = service_key
+        super().__init__(
+            f"Factory for service {service_key} returned a generator, but generator factories "
+            "require scoped or transient lifetimes within an active scope.",
+        )
+
+
+class DIWireAsyncDependencyInSyncContextError(DIWireError):
+    """Attempted to resolve an async dependency using synchronous resolve()."""
+
+    def __init__(self, service_key: ServiceKey, async_dep: ServiceKey) -> None:
+        self.service_key = service_key
+        self.async_dep = async_dep
+        super().__init__(
+            f"Cannot resolve {service_key} synchronously because it depends on async dependency "
+            f"{async_dep}. Use 'await container.aresolve({service_key})' instead.",
+        )
+
+
+class DIWireAsyncGeneratorFactoryWithoutScopeError(DIWireError):
+    """Async generator factory used without an active scope."""
+
+    def __init__(self, service_key: ServiceKey) -> None:
+        self.service_key = service_key
+        super().__init__(
+            f"Factory for service {service_key} is an async generator, but no active scope exists. "
+            "Resolve the service within an async scope (async with container.start_scope()) "
+            "to ensure proper cleanup.",
+        )
+
+
+class DIWireAsyncGeneratorFactoryDidNotYieldError(DIWireError):
+    """Async generator factory did not yield a value."""
+
+    def __init__(self, service_key: ServiceKey) -> None:
+        self.service_key = service_key
+        super().__init__(
+            f"Async generator factory for service {service_key} did not yield a value.",
+        )
+
+
+class DIWireContainerNotSetError(DIWireError):
+    """No container set in current context."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "No container set in current context. "
+            "Call container_context.set_current(container) first.",
+        )
