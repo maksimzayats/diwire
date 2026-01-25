@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
 from dataclasses import dataclass, field
 from inspect import signature
 from typing import Annotated
@@ -985,7 +985,7 @@ class TestAsyncMissingCoverage:
 
         container = Container()
 
-        def generator_factory():
+        def generator_factory() -> Generator[ServiceA, None, None]:
             yield ServiceA()
 
         container.register(
@@ -1004,7 +1004,7 @@ class TestAsyncMissingCoverage:
 
         container = Container()
 
-        def empty_generator():
+        def empty_generator() -> Generator[None, None, None]:
             return
             yield  # Make it a generator  # pyrefly: ignore[unreachable]
 

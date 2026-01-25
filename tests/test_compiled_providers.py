@@ -476,3 +476,44 @@ class TestCompilationMissingCoverage:
         # compile() should not crash - DIWireError is caught
         container.compile()
         assert container._is_compiled is True
+
+    def test_compiled_scoped_resolution_scope_mismatch_fallthrough(self) -> None:
+        """Test branch 1107->1120: compiled scoped resolution falls through when scope doesn't match."""
+        import pytest
+
+        from diwire.exceptions import DIWireScopeMismatchError
+        from diwire.registry import Registration
+        from diwire.service_key import ServiceKey
+
+        @dataclass
+        class ScopedService:
+            pass
+
+        container = Container()
+        service_key = ServiceKey.from_value(ScopedService)
+
+        # Register the service for scope "scope_a"
+        container.register(ScopedService, lifetime=Lifetime.SCOPED_SINGLETON, scope="scope_a")
+        container.compile()  # Creates compiled scoped provider for (service_key, "scope_a")
+
+        # Manually create a scoped registration that will be found by _get_scoped_registration
+        # but with a scope name that doesn't match the current scope's segments
+        # This simulates an edge case where the registration scope differs from cache key lookup
+        scoped_reg = Registration(
+            service_key=service_key,
+            lifetime=Lifetime.SCOPED_SINGLETON,
+            scope="scope_a",
+        )
+        # Put it in the scoped registry under "scope_b" so it's found when in scope_b
+        container._scoped_registry[(service_key, "scope_b")] = scoped_reg
+
+        # Enter scope_b - _get_scoped_registration will find the registration for "scope_b"
+        # but scoped_registration.scope is "scope_a"
+        # So cache_scope = current_scope.get_cache_key_for_scope("scope_a") returns None
+        # because scope_b doesn't contain scope_a
+        with container.start_scope("scope_b"):
+            # The scoped_provider exists for (service_key, "scope_a") from compilation
+            # But cache_scope is None -> falls through branch 1107->1120
+            # Then normal resolution finds the registration and raises scope mismatch
+            with pytest.raises(DIWireScopeMismatchError):
+                container.resolve(ScopedService)

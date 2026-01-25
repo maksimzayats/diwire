@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from types import FunctionType, MethodType
 from typing import Annotated, Any, get_args, get_origin, get_type_hints
 
+from diwire.exceptions import DIWireDependencyExtractionError
 from diwire.service_key import ServiceKey
 from diwire.types import FromDI
 
@@ -34,7 +35,10 @@ class DependenciesExtractor:
             return cached
 
         init_func = self._get_init_func(service_key)
-        type_hints = get_type_hints(init_func, include_extras=True)
+        try:
+            type_hints = get_type_hints(init_func, include_extras=True)
+        except (TypeError, NameError) as e:
+            raise DIWireDependencyExtractionError(service_key, e) from e
 
         result = {
             name: ServiceKey.from_value(hint)
@@ -54,7 +58,10 @@ class DependenciesExtractor:
             return cached
 
         init_func = self._get_init_func(service_key)
-        type_hints = get_type_hints(init_func, include_extras=True)
+        try:
+            type_hints = get_type_hints(init_func, include_extras=True)
+        except (TypeError, NameError) as e:
+            raise DIWireDependencyExtractionError(service_key, e) from e
         defaults = self._get_parameter_defaults(service_key)
 
         result = {

@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Generator
 from dataclasses import dataclass, field
 from inspect import signature
 from typing import Annotated
@@ -752,7 +753,7 @@ class TestAsyncResolutionEdgeCases:
 
         # Use module-level classes for circular dependency detection
         # These are defined at module level to avoid forward reference issues
-        from tests.test_container import _CircularServiceA
+        from tests.test_container import _CircularServiceA  # type: ignore[unresolved-import]
 
         with pytest.raises(DIWireCircularDependencyError):
             await container.aresolve(_CircularServiceA)
@@ -975,7 +976,7 @@ class TestAsyncResolutionEdgeCases:
         class ServiceA:
             pass
 
-        def generator_factory():
+        def generator_factory() -> Generator[ServiceA, None, None]:
             try:
                 yield ServiceA()
             finally:
@@ -1251,10 +1252,7 @@ class TestCoverageEdgeCases:
             assert instance1 is instance2
 
             # Verify it's in the scoped instances cache
-            assert any(
-                k[1] == service_key
-                for k in container._scoped_instances
-            )
+            assert any(k[1] == service_key for k in container._scoped_instances)
 
     @pytest.mark.asyncio
     async def test_aresolve_type_singleton_fast_path_cache_hit(self) -> None:
@@ -1423,3 +1421,46 @@ class TestCoverageEdgeCases:
         # So the resolution should succeed with default value
         result = container.resolve(ServiceWithDefault)
         assert result.dep is default_instance
+
+
+class TestDependencyExtractionErrorHandling:
+    """Tests for DIWireDependencyExtractionError handling in container."""
+
+    def test_compile_handles_extraction_error_in_compute_async_deps(self) -> None:
+        """compile() catches DIWireDependencyExtractionError in _compute_async_dependencies (lines 765-766)."""
+
+        # Create a class with a forward reference that cannot be resolved
+        # This will cause get_type_hints to fail with NameError
+        class BadAnnotation:
+            def __init__(self, dep: "NonExistentType") -> None:  # type: ignore[name-defined] # noqa: F821
+                pass
+
+        container = Container(auto_compile=False)
+        container.register(BadAnnotation)
+
+        # compile() should not raise - it catches the DIWireDependencyExtractionError
+        # and continues (lines 765-766)
+        container.compile()
+        assert container._is_compiled is True
+
+    def test_scoped_injected_handles_extraction_error_in_find_scope(self) -> None:
+        """ScopedInjected catches DIWireDependencyExtractionError in _find_scope_in_dependencies (lines 1656-1657)."""
+
+        # Create a class with unresolvable forward reference in its dependencies
+        class ServiceWithBadNestedDep:
+            def __init__(self, dep: "UndefinedType") -> None:  # type: ignore[name-defined] # noqa: F821
+                pass
+
+        container = Container(register_if_missing=True)
+        container.register(ServiceWithBadNestedDep)
+
+        # Create a handler that depends on the service with bad nested deps
+        def handler(service: Annotated[ServiceWithBadNestedDep, FromDI()]) -> None:
+            pass
+
+        # resolve() should not raise during scope detection
+        # It catches the DIWireDependencyExtractionError and continues (lines 1656-1657)
+        result = container.resolve(handler)
+
+        # Should return Injected (no scope detected due to extraction error)
+        assert isinstance(result, Injected)

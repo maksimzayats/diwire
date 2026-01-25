@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import NoReturn
 
 import pytest
 
@@ -94,10 +95,10 @@ class TestDependenciesEdgeCases:
 
         class BadSignatureClass:
             @property
-            def __signature__(self):
+            def __signature__(self) -> NoReturn:
                 raise TypeError("cannot compute signature")
 
-            def __init__(self):
+            def __init__(self) -> None:
                 pass
 
         # Directly test _get_parameter_defaults

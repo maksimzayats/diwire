@@ -181,3 +181,12 @@ class DIWireContainerNotSetError(DIWireError):
             "No container set in current context. "
             "Call container_context.set_current(container) first.",
         )
+
+
+class DIWireDependencyExtractionError(DIWireError):
+    """Failed to extract dependencies from a type."""
+
+    def __init__(self, service_key: ServiceKey, cause: Exception) -> None:
+        self.service_key = service_key
+        self.cause = cause
+        super().__init__(f"Failed to extract dependencies from {service_key}: {cause}")

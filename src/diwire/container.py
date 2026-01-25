@@ -796,7 +796,10 @@ class Container:
         if not isinstance(service_key.value, type):
             return None
 
-        deps = self._dependencies_extractor.get_dependencies_with_defaults(service_key)
+        try:
+            deps = self._dependencies_extractor.get_dependencies_with_defaults(service_key)
+        except DIWireError:
+            return None
 
         # Filter out ignored types with defaults
         filtered_deps: dict[str, ServiceKey] = {}
