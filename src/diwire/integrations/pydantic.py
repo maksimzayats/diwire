@@ -1,6 +1,6 @@
 try:
     from pydantic_settings import BaseSettings
-except ImportError:
+except ImportError:  # pragma: no cover
 
     class BaseSettings:  # type: ignore[no-redef]  # noqa: D101
         pass

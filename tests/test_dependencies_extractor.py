@@ -371,6 +371,60 @@ class TestGetInitFunc:
         assert result is not None
 
 
+class TestGetParameterDefaultsEdgeCases:
+    """Tests for _get_parameter_defaults edge cases."""
+
+    def test_get_parameter_defaults_with_defaults(
+        self,
+        dependencies_extractor: DependenciesExtractor,
+    ) -> None:
+        """Function with default values returns correct mapping."""
+
+        def func_with_defaults(a: int, b: str = "default", c: int = 10) -> None:
+            pass
+
+        result = dependencies_extractor._get_parameter_defaults(
+            ServiceKey.from_value(func_with_defaults),
+        )
+
+        # a has no default, b and c have defaults
+        assert result["a"] is False
+        assert result["b"] is True
+        assert result["c"] is True
+
+    def test_get_parameter_defaults_lambda(
+        self,
+        dependencies_extractor: DependenciesExtractor,
+    ) -> None:
+        """Lambda functions should work."""
+        my_lambda = lambda x, y=10: x + y  # noqa: E731
+
+        result = dependencies_extractor._get_parameter_defaults(
+            ServiceKey.from_value(my_lambda),
+        )
+
+        assert "y" in result
+        assert result["y"] is True  # has default
+
+    def test_get_parameter_defaults_class_with_init(
+        self,
+        dependencies_extractor: DependenciesExtractor,
+    ) -> None:
+        """Class with __init__ that has defaults."""
+
+        class MyClass:
+            def __init__(self, a: int, b: str = "default") -> None:
+                self.a = a
+                self.b = b
+
+        result = dependencies_extractor._get_parameter_defaults(
+            ServiceKey.from_value(MyClass),
+        )
+        # a has no default, b has default
+        assert result["a"] is False
+        assert result["b"] is True
+
+
 class TestGetDependenciesWithDefaults:
     """Tests for get_dependencies_with_defaults method."""
 

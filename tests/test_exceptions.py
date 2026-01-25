@@ -13,6 +13,7 @@ from diwire.exceptions import (
     DIWireServiceNotRegisteredError,
 )
 from diwire.service_key import Component, ServiceKey
+from diwire.types import Lifetime
 
 
 @pytest.fixture()
@@ -300,3 +301,141 @@ class TestAsyncExceptions:
 
         assert exc.service_key is service_key
         assert "did not yield" in str(exc)
+
+
+class TestGeneratorFactoryExceptions:
+    """Tests for generator factory exceptions."""
+
+    def test_generator_factory_did_not_yield_error_constructor(self) -> None:
+        """DIWireGeneratorFactoryDidNotYieldError has correct message."""
+        from diwire.exceptions import DIWireGeneratorFactoryDidNotYieldError
+
+        class ServiceA:
+            pass
+
+        service_key = ServiceKey(value=ServiceA)
+        exc = DIWireGeneratorFactoryDidNotYieldError(service_key)
+
+        assert exc.service_key is service_key
+        assert "did not yield a value" in str(exc)
+        assert "ServiceA" in str(exc)
+
+    def test_generator_factory_unsupported_lifetime_error_constructor(self) -> None:
+        """DIWireGeneratorFactoryUnsupportedLifetimeError has correct message."""
+        from diwire.exceptions import DIWireGeneratorFactoryUnsupportedLifetimeError
+
+        class ServiceA:
+            pass
+
+        service_key = ServiceKey(value=ServiceA)
+        exc = DIWireGeneratorFactoryUnsupportedLifetimeError(service_key)
+
+        assert exc.service_key is service_key
+        assert "generator" in str(exc).lower()
+        assert "lifetime" in str(exc).lower()
+
+    def test_generator_factory_did_not_yield_raised_in_sync(self) -> None:
+        """DIWireGeneratorFactoryDidNotYieldError raised when generator doesn't yield."""
+        from collections.abc import Generator
+
+        from diwire.exceptions import DIWireGeneratorFactoryDidNotYieldError
+
+        class ServiceA:
+            pass
+
+        def empty_generator_factory() -> Generator[ServiceA, None, None]:
+            # Generator that yields nothing
+            return
+            yield  # type: ignore[misc]  # unreachable but needed for generator
+
+        container = Container()
+        container.register(ServiceA, factory=empty_generator_factory, scope="request")
+
+        with pytest.raises(DIWireGeneratorFactoryDidNotYieldError):
+            with container.start_scope("request"):
+                container.resolve(ServiceA)
+
+    def test_generator_factory_unsupported_lifetime_raised(self) -> None:
+        """DIWireGeneratorFactoryUnsupportedLifetimeError raised for singleton generator."""
+        from collections.abc import Generator
+
+        from diwire.exceptions import (
+            DIWireGeneratorFactoryUnsupportedLifetimeError,
+            DIWireGeneratorFactoryWithoutScopeError,
+        )
+
+        class ServiceA:
+            pass
+
+        def singleton_gen_factory() -> Generator[ServiceA, None, None]:
+            yield ServiceA()
+
+        container = Container()
+        # Register as SINGLETON which is not supported for generator factories
+        container.register(
+            ServiceA,
+            factory=singleton_gen_factory,
+            lifetime=Lifetime.SINGLETON,
+        )
+
+        # Generator factories require a scope - trying to resolve will fail
+        # because either there's no scope (DIWireGeneratorFactoryWithoutScopeError)
+        # or the lifetime is not SCOPED_SINGLETON (DIWireGeneratorFactoryUnsupportedLifetimeError)
+        with pytest.raises(  # type: ignore[call-overload]
+            (
+                DIWireGeneratorFactoryUnsupportedLifetimeError,
+                DIWireGeneratorFactoryWithoutScopeError,
+            ),
+        ):
+            container.resolve(ServiceA)
+
+    async def test_async_generator_factory_did_not_yield_raised(self) -> None:
+        """DIWireAsyncGeneratorFactoryDidNotYieldError raised when async gen doesn't yield."""
+        from collections.abc import AsyncGenerator
+
+        from diwire.exceptions import DIWireAsyncGeneratorFactoryDidNotYieldError
+
+        class ServiceA:
+            pass
+
+        async def empty_async_gen_factory() -> AsyncGenerator[ServiceA, None]:
+            return
+            yield  # type: ignore[misc]  # unreachable but needed for async generator
+
+        container = Container()
+        container.register(ServiceA, factory=empty_async_gen_factory, scope="request")
+
+        with pytest.raises(DIWireAsyncGeneratorFactoryDidNotYieldError):
+            async with container.start_scope("request"):
+                await container.aresolve(ServiceA)
+
+    async def test_async_generator_factory_unsupported_lifetime_raised(self) -> None:
+        """DIWireAsyncGeneratorFactoryWithoutScopeError raised for singleton async gen."""
+        from collections.abc import AsyncGenerator
+
+        from diwire.exceptions import (
+            DIWireAsyncGeneratorFactoryWithoutScopeError,
+            DIWireGeneratorFactoryUnsupportedLifetimeError,
+        )
+
+        class ServiceA:
+            pass
+
+        async def singleton_async_gen_factory() -> AsyncGenerator[ServiceA, None]:
+            yield ServiceA()
+
+        container = Container()
+        container.register(
+            ServiceA,
+            factory=singleton_async_gen_factory,
+            lifetime=Lifetime.SINGLETON,
+        )
+
+        # Async generator factories require a scope - trying to resolve will fail
+        with pytest.raises(  # type: ignore[call-overload]
+            (
+                DIWireAsyncGeneratorFactoryWithoutScopeError,
+                DIWireGeneratorFactoryUnsupportedLifetimeError,
+            ),
+        ):
+            await container.aresolve(ServiceA)

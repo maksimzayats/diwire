@@ -9,7 +9,7 @@ lint:
 	uv run mypy .
 
 test:
-	uv run pytest tests/
+	uv run pytest -v --cov=src --cov-report=html tests/
 
 # === Benchmark Commands ===
 
