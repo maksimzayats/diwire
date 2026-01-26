@@ -1,6 +1,6 @@
 [project]
 name = "diwire"
-version = "0.0.0a1"
+dynamic = ["version"]
 description = "A lightweight, type-safe dependency injection container with automatic wiring, scoped lifetimes, and zero dependencies"
 readme = "README.md"
 license = "MIT"
@@ -55,8 +55,18 @@ dev = [
 ]
 
 [build-system]
-requires = ["uv_build>=0.9.10,<0.10.0"]
-build-backend = "uv_build"
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
+
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
 
 [tool.mypy]
 python_version = "3.10"
