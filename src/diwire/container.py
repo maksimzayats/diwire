@@ -46,6 +46,7 @@ from diwire.exceptions import (
     DIWireIgnoredServiceError,
     DIWireMissingDependenciesError,
     DIWireNotAClassError,
+    DIWireProvidesRequiresClassError,
     DIWireScopedSingletonWithoutScopeError,
     DIWireScopeMismatchError,
     DIWireServiceNotRegisteredError,
@@ -594,22 +595,39 @@ class Container:
         lifetime: Lifetime = Lifetime.TRANSIENT,
         scope: str | None = None,
         is_async: bool | None = None,
+        provides: Any | None = None,
     ) -> None:
         """Register a service with the container.
 
         Args:
-            key: The service key to register.
+            key: The service key to register. When used with `provides`, this is the
+                concrete implementation class.
             factory: Optional factory to create instances.
             instance: Optional pre-created instance.
             lifetime: The lifetime of the service.
             scope: Optional scope name for SCOPED_SINGLETON services.
             is_async: Whether the factory is async. If None, auto-detected from factory.
+            provides: Optional interface/abstract type that this registration provides.
+                When specified, the service is registered under this type instead of `key`.
 
         Raises:
             DIWireScopedSingletonWithoutScopeError: If lifetime is SCOPED_SINGLETON but no scope is provided.
+            DIWireProvidesRequiresClassError: If `provides` is used but `key` is not a class
+                (when no factory/instance is given).
 
         """
-        service_key = ServiceKey.from_value(key)
+        # Determine service_key and concrete_type based on provides parameter
+        if provides is not None:
+            service_key = ServiceKey.from_value(provides)
+            if instance is None and factory is None:
+                if not isinstance(key, type):
+                    raise DIWireProvidesRequiresClassError(key, provides)
+                concrete_type: type | None = key
+            else:
+                concrete_type = key if isinstance(key, type) else None
+        else:
+            service_key = ServiceKey.from_value(key)
+            concrete_type = None
 
         if lifetime == Lifetime.SCOPED_SINGLETON and scope is None:
             raise DIWireScopedSingletonWithoutScopeError(service_key)
@@ -628,6 +646,7 @@ class Container:
             lifetime=lifetime,
             scope=scope,
             is_async=detected_is_async,
+            concrete_type=concrete_type,
         )
 
         # If registering with an instance (non-scoped), update the singleton cache immediately
@@ -792,12 +811,22 @@ class Container:
                 return SingletonFactoryProvider(service_key, factory_provider)
             return FactoryProvider(factory_provider)
 
+        # Use concrete_type if registered with provides parameter
+        instantiation_type = registration.concrete_type or service_key.value
+
         # Handle type registrations - compile dependencies
-        if not isinstance(service_key.value, type):
+        if not isinstance(instantiation_type, type):
             return None
 
+        # Use concrete type's service key for dependency extraction
+        instantiation_key = (
+            ServiceKey.from_value(instantiation_type)
+            if registration.concrete_type is not None
+            else service_key
+        )
+
         try:
-            deps = self._dependencies_extractor.get_dependencies_with_defaults(service_key)
+            deps = self._dependencies_extractor.get_dependencies_with_defaults(instantiation_key)
         except DIWireError:
             return None
 
@@ -814,8 +843,8 @@ class Container:
         if not filtered_deps:
             # No dependencies - use simple provider
             if registration.lifetime == Lifetime.SINGLETON:
-                return SingletonTypeProvider(service_key.value, service_key)
-            return TypeProvider(service_key.value)
+                return SingletonTypeProvider(instantiation_type, service_key)
+            return TypeProvider(instantiation_type)
 
         # Compile dependency providers
         param_names: list[str] = []
@@ -829,13 +858,13 @@ class Container:
 
         if registration.lifetime == Lifetime.SINGLETON:
             return SingletonArgsTypeProvider(
-                service_key.value,
+                instantiation_type,
                 service_key,
                 tuple(param_names),
                 tuple(dep_providers),
             )
         return ArgsTypeProvider(
-            service_key.value,
+            instantiation_type,
             tuple(param_names),
             tuple(dep_providers),
         )
@@ -883,10 +912,20 @@ class Container:
         if registration.instance is not None or registration.factory is not None:
             return None
 
-        if not isinstance(service_key.value, type):
+        # Use concrete_type if registered with provides parameter
+        instantiation_type = registration.concrete_type or service_key.value
+
+        if not isinstance(instantiation_type, type):
             return None
 
-        deps = self._dependencies_extractor.get_dependencies_with_defaults(service_key)
+        # Use concrete type's service key for dependency extraction
+        instantiation_key = (
+            ServiceKey.from_value(instantiation_type)
+            if registration.concrete_type is not None
+            else service_key
+        )
+
+        deps = self._dependencies_extractor.get_dependencies_with_defaults(instantiation_key)
 
         # Filter out ignored types with defaults
         filtered_deps: dict[str, ServiceKey] = {}
@@ -899,7 +938,7 @@ class Container:
 
         if not filtered_deps:
             # No dependencies - use simple scoped provider
-            return ScopedSingletonProvider(service_key.value, service_key)
+            return ScopedSingletonProvider(instantiation_type, service_key)
 
         # Compile dependency providers
         param_names: list[str] = []
@@ -912,7 +951,7 @@ class Container:
             dep_providers.append(dep_provider)
 
         return ScopedSingletonArgsProvider(
-            service_key.value,
+            instantiation_type,
             service_key,
             tuple(param_names),
             tuple(dep_providers),
@@ -1185,11 +1224,19 @@ class Container:
 
                 return instance
 
-            resolved_dependencies = self._get_resolved_dependencies(service_key=service_key)
+            # Use concrete_type if registered with provides parameter
+            instantiation_type = registration.concrete_type or service_key.value
+            instantiation_key = (
+                ServiceKey.from_value(instantiation_type)
+                if registration.concrete_type is not None
+                else service_key
+            )
+
+            resolved_dependencies = self._get_resolved_dependencies(service_key=instantiation_key)
             if resolved_dependencies.missing:
                 raise DIWireMissingDependenciesError(service_key, resolved_dependencies.missing)
 
-            instance = service_key.value(**resolved_dependencies.dependencies)
+            instance = instantiation_type(**resolved_dependencies.dependencies)
 
             if registration.lifetime == Lifetime.SINGLETON:
                 self._singletons[service_key] = instance
@@ -1436,12 +1483,22 @@ class Container:
 
                 return instance  # type: ignore[possibly-undefined]
 
+            # Use concrete_type if registered with provides parameter
+            instantiation_type = registration.concrete_type or service_key.value
+            instantiation_key = (
+                ServiceKey.from_value(instantiation_type)
+                if registration.concrete_type is not None
+                else service_key
+            )
+
             # Resolve dependencies
-            resolved_dependencies = await self._aget_resolved_dependencies(service_key=service_key)
+            resolved_dependencies = await self._aget_resolved_dependencies(
+                service_key=instantiation_key,
+            )
             if resolved_dependencies.missing:
                 raise DIWireMissingDependenciesError(service_key, resolved_dependencies.missing)
 
-            instance = service_key.value(**resolved_dependencies.dependencies)
+            instance = instantiation_type(**resolved_dependencies.dependencies)
 
             if registration.lifetime == Lifetime.SINGLETON:
                 self._singletons[service_key] = instance

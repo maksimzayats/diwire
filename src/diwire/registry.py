@@ -14,3 +14,4 @@ class Registration:
     factory: Factory | None = None
     scope: str | None = None
     is_async: bool = False
+    concrete_type: type | None = None

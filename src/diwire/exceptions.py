@@ -190,3 +190,15 @@ class DIWireDependencyExtractionError(DIWireError):
         self.service_key = service_key
         self.cause = cause
         super().__init__(f"Failed to extract dependencies from {service_key}: {cause}")
+
+
+class DIWireProvidesRequiresClassError(DIWireError):
+    """The 'provides' parameter requires 'key' to be a class when no factory/instance is given."""
+
+    def __init__(self, key: object, provides: type) -> None:
+        self.key = key
+        self.provides = provides
+        super().__init__(
+            f"When using 'provides={provides.__name__}', the 'key' must be a class, "
+            f"got {type(key).__name__}: {key}",
+        )
