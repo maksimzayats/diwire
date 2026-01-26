@@ -87,20 +87,6 @@ class UserController:
         return None
 
 
-class AsyncController:
-    """Controller with async decorated methods."""
-
-    @container_context.resolve()
-    async def async_list(
-        self,
-        db: Annotated[Database, FromDI()],
-        logger: Annotated[Logger, FromDI()],
-    ) -> list[dict[str, str]]:
-        """Async method with dependency injection."""
-        logger.info("Async fetching users")
-        return db.query("SELECT * FROM users")
-
-
 def main() -> None:
     # Set up container
     container = Container()
