@@ -105,6 +105,7 @@ unused-ignore-comment = "ignore"
 
 [tool.pyrefly]
 project-excludes = ["benchmarks/**", "benchmarks/", "examples/**", "tests/examples/**"]
+search-path = ["."]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
