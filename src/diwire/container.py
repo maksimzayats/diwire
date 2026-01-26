@@ -1753,7 +1753,11 @@ class Container:
 
             try:
                 resolved_dependencies.dependencies[name] = self.resolve(param_info.service_key)
-            except (DIWireCircularDependencyError, DIWireScopeMismatchError):
+            except (
+                DIWireCircularDependencyError,
+                DIWireScopeMismatchError,
+                DIWireAsyncDependencyInSyncContextError,
+            ):
                 raise
             except DIWireError:
                 if not param_info.has_default:
