@@ -37,7 +37,7 @@ def main() -> None:
         ctx1 = scope.resolve(RequestContext)
         ctx2 = scope.resolve(RequestContext)
 
-        print(f"Inside scope '{Scope.REQUEST}':")
+        print(f"Inside scope '{Scope.REQUEST.value}':")
         print(f"  ctx1: {ctx1}")
         print(f"  ctx2: {ctx2}")
         print(f"  Same instance (transient): {ctx1 is ctx2}")
