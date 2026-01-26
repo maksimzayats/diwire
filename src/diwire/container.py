@@ -93,7 +93,8 @@ class ScopeId:
 
 
 # Context variable for resolution tracking (works with both threads and async tasks)
-_resolution_stack: ContextVar[list[ServiceKey] | None] = ContextVar(
+# Stores (task_id, stack) tuple to detect when stack needs cloning for new async tasks
+_resolution_stack: ContextVar[tuple[int | None, list[ServiceKey]] | None] = ContextVar(
     "resolution_stack",
     default=None,
 )
@@ -102,13 +103,42 @@ _resolution_stack: ContextVar[list[ServiceKey] | None] = ContextVar(
 _current_scope: ContextVar[ScopeId | None] = ContextVar("current_scope", default=None)
 
 
+def _get_context_id() -> int | None:
+    """Get an identifier for the current execution context.
+
+    Returns the id of the current async task if running in an async context,
+    or None if running in a sync context.
+    """
+    try:
+        task = asyncio.current_task()
+        return id(task) if task is not None else None
+    except RuntimeError:
+        return None
+
+
 def _get_resolution_stack() -> list[ServiceKey]:
-    """Get the current context's resolution stack."""
-    stack = _resolution_stack.get()
-    if stack is None:
+    """Get the current context's resolution stack.
+
+    When called from a different async task than the one that created the stack,
+    returns a cloned copy to ensure task isolation during parallel resolution.
+    """
+    current_task_id = _get_context_id()
+    stored = _resolution_stack.get()
+
+    if stored is None:
         # Create a new list for this context
-        stack = []
-        _resolution_stack.set(stack)
+        stack: list[ServiceKey] = []
+        _resolution_stack.set((current_task_id, stack))
+        return stack
+
+    owner_task_id, stack = stored
+
+    # If we're in a different async task, clone the stack for isolation
+    if current_task_id is not None and owner_task_id != current_task_id:
+        cloned_stack = list(stack)
+        _resolution_stack.set((current_task_id, cloned_stack))
+        return cloned_stack
+
     return stack
 
 
@@ -126,7 +156,8 @@ def _is_async_factory(factory: Any) -> bool:
     # Handle callable instances (objects with __call__ that aren't functions/classes)
     if callable(factory) and not inspect.isfunction(factory) and not inspect.ismethod(factory):
         call_method = getattr(factory, "__call__", None)  # noqa: B004
-        if call_method is not None:
+        # Callable objects always have __call__, so this is always True
+        if call_method is not None:  # pragma: no branch
             return inspect.iscoroutinefunction(call_method) or inspect.isasyncgenfunction(
                 call_method,
             )
@@ -430,9 +461,11 @@ class AsyncInjected(Generic[T]):
             service_key=self._service_key,
         )
         # Resolve all dependencies in parallel
-        tasks = {name: self._container.aresolve(dep) for name, dep in injected_deps.items()}
-        results = await asyncio.gather(*tasks.values())
-        return dict(zip(tasks.keys(), results, strict=True))
+        # Wrap in create_task() so each coroutine gets its own context copy
+        coros = {name: self._container.aresolve(dep) for name, dep in injected_deps.items()}
+        tasks = [asyncio.create_task(coro) for coro in coros.values()]
+        results = await asyncio.gather(*tasks)
+        return dict(zip(coros.keys(), results, strict=True))
 
     def __repr__(self) -> str:
         return f"AsyncInjected({self._func!r})"
@@ -500,9 +533,11 @@ class AsyncScopedInjected(Generic[T]):
             service_key=self._service_key,
         )
         # Resolve all dependencies in parallel
-        tasks = {name: self._container.aresolve(dep) for name, dep in injected_deps.items()}
-        results = await asyncio.gather(*tasks.values())
-        return dict(zip(tasks.keys(), results, strict=True))
+        # Wrap in create_task() so each coroutine gets its own context copy
+        coros = {name: self._container.aresolve(dep) for name, dep in injected_deps.items()}
+        tasks = [asyncio.create_task(coro) for coro in coros.values()]
+        results = await asyncio.gather(*tasks)
+        return dict(zip(coros.keys(), results, strict=True))
 
     def __repr__(self) -> str:
         return f"AsyncScopedInjected({self._func!r}, scope={self._scope_name!r})"
@@ -1263,7 +1298,8 @@ class Container:
                     if registration.lifetime == Lifetime.SINGLETON:
                         self._singletons[service_key] = instance
                     elif (
-                        registration.lifetime == Lifetime.SCOPED_SINGLETON and cache_scope is not None
+                        registration.lifetime == Lifetime.SCOPED_SINGLETON
+                        and cache_scope is not None
                     ):
                         self._scoped_instances[(cache_scope, service_key)] = instance
 
@@ -1646,8 +1682,10 @@ class Container:
                 resolved_dependencies.dependencies[name] = await coro
             else:
                 # Multiple async dependencies - resolve in parallel
+                # Wrap in create_task() so each coroutine gets its own context copy
                 names, coros = zip(*async_tasks, strict=True)
-                results = await asyncio.gather(*coros)
+                tasks = [asyncio.create_task(coro) for coro in coros]
+                results = await asyncio.gather(*tasks)
                 for name, result in zip(names, results, strict=True):
                     resolved_dependencies.dependencies[name] = result
 
@@ -1687,7 +1725,9 @@ class Container:
         if key not in self._sync_singleton_locks:
             with self._sync_singleton_locks_lock:
                 # Second check after acquiring lock - race timing dependent
-                if key not in self._sync_singleton_locks:  # pragma: no cover - race timing dependent
+                if (
+                    key not in self._sync_singleton_locks
+                ):  # pragma: no cover - race timing dependent
                     self._sync_singleton_locks[key] = threading.Lock()
         return self._sync_singleton_locks[key]
 
