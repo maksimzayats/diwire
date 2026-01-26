@@ -21,6 +21,7 @@ from typing import (
     TypeVar,
     get_args,
     get_origin,
+    get_type_hints,
     overload,
 )
 
@@ -52,6 +53,7 @@ from diwire.exceptions import (
     DIWireAsyncGeneratorFactoryWithoutScopeError,
     DIWireCircularDependencyError,
     DIWireComponentSpecifiedError,
+    DIWireDecoratorFactoryMissingReturnAnnotationError,
     DIWireError,
     DIWireGeneratorFactoryDidNotYieldError,
     DIWireGeneratorFactoryUnsupportedLifetimeError,
@@ -69,6 +71,7 @@ from diwire.service_key import ServiceKey
 from diwire.types import Factory, FromDI, Lifetime
 
 T = TypeVar("T", bound=Any)
+_C = TypeVar("_C", bound=type)  # For class decorator
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,6 +185,47 @@ def _is_async_factory(factory: Any) -> bool:
             )
 
     return inspect.iscoroutinefunction(factory) or inspect.isasyncgenfunction(factory)
+
+
+def _get_return_annotation(func: Callable[..., Any]) -> type | None:
+    """Extract the return type annotation from a callable.
+
+    Returns None if there's no return annotation or if the return type is None.
+    Handles unwrapping of Optional, Union, AsyncGenerator, Generator, etc.
+    """
+    try:
+        hints = get_type_hints(func)
+    except (NameError, TypeError, AttributeError):
+        # NameError: unresolved forward references
+        # TypeError: invalid type annotations
+        # AttributeError: missing module or attribute
+        return None
+
+    return_type = hints.get("return")
+    if return_type is None:
+        return None
+
+    # Handle NoneType - if return annotation is just None/NoneType, return None
+    if return_type is type(None):
+        return None
+
+    # Unwrap async generator and generator types
+    origin = get_origin(return_type)
+    if origin is not None:
+        # Handle Generator[YieldType, SendType, ReturnType] and AsyncGenerator[YieldType, SendType]
+        if origin in (Generator, AsyncGenerator):
+            args = get_args(return_type)
+            if args:
+                return args[0]  # Return the yield type
+        # Handle other generic types - just return the origin if it's a class
+        if isinstance(origin, type):
+            return origin
+
+    # Return the type if it's a class
+    if isinstance(return_type, type):
+        return return_type
+
+    return None
 
 
 @dataclass(kw_only=True, slots=True, frozen=True)
@@ -682,9 +726,46 @@ class Container:
 
         self.register(type(self), instance=self, lifetime=Lifetime.SINGLETON)
 
+    # Overload 1: Bare class decorator - @container.register
+    @overload
+    def register(self, key: _C, /) -> _C: ...
+
+    # Overload 2: Bare factory function decorator - @container.register
+    @overload
+    def register(self, key: Callable[..., T], /) -> Callable[..., T]: ...
+
+    # Overload 3: Parameterized decorator - @container.register(lifetime=..., provides=...)
+    # Returns a decorator that accepts classes or functions
+    @overload
+    def register(
+        self,
+        key: None = None,
+        /,
+        factory: None = None,
+        instance: None = None,
+        lifetime: Lifetime = ...,
+        scope: str | None = ...,
+        is_async: bool | None = ...,
+        provides: type | None = ...,
+    ) -> Callable[[T], T]: ...
+
+    # Overload 4: Direct call with explicit key - container.register(MyClass, factory=...)
+    @overload
     def register(
         self,
         key: Any,
+        /,
+        factory: Factory | None = ...,
+        instance: Any | None = ...,
+        lifetime: Lifetime = ...,
+        scope: str | None = ...,
+        is_async: bool | None = ...,
+        provides: Any | None = ...,
+    ) -> None: ...
+
+    def register(
+        self,
+        key: Any | None = None,
         /,
         factory: Factory | None = None,
         instance: Any | None = None,
@@ -692,12 +773,18 @@ class Container:
         scope: str | None = None,
         is_async: bool | None = None,
         provides: Any | None = None,
-    ) -> None:
+    ) -> Any:
         """Register a service with the container.
+
+        Can be used as:
+        - Bare class decorator: @container.register
+        - Parameterized decorator: @container.register(lifetime=Lifetime.SINGLETON)
+        - Factory function decorator: @container.register (with return annotation)
+        - Direct call: container.register(MyClass, factory=my_factory)
 
         Args:
             key: The service key to register. When used with `provides`, this is the
-                concrete implementation class.
+                concrete implementation class. When None, returns a decorator.
             factory: Optional factory to create instances.
             instance: Optional pre-created instance.
             lifetime: The lifetime of the service. This default applies only to explicit
@@ -708,12 +795,141 @@ class Container:
             provides: Optional interface/abstract type that this registration provides.
                 When specified, the service is registered under this type instead of `key`.
 
+        Returns:
+            - When used as a bare decorator on a class: returns the class unchanged
+            - When used as a parameterized decorator: returns a decorator function
+            - When used as a direct call: returns None
+
         Raises:
-            DIWireScopedSingletonWithoutScopeError: If lifetime is SCOPED_SINGLETON but no scope is provided.
+            DIWireScopedSingletonWithoutScopeError: If lifetime is SCOPED_SINGLETON but
+                no scope is provided.
             DIWireProvidesRequiresClassError: If `provides` is used but `key` is not a class
                 (when no factory/instance is given).
+            DIWireDecoratorFactoryMissingReturnAnnotationError: If used as a factory decorator
+                but the function has no return annotation and no `provides` parameter.
 
         """
+        # Check if all optional params are at defaults (for bare decorator detection)
+        all_params_at_defaults = (
+            factory is None
+            and instance is None
+            and lifetime == Lifetime.TRANSIENT
+            and scope is None
+            and is_async is None
+            and provides is None
+        )
+
+        # Case 1: Parameterized decorator - @container.register(lifetime=..., provides=...)
+        if key is None:
+            return self._make_decorator(
+                lifetime=lifetime,
+                scope=scope,
+                is_async=is_async,
+                provides=provides,
+            )
+
+        # Case 2: Bare decorator on a class - @container.register
+        if isinstance(key, type) and all_params_at_defaults:
+            self._do_register(
+                key=key,
+                factory=None,
+                instance=None,
+                lifetime=lifetime,
+                scope=scope,
+                is_async=is_async,
+                provides=None,
+            )
+            return key
+
+        # Case 3: Bare decorator on a function - @container.register
+        # Check that key is a proper function/method, not a generic alias like Annotated[T, ...]
+        is_factory_function = (
+            callable(key)
+            and not isinstance(key, type)
+            and get_origin(key) is None  # Not a generic alias
+            and (
+                inspect.isfunction(key) or inspect.ismethod(key) or inspect.iscoroutinefunction(key)
+            )
+        )
+        if is_factory_function and all_params_at_defaults:
+            service_type = _get_return_annotation(key)
+            if service_type is None:
+                raise DIWireDecoratorFactoryMissingReturnAnnotationError(key)
+            self._do_register(
+                key=service_type,
+                factory=key,
+                instance=None,
+                lifetime=lifetime,
+                scope=scope,
+                is_async=is_async,
+                provides=None,
+            )
+            return key
+
+        # Case 4: Direct call - container.register(MyClass, factory=...)
+        self._do_register(
+            key=key,
+            factory=factory,
+            instance=instance,
+            lifetime=lifetime,
+            scope=scope,
+            is_async=is_async,
+            provides=provides,
+        )
+        return None
+
+    def _make_decorator(
+        self,
+        lifetime: Lifetime,
+        scope: str | None,
+        is_async: bool | None,
+        provides: Any | None,
+    ) -> Callable[[T], T]:
+        """Create a decorator function for parameterized @container.register(...) usage."""
+
+        def decorator(target: T) -> T:
+            if isinstance(target, type):
+                # Class decoration
+                self._do_register(
+                    key=target,
+                    factory=None,
+                    instance=None,
+                    lifetime=lifetime,
+                    scope=scope,
+                    is_async=is_async,
+                    provides=provides,
+                )
+            else:
+                # Factory function decoration - infer type from return annotation
+                service_type = provides
+                if service_type is None:
+                    service_type = _get_return_annotation(target)  # type: ignore[arg-type]
+                    if service_type is None:
+                        raise DIWireDecoratorFactoryMissingReturnAnnotationError(target)
+                self._do_register(
+                    key=service_type,
+                    factory=target,  # type: ignore[arg-type]
+                    instance=None,
+                    lifetime=lifetime,
+                    scope=scope,
+                    is_async=is_async,
+                    provides=None,  # Already resolved to service_type
+                )
+            return target
+
+        return decorator
+
+    def _do_register(
+        self,
+        key: Any,
+        factory: Factory | None,
+        instance: Any | None,
+        lifetime: Lifetime,
+        scope: str | None,
+        is_async: bool | None,
+        provides: Any | None,
+    ) -> None:
+        """Perform the actual registration logic."""
         # Determine service_key and concrete_type based on provides parameter
         if provides is not None:
             service_key = ServiceKey.from_value(provides)

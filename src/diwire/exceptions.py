@@ -215,3 +215,20 @@ class DIWireAsyncCleanupWithoutEventLoopError(DIWireError):
             "running. Use 'async with container.start_scope()' instead of 'with' when resolving "
             "async generators, or ensure an event loop is running when the scope exits.",
         )
+
+
+class DIWireDecoratorFactoryMissingReturnAnnotationError(DIWireError):
+    """Raised when factory decorator cannot determine service type.
+
+    This happens when:
+    - No 'provides' parameter is given, AND
+    - The function has no return type annotation (or returns None)
+    """
+
+    def __init__(self, factory: object) -> None:
+        self.factory = factory
+        factory_name = getattr(factory, "__name__", repr(factory))
+        super().__init__(
+            f"Factory '{factory_name}' has no return annotation. "
+            f"Either add a return type annotation or use provides=SomeType.",
+        )
