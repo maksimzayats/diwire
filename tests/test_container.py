@@ -1205,6 +1205,39 @@ class TestCoverageEdgeCases:
         service_key_b = ServiceKey.from_value(ServiceB)
         assert (service_key_b, "request") not in container._scoped_compiled_providers
 
+    def test_compile_scoped_registration_skips_scoped_dependency(self) -> None:
+        """Scoped compilation skips when dependencies have scoped registrations."""
+        container = Container(auto_compile=False, register_if_missing=False)
+
+        class ServiceA:
+            def __init__(self, name: str) -> None:
+                self.name = name
+
+        class ServiceB:
+            def __init__(self, a: ServiceA) -> None:
+                self.a = a
+
+        global_instance = ServiceA(name="global")
+        scoped_instance = ServiceA(name="scoped")
+
+        container.register(ServiceA, instance=global_instance, lifetime=Lifetime.SINGLETON)
+        container.register(
+            ServiceA,
+            instance=scoped_instance,
+            scope="request",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        container.compile()
+
+        service_key_b = ServiceKey.from_value(ServiceB)
+        assert (service_key_b, "request") not in container._scoped_compiled_providers
+
+        with container.start_scope("request"):
+            resolved = container.resolve(ServiceB)
+            assert resolved.a is scoped_instance
+
     def test_compiled_scoped_provider_uses_cache(self) -> None:
         """Compiled scoped provider caches instances correctly."""
         container = Container(auto_compile=False)

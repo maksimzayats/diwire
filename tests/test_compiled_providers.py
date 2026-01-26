@@ -177,7 +177,7 @@ class TestScopedSingletonArgsProvider:
     def test_scoped_singleton_args_outside_scope(self) -> None:
         """Test scoped singleton args provider fallback when outside scope."""
         container = Container()
-        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceA, lifetime=Lifetime.TRANSIENT)
         container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
         container.compile()
 

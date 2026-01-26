@@ -1006,6 +1006,12 @@ class Container:
             # No dependencies - use simple scoped provider
             return ScopedSingletonProvider(instantiation_type, service_key)
 
+        # Skip compilation when any dependency has a scoped registration.
+        if self._scoped_registry:
+            scoped_service_keys = {scoped_key for scoped_key, _ in self._scoped_registry}
+            if any(dep_key in scoped_service_keys for dep_key in filtered_deps.values()):
+                return None
+
         # Compile dependency providers
         param_names: list[str] = []
         dep_providers: list[CompiledProvider] = []
