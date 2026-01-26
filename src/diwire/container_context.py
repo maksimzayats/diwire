@@ -7,10 +7,12 @@ import threading
 import types
 from collections.abc import Callable, Coroutine
 from contextvars import ContextVar, Token
+from dataclasses import dataclass
 from functools import wraps
-from typing import TYPE_CHECKING, Any, TypeVar, overload
+from typing import TYPE_CHECKING, Any, TypeVar, get_origin, overload
 
 from diwire.exceptions import DIWireContainerNotSetError
+from diwire.types import Factory, Lifetime
 
 if TYPE_CHECKING:
     from diwire.container import Container
@@ -19,6 +21,7 @@ if TYPE_CHECKING:
 from diwire.container import _build_signature_without_fromdi
 
 T = TypeVar("T")
+_C = TypeVar("_C", bound=type)
 
 _current_container: ContextVar[Container | None] = ContextVar(
     "diwire_current_container",
@@ -31,6 +34,39 @@ _current_container: ContextVar[Container | None] = ContextVar(
 # Each thread gets its own fallback container to prevent cross-thread leakage.
 # See: https://github.com/python/cpython/issues/102609
 _thread_local_fallback: threading.local = threading.local()
+
+
+@dataclass(slots=True)
+class _DeferredRegistration:
+    key: Any
+    factory: Factory | None
+    instance: Any | None
+    lifetime: Lifetime
+    scope: str | None
+    is_async: bool | None
+    provides: Any | None
+    via_decorator: bool
+
+    def apply(self, container: Container) -> None:
+        if self.via_decorator:
+            decorator = container.register(
+                lifetime=self.lifetime,
+                scope=self.scope,
+                is_async=self.is_async,
+                provides=self.provides,
+            )
+            decorator(self.key)
+            return
+
+        container.register(
+            self.key,
+            factory=self.factory,
+            instance=self.instance,
+            lifetime=self.lifetime,
+            scope=self.scope,
+            is_async=self.is_async,
+            provides=self.provides,
+        )
 
 
 class _ContextInjected:
@@ -211,10 +247,14 @@ class ContainerContextProxy:
     The instance-level default exists because some frameworks (e.g., FastAPI/Starlette)
     run sync endpoint handlers in a thread pool, meaning neither ContextVar nor
     thread-local storage can access a container set in the main thread.
+
+    Registrations can be deferred until a container is set; they are applied
+    the next time set_current() is called.
     """
 
     def __init__(self) -> None:
         self._default_container: Container | None = None
+        self._deferred_registrations: list[_DeferredRegistration] = []
 
     def set_current(self, container: Container) -> Token[Container | None]:
         """Set the current container in the context.
@@ -233,7 +273,21 @@ class ContainerContextProxy:
         """
         self._default_container = container
         _thread_local_fallback.container = container
-        return _current_container.set(container)
+        token = _current_container.set(container)
+        self._flush_deferred(container)
+        return token
+
+    def _get_current_or_none(self) -> Container | None:
+        """Return the current container if available, otherwise None."""
+        container = _current_container.get()
+        if container is not None:
+            return container
+
+        container = getattr(_thread_local_fallback, "container", None)
+        if container is not None:
+            return container
+
+        return self._default_container
 
     def get_current(self) -> Container:
         """Get the current container from the context.
@@ -265,6 +319,15 @@ class ContainerContextProxy:
             return self._default_container
 
         raise DIWireContainerNotSetError
+
+    def _flush_deferred(self, container: Container) -> None:
+        if not self._deferred_registrations:
+            return
+
+        pending = self._deferred_registrations
+        self._deferred_registrations = []
+        for registration in pending:
+            registration.apply(container)
 
     def reset(self, token: Token[Container | None]) -> None:
         """Reset the container to its previous value.
@@ -377,12 +440,145 @@ class ContainerContextProxy:
         """
         return self.get_current().aresolve(key, scope=scope)
 
-    def register(self, *args: Any, **kwargs: Any) -> None:
+    # Register overloads mirror Container.register for API parity.
+    @overload
+    def register(self, key: _C, /) -> _C: ...
+
+    @overload
+    def register(self, key: Callable[..., T], /) -> Callable[..., T]: ...
+
+    @overload
+    def register(
+        self,
+        key: None = None,
+        /,
+        factory: None = None,
+        instance: None = None,
+        lifetime: Lifetime = ...,
+        scope: str | None = ...,
+        is_async: bool | None = ...,  # noqa: FBT001
+        provides: type | None = ...,
+    ) -> Callable[[T], T]: ...
+
+    @overload
+    def register(
+        self,
+        key: Any,
+        /,
+        factory: Factory | None = ...,
+        instance: Any | None = ...,
+        lifetime: Lifetime = ...,
+        scope: str | None = ...,
+        is_async: bool | None = ...,  # noqa: FBT001
+        provides: Any | None = ...,
+    ) -> None: ...
+
+    def register(  # noqa: PLR0913
+        self,
+        key: Any | None = None,
+        /,
+        factory: Factory | None = None,
+        instance: Any | None = None,
+        lifetime: Lifetime = Lifetime.TRANSIENT,
+        scope: str | None = None,
+        is_async: bool | None = None,  # noqa: FBT001
+        provides: Any | None = None,
+    ) -> Any:
         """Register a service with the current container.
 
-        Delegates to the current container's register method.
+        Supports the same decorator and direct-call patterns as Container.register.
+        If no container is set, registration is deferred until set_current().
         """
-        return self.get_current().register(*args, **kwargs)
+        container = self._get_current_or_none()
+        if container is not None:
+            return container.register(
+                key,
+                factory=factory,
+                instance=instance,
+                lifetime=lifetime,
+                scope=scope,
+                is_async=is_async,
+                provides=provides,
+            )
+
+        all_params_at_defaults = (
+            factory is None
+            and instance is None
+            and lifetime == Lifetime.TRANSIENT
+            and scope is None
+            and is_async is None
+            and provides is None
+        )
+
+        if key is None:
+
+            def decorator(target: T) -> T:
+                current = self._get_current_or_none()
+                if current is not None:
+                    register_decorator = current.register(
+                        lifetime=lifetime,
+                        scope=scope,
+                        is_async=is_async,
+                        provides=provides,
+                    )
+                    register_decorator(target)
+                    return target
+
+                self._deferred_registrations.append(
+                    _DeferredRegistration(
+                        key=target,
+                        factory=None,
+                        instance=None,
+                        lifetime=lifetime,
+                        scope=scope,
+                        is_async=is_async,
+                        provides=provides,
+                        via_decorator=True,
+                    ),
+                )
+                return target
+
+            return decorator
+
+        is_factory_function = (
+            callable(key)
+            and not isinstance(key, type)
+            and get_origin(key) is None
+            and (
+                inspect.isfunction(key) or inspect.ismethod(key) or inspect.iscoroutinefunction(key)
+            )
+        )
+        is_decorator_target = all_params_at_defaults and (
+            isinstance(key, (type, staticmethod)) or is_factory_function
+        )
+        if is_decorator_target:
+            self._deferred_registrations.append(
+                _DeferredRegistration(
+                    key=key,
+                    factory=factory,
+                    instance=instance,
+                    lifetime=lifetime,
+                    scope=scope,
+                    is_async=is_async,
+                    provides=provides,
+                    via_decorator=False,
+                ),
+            )
+            return key
+
+        self._deferred_registrations.append(
+            _DeferredRegistration(
+                key=key,
+                factory=factory,
+                instance=instance,
+                lifetime=lifetime,
+                scope=scope,
+                is_async=is_async,
+                provides=provides,
+                via_decorator=False,
+            ),
+        )
+        return None
 
     def start_scope(self, scope_name: str | None = None) -> Any:
         """Start a new scope on the current container.
