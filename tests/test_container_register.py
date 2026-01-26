@@ -619,7 +619,8 @@ class TestFactoryFunctionAutoInjectsDependencies:
         assert isinstance(instance, Service)
 
     async def test_factory_async_generator_auto_injects_dependencies(
-        self, container: Container,
+        self,
+        container: Container,
     ) -> None:
         """Async generator factory should have all typed params auto-injected."""
         from collections.abc import AsyncGenerator
@@ -704,7 +705,8 @@ class TestFactoryFunctionAutoInjectsDependencies:
         assert instance.value == "from_class_factory"
 
     async def test_async_factory_function_auto_injects_dependencies(
-        self, container: Container,
+        self,
+        container: Container,
     ) -> None:
         """Async factory function should have all typed params auto-injected."""
 
