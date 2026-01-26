@@ -230,7 +230,6 @@ asyncio.run(main())
 For larger apps, `container_context` provides a context-local global container.
 
 ```python
-"""Basic diwire usage examples."""
 from dataclasses import dataclass
 from typing import Annotated
 
