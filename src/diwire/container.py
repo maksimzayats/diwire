@@ -2022,9 +2022,24 @@ class Container:
                 continue
             visited.add(dep_key)
 
+            # Collect all scopes from both registries
+            found_scopes: set[str] = set()
+
+            # Check global registry
             registration = self._registry.get(dep_key)
             if registration is not None and registration.scope is not None:
-                return registration.scope
+                found_scopes.add(registration.scope)
+
+            # Check scoped registry for all entries matching this dep_key
+            for (service_key, _scope_name), scoped_reg in self._scoped_registry.items():
+                if service_key == dep_key and scoped_reg.scope is not None:
+                    found_scopes.add(scoped_reg.scope)
+
+            # If we found exactly one unique scope, return it
+            if len(found_scopes) == 1:
+                return next(iter(found_scopes))
+            # If multiple different scopes (ambiguous), skip and check nested deps
+            # If no scopes found, also check nested deps
 
             # Check nested dependencies (skip if extraction fails for non-class types)
             try:

@@ -443,6 +443,34 @@ class TestAutoScopeDetection:
         assert isinstance(result, Injected)
         assert not isinstance(result, ScopedInjected)
 
+    def test_auto_detect_scope_from_scoped_registry(self, container: Container) -> None:
+        """resolve() auto-detects scope from scoped_registry."""
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        def handler(session: Annotated[Session, FromDI()]) -> Session:
+            return session
+
+        injected = container.resolve(handler)
+        assert isinstance(injected, ScopedInjected)
+
+    def test_ambiguous_scope_detection_returns_none(self, container: Container) -> None:
+        """Ambiguous scopes (different values) don't auto-detect."""
+        # Register same service in multiple scopes
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container._scoped_registry[(ServiceKey.from_value(Session), "session")] = Registration(
+            service_key=ServiceKey.from_value(Session),
+            lifetime=Lifetime.SCOPED_SINGLETON,
+            scope="session",
+        )
+
+        def handler(session: Annotated[Session, FromDI()]) -> Session:
+            return session
+
+        injected = container.resolve(handler)
+        # Should not auto-detect scope due to ambiguity
+        assert isinstance(injected, Injected)
+        assert not isinstance(injected, ScopedInjected)
+
 
 class TestScopeHierarchyMatching:
     """Tests for scope hierarchy matching logic."""
