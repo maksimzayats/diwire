@@ -200,13 +200,27 @@ class ContainerContextProxy:
 
     This allows setting up decorators before the container is configured,
     with the actual container lookup happening at call time.
+
+    Resolution order in get_current():
+    1. ContextVar (highest precedence - for explicit per-request containers)
+    2. Thread-local (for asyncio.run() case where ContextVar doesn't propagate)
+    3. Class-level default (lowest precedence - for cross-thread access)
+
+    The class-level default exists because some frameworks (e.g., FastAPI/Starlette)
+    run sync endpoint handlers in a thread pool, meaning neither ContextVar nor
+    thread-local storage can access a container set in the main thread.
     """
+
+    # Process-wide default container for cross-thread access
+    _default_container: Container | None = None
 
     def set_current(self, container: Container) -> Token[Container | None]:
         """Set the current container in the context.
 
-        Note: Also stores in a thread-local fallback because Python's asyncio.run()
-        creates a fresh context that doesn't inherit contextvar values.
+        Sets the container in three storage mechanisms:
+        1. ContextVar - for same async context access
+        2. Thread-local - for asyncio.run() case (same thread, new context)
+        3. Class-level default - for thread pool access (different threads)
 
         Args:
             container: The container to set as current.
@@ -215,13 +229,17 @@ class ContainerContextProxy:
             A token that can be used to reset the container.
 
         """
+        self._default_container = container
         _thread_local_fallback.container = container
         return _current_container.set(container)
 
     def get_current(self) -> Container:
         """Get the current container from the context.
 
-        Tries contextvar first, then falls back to thread-local storage.
+        Resolution order (first non-None wins):
+        1. ContextVar - for per-context containers
+        2. Thread-local - for asyncio.run() (same thread, new context)
+        3. Class-level default - for thread pools (different thread entirely)
 
         Returns:
             The current container.
@@ -230,13 +248,21 @@ class ContainerContextProxy:
             DIWireContainerNotSetError: If no container has been set.
 
         """
+        # 1. Try ContextVar (highest precedence)
         container = _current_container.get()
-        if container is None:
-            # Fallback when contextvar not propagated (e.g., asyncio.run())
-            container = getattr(_thread_local_fallback, "container", None)
-        if container is None:
-            raise DIWireContainerNotSetError
-        return container
+        if container is not None:
+            return container
+
+        # 2. Fallback: Thread-local (for asyncio.run() in same thread)
+        container = getattr(_thread_local_fallback, "container", None)
+        if container is not None:
+            return container
+
+        # 3. Fallback: Class-level default (for thread pools like FastAPI sync handlers)
+        if self._default_container is not None:
+            return self._default_container
+
+        raise DIWireContainerNotSetError
 
     def reset(self, token: Token[Container | None]) -> None:
         """Reset the container to its previous value.
@@ -250,8 +276,10 @@ class ContainerContextProxy:
         if current is None:
             if hasattr(_thread_local_fallback, "container"):
                 del _thread_local_fallback.container
+            self._default_container = None
         else:
             _thread_local_fallback.container = current
+            self._default_container = current
 
     # Decorator overloads
     @overload

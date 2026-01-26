@@ -2206,3 +2206,196 @@ class TestContextInjectedDescriptors:
         dummy_obj = object()
         result = async_context_scoped_injected.__get__(dummy_obj, type(dummy_obj))
         assert isinstance(result, types.MethodType)
+
+
+# ============================================================================
+# Cross-Thread Default Container Tests
+# ============================================================================
+
+
+class TestCrossThreadDefaultContainer:
+    """Tests for cross-thread default container access.
+
+    These tests verify that set_current() also sets a class-level default
+    container that can be accessed from thread pool workers (e.g., FastAPI
+    sync endpoint handlers).
+    """
+
+    def test_default_container_accessible_from_different_thread(self) -> None:
+        """Container set in main thread is accessible from worker thread."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        container = Container()
+        container.register(ServiceA, instance=ServiceA(id="main-thread-container"))
+
+        results: dict[str, str | None] = {}
+        errors: list[Exception] = []
+
+        def worker() -> None:
+            try:
+                # Worker thread should see the container set in main thread
+                # via the class-level default (not ContextVar or thread-local)
+                service = container_context.resolve(ServiceA)
+                results["worker"] = service.id
+            except Exception as e:
+                errors.append(e)
+
+        token = container_context.set_current(container)
+        try:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(worker)
+                future.result()
+
+            assert not errors, f"Errors occurred: {errors}"
+            assert results["worker"] == "main-thread-container"
+        finally:
+            container_context.reset(token)
+
+    def test_default_container_accessible_from_multiple_threads(self) -> None:
+        """Container is accessible from multiple concurrent worker threads."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        container = Container()
+        container.register(ServiceA, instance=ServiceA(id="shared-container"))
+
+        results: dict[int, str] = {}
+        errors: list[Exception] = []
+
+        def worker(thread_num: int) -> tuple[int, str]:
+            try:
+                service = container_context.resolve(ServiceA)
+            except Exception as e:
+                errors.append(e)
+                raise
+            else:
+                return thread_num, service.id
+
+        token = container_context.set_current(container)
+        try:
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                futures = [executor.submit(worker, i) for i in range(10)]
+                for future in as_completed(futures):
+                    if not future.exception():
+                        thread_num, result = future.result()
+                        results[thread_num] = result
+
+            assert not errors, f"Errors occurred: {errors}"
+            assert len(results) == 10
+            for i in range(10):
+                assert results[i] == "shared-container"
+        finally:
+            container_context.reset(token)
+
+    def test_reset_clears_default_container(self) -> None:
+        """reset() clears the class-level default container."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        container = Container()
+        initial_token = _current_container.set(None)
+        try:
+            token = container_context.set_current(container)
+
+            # Verify default is set
+            assert container_context._default_container is container
+
+            # Reset should clear the default
+            container_context.reset(token)
+
+            # Default should now be None
+            # Cast to Any to break mypy's type narrowing from the previous assertion
+            proxy: Any = container_context
+            assert proxy._default_container is None
+
+            # Worker thread should not see any container
+            errors: list[Exception] = []
+
+            def worker() -> None:
+                try:
+                    container_context.resolve(ServiceA)
+                except DIWireContainerNotSetError:
+                    pass  # Expected
+                except Exception as e:
+                    errors.append(e)
+
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(worker)
+                future.result()
+
+            assert not errors
+        finally:
+            _current_container.reset(initial_token)
+
+    def test_decorated_sync_handler_works_from_thread_pool(self) -> None:
+        """Decorated sync handlers work when called from thread pool."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        container = Container()
+        container.register(ServiceA, instance=ServiceA(id="thread-pool-test"))
+
+        @container_context.resolve(scope="request")
+        def handler(
+            value: int,
+            service: Annotated[ServiceA, FromDI()],
+        ) -> dict[str, Any]:
+            return {"value": value, "service_id": service.id}
+
+        results: dict[str, Any] = {}
+        errors: list[Exception] = []
+
+        def worker() -> None:
+            try:
+                result = handler(42)
+                results["handler_result"] = result
+            except Exception as e:
+                errors.append(e)
+
+        token = container_context.set_current(container)
+        try:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(worker)
+                future.result()
+
+            assert not errors, f"Errors occurred: {errors}"
+            assert results["handler_result"]["value"] == 42
+            assert results["handler_result"]["service_id"] == "thread-pool-test"
+        finally:
+            container_context.reset(token)
+
+    def test_instance_method_works_from_thread_pool(self) -> None:
+        """Decorated instance methods work when called from thread pool."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        container = Container()
+        container.register(ServiceA, instance=ServiceA(id="instance-method-test"))
+
+        class Handler:
+            @container_context.resolve(scope="request")
+            def handle(
+                self,
+                name: str,
+                service: Annotated[ServiceA, FromDI()],
+            ) -> dict[str, str]:
+                return {"name": name, "service_id": service.id}
+
+        handler_instance = Handler()
+        results: dict[str, Any] = {}
+        errors: list[Exception] = []
+
+        def worker() -> None:
+            try:
+                result = handler_instance.handle("test")
+                results["handler_result"] = result
+            except Exception as e:
+                errors.append(e)
+
+        token = container_context.set_current(container)
+        try:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(worker)
+                future.result()
+
+            assert not errors, f"Errors occurred: {errors}"
+            assert results["handler_result"]["name"] == "test"
+            assert results["handler_result"]["service_id"] == "instance-method-test"
+        finally:
+            container_context.reset(token)
