@@ -320,3 +320,29 @@ class TestAsyncCircularDependencies:
 
         # Scope context should be cleaned up
         assert _current_scope.get() is None
+
+    async def test_circular_dependency_async_non_compiled(self) -> None:
+        """Circular dependency detected in aresolve without compilation.
+
+        This test covers line 1602 in container.py where circular dependency
+        is detected in the async non-compiled resolution path.
+        To hit this path, we need dependencies to be resolved via aresolve,
+        which requires registering them with is_async=True.
+        """
+
+        # Define async factories to force async resolution path
+        async def create_x(y: AsyncCircularY) -> AsyncCircularX:
+            return AsyncCircularX(y)
+
+        async def create_y(x: AsyncCircularX) -> AsyncCircularY:
+            return AsyncCircularY(x)
+
+        # Create container without auto-compile and register with async factories
+        container = Container(register_if_missing=False, auto_compile=False)
+        container.register(AsyncCircularX, factory=create_x)
+        container.register(AsyncCircularY, factory=create_y)
+
+        with pytest.raises(DIWireCircularDependencyError) as exc_info:
+            await container.aresolve(AsyncCircularX)
+
+        assert "AsyncCircularX" in str(exc_info.value)

@@ -1981,3 +1981,195 @@ class TestMemoryAndReferenceEdgeCases:
             # Verify cache is cleaned after each scope exit
             test_scopes = [k for k in container._scoped_instances if has_test_scope(k)]
             assert len(test_scopes) == 0
+
+
+# ============================================================================
+# Async Scoped Singleton Lock Cleanup Tests (line 807)
+# ============================================================================
+
+
+class TestAsyncScopedSingletonLockCleanup:
+    """Tests for async scoped singleton lock cleanup on scope exit."""
+
+    def test_async_scoped_singleton_lock_cleanup_via_sync_close_scope(
+        self,
+        container: Container,
+    ) -> None:
+        """Async scoped singleton locks are cleaned up via sync close_scope().
+
+        This test covers line 807 in container.py where async scoped singleton
+        locks are deleted during close_scope() (the sync version).
+        """
+
+        async def session_factory() -> Session:
+            return Session(id="async-created")
+
+        container.register(
+            Session,
+            factory=session_factory,
+            scope="request",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        # Use sync context manager to enter scope
+        with container.start_scope("request"):
+            # Create async lock by running aresolve in a new event loop
+            async def resolve_async() -> Session:
+                return await container.aresolve(Session)
+
+            loop = asyncio.new_event_loop()
+            try:
+                session = loop.run_until_complete(resolve_async())
+            finally:
+                loop.close()
+
+            assert session.id == "async-created"
+
+            # Verify async lock was created while scope is active
+            assert len(container._scoped_singleton_locks) > 0
+
+        # After sync scope exit (close_scope), async locks should be cleaned up (line 807)
+        assert len(container._scoped_singleton_locks) == 0
+
+    async def test_async_scoped_singleton_lock_cleanup_via_async_clear_scope(
+        self,
+        container: Container,
+    ) -> None:
+        """Async scoped singleton locks are cleaned up via aclear_scope().
+
+        This test covers line 1932 in container.py where async scoped singleton
+        locks are deleted during aclear_scope() (the async version).
+        """
+
+        async def session_factory() -> Session:
+            return Session()
+
+        container.register(
+            Session,
+            factory=session_factory,
+            scope="request",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        async with container.start_scope("request"):
+            # Resolve via aresolve to ensure async lock is created
+            await container.aresolve(Session)
+            assert len(container._scoped_singleton_locks) > 0
+
+        # After async scope exit, async locks should be cleaned up
+        assert len(container._scoped_singleton_locks) == 0
+
+
+# ============================================================================
+# Scoped Singleton Double-Check Locking Tests (lines 1320, 1376-1377, 1386, 1653)
+# ============================================================================
+
+
+class TestScopedSingletonDoubleCheckLocking:
+    """Tests for scoped singleton double-check locking paths."""
+
+    def test_scoped_singleton_with_registered_instance_sync(
+        self,
+        container: Container,
+    ) -> None:
+        """Scoped singleton with pre-registered instance releases lock correctly.
+
+        This test covers lines 1385-1386 in container.py where the scoped lock
+        is released when a registration already has an instance.
+        """
+        specific_session = Session(id="pre-registered")
+
+        container.register(
+            Session,
+            instance=specific_session,
+            scope="test",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        with container.start_scope("test"):
+            # First resolve will acquire lock and find instance in registration
+            session1 = container.resolve(Session)
+            assert session1.id == "pre-registered"
+
+            # Second resolve should also work (lock was properly released)
+            session2 = container.resolve(Session)
+            assert session1 is session2
+
+    async def test_scoped_singleton_with_registered_instance_async(
+        self,
+        container: Container,
+    ) -> None:
+        """Async scoped singleton with pre-registered instance releases lock correctly.
+
+        This test covers line 1653 in container.py where the scoped lock
+        is released when a registration already has an instance in async path.
+        """
+        specific_session = Session(id="async-pre-registered")
+
+        container.register(
+            Session,
+            instance=specific_session,
+            scope="test",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        async with container.start_scope("test"):
+            # First resolve via aresolve will acquire async lock and find instance
+            session1 = await container.aresolve(Session)
+            assert session1.id == "async-pre-registered"
+
+            # Second resolve should also work (lock was properly released)
+            session2 = await container.aresolve(Session)
+            assert session1 is session2
+
+    async def test_scoped_singleton_double_check_async_path(
+        self,
+        container: Container,
+    ) -> None:
+        """Async scoped singleton double-check locking returns cached value.
+
+        This tests the async double-check locking path where concurrent
+        coroutines compete for the same scoped singleton instance.
+        """
+        call_count = 0
+        factory_started = asyncio.Event()
+        factory_release = asyncio.Event()
+
+        async def slow_session_factory() -> Session:
+            nonlocal call_count
+            call_count += 1
+            call_id = call_count
+            factory_started.set()  # Signal that factory has started
+            await factory_release.wait()  # Wait for release signal
+            return Session(id=f"session-{call_id}")
+
+        container.register(
+            Session,
+            factory=slow_session_factory,
+            scope="test",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        async with container.start_scope("test"):
+            # Start first resolution - this will hold the lock
+            task1 = asyncio.create_task(container.aresolve(Session))
+
+            # Wait for factory to start (meaning lock is held)
+            await factory_started.wait()
+
+            # Start second resolution - this will wait for lock then hit double-check
+            task2 = asyncio.create_task(container.aresolve(Session))
+
+            # Give task2 time to reach the lock
+            await asyncio.sleep(0.01)
+
+            # Release the factory
+            factory_release.set()
+
+            # Wait for both tasks
+            session1, session2 = await asyncio.gather(task1, task2)
+
+        # Factory should only be called once due to double-check locking
+        assert call_count == 1
+        # Both tasks should get the same instance
+        assert session1 is session2

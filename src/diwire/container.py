@@ -1316,8 +1316,8 @@ class Container:
                     scoped_lock = self._get_sync_scoped_singleton_lock(cache_key)
                     with scoped_lock:
                         cached = self._scoped_instances.get(cache_key)
-                        if cached is not None:
-                            return cached
+                        if cached is not None:  # pragma: no cover - race timing dependent
+                            return cached  # pragma: no cover - race timing dependent
                         # Use compiled provider (pass None - we handle caching at container level)
                         result = scoped_provider(self._singletons, None)
                         # Store directly in flat cache
@@ -1372,9 +1372,9 @@ class Container:
                 scoped_lock.acquire()
                 # Double-check cache after acquiring lock
                 cached = self._scoped_instances.get(cache_key)
-                if cached is not None:
-                    scoped_lock.release()
-                    return cached
+                if cached is not None:  # pragma: no cover - race timing dependent
+                    scoped_lock.release()  # pragma: no cover
+                    return cached  # pragma: no cover
 
             if registration.instance is not None:
                 # Cache scoped instances in _scoped_instances, not _singletons
@@ -1382,8 +1382,8 @@ class Container:
                     self._scoped_instances[cache_key] = registration.instance
                 else:
                     self._singletons[service_key] = registration.instance
-                if scoped_lock is not None and scoped_lock.locked():  # type: ignore[redundant-expr]
-                    scoped_lock.release()
+                if scoped_lock is not None and scoped_lock.locked():  # type: ignore[redundant-expr] # pragma: no cover - defensive, lock only acquired when instance is None
+                    scoped_lock.release()  # pragma: no cover
                 return registration.instance
 
             # For singletons, use lock to prevent race conditions in threaded resolution
@@ -1649,8 +1649,10 @@ class Container:
                     self._scoped_instances[cache_key] = registration.instance
                 else:
                     self._singletons[service_key] = registration.instance
-                if scoped_lock is not None and scoped_lock.locked():
-                    scoped_lock.release()
+                if (
+                    scoped_lock is not None and scoped_lock.locked()
+                ):  # pragma: no cover - defensive, lock only acquired when instance is None
+                    scoped_lock.release()  # pragma: no cover
                 return registration.instance
 
             # For singletons, use lock to prevent race conditions in async resolution

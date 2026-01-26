@@ -9,7 +9,7 @@ lint:
 	uv run mypy .
 
 test:
-	uv run pytest tests/
+	uv run pytest tests/ --cov=src/diwire --cov-report=term-missing
 
 # === Benchmark Commands ===
 

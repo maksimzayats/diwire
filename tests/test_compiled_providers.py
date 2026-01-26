@@ -677,3 +677,85 @@ class TestCompilationMissingCoverage:
         # The service should not be in compiled scoped providers
         service_key = ServiceKey.from_value(ServiceWithBadDep)
         assert (service_key, "request") not in container._scoped_compiled_providers
+
+    def test_factory_class_with_uncompilable_dependency_returns_none(self) -> None:
+        """Factory class with uncompilable dependency returns None from compilation.
+
+        This test covers line 902 in container.py where a factory class has
+        a dependency that cannot be compiled, causing _compile_registration
+        to return None.
+        """
+
+        class UncompilableDep:
+            """Dependency that cannot be compiled."""
+
+            def __init__(
+                self,
+                broken: "UndefinedType",  # type: ignore[name-defined]  # noqa: F821
+            ) -> None:
+                self.broken = broken
+
+        class FactoryClass:
+            """Factory that depends on an uncompilable type."""
+
+            def __init__(self, dep: UncompilableDep) -> None:
+                self.dep = dep
+
+            def __call__(self) -> ServiceA:
+                return ServiceA(id="factory-result")
+
+        container = Container(register_if_missing=False, auto_compile=False)
+
+        # Register the factory class which depends on UncompilableDep
+        container.register(ServiceA, factory=FactoryClass, lifetime=Lifetime.TRANSIENT)
+        # Register UncompilableDep so it exists in registry but has bad deps
+        container.register(UncompilableDep, lifetime=Lifetime.TRANSIENT)
+
+        # Compile - should not raise, factory registration should be skipped
+        container.compile()
+
+        # ServiceA should NOT be compiled since its factory can't be compiled
+        service_key = ServiceKey.from_value(ServiceA)
+        assert service_key not in container._compiled_providers
+
+    def test_compile_or_get_provider_handles_auto_registration_error(self) -> None:
+        """Auto-registration errors during compilation return None gracefully.
+
+        This test covers lines 1043-1044 in container.py where an error during
+        auto-registration causes _compile_or_get_provider to return None.
+
+        We trigger this by having a service that depends on a type annotated
+        with Component. The type passes the ignores filter (line 941), but when
+        _compile_or_get_provider tries to auto-register it, it raises
+        DIWireComponentSpecifiedError because components require explicit registration.
+        """
+        from typing import Annotated
+
+        from diwire.service_key import Component
+
+        class DatabaseConn:
+            """A type that will be used with a component annotation."""
+
+        class ServiceWithComponentDep:
+            """Service with a dependency on a component-annotated type."""
+
+            def __init__(
+                self,
+                db: Annotated[DatabaseConn, Component("primary")],
+            ) -> None:
+                self.db = db
+
+        container = Container(register_if_missing=True, auto_compile=False)
+
+        # Register the top-level service
+        container.register(ServiceWithComponentDep, lifetime=Lifetime.TRANSIENT)
+
+        # Don't register DatabaseConn with component "primary" -
+        # when compiling, _compile_or_get_provider will try to auto-register
+        # the component-annotated dependency, which raises DIWireComponentSpecifiedError
+        # because auto-registration doesn't support components (line 2039-2040)
+        container.compile()
+
+        # ServiceWithComponentDep should NOT be compiled due to dependency error
+        service_key = ServiceKey.from_value(ServiceWithComponentDep)
+        assert service_key not in container._compiled_providers

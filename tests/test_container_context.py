@@ -909,6 +909,42 @@ class TestThreadLocalFallbackIsolation:
         finally:
             _current_container.reset(initial_token)
 
+    def test_thread_local_fallback_used_when_contextvar_none(self) -> None:
+        """Thread-local fallback returns container when ContextVar is None.
+
+        This test covers line 259 in container_context.py where the thread-local
+        fallback path is used when ContextVar returns None.
+        """
+        proxy = ContainerContextProxy()
+        container = Container()
+        container.register(ServiceA, instance=ServiceA(id="thread-local-container"))
+
+        # Store the original values to restore later
+        original_default = proxy._default_container
+
+        # First, set ContextVar to None explicitly
+        token = _current_container.set(None)
+        try:
+            # Set thread-local directly (bypassing set_current to isolate the path)
+            _thread_local_fallback.container = container
+
+            # Clear class-level default to ensure we hit the thread-local path
+            proxy._default_container = None
+
+            # get_current should use thread-local fallback (line 259)
+            result = proxy.get_current()
+            assert result is container
+
+            # Verify we can resolve from this container
+            service = result.resolve(ServiceA)
+            assert service.id == "thread-local-container"
+        finally:
+            # Clean up
+            _current_container.reset(token)
+            if hasattr(_thread_local_fallback, "container"):
+                del _thread_local_fallback.container
+            proxy._default_container = original_default
+
     def test_thread_local_fallback_works_with_asyncio_run(self) -> None:
         """Thread-local fallback works when ContextVar is reset by asyncio.run()."""
         # Set container in main thread

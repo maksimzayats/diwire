@@ -794,3 +794,116 @@ class TestFactoryFunctionAutoInjectsDependencies:
         assert len(received_deps) == 1
         assert isinstance(received_deps[0][0], DependencyA)
         assert isinstance(received_deps[0][1], DependencyB)
+
+
+class TestBuiltinCallableFactoryWithoutCompilation:
+    """Tests for built-in callable factories (like ContextVar.get) without compilation."""
+
+    def test_builtin_callable_factory_without_compilation_sync(
+        self,
+        container: Container,
+    ) -> None:
+        """ContextVar.get as factory works in non-compiled container.
+
+        This test covers line 1419 in container.py where a built-in callable
+        factory is invoked directly in the non-compiled sync path.
+        """
+        from contextvars import ContextVar
+
+        class Request:
+            def __init__(self, request_id: str) -> None:
+                self.request_id = request_id
+
+        request_var: ContextVar[Request] = ContextVar("request")
+        expected_request = Request("test-no-compile")
+        request_var.set(expected_request)
+
+        # Create container without auto-compile
+        c = Container(register_if_missing=True, auto_compile=False)
+        c.register(Request, factory=request_var.get)
+
+        instance = c.resolve(Request)
+        assert instance is expected_request
+
+    async def test_builtin_callable_factory_without_compilation_async(
+        self,
+        container: Container,
+    ) -> None:
+        """ContextVar.get as factory works in async non-compiled resolution.
+
+        This test covers the async path (line 1688) where a built-in callable
+        factory is invoked directly in the non-compiled async path.
+        """
+        from contextvars import ContextVar
+
+        class Request:
+            def __init__(self, request_id: str) -> None:
+                self.request_id = request_id
+
+        request_var: ContextVar[Request] = ContextVar("request")
+        expected_request = Request("async-no-compile")
+        request_var.set(expected_request)
+
+        # Create container without auto-compile
+        c = Container(register_if_missing=True, auto_compile=False)
+        c.register(Request, factory=request_var.get)
+
+        instance = await c.aresolve(Request)
+        assert instance is expected_request
+
+
+class TestFunctionFactoryMissingDependencies:
+    """Tests for function factory with missing (unresolvable) dependencies."""
+
+    def test_function_factory_with_missing_dependencies_raises_error_sync(
+        self,
+        container_no_autoregister: Container,
+    ) -> None:
+        """Function factory with unresolvable deps raises DIWireMissingDependenciesError.
+
+        This test covers line 1415 in container.py where a function factory
+        has dependencies that cannot be resolved.
+        """
+        from diwire.exceptions import DIWireMissingDependenciesError
+
+        # Create a type that cannot be auto-registered (abstract or uninstantiable)
+        class UnregisteredDep:
+            """Dependency that is not registered."""
+
+        class Service:
+            pass
+
+        def service_factory(dep: UnregisteredDep) -> Service:
+            return Service()
+
+        # Use container without auto-registration so UnregisteredDep won't be found
+        container_no_autoregister.register(Service, factory=service_factory)
+
+        with pytest.raises(DIWireMissingDependenciesError):
+            container_no_autoregister.resolve(Service)
+
+    async def test_function_factory_with_missing_dependencies_raises_error_async(
+        self,
+        container_no_autoregister: Container,
+    ) -> None:
+        """Async: Function factory with unresolvable deps raises error.
+
+        This test covers line 1685 in container.py where a function factory
+        has dependencies that cannot be resolved in the async path.
+        """
+        from diwire.exceptions import DIWireMissingDependenciesError
+
+        class UnregisteredDep:
+            """Dependency that is not registered."""
+
+        class Service:
+            pass
+
+        def service_factory(dep: UnregisteredDep) -> Service:
+            return Service()
+
+        # Use container without auto-registration
+        container_no_autoregister.register(Service, factory=service_factory)
+
+        with pytest.raises(DIWireMissingDependenciesError):
+            await container_no_autoregister.aresolve(Service)
