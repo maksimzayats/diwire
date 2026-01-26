@@ -2027,12 +2027,14 @@ class Container:
             service_key=service_key,
         )
         for name, param_info in dependencies.items():
-            # Skip ignored types that have defaults - let Python use the default
-            if param_info.service_key.value in self._autoregister_ignores:
-                if param_info.has_default:
+            # Skip ignored types that aren't explicitly registered
+            if param_info.service_key.value in self._autoregister_ignores:  # noqa: SIM102
+                # Quick check: is it registered?
+                if param_info.service_key not in self._registry:
+                    if param_info.has_default:
+                        continue
+                    resolved_dependencies.missing.append(param_info.service_key)
                     continue
-                resolved_dependencies.missing.append(param_info.service_key)
-                continue
 
             try:
                 resolved_dependencies.dependencies[name] = self.resolve(param_info.service_key)
