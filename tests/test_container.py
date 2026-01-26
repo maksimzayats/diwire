@@ -386,6 +386,61 @@ class TestAsyncCallableClassFactory:
 
         assert _is_async_factory(RegularClass) is False
 
+    def test_is_async_factory_with_async_callable_instance(self) -> None:
+        """Test _is_async_factory() detects callable instance with async __call__."""
+
+        class AsyncCallableFactory:
+            async def __call__(self) -> str:
+                return "async result"
+
+        class SyncCallableFactory:
+            def __call__(self) -> str:
+                return "sync result"
+
+        # Instance with async __call__ should be detected as async factory
+        assert _is_async_factory(AsyncCallableFactory()) is True
+
+        # Instance with sync __call__ should not be detected as async factory
+        assert _is_async_factory(SyncCallableFactory()) is False
+
+    def test_is_async_factory_with_async_gen_callable_instance(self) -> None:
+        """Test _is_async_factory() detects callable instance with async generator __call__."""
+
+        class AsyncGenCallableFactory:
+            async def __call__(self) -> AsyncGenerator[str, None]:
+                yield "async gen result"
+
+        # Instance with async generator __call__ should be detected as async
+        assert _is_async_factory(AsyncGenCallableFactory()) is True
+
+    def test_registration_detects_async_callable_instance_factory(self) -> None:
+        """Test that registration correctly detects async callable instance factory."""
+
+        class ServiceA:
+            pass
+
+        class AsyncServiceFactory:
+            async def __call__(self) -> ServiceA:
+                return ServiceA()
+
+        class SyncServiceFactory:
+            def __call__(self) -> ServiceA:
+                return ServiceA()
+
+        container = Container(auto_compile=False)
+
+        # Register with async callable instance - should detect is_async=True
+        container.register(ServiceA, factory=AsyncServiceFactory(), lifetime=Lifetime.TRANSIENT)
+        registration = container._registry.get(ServiceKey.from_value(ServiceA))
+        assert registration is not None
+        assert registration.is_async is True
+
+        # Register with sync callable instance - should detect is_async=False
+        container.register(ServiceA, factory=SyncServiceFactory(), lifetime=Lifetime.TRANSIENT)
+        registration = container._registry.get(ServiceKey.from_value(ServiceA))
+        assert registration is not None
+        assert registration.is_async is False
+
 
 class TestDescriptorProtocol:
     """Tests for descriptor protocol __get__ methods returning self when obj is None."""

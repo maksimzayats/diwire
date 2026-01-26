@@ -123,6 +123,14 @@ def _is_async_factory(factory: Any) -> bool:
             )
         return False  # pragma: no cover - __call__ is never None for a normal class
 
+    # Handle callable instances (objects with __call__ that aren't functions/classes)
+    if callable(factory) and not inspect.isfunction(factory) and not inspect.ismethod(factory):
+        call_method = getattr(factory, "__call__", None)  # noqa: B004
+        if call_method is not None:
+            return inspect.iscoroutinefunction(call_method) or inspect.isasyncgenfunction(
+                call_method,
+            )
+
     return inspect.iscoroutinefunction(factory) or inspect.isasyncgenfunction(factory)
 
 
