@@ -11,7 +11,7 @@ from typing import Annotated, Any
 
 import pytest
 
-from diwire import Container, DIWireContainerNotSetError, FromDI, Lifetime, container_context
+from diwire import Container, FromDI, Lifetime, container_context
 from diwire.container_context import (
     ContainerContextProxy,
     _AsyncContextInjected,
@@ -21,6 +21,7 @@ from diwire.container_context import (
     _current_container,
     _thread_local_fallback,
 )
+from diwire.exceptions import DIWireContainerNotSetError
 
 
 @dataclass
@@ -1323,7 +1324,7 @@ class TestErrorPropagation:
 
     def test_service_not_registered_error_propagates(self) -> None:
         """DIWireServiceNotRegisteredError propagates from decorated function."""
-        from diwire import DIWireServiceNotRegisteredError
+        from diwire.exceptions import DIWireServiceNotRegisteredError
 
         container = Container(register_if_missing=False)
         token = container_context.set_current(container)
@@ -1340,7 +1341,7 @@ class TestErrorPropagation:
 
     def test_circular_dependency_error_propagates(self) -> None:
         """DIWireCircularDependencyError propagates from decorated function."""
-        from diwire import DIWireCircularDependencyError
+        from diwire.exceptions import DIWireCircularDependencyError
 
         # Use auto-registration (register_if_missing=True) for proper
         # circular dependency detection
