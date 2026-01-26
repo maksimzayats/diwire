@@ -229,6 +229,77 @@ class TestProxyMethodDelegation:
 
 
 # ============================================================================
+# Register Decorator Tests
+# ============================================================================
+
+
+class TestRegisterDecoratorPattern:
+    """Tests for container_context.register decorator usage."""
+
+    def test_register_decorator_registers_class(self) -> None:
+        """@container_context.register on a class should register it."""
+        container = Container(register_if_missing=False)
+        token = container_context.set_current(container)
+        try:
+
+            @container_context.register
+            class MyService:
+                pass
+
+            instance = container.resolve(MyService)
+            assert isinstance(instance, MyService)
+        finally:
+            container_context.reset(token)
+
+    def test_register_decorator_returns_original_class(self) -> None:
+        """@container_context.register should return the original class unchanged."""
+        container = Container(register_if_missing=False)
+        token = container_context.set_current(container)
+        try:
+
+            @container_context.register
+            class MyService:
+                pass
+
+            assert MyService.__name__ == "MyService"
+            assert hasattr(MyService, "__init__")
+        finally:
+            container_context.reset(token)
+
+    def test_register_decorator_with_lifetime_singleton(self) -> None:
+        """@container_context.register(lifetime=SINGLETON) should create singletons."""
+        container = Container(register_if_missing=False)
+        token = container_context.set_current(container)
+        try:
+
+            @container_context.register(lifetime=Lifetime.SINGLETON)
+            class MySingleton:
+                pass
+
+            instance1 = container.resolve(MySingleton)
+            instance2 = container.resolve(MySingleton)
+            assert instance1 is instance2
+        finally:
+            container_context.reset(token)
+
+    def test_register_factory_decorator_infers_type(self) -> None:
+        """@container_context.register on a function should infer return type."""
+        container = Container(register_if_missing=False)
+        token = container_context.set_current(container)
+        try:
+
+            @container_context.register
+            def create_service() -> ServiceA:
+                return ServiceA(id="factory")
+
+            assert create_service.__name__ == "create_service"
+            instance = container.resolve(ServiceA)
+            assert instance.id == "factory"
+        finally:
+            container_context.reset(token)
+
+
+# ============================================================================
 # Decorator Pattern Tests - Sync Functions
 # ============================================================================
 
@@ -1478,14 +1549,29 @@ class TestMultipleFromDIParameters:
 class TestContainerOperationsWithoutContainer:
     """Tests for proxy methods when no container is set."""
 
-    def test_register_without_container_raises_error(self) -> None:
-        """register() without container raises DIWireContainerNotSetError."""
+    def test_register_without_container_defers(self) -> None:
+        """register() without container defers until set_current()."""
         initial_token = _current_container.set(None)
         try:
-            with pytest.raises(DIWireContainerNotSetError):
-                container_context.register(ServiceA)
+            if hasattr(_thread_local_fallback, "container"):
+                del _thread_local_fallback.container
+            container_context._default_container = None
+            container_context._deferred_registrations.clear()
+
+            @container_context.register
+            class DeferredService:
+                pass
+
+            container = Container(register_if_missing=False)
+            token = container_context.set_current(container)
+            try:
+                service = container.resolve(DeferredService)
+                assert isinstance(service, DeferredService)
+            finally:
+                container_context.reset(token)
         finally:
             _current_container.reset(initial_token)
+            container_context._deferred_registrations.clear()
 
     def test_start_scope_without_container_raises_error(self) -> None:
         """start_scope() without container raises DIWireContainerNotSetError."""
@@ -1513,6 +1599,113 @@ class TestContainerOperationsWithoutContainer:
             with pytest.raises(DIWireContainerNotSetError):
                 await container_context.aresolve(ServiceA)
         finally:
+            _current_container.reset(initial_token)
+
+
+# ============================================================================
+# Deferred Registration Tests
+# ============================================================================
+
+
+class TestDeferredRegistrations:
+    """Tests for deferred registration behavior."""
+
+    def test_deferred_parameterized_decorator_registers_factory(self) -> None:
+        """Parameterized decorator defers and registers on set_current()."""
+        initial_token = _current_container.set(None)
+        try:
+            if hasattr(_thread_local_fallback, "container"):
+                del _thread_local_fallback.container
+            container_context._default_container = None
+            container_context._deferred_registrations.clear()
+
+            @container_context.register(lifetime=Lifetime.SINGLETON)
+            def create_service() -> ServiceA:
+                return ServiceA(id="deferred-factory")
+
+            container = Container(register_if_missing=False)
+            token = container_context.set_current(container)
+            try:
+                service1 = container.resolve(ServiceA)
+                service2 = container.resolve(ServiceA)
+                assert service1 is service2
+                assert service1.id == "deferred-factory"
+            finally:
+                container_context.reset(token)
+        finally:
+            _current_container.reset(initial_token)
+            container_context._deferred_registrations.clear()
+
+    def test_parameterized_decorator_applies_after_container_set(self) -> None:
+        """Decorator created before set_current applies when container is available."""
+        initial_token = _current_container.set(None)
+        try:
+            if hasattr(_thread_local_fallback, "container"):
+                del _thread_local_fallback.container
+            container_context._default_container = None
+            container_context._deferred_registrations.clear()
+
+            decorator = container_context.register(lifetime=Lifetime.SINGLETON)
+            container = Container(register_if_missing=False)
+            token = container_context.set_current(container)
+            try:
+
+                @decorator
+                class LateService:
+                    pass
+
+                service = container.resolve(LateService)
+                assert isinstance(service, LateService)
+                assert not container_context._deferred_registrations
+            finally:
+                container_context.reset(token)
+        finally:
+            _current_container.reset(initial_token)
+            container_context._deferred_registrations.clear()
+
+    def test_deferred_direct_call_registers_instance(self) -> None:
+        """Direct call defers and registers instance on set_current()."""
+        initial_token = _current_container.set(None)
+        try:
+            if hasattr(_thread_local_fallback, "container"):
+                del _thread_local_fallback.container
+            container_context._default_container = None
+            container_context._deferred_registrations.clear()
+
+            instance = ServiceA(id="deferred-instance")
+            container_context.register(ServiceA, instance=instance)
+
+            container = Container(register_if_missing=False)
+            token = container_context.set_current(container)
+            try:
+                assert container.resolve(ServiceA) is instance
+            finally:
+                container_context.reset(token)
+        finally:
+            _current_container.reset(initial_token)
+            container_context._deferred_registrations.clear()
+
+    def test_register_uses_thread_local_fallback(self) -> None:
+        """register() uses thread-local fallback when contextvar is None."""
+        initial_token = _current_container.set(None)
+        try:
+            if hasattr(_thread_local_fallback, "container"):
+                del _thread_local_fallback.container
+            container_context._default_container = None
+            container_context._deferred_registrations.clear()
+
+            container = Container(register_if_missing=False)
+            _thread_local_fallback.container = container
+
+            instance = ServiceA(id="thread-local")
+            container_context.register(ServiceA, instance=instance)
+
+            assert container.resolve(ServiceA) is instance
+        finally:
+            if hasattr(_thread_local_fallback, "container"):
+                del _thread_local_fallback.container
+            container_context._default_container = None
+            container_context._deferred_registrations.clear()
             _current_container.reset(initial_token)
 
 

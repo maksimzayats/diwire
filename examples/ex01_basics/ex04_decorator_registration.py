@@ -4,9 +4,12 @@ Demonstrates using @container.register as a decorator for:
 1. Class registration with automatic or custom lifetimes
 2. Factory function registration with type inference
 3. Interface/Protocol registration via provides parameter
-4. Async factory function registration
-5. Factory functions with auto-injected dependencies
-6. Static method factories
+4. Factory functions with auto-injected dependencies
+5. Scoped singleton decorator usage
+6. Async factory function registration
+7. Static method factories
+8. Async generator factories with cleanup
+9. container_context decorator registration
 """
 
 import asyncio
@@ -15,7 +18,7 @@ from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import Protocol
 
-from diwire import Container, Lifetime
+from diwire import Container, Lifetime, container_context
 
 
 # Define interfaces/protocols
@@ -213,6 +216,24 @@ def main() -> None:
         ctx2 = scope.resolve(RequestContext)
         print(f"Same request context: {ctx1 is ctx2}")
         print(f"Request ID: {ctx1.request_id}")
+
+    print("\n=== Context Registration Demo ===")
+
+    @container_context.register(lifetime=Lifetime.SINGLETON)
+    class ContextLogger:
+        """Logger registered via container_context decorator."""
+
+        def log(self, message: str) -> None:
+            print(f"[CTX] {message}")
+
+    token = container_context.set_current(container)
+    try:
+        context_logger1 = container_context.resolve(ContextLogger)
+        context_logger2 = container_context.resolve(ContextLogger)
+        context_logger1.log("Hello from context logger!")
+        print(f"Context logger is singleton: {context_logger1 is context_logger2}")
+    finally:
+        container_context.reset(token)
 
     # Demonstrate staticmethod factories
     print("\n=== Static Method Factory Demo ===")
