@@ -938,7 +938,10 @@ class Container:
             else service_key
         )
 
-        deps = self._dependencies_extractor.get_dependencies_with_defaults(instantiation_key)
+        try:
+            deps = self._dependencies_extractor.get_dependencies_with_defaults(instantiation_key)
+        except DIWireError:
+            return None
 
         # Filter out ignored types with defaults
         filtered_deps: dict[str, ServiceKey] = {}
@@ -1157,7 +1160,11 @@ class Container:
         ):
             scoped_provider = self._scoped_compiled_providers.get((service_key, scoped_scope_name))
             if scoped_provider is not None:
-                # Get the cache scope for this registration
+                # Transient: no caching, create new instance each time
+                if scoped_registration.lifetime == Lifetime.TRANSIENT:
+                    return scoped_provider(self._singletons, None)
+
+                # Scoped singleton: use cache
                 cache_scope = current_scope.get_cache_key_for_scope(scoped_scope_name)
                 if cache_scope is not None:
                     cache_key = (cache_scope, service_key)

@@ -498,3 +498,43 @@ class TestCompilationMissingCoverage:
             # Then normal resolution finds the registration and raises scope mismatch
             with pytest.raises(DIWireScopeMismatchError):
                 container.resolve(ScopedService)
+
+    def test_compiled_scoped_transient_not_cached(self) -> None:
+        """Compiled scoped providers skip caching for TRANSIENT lifetime."""
+        container = Container()
+
+        class ServiceLocal:
+            pass
+
+        container.register(ServiceLocal, scope="request", lifetime=Lifetime.TRANSIENT)
+        container.compile()
+
+        with container.start_scope("request"):
+            # Each resolution should return a new instance (not cached)
+            instance1 = container.resolve(ServiceLocal)
+            instance2 = container.resolve(ServiceLocal)
+            assert instance1 is not instance2
+
+    def test_compile_scoped_provider_returns_none_on_dependency_extraction_error(self) -> None:
+        """_compile_scoped_provider returns None when dependency extraction fails."""
+        container = Container(register_if_missing=False, auto_compile=False)
+
+        class ServiceWithBadDep:
+            def __init__(
+                self,
+                dep: "UndefinedType",  # type: ignore[name-defined]  # noqa: F821
+            ) -> None:
+                self.dep = dep
+
+        container.register(
+            ServiceWithBadDep,
+            scope="request",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        # Compilation should not raise - it returns None for this registration
+        container.compile()
+
+        # The service should not be in compiled scoped providers
+        service_key = ServiceKey.from_value(ServiceWithBadDep)
+        assert (service_key, "request") not in container._scoped_compiled_providers
