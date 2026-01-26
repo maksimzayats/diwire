@@ -72,7 +72,6 @@ class Handler:
     @container_context.resolve(scope="request")
     async def handle(
         self,
-        request: Request,
         name: Annotated[str, Query()],
         service: Annotated[Service, FromDI()],
     ) -> dict[str, str | int]:
@@ -100,6 +99,7 @@ async def greet(
     return {"message": service.greet(name), "request_id": service.get_request_id()}
 
 
+# Class-based handler route
 app.get("/greet/v2")(Handler().handle)
 
 
