@@ -18,6 +18,7 @@ the current public API.
 
 ## Lint and type checks
 
+- Always keep linting and type-checking clean; do not proceed with changes that introduce errors.
 - Ruff lint: `uv run ruff check .`
 - Ruff auto-fix (limited): `uv run ruff check --fix-only .`
 - Ruff format: `uv run ruff format .`
@@ -88,10 +89,16 @@ the current public API.
 ## Testing guidelines
 
 - Aim for maximum coverage and edge cases for all new features.
+- Maintain 100% coverage overall; every change must keep coverage at 100%.
 - Tests live in `tests/` and mirror module naming when possible.
 - Use pytest fixtures from `tests/conftest.py` for shared setup.
 - Prefer small, focused tests over large integration tests.
 - Keep tests deterministic; avoid time-based assertions unless necessary.
+
+## Quality gates
+
+- Always ensure linting and type-checking run clean with no errors.
+- Every new change must preserve 100% test coverage.
 
 ## Ruff configuration highlights
 

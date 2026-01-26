@@ -28,11 +28,13 @@ from diwire.exceptions import (
     DIWireScopeMismatchError,
     DIWireServiceNotRegisteredError,
 )
+from diwire.service_key import Component
 from diwire.types import FromDI, Lifetime
 
 __all__ = [
     "AsyncInjected",
     "AsyncScopedInjected",
+    "Component",
     "Container",
     "DIWireAsyncDependencyInSyncContextError",
     "DIWireAsyncGeneratorFactoryDidNotYieldError",
