@@ -52,3 +52,46 @@ def test_ex03_constructor_injection(capsys: pytest.CaptureFixture[str]) -> None:
         "SELECT * FROM users WHERE id = 42",
         "Dependency chain resolved:",
     )
+
+
+def test_ex04_decorator_registration(capsys: pytest.CaptureFixture[str]) -> None:
+    """Test decorator registration demonstrates all decorator patterns."""
+    from examples.ex01_basics.ex04_decorator_registration import main
+
+    main()
+    captured = capsys.readouterr()
+
+    assert_output_contains(
+        captured.out,
+        "=== Decorator Registration Examples ===",
+        "[LOG] Hello from logger!",
+        "Logger is singleton: True",
+        "Database type: PostgresDatabase",
+        "Cache: {'initialized': 'true'}",
+        "Settings: MyApp v1.0.0",
+        "UserRepository has db: True",
+        "=== Scoped Singleton Demo ===",
+        "Same request context: True",
+        "=== Static Method Factory Demo ===",
+        "Sending email to user@example.com",
+        "Connection pool:",
+    )
+
+
+@pytest.mark.asyncio
+async def test_ex04_decorator_registration_async(capsys: pytest.CaptureFixture[str]) -> None:
+    """Test async decorator registration examples."""
+    from examples.ex01_basics.ex04_decorator_registration import async_main
+
+    await async_main()
+    captured = capsys.readouterr()
+
+    assert_output_contains(
+        captured.out,
+        "=== Async Factory Examples ===",
+        "Async service initialized: True",
+        "Database connection opened",
+        "Connection active: True",
+        "Database connection closed",
+        "Connection after scope exit: False",
+    )
