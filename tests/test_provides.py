@@ -138,8 +138,8 @@ class TestProvidesWithInstance:
         container.register(AppConfig, instance=config, provides=IConfig)
 
         result = container.resolve(IConfig)
-        assert result is config
-        assert result.get_value() == "production"
+        assert result is config  # type: ignore[comparison-overlap]
+        assert result.get_value() == "production"  # type: ignore[attr-defined]
 
 
 class TestProvidesWithLifetime:
@@ -375,7 +375,7 @@ class TestProvidesErrors:
         container.register("my_service", instance=instance, provides=IService)
 
         result = container.resolve(IService)
-        assert result is instance
+        assert result is instance  # type: ignore[comparison-overlap]
 
 
 class TestProvidesAsync:
