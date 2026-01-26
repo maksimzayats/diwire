@@ -2201,3 +2201,136 @@ class TestScopedSingletonDoubleCheckLocking:
         assert call_count == 1
         # Both tasks should get the same instance
         assert session1 is session2
+
+
+# ============================================================================
+# Scoped Ignored Types Tests (lines 1782-1788, 2082-2088)
+# ============================================================================
+
+
+@dataclass
+class ServiceWithStr:
+    """A service that depends on str (ignored type)."""
+
+    name: str
+
+
+@dataclass
+class ServiceWithStrDefault:
+    """A service that depends on str with a default value."""
+
+    name: str = "default_name"
+
+
+class TestScopedIgnoredTypes:
+    """Test ignored types (str, int, etc.) with scoped registrations."""
+
+    def test_scoped_registered_str_resolves_sync(self, container: Container) -> None:
+        """Sync: str registered in scope should be resolved, not marked as missing."""
+        container.register(str, instance="scoped_value", scope="request")
+        container.register(ServiceWithStr)
+
+        with container.start_scope("request"):
+            service = container.resolve(ServiceWithStr)
+            assert service.name == "scoped_value"
+
+    async def test_scoped_registered_str_resolves_async(self, container: Container) -> None:
+        """Async: str registered in scope should be resolved, not marked as missing."""
+        container.register(str, instance="async_scoped_value", scope="request")
+        container.register(ServiceWithStr)
+
+        async with container.start_scope("request"):
+            service = await container.aresolve(ServiceWithStr)
+            assert service.name == "async_scoped_value"
+
+    def test_scoped_ignored_type_with_default_uses_scoped_value(
+        self,
+        container: Container,
+    ) -> None:
+        """Scoped registration takes precedence over default value."""
+        container.register(str, instance="from_scope", scope="request")
+        container.register(ServiceWithStrDefault)
+
+        with container.start_scope("request"):
+            service = container.resolve(ServiceWithStrDefault)
+            # Scoped value should be used, not the default
+            assert service.name == "from_scope"
+
+    def test_ignored_type_in_nested_scope_resolves(self, container: Container) -> None:
+        """Ignored type registered in parent scope resolves in nested scope."""
+        container.register(str, instance="parent_value", scope="parent")
+        container.register(ServiceWithStr)
+
+        with container.start_scope("parent"):
+            # Nested scope should still find the parent's scoped registration
+            with container.start_scope("child"):
+                service = container.resolve(ServiceWithStr)
+                assert service.name == "parent_value"
+
+    def test_ignored_type_outside_scope_uses_default(self, container: Container) -> None:
+        """Outside scope, ignored type with default uses default (not scoped value)."""
+        container.register(str, instance="scoped_value", scope="request")
+        container.register(ServiceWithStrDefault)
+
+        # Outside the scope, the scoped registration is not visible
+        # So the default value should be used
+        service = container.resolve(ServiceWithStrDefault)
+        assert service.name == "default_name"
+
+    async def test_ignored_type_outside_scope_uses_default_async(
+        self,
+        container: Container,
+    ) -> None:
+        """Async: Outside scope, ignored type with default uses default (not scoped value)."""
+        container.register(str, instance="scoped_value", scope="request")
+        container.register(ServiceWithStrDefault)
+
+        # Outside the scope, the scoped registration is not visible
+        # So the default value should be used (async path)
+        service = await container.aresolve(ServiceWithStrDefault)
+        assert service.name == "default_name"
+
+    def test_ignored_type_outside_scope_without_default_raises(
+        self,
+        container: Container,
+    ) -> None:
+        """Outside scope, ignored type without default raises error."""
+        container.register(str, instance="scoped_value", scope="request")
+        container.register(ServiceWithStr)
+
+        # Outside the scope, str is not registered globally and has no default
+        with pytest.raises(DIWireMissingDependenciesError):
+            container.resolve(ServiceWithStr)
+
+    async def test_ignored_type_in_nested_scope_resolves_async(
+        self,
+        container: Container,
+    ) -> None:
+        """Async: Ignored type registered in parent scope resolves in nested scope."""
+        container.register(str, instance="async_parent_value", scope="parent")
+        container.register(ServiceWithStr)
+
+        async with container.start_scope("parent"):
+            async with container.start_scope("child"):
+                service = await container.aresolve(ServiceWithStr)
+                assert service.name == "async_parent_value"
+
+    def test_multiple_ignored_types_in_scope(self, container: Container) -> None:
+        """Multiple ignored types can be registered and resolved in scope."""
+
+        @dataclass
+        class ServiceWithMultipleIgnored:
+            name: str
+            count: int
+            ratio: float
+
+        container.register(str, instance="test_name", scope="request")
+        container.register(int, instance=42, scope="request")
+        container.register(float, instance=3.14, scope="request")
+        container.register(ServiceWithMultipleIgnored)
+
+        with container.start_scope("request"):
+            service = container.resolve(ServiceWithMultipleIgnored)
+            assert service.name == "test_name"
+            assert service.count == 42
+            assert service.ratio == 3.14

@@ -1779,9 +1779,16 @@ class Container:
             dep_key = param_info.service_key
 
             # Skip ignored types that aren't explicitly registered
-            if dep_key.value in self._autoregister_ignores:  # noqa: SIM102
-                # Quick check: is it registered?
-                if dep_key not in self._registry:
+            if dep_key.value in self._autoregister_ignores:
+                # Check both global and scoped registries before marking as missing
+                is_registered = dep_key in self._registry
+                if not is_registered and self._has_scoped_registrations:
+                    current_scope = _current_scope.get()
+                    if current_scope is not None:
+                        is_registered = (
+                            self._get_scoped_registration(dep_key, current_scope) is not None
+                        )
+                if not is_registered:
                     if param_info.has_default:
                         continue
                     resolved_dependencies.missing.append(dep_key)
@@ -2079,9 +2086,17 @@ class Container:
         )
         for name, param_info in dependencies.items():
             # Skip ignored types that aren't explicitly registered
-            if param_info.service_key.value in self._autoregister_ignores:  # noqa: SIM102
-                # Quick check: is it registered?
-                if param_info.service_key not in self._registry:
+            if param_info.service_key.value in self._autoregister_ignores:
+                # Check both global and scoped registries before marking as missing
+                is_registered = param_info.service_key in self._registry
+                if not is_registered and self._has_scoped_registrations:
+                    current_scope = _current_scope.get()
+                    if current_scope is not None:
+                        is_registered = (
+                            self._get_scoped_registration(param_info.service_key, current_scope)
+                            is not None
+                        )
+                if not is_registered:
                     if param_info.has_default:
                         continue
                     resolved_dependencies.missing.append(param_info.service_key)
