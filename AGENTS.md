@@ -99,6 +99,7 @@ the current public API.
 
 - Always ensure linting and type-checking run clean with no errors.
 - Every new change must preserve 100% test coverage.
+- After making changes, always run `make lint` and `make test` and report results.
 
 ## Ruff configuration highlights
 

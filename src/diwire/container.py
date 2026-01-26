@@ -941,6 +941,49 @@ class Container:
             tuple(dep_providers),
         )
 
+    def _make_compiled_factory_result_handler(
+        self,
+        service_key: ServiceKey,
+        lifetime: Lifetime,
+        scope: str | None,
+    ) -> Callable[[Any], Any]:
+        def handler(result: Any) -> Any:
+            return self._handle_compiled_factory_result(
+                result,
+                service_key,
+                lifetime,
+                scope,
+            )
+
+        return handler
+
+    def _handle_compiled_factory_result(
+        self,
+        result: Any,
+        service_key: ServiceKey,
+        lifetime: Lifetime,
+        scope: str | None,
+    ) -> Any:
+        if inspect.iscoroutine(result):
+            result.close()
+            raise DIWireAsyncDependencyInSyncContextError(service_key, service_key)
+        if isinstance(result, AsyncGenerator):
+            raise DIWireAsyncDependencyInSyncContextError(service_key, service_key)
+        if isinstance(result, Generator):
+            current_scope = _current_scope.get() if self._has_scoped_registrations else None
+            cache_scope = self._get_cache_scope(current_scope, scope)
+            if cache_scope is None:
+                raise DIWireGeneratorFactoryWithoutScopeError(service_key)
+            if lifetime == Lifetime.SINGLETON:
+                raise DIWireGeneratorFactoryUnsupportedLifetimeError(service_key)
+            try:
+                instance = next(result)
+            except StopIteration as exc:
+                raise DIWireGeneratorFactoryDidNotYieldError(service_key) from exc
+            self._get_scope_exit_stack(cache_scope).callback(result.close)
+            return instance
+        return result
+
     def _compile_or_get_provider(self, service_key: ServiceKey) -> CompiledProvider | None:
         """Get an existing compiled provider or compile a new one."""
         # Check if already compiled

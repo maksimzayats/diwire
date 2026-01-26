@@ -1,6 +1,10 @@
 """Tests for compiled providers."""
 
+import asyncio
+import inspect
+from collections.abc import AsyncGenerator, Coroutine, Generator
 from dataclasses import dataclass, field
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -12,7 +16,11 @@ from diwire.compiled_providers import (
     SingletonFactoryProvider,
 )
 from diwire.container import Container
-from diwire.exceptions import DIWireScopeMismatchError
+from diwire.exceptions import (
+    DIWireAsyncDependencyInSyncContextError,
+    DIWireGeneratorFactoryWithoutScopeError,
+    DIWireScopeMismatchError,
+)
 from diwire.registry import Registration
 from diwire.service_key import ServiceKey
 from diwire.types import Lifetime
@@ -255,6 +263,113 @@ class TestSingletonFactoryProvider:
 
         assert service_b1 is service_b2
         assert service_b1.service_a is service_a
+
+
+class TestCompiledFactoryGeneratorHandling:
+    """Tests for generator factories when using compiled providers."""
+
+    def test_compiled_factory_generator_without_scope_raises(self) -> None:
+        """Compiled factory returning a generator without scope raises."""
+
+        class GeneratorFactory:
+            def __call__(self) -> Generator[ServiceA, None, None]:
+                yield ServiceA(id="generated")
+
+        container = Container()
+        container.register(ServiceA, factory=GeneratorFactory, lifetime=Lifetime.TRANSIENT)
+        container.compile()
+
+        service_key = ServiceKey.from_value(ServiceA)
+        assert service_key in container._compiled_providers
+
+        with pytest.raises(DIWireGeneratorFactoryWithoutScopeError):
+            container.resolve(ServiceA)
+
+    def test_compiled_singleton_factory_generator_without_scope_does_not_cache(self) -> None:
+        """Singleton compiled factory returning a generator without scope is not cached."""
+
+        class GeneratorFactory:
+            def __call__(self) -> Generator[ServiceA, None, None]:
+                yield ServiceA(id="generated")
+
+        container = Container()
+        container.register(ServiceA, factory=GeneratorFactory, lifetime=Lifetime.SINGLETON)
+        container.compile()
+
+        service_key = ServiceKey.from_value(ServiceA)
+        provider = container._compiled_providers.get(service_key)
+        assert isinstance(provider, SingletonFactoryProvider)
+
+        with pytest.raises(DIWireGeneratorFactoryWithoutScopeError):
+            container.resolve(ServiceA)
+
+        assert service_key not in container._singletons
+        assert provider._instance is None
+
+    def test_compiled_async_generator_factory_sync_resolve_raises(self) -> None:
+        """Async generator factories stay on the uncompiled sync path."""
+
+        class AsyncGeneratorFactory:
+            async def __call__(self) -> AsyncGenerator[ServiceA, None]:
+                yield ServiceA(id="async")
+
+        container = Container()
+        container.register(ServiceA, factory=AsyncGeneratorFactory, lifetime=Lifetime.TRANSIENT)
+        container.compile()
+
+        service_key = ServiceKey.from_value(ServiceA)
+        assert service_key not in container._compiled_providers
+
+        with pytest.raises(DIWireAsyncDependencyInSyncContextError):
+            container.resolve(ServiceA)
+
+    def test_compiled_factory_returning_coroutine_raises(self) -> None:
+        """Sync factory returning a coroutine raises and closes the coroutine."""
+        coro_ref: Coroutine[Any, Any, ServiceA] | None = None
+
+        class CoroutineFactory:
+            def __call__(self) -> Coroutine[Any, Any, ServiceA]:
+                nonlocal coro_ref
+
+                async def build() -> ServiceA:
+                    return ServiceA(id="async")
+
+                coro_ref = build()
+                return coro_ref
+
+        container = Container()
+        container.register(ServiceA, factory=CoroutineFactory, lifetime=Lifetime.TRANSIENT)
+        container.compile()
+
+        with pytest.raises(DIWireAsyncDependencyInSyncContextError):
+            container.resolve(ServiceA)
+
+        assert coro_ref is not None
+        assert inspect.getcoroutinestate(coro_ref) == inspect.CORO_CLOSED
+
+    def test_compiled_factory_returning_async_generator_raises(self) -> None:
+        """Sync factory returning an async generator raises and can be closed."""
+        async_gen_ref: AsyncGenerator[ServiceA, None] | None = None
+
+        class AsyncGeneratorWrapperFactory:
+            def __call__(self) -> AsyncGenerator[ServiceA, None]:
+                nonlocal async_gen_ref
+
+                async def build() -> AsyncGenerator[ServiceA, None]:
+                    yield ServiceA(id="async")
+
+                async_gen_ref = build()
+                return async_gen_ref
+
+        container = Container()
+        container.register(ServiceA, factory=AsyncGeneratorWrapperFactory, lifetime=Lifetime.TRANSIENT)
+        container.compile()
+
+        with pytest.raises(DIWireAsyncDependencyInSyncContextError):
+            container.resolve(ServiceA)
+
+        assert async_gen_ref is not None
+        asyncio.run(async_gen_ref.aclose())
 
 
 class TestCompiledProvidersCacheHit:
