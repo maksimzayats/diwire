@@ -6,6 +6,7 @@ Demonstrates using @container.register as a decorator for:
 3. Interface/Protocol registration via provides parameter
 4. Async factory function registration
 5. Factory functions with auto-injected dependencies
+6. Static method and class method factories
 """
 
 import asyncio
@@ -58,10 +59,17 @@ class PostgresDatabase:
 
 
 # Pattern 4: Factory function decorator (infers type from return annotation)
+class Cache:
+    """A simple cache wrapper."""
+
+    def __init__(self, data: dict[str, str]) -> None:
+        self.data = data
+
+
 @container.register
-def create_cache() -> dict[str, str]:
-    """Factory function that creates a cache dictionary."""
-    return {"initialized": "true"}
+def create_cache() -> Cache:
+    """Factory function that creates a cache."""
+    return Cache({"initialized": "true"})
 
 
 # Pattern 5: Factory with explicit provides (overrides return annotation)
@@ -113,7 +121,61 @@ async def create_async_service() -> AsyncService:
     return AsyncService(initialized=True)
 
 
-# Pattern 9: Async generator factory with cleanup
+# Pattern 9: Static method factory decorator
+class EmailService:
+    """Email service created via static method factory."""
+
+    def __init__(self, *, smtp_host: str) -> None:
+        self.smtp_host = smtp_host
+
+    def send(self, to: str, message: str) -> None:
+        print(f"Sending email to {to} via {self.smtp_host}: {message}")
+
+
+class ConnectionPool:
+    """A connection pool wrapper."""
+
+    def __init__(self, connections: list[str]) -> None:
+        self.connections = connections
+
+
+class FactoryMetadata:
+    """Metadata about the factory."""
+
+    def __init__(self, factory_class: str, version: str) -> None:
+        self.factory_class = factory_class
+        self.version = version
+
+
+class ServiceFactories:
+    """A collection of factory methods for creating services."""
+
+    # Pattern 9a: Static method with bare decorator
+    @staticmethod
+    @container.register
+    def create_email_service() -> EmailService:
+        """Static method factory for EmailService."""
+        return EmailService(smtp_host="smtp.example.com")
+
+    # Pattern 9b: Static method with parameterized decorator
+    @staticmethod
+    @container.register(lifetime=Lifetime.SINGLETON)
+    def create_connection_pool() -> ConnectionPool:
+        """Static method factory that creates a singleton connection pool."""
+        print("Creating connection pool...")
+        return ConnectionPool(["conn1", "conn2", "conn3"])
+
+    # Pattern 9c: Class method factory
+    # Note: When used as a DI factory, 'cls' is None (class not available during resolution)
+    @classmethod
+    @container.register(lifetime=Lifetime.SINGLETON)
+    def create_factory_metadata(cls) -> FactoryMetadata:
+        """Class method factory. Note: cls is None when called via DI."""
+        class_name = cls.__name__ if cls is not None else "ServiceFactories"
+        return FactoryMetadata(factory_class=class_name, version="1.0")
+
+
+# Pattern 10: Async generator factory with cleanup (using staticmethod)
 class DatabaseConnection:
     def __init__(self) -> None:
         self.connected = True
@@ -121,17 +183,18 @@ class DatabaseConnection:
     def close(self) -> None:
         self.connected = False
 
-    @staticmethod
-    @container.register(lifetime=Lifetime.SCOPED_SINGLETON, scope="request")
-    async def create_db_connection() -> AsyncGenerator["DatabaseConnection", None]:
-        """Async generator factory with automatic cleanup."""
-        conn = DatabaseConnection()
-        print("Database connection opened")
-        try:
-            yield conn
-        finally:
-            conn.close()
-            print("Database connection closed")
+
+# Note: Factory defined outside class to avoid forward reference issues
+@container.register(lifetime=Lifetime.SCOPED_SINGLETON, scope="request")
+async def create_db_connection() -> AsyncGenerator[DatabaseConnection, None]:
+    """Async generator factory with automatic cleanup."""
+    conn = DatabaseConnection()
+    print("Database connection opened")
+    try:
+        yield conn
+    finally:
+        conn.close()
+        print("Database connection closed")
 
 
 def main() -> None:
@@ -149,8 +212,8 @@ def main() -> None:
     print(f"Database type: {type(db).__name__}\n")
 
     # Resolve factory-created instances
-    cache = container.resolve(dict)
-    print(f"Cache: {cache}\n")
+    cache = container.resolve(Cache)
+    print(f"Cache: {cache.data}\n")
 
     settings = container.resolve(AppSettings)
     print(f"Settings: {settings.name} v{settings.version}\n")
@@ -167,6 +230,17 @@ def main() -> None:
         ctx2 = scope.resolve(RequestContext)
         print(f"Same request context: {ctx1 is ctx2}")
         print(f"Request ID: {ctx1.request_id}")
+
+    # Demonstrate staticmethod and classmethod factories
+    print("\n=== Static/Class Method Factory Demo ===")
+    email_service = container.resolve(EmailService)
+    email_service.send("user@example.com", "Hello!")
+
+    conn_pool = container.resolve(ConnectionPool)
+    print(f"Connection pool: {conn_pool.connections}")
+
+    metadata = container.resolve(FactoryMetadata)
+    print(f"Factory metadata: {metadata.factory_class} v{metadata.version}")
 
 
 async def async_main() -> None:

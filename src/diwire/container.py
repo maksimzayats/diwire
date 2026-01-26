@@ -19,6 +19,7 @@ from typing import (
     ClassVar,
     Generic,
     TypeVar,
+    cast,
     get_args,
     get_origin,
     get_type_hints,
@@ -226,6 +227,68 @@ def _get_return_annotation(func: Callable[..., Any]) -> type | None:
         return return_type
 
     return None
+
+
+def _unwrap_method_descriptor(
+    obj: Any,
+) -> tuple[Callable[..., Any] | None, Any]:
+    """Unwrap staticmethod or classmethod descriptors to get the underlying function.
+
+    Returns:
+        A tuple of (unwrapped_function, original_descriptor).
+        If obj is not a descriptor, returns (None, None).
+
+    """
+    if isinstance(obj, staticmethod):
+        return obj.__func__, obj
+    if isinstance(obj, classmethod):
+        return obj.__func__, obj
+    return None, None
+
+
+def _is_method_descriptor(obj: Any) -> bool:
+    """Check if obj is a staticmethod or classmethod descriptor."""
+    return isinstance(obj, (staticmethod, classmethod))
+
+
+def _wrap_classmethod_func(func: Callable[..., T]) -> Callable[..., T]:
+    """Wrap a classmethod's __func__ to skip the cls parameter.
+
+    Classmethods expect `cls` as the first argument, but when used as a DI factory,
+    we don't have the class available. This wrapper binds `cls` to None.
+
+    """
+
+    @wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> T:
+        # Pass None as cls since we don't have the class during DI resolution
+        return func(None, *args, **kwargs)
+
+    return wrapper
+
+
+def _looks_like_classmethod(func: Callable[..., Any]) -> bool:
+    """Check if a function looks like a classmethod (first param is 'cls').
+
+    This handles the case where @classmethod comes AFTER @container.register,
+    i.e., @classmethod @container.register, where container.register sees
+    the raw function before it's wrapped by classmethod.
+
+    """
+    try:
+        sig = inspect.signature(func)
+        params = list(sig.parameters.values())
+        if not params:
+            return False
+        first_param = params[0]
+        # Check if first parameter is named 'cls' and has no annotation
+        # (or annotation is type[T] which is typical for cls)
+        return first_param.name == "cls" and first_param.annotation in (
+            inspect.Parameter.empty,
+            type,
+        )
+    except (ValueError, TypeError):
+        return False
 
 
 @dataclass(kw_only=True, slots=True, frozen=True)
@@ -855,9 +918,12 @@ class Container:
             service_type = _get_return_annotation(key)
             if service_type is None:
                 raise DIWireDecoratorFactoryMissingReturnAnnotationError(key)
+            # Check if function looks like a classmethod (first param is 'cls')
+            # This handles @classmethod @container.register order
+            factory_func = _wrap_classmethod_func(key) if _looks_like_classmethod(key) else key
             self._do_register(
                 key=service_type,
-                factory=key,
+                factory=factory_func,
                 instance=None,
                 lifetime=lifetime,
                 scope=scope,
@@ -866,7 +932,32 @@ class Container:
             )
             return key
 
-        # Case 4: Direct call - container.register(MyClass, factory=...)
+        # Case 4: Bare decorator on a staticmethod/classmethod - @staticmethod @container.register
+        if _is_method_descriptor(key) and all_params_at_defaults:
+            # _is_method_descriptor guarantees key is staticmethod/classmethod,
+            # so unwrapped_func is always non-None
+            unwrapped_func, descriptor = _unwrap_method_descriptor(key)
+            service_type = _get_return_annotation(unwrapped_func)  # type: ignore[arg-type]
+            if service_type is None:
+                raise DIWireDecoratorFactoryMissingReturnAnnotationError(unwrapped_func)
+            # For classmethod, wrap to skip `cls` parameter
+            # unwrapped_func is guaranteed non-None since _is_method_descriptor passed
+            _func = cast("Callable[..., Any]", unwrapped_func)
+            factory_func = (
+                _wrap_classmethod_func(_func) if isinstance(descriptor, classmethod) else _func
+            )
+            self._do_register(
+                key=service_type,
+                factory=factory_func,
+                instance=None,
+                lifetime=lifetime,
+                scope=scope,
+                is_async=is_async,
+                provides=None,
+            )
+            return key
+
+        # Case 5: Direct call - container.register(MyClass, factory=...)
         self._do_register(
             key=key,
             factory=factory,
@@ -899,6 +990,33 @@ class Container:
                     is_async=is_async,
                     provides=provides,
                 )
+            elif _is_method_descriptor(target):
+                # staticmethod/classmethod decoration
+                # _is_method_descriptor guarantees target is staticmethod/classmethod,
+                # so unwrapped_func is always non-None
+                unwrapped_func, descriptor = _unwrap_method_descriptor(target)
+                service_type = provides
+                if service_type is None:
+                    service_type = _get_return_annotation(unwrapped_func)  # type: ignore[arg-type]
+                    if service_type is None:
+                        raise DIWireDecoratorFactoryMissingReturnAnnotationError(
+                            unwrapped_func,
+                        )
+                # For classmethod, wrap to skip `cls` parameter
+                # unwrapped_func is guaranteed non-None since _is_method_descriptor passed
+                _meth = cast("Callable[..., Any]", unwrapped_func)
+                method_factory = (
+                    _wrap_classmethod_func(_meth) if isinstance(descriptor, classmethod) else _meth
+                )
+                self._do_register(
+                    key=service_type,
+                    factory=method_factory,
+                    instance=None,
+                    lifetime=lifetime,
+                    scope=scope,
+                    is_async=is_async,
+                    provides=None,  # Already resolved to service_type
+                )
             else:
                 # Factory function decoration - infer type from return annotation
                 service_type = provides
@@ -906,9 +1024,14 @@ class Container:
                     service_type = _get_return_annotation(target)  # type: ignore[arg-type]
                     if service_type is None:
                         raise DIWireDecoratorFactoryMissingReturnAnnotationError(target)
+                # Check if function looks like a classmethod (first param is 'cls')
+                # This handles @classmethod @container.register(...) order
+                func_factory: Any = target
+                if _looks_like_classmethod(target):  # type: ignore[arg-type]
+                    func_factory = _wrap_classmethod_func(target)  # type: ignore[arg-type]
                 self._do_register(
                     key=service_type,
-                    factory=target,  # type: ignore[arg-type]
+                    factory=func_factory,
                     instance=None,
                     lifetime=lifetime,
                     scope=scope,

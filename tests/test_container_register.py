@@ -1460,3 +1460,311 @@ class TestSyncGeneratorFactoryDecorator:
             assert cleanup_called == []
 
         assert cleanup_called == [True]
+
+
+class TestStaticMethodDecorator:
+    """Tests for using @container.register on staticmethod factories."""
+
+    def test_staticmethod_bare_decorator(self, container: Container) -> None:
+        """@staticmethod @container.register should work."""
+
+        class Database:
+            pass
+
+        class Factories:
+            @staticmethod
+            @container.register
+            def create_database() -> Database:
+                return Database()
+
+        instance = container.resolve(Database)
+        assert isinstance(instance, Database)
+
+    def test_staticmethod_parameterized_decorator(self, container: Container) -> None:
+        """@staticmethod @container.register(lifetime=...) should work."""
+
+        class Config:
+            pass
+
+        class Factories:
+            @staticmethod
+            @container.register(lifetime=Lifetime.SINGLETON)
+            def create_config() -> Config:
+                return Config()
+
+        instance1 = container.resolve(Config)
+        instance2 = container.resolve(Config)
+        assert instance1 is instance2
+
+    def test_staticmethod_with_provides(self, container: Container) -> None:
+        """@staticmethod @container.register(provides=...) should work."""
+
+        class IService:
+            pass
+
+        class ServiceImpl(IService):
+            pass
+
+        class Factories:
+            @staticmethod
+            @container.register(provides=IService)
+            def create_service() -> ServiceImpl:
+                return ServiceImpl()
+
+        instance = container.resolve(IService)
+        assert isinstance(instance, ServiceImpl)
+
+    def test_staticmethod_with_dependencies(self, container: Container) -> None:
+        """Static method factory with dependencies should auto-inject."""
+
+        class Logger:
+            pass
+
+        class Service:
+            def __init__(self, logger: Logger) -> None:
+                self.logger = logger
+
+        class Factories:
+            @staticmethod
+            @container.register
+            def create_service(logger: Logger) -> Service:
+                return Service(logger)
+
+        instance = container.resolve(Service)
+        assert isinstance(instance, Service)
+        assert isinstance(instance.logger, Logger)
+
+    async def test_staticmethod_async_factory(self, container: Container) -> None:
+        """@staticmethod async factory should work."""
+
+        class AsyncService:
+            pass
+
+        class Factories:
+            @staticmethod
+            @container.register(lifetime=Lifetime.SINGLETON)
+            async def create_async_service() -> AsyncService:
+                return AsyncService()
+
+        instance = await container.aresolve(AsyncService)
+        assert isinstance(instance, AsyncService)
+
+    def test_staticmethod_preserves_descriptor(self, container: Container) -> None:
+        """Decorator should preserve the staticmethod descriptor."""
+
+        class Service:
+            pass
+
+        class Factories:
+            @staticmethod
+            @container.register
+            def create_service() -> Service:
+                return Service()
+
+        # The method should still be a staticmethod descriptor on the class
+        assert isinstance(Factories.__dict__["create_service"], staticmethod)
+
+        # Should be callable without self
+        direct_result = Factories.create_service()
+        assert isinstance(direct_result, Service)
+
+    async def test_staticmethod_async_generator_factory(self, container: Container) -> None:
+        """@staticmethod async generator factory should work with cleanup."""
+        from collections.abc import AsyncGenerator
+
+        cleanup_called = []
+
+        class Resource:
+            pass
+
+        class Factories:
+            @staticmethod
+            @container.register(lifetime=Lifetime.SCOPED_SINGLETON, scope="request")
+            async def create_resource() -> AsyncGenerator[Resource, None]:
+                try:
+                    yield Resource()
+                finally:
+                    cleanup_called.append(True)
+
+        async with container.start_scope("request"):
+            instance = await container.aresolve(Resource)
+            assert isinstance(instance, Resource)
+            assert cleanup_called == []
+
+        assert cleanup_called == [True]
+
+
+class TestClassMethodDecorator:
+    """Tests for using @container.register on classmethod factories."""
+
+    def test_classmethod_bare_decorator(self, container: Container) -> None:
+        """@classmethod @container.register should work."""
+
+        class Database:
+            pass
+
+        class Factories:
+            @classmethod
+            @container.register
+            def create_database(cls) -> Database:
+                return Database()
+
+        instance = container.resolve(Database)
+        assert isinstance(instance, Database)
+
+    def test_classmethod_parameterized_decorator(self, container: Container) -> None:
+        """@classmethod @container.register(lifetime=...) should work."""
+
+        class Config:
+            pass
+
+        class Factories:
+            @classmethod
+            @container.register(lifetime=Lifetime.SINGLETON)
+            def create_config(cls) -> Config:
+                return Config()
+
+        instance1 = container.resolve(Config)
+        instance2 = container.resolve(Config)
+        assert instance1 is instance2
+
+    def test_classmethod_with_provides(self, container: Container) -> None:
+        """@classmethod @container.register(provides=...) should work."""
+
+        class IRepository:
+            pass
+
+        class RepositoryImpl(IRepository):
+            pass
+
+        class Factories:
+            @classmethod
+            @container.register(provides=IRepository)
+            def create_repo(cls) -> RepositoryImpl:
+                return RepositoryImpl()
+
+        instance = container.resolve(IRepository)
+        assert isinstance(instance, RepositoryImpl)
+
+    def test_classmethod_preserves_descriptor(self, container: Container) -> None:
+        """Decorator should preserve the classmethod descriptor."""
+
+        class Service:
+            pass
+
+        class Factories:
+            @classmethod
+            @container.register
+            def create_service(cls) -> Service:
+                return Service()
+
+        # The method should still be a classmethod descriptor on the class
+        assert isinstance(Factories.__dict__["create_service"], classmethod)
+
+        # Should be callable with class
+        direct_result = Factories.create_service()
+        assert isinstance(direct_result, Service)
+
+    def test_classmethod_without_return_annotation_raises(self, container: Container) -> None:
+        """@classmethod without return annotation should raise error."""
+        from diwire.exceptions import DIWireDecoratorFactoryMissingReturnAnnotationError
+
+        with pytest.raises(DIWireDecoratorFactoryMissingReturnAnnotationError):
+
+            class Factories:
+                @classmethod
+                @container.register
+                def create_something(cls):  # type: ignore[no-untyped-def]  # noqa: ANN206
+                    return object()
+
+    def test_staticmethod_without_return_annotation_raises(self, container: Container) -> None:
+        """@staticmethod without return annotation should raise error."""
+        from diwire.exceptions import DIWireDecoratorFactoryMissingReturnAnnotationError
+
+        with pytest.raises(DIWireDecoratorFactoryMissingReturnAnnotationError):
+
+            class Factories:
+                @staticmethod
+                @container.register
+                def create_something():  # type: ignore[no-untyped-def]  # noqa: ANN205
+                    return object()
+
+
+class TestMethodDescriptorDecoratorOrder:
+    """Tests for decorator order with staticmethod/classmethod."""
+
+    def test_register_before_staticmethod_without_annotation_raises(
+        self,
+        container: Container,
+    ) -> None:
+        """@container.register @staticmethod without annotation should raise."""
+        from diwire.exceptions import DIWireDecoratorFactoryMissingReturnAnnotationError
+
+        with pytest.raises(DIWireDecoratorFactoryMissingReturnAnnotationError):
+
+            class Factories:
+                @container.register
+                @staticmethod
+                def create_something():  # type: ignore[no-untyped-def]  # noqa: ANN205
+                    return object()
+
+    def test_parameterized_register_before_staticmethod_without_annotation_raises(
+        self,
+        container: Container,
+    ) -> None:
+        """@container.register(lifetime=...) @staticmethod without annotation should raise."""
+        from diwire.exceptions import DIWireDecoratorFactoryMissingReturnAnnotationError
+
+        with pytest.raises(DIWireDecoratorFactoryMissingReturnAnnotationError):
+
+            class Factories:
+                @container.register(lifetime=Lifetime.SINGLETON)
+                @staticmethod
+                def create_something():  # type: ignore[no-untyped-def]  # noqa: ANN205
+                    return object()
+
+    def test_register_before_staticmethod(self, container: Container) -> None:
+        """@container.register @staticmethod order should also work."""
+
+        class Service:
+            pass
+
+        class Factories:
+            @container.register
+            @staticmethod
+            def create_service() -> Service:
+                return Service()
+
+        instance = container.resolve(Service)
+        assert isinstance(instance, Service)
+
+    def test_register_before_classmethod(self, container: Container) -> None:
+        """@container.register @classmethod order should also work."""
+
+        class Service:
+            pass
+
+        class Factories:
+            @container.register
+            @classmethod
+            def create_service(cls) -> Service:
+                return Service()
+
+        instance = container.resolve(Service)
+        assert isinstance(instance, Service)
+
+    def test_parameterized_before_staticmethod(self, container: Container) -> None:
+        """@container.register(lifetime=...) @staticmethod should work."""
+
+        class Service:
+            pass
+
+        class Factories:
+            @container.register(lifetime=Lifetime.SINGLETON)
+            @staticmethod
+            def create_service() -> Service:
+                return Service()
+
+        instance1 = container.resolve(Service)
+        instance2 = container.resolve(Service)
+        assert instance1 is instance2
