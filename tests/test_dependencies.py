@@ -131,3 +131,103 @@ class TestDependenciesEdgeCases:
         # Test with non-Annotated type
         result = dependencies_extractor._extract_from_di_type(ServiceA)
         assert result is None
+
+    def test_get_injected_dependencies_nameerror_fallback_to_no_extras(
+        self,
+        dependencies_extractor: DependenciesExtractor,
+    ) -> None:
+        """NameError with include_extras falls back to get_type_hints without extras."""
+
+        class ServiceA:
+            pass
+
+        def func_with_injected(dep: Annotated[ServiceA, FromDI()]) -> None:
+            pass
+
+        service_key = ServiceKey.from_value(func_with_injected)
+
+        # Mock get_type_hints to fail on first call (with include_extras)
+        # but succeed on second call (without include_extras)
+        original_get_type_hints = dependencies_extractor.get_injected_dependencies.__globals__[
+            "get_type_hints"
+        ]
+        call_count = 0
+
+        def mock_get_type_hints(func: object, *, include_extras: bool = False) -> dict[str, object]:
+            nonlocal call_count
+            call_count += 1
+            if include_extras:
+                raise NameError("Unresolved forward reference")
+            return original_get_type_hints(func, include_extras=include_extras)
+
+        with patch(
+            "diwire.dependencies.get_type_hints",
+            side_effect=mock_get_type_hints,
+        ):
+            # Clear the cache to ensure our code path runs
+            fresh_extractor = DependenciesExtractor()
+            result = fresh_extractor.get_injected_dependencies(service_key)
+
+        # Should have called get_type_hints twice (first with extras, then without)
+        assert call_count == 2
+        # Without include_extras=True, FromDI metadata is not extracted, so result is empty
+        assert result == {}
+
+    def test_get_injected_dependencies_typeerror_fallback_to_no_extras(
+        self,
+        dependencies_extractor: DependenciesExtractor,
+    ) -> None:
+        """TypeError with include_extras falls back to get_type_hints without extras."""
+
+        class ServiceA:
+            pass
+
+        def func_with_injected(dep: Annotated[ServiceA, FromDI()]) -> None:
+            pass
+
+        service_key = ServiceKey.from_value(func_with_injected)
+
+        call_count = 0
+
+        def mock_get_type_hints(func: object, *, include_extras: bool = False) -> dict[str, object]:
+            nonlocal call_count
+            call_count += 1
+            if include_extras:
+                raise TypeError("Cannot resolve type")
+            return {"dep": ServiceA}  # Return type without Annotated wrapper
+
+        with patch(
+            "diwire.dependencies.get_type_hints",
+            side_effect=mock_get_type_hints,
+        ):
+            fresh_extractor = DependenciesExtractor()
+            result = fresh_extractor.get_injected_dependencies(service_key)
+
+        assert call_count == 2
+        # Without include_extras, the Annotated metadata is stripped, so no FromDI found
+        assert result == {}
+
+    def test_get_injected_dependencies_both_calls_fail_returns_empty(
+        self,
+        dependencies_extractor: DependenciesExtractor,
+    ) -> None:
+        """When both get_type_hints calls fail, returns empty dict."""
+
+        class ServiceA:
+            pass
+
+        def func_with_injected(dep: Annotated[ServiceA, FromDI()]) -> None:
+            pass
+
+        service_key = ServiceKey.from_value(func_with_injected)
+
+        # Mock get_type_hints to always fail
+        with patch(
+            "diwire.dependencies.get_type_hints",
+            side_effect=NameError("Cannot resolve"),
+        ):
+            fresh_extractor = DependenciesExtractor()
+            result = fresh_extractor.get_injected_dependencies(service_key)
+
+        # Should return empty dict when all attempts fail
+        assert result == {}

@@ -18,6 +18,29 @@ class ServiceB:
         self.a = a
 
 
+class SlowAsyncService:
+    """Service used for testing async singleton double-check locking."""
+
+    _creation_count: int = 0
+
+    def __init__(self) -> None:
+        SlowAsyncService._creation_count += 1
+
+    @classmethod
+    def reset_count(cls) -> None:
+        cls._creation_count = 0
+
+    @classmethod
+    def get_count(cls) -> int:
+        return cls._creation_count
+
+
+async def slow_async_service_factory() -> SlowAsyncService:
+    """Factory that introduces a delay to simulate slow async resolution."""
+    await asyncio.sleep(0.05)
+    return SlowAsyncService()
+
+
 class TestConcurrentResolution:
     def test_concurrent_singleton_resolution_same_instance(
         self,
@@ -424,3 +447,81 @@ class TestAsyncConcurrentResolution:
         for r in results:
             assert isinstance(r, ServiceB)
             assert isinstance(r.a, ServiceA)
+
+    async def test_async_singleton_double_check_locking(self) -> None:
+        """Test that double-check locking works correctly for async singletons.
+
+        This test ensures multiple concurrent coroutines resolving the same
+        singleton all get the same instance due to double-check locking.
+        """
+        # Use a simple class that's already defined (ServiceA) with singleton lifetime
+        container = Container(
+            register_if_missing=True,
+            autoregister_default_lifetime=Lifetime.SINGLETON,
+            auto_compile=False,  # Disable compilation to use aresolve path
+        )
+
+        # Use an Event to synchronize workers starting together
+        start_event = asyncio.Event()
+        results: list[ServiceA] = []
+
+        async def worker() -> None:
+            await start_event.wait()  # All workers start together
+            instance = await container.aresolve(ServiceA)
+            results.append(instance)
+
+        # Create all worker tasks
+        tasks = [asyncio.create_task(worker()) for _ in range(20)]
+        # Give tasks time to start and wait on the event
+        await asyncio.sleep(0.01)
+        # Release all workers simultaneously
+        start_event.set()
+        # Wait for all to complete
+        await asyncio.gather(*tasks)
+
+        assert len(results) == 20
+        # All should be the same instance
+        assert all(r is results[0] for r in results)
+
+    async def test_async_singleton_with_slow_factory_double_check(self) -> None:
+        """Test double-check locking with a slow async factory.
+
+        This test directly exercises the double-check path by:
+        1. Starting a singleton resolution that acquires the lock
+        2. While holding the lock, manually populating the singleton cache
+        3. Verifying the cached value is returned
+        """
+        from diwire.service_key import ServiceKey
+
+        SlowAsyncService.reset_count()
+
+        container = Container(register_if_missing=False, auto_compile=False)
+        container.register(
+            SlowAsyncService,
+            factory=slow_async_service_factory,
+            lifetime=Lifetime.SINGLETON,
+        )
+
+        service_key = ServiceKey.from_value(SlowAsyncService)
+
+        # Get the singleton lock
+        singleton_lock = await container._get_singleton_lock(service_key)
+
+        # Create a pre-made instance to inject into the cache
+        injected_instance = SlowAsyncService()
+
+        # Hold the lock while we populate the cache
+        async with singleton_lock:
+            # Populate the singleton cache while holding the lock
+            container._singletons[service_key] = injected_instance
+
+        # Reset count to verify the factory wasn't called
+        initial_count = SlowAsyncService.get_count()
+
+        # Now resolve - should hit the double-check path and return cached instance
+        result = await container.aresolve(SlowAsyncService)
+
+        # Should be the same instance we injected
+        assert result is injected_instance
+        # Factory should not have been called again
+        assert SlowAsyncService.get_count() == initial_count
