@@ -1,0 +1,142 @@
+[project]
+name = "diwire"
+dynamic = ["version"]
+description = "A lightweight, type-safe dependency injection container with automatic wiring, scoped lifetimes, and zero dependencies"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "Maksim Zayats", email = "maksim@zayats.dev" }]
+keywords = [
+    "dependency-injection",
+    "di",
+    "ioc",
+    "inversion-of-control",
+    "container",
+    "autowiring",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://github.com/MaksimZayats/diwire"
+Repository = "https://github.com/MaksimZayats/diwire"
+Issues = "https://github.com/MaksimZayats/diwire/issues"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.14.13",
+    "ty>=0.0.13",
+    "pyrefly>=0.49.0",
+    # Integration testing
+    "pydantic-settings>=2.12.0",
+    "fastapi>=0.128.0",
+    "sqlalchemy>=2.0.46",
+    "dishka>=1.7.2",
+    "punq>=0.7.0",
+    "rodi>=2.0.8",
+    # Benchmarking
+    "pytest-benchmark[histogram]>=5.1.0",
+    "pytest-asyncio>=1.3.0",
+    "uvicorn>=0.40.0",
+]
+
+[build-system]
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
+
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+ignore_missing_imports = true
+local_partial_types = true
+warn_unreachable = true
+enable_error_code = [
+    "truthy-bool",
+    "truthy-iterable",
+    "redundant-expr",
+    "unused-awaitable",
+    "ignore-without-code",
+    "possibly-undefined",
+    "redundant-self",
+    "unimported-reveal",
+    "deprecated",
+    "exhaustive-match",
+]
+disable_error_code = [
+    "unused-ignore",
+    "no-any-return",
+]
+exclude = [
+    "benchmarks/",
+    "examples/",
+]
+
+[tool.ty.src]
+exclude = ["benchmarks/"]
+
+[tool.ty.rules]
+unused-ignore-comment = "ignore"
+
+[tool.pyrefly]
+project-excludes = ["benchmarks/**", "benchmarks/", "examples/**"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]
+filterwarnings = [
+    "error",
+    # Ignore ResourceWarnings from unclosed sockets/event loops during GC
+    # These come from pytest-asyncio internals and are not related to test code
+    "ignore:unclosed <socket.socket:ResourceWarning",
+    "ignore:unclosed event loop:ResourceWarning",
+]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+source = ["src/diwire"]
+branch = true
+parallel = true
+
+[tool.coverage.report]
+fail_under = 100
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if typing.TYPE_CHECKING:",
+    "@overload",
+    "@typing.overload",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
+]
+show_missing = true
+skip_covered = true
