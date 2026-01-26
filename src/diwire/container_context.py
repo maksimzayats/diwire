@@ -206,15 +206,15 @@ class ContainerContextProxy:
     Resolution order in get_current():
     1. ContextVar (highest precedence - for explicit per-request containers)
     2. Thread-local (for asyncio.run() case where ContextVar doesn't propagate)
-    3. Class-level default (lowest precedence - for cross-thread access)
+    3. Instance-level default (lowest precedence - for cross-thread access)
 
-    The class-level default exists because some frameworks (e.g., FastAPI/Starlette)
+    The instance-level default exists because some frameworks (e.g., FastAPI/Starlette)
     run sync endpoint handlers in a thread pool, meaning neither ContextVar nor
     thread-local storage can access a container set in the main thread.
     """
 
-    # Process-wide default container for cross-thread access
-    _default_container: Container | None = None
+    def __init__(self) -> None:
+        self._default_container: Container | None = None
 
     def set_current(self, container: Container) -> Token[Container | None]:
         """Set the current container in the context.
@@ -222,7 +222,7 @@ class ContainerContextProxy:
         Sets the container in three storage mechanisms:
         1. ContextVar - for same async context access
         2. Thread-local - for asyncio.run() case (same thread, new context)
-        3. Class-level default - for thread pool access (different threads)
+        3. Instance-level default - for thread pool access (different threads)
 
         Args:
             container: The container to set as current.
@@ -241,7 +241,7 @@ class ContainerContextProxy:
         Resolution order (first non-None wins):
         1. ContextVar - for per-context containers
         2. Thread-local - for asyncio.run() (same thread, new context)
-        3. Class-level default - for thread pools (different thread entirely)
+        3. Instance-level default - for thread pools (different thread entirely)
 
         Returns:
             The current container.
@@ -260,7 +260,7 @@ class ContainerContextProxy:
         if container is not None:
             return container
 
-        # 3. Fallback: Class-level default (for thread pools like FastAPI sync handlers)
+        # 3. Fallback: Instance-level default (for thread pools like FastAPI sync handlers)
         if self._default_container is not None:
             return self._default_container
 
