@@ -10,6 +10,7 @@ from uuid import uuid4
 import pytest
 
 from diwire.compiled_providers import (
+    FactoryProvider,
     InstanceProvider,
     ScopedSingletonArgsProvider,
     ScopedSingletonProvider,
@@ -265,6 +266,25 @@ class TestSingletonFactoryProvider:
         assert service_b1.service_a is service_a
 
 
+class TestFactoryProvider:
+    """Tests for FactoryProvider - factory-created instances."""
+
+    def test_factory_provider_without_handler_returns_result(self) -> None:
+        """FactoryProvider without a result handler returns the raw result."""
+
+        class ServiceAFactory:
+            def __call__(self) -> ServiceA:
+                return ServiceA(id="factory")
+
+        factory_provider = InstanceProvider(ServiceAFactory())
+        provider = FactoryProvider(factory_provider)
+
+        result = provider({}, None)
+
+        assert isinstance(result, ServiceA)
+        assert result.id == "factory"
+
+
 class TestCompiledFactoryGeneratorHandling:
     """Tests for generator factories when using compiled providers."""
 
@@ -362,7 +382,11 @@ class TestCompiledFactoryGeneratorHandling:
                 return async_gen_ref
 
         container = Container()
-        container.register(ServiceA, factory=AsyncGeneratorWrapperFactory, lifetime=Lifetime.TRANSIENT)
+        container.register(
+            ServiceA,
+            factory=AsyncGeneratorWrapperFactory,
+            lifetime=Lifetime.TRANSIENT,
+        )
         container.compile()
 
         with pytest.raises(DIWireAsyncDependencyInSyncContextError):

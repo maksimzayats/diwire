@@ -582,9 +582,13 @@ class Container:
         "_scoped_compiled_providers",
         "_scoped_instances",
         "_scoped_registry",
+        "_scoped_singleton_locks",
+        "_scoped_singleton_locks_lock",
         "_singleton_locks",
         "_singleton_locks_lock",
         "_singletons",
+        "_sync_scoped_singleton_locks",
+        "_sync_scoped_singleton_locks_lock",
         "_sync_singleton_locks",
         "_sync_singleton_locks_lock",
         "_type_providers",
@@ -638,6 +642,20 @@ class Container:
 
         # Cache for async dependency info (Phase 4 optimization)
         self._async_deps_cache: dict[ServiceKey, frozenset[ServiceKey]] = {}
+
+        # Per-cache-key locks for async scoped singleton resolution to prevent races
+        self._scoped_singleton_locks: dict[
+            tuple[tuple[tuple[str | None, int], ...], ServiceKey],
+            asyncio.Lock,
+        ] = {}
+        self._scoped_singleton_locks_lock = asyncio.Lock()
+
+        # Per-cache-key locks for sync scoped singleton resolution to prevent races
+        self._sync_scoped_singleton_locks: dict[
+            tuple[tuple[tuple[str | None, int], ...], ServiceKey],
+            threading.Lock,
+        ] = {}
+        self._sync_scoped_singleton_locks_lock = threading.Lock()
 
         # Per-service-key locks for async singleton resolution to prevent race conditions
         self._singleton_locks: dict[ServiceKey, asyncio.Lock] = {}
@@ -781,6 +799,12 @@ class Container:
         keys_to_remove = [k for k in self._scoped_instances if k[0] == scope_key]
         for k in keys_to_remove:
             del self._scoped_instances[k]
+        scoped_lock_keys = [k for k in self._sync_scoped_singleton_locks if k[0] == scope_key]
+        for k in scoped_lock_keys:
+            del self._sync_scoped_singleton_locks[k]
+        async_scoped_lock_keys = [k for k in self._scoped_singleton_locks if k[0] == scope_key]
+        for k in async_scoped_lock_keys:
+            del self._scoped_singleton_locks[k]
 
     def _get_scope_exit_stack(
         self,
@@ -1280,11 +1304,16 @@ class Container:
                     cached = self._scoped_instances.get(cache_key)
                     if cached is not None:
                         return cached
-                    # Use compiled provider (pass None - we handle caching at container level)
-                    result = scoped_provider(self._singletons, None)
-                    # Store directly in flat cache
-                    self._scoped_instances[cache_key] = result
-                    return result
+                    scoped_lock = self._get_sync_scoped_singleton_lock(cache_key)
+                    with scoped_lock:
+                        cached = self._scoped_instances.get(cache_key)
+                        if cached is not None:
+                            return cached
+                        # Use compiled provider (pass None - we handle caching at container level)
+                        result = scoped_provider(self._singletons, None)
+                        # Store directly in flat cache
+                        self._scoped_instances[cache_key] = result
+                        return result
 
         # Inline circular dependency tracking (avoids context manager overhead)
         stack = _get_resolution_stack()
@@ -1316,19 +1345,36 @@ class Container:
 
             # Determine the scope key to use for caching
             cache_scope = self._get_cache_scope(current_scope, registration.scope)
+            cache_key = (cache_scope, service_key) if cache_scope is not None else None  # type: ignore[assignment]
 
             # Check scoped instance cache using flat dict (single lookup)
-            if cache_scope is not None:
-                cached = self._scoped_instances.get((cache_scope, service_key))
+            if cache_key is not None:
+                cached = self._scoped_instances.get(cache_key)
                 if cached is not None:
+                    return cached
+
+            scoped_lock: threading.Lock | None = None  # type: ignore[no-redef]
+            if (
+                registration.lifetime == Lifetime.SCOPED_SINGLETON
+                and cache_key is not None  # type: ignore[redundant-expr]
+                and registration.instance is None
+            ):
+                scoped_lock = self._get_sync_scoped_singleton_lock(cache_key)
+                scoped_lock.acquire()
+                # Double-check cache after acquiring lock
+                cached = self._scoped_instances.get(cache_key)
+                if cached is not None:
+                    scoped_lock.release()
                     return cached
 
             if registration.instance is not None:
                 # Cache scoped instances in _scoped_instances, not _singletons
-                if registration.scope is not None and cache_scope is not None:
-                    self._scoped_instances[(cache_scope, service_key)] = registration.instance
+                if registration.scope is not None and cache_key is not None:
+                    self._scoped_instances[cache_key] = registration.instance
                 else:
                     self._singletons[service_key] = registration.instance
+                if scoped_lock is not None and scoped_lock.locked():  # type: ignore[redundant-expr]
+                    scoped_lock.release()
                 return registration.instance
 
             # For singletons, use lock to prevent race conditions in threaded resolution
@@ -1363,10 +1409,9 @@ class Container:
                     if registration.lifetime == Lifetime.SINGLETON:
                         self._singletons[service_key] = instance
                     elif (
-                        registration.lifetime == Lifetime.SCOPED_SINGLETON
-                        and cache_scope is not None
+                        registration.lifetime == Lifetime.SCOPED_SINGLETON and cache_key is not None
                     ):
-                        self._scoped_instances[(cache_scope, service_key)] = instance
+                        self._scoped_instances[cache_key] = instance
 
                     return instance
 
@@ -1388,13 +1433,15 @@ class Container:
 
                 if registration.lifetime == Lifetime.SINGLETON:
                     self._singletons[service_key] = instance
-                elif registration.lifetime == Lifetime.SCOPED_SINGLETON and cache_scope is not None:
-                    self._scoped_instances[(cache_scope, service_key)] = instance
+                elif registration.lifetime == Lifetime.SCOPED_SINGLETON and cache_key is not None:
+                    self._scoped_instances[cache_key] = instance
 
                 return instance
             finally:
                 if singleton_lock is not None and singleton_lock.locked():
                     singleton_lock.release()
+                if scoped_lock is not None and scoped_lock.locked():  # type: ignore[redundant-expr]
+                    scoped_lock.release()
         finally:
             stack.pop()
 
@@ -1581,18 +1628,35 @@ class Container:
 
             # Determine the scope key to use for caching
             cache_scope = self._get_cache_scope(current_scope, registration.scope)
+            cache_key = (cache_scope, service_key) if cache_scope is not None else None
 
             # Check scoped instance cache using flat dict (single lookup)
-            if cache_scope is not None:
-                cached = self._scoped_instances.get((cache_scope, service_key))
+            if cache_key is not None:
+                cached = self._scoped_instances.get(cache_key)
                 if cached is not None:
                     return cached
 
+            scoped_lock: asyncio.Lock | None = None
+            if (
+                registration.lifetime == Lifetime.SCOPED_SINGLETON
+                and cache_key is not None
+                and registration.instance is None
+            ):
+                scoped_lock = await self._get_scoped_singleton_lock(cache_key)
+                await scoped_lock.acquire()
+                # Double-check cache after acquiring lock
+                cached = self._scoped_instances.get(cache_key)
+                if cached is not None:
+                    scoped_lock.release()
+                    return cached
+
             if registration.instance is not None:
-                if registration.scope is not None and cache_scope is not None:
-                    self._scoped_instances[(cache_scope, service_key)] = registration.instance
+                if registration.scope is not None and cache_key is not None:
+                    self._scoped_instances[cache_key] = registration.instance
                 else:
                     self._singletons[service_key] = registration.instance
+                if scoped_lock is not None and scoped_lock.locked():
+                    scoped_lock.release()
                 return registration.instance
 
             # For singletons, use lock to prevent race conditions in async resolution
@@ -1652,10 +1716,9 @@ class Container:
                     if registration.lifetime == Lifetime.SINGLETON:
                         self._singletons[service_key] = instance  # type: ignore[possibly-undefined]
                     elif (
-                        registration.lifetime == Lifetime.SCOPED_SINGLETON
-                        and cache_scope is not None
+                        registration.lifetime == Lifetime.SCOPED_SINGLETON and cache_key is not None
                     ):
-                        self._scoped_instances[(cache_scope, service_key)] = instance  # type: ignore[possibly-undefined]
+                        self._scoped_instances[cache_key] = instance  # type: ignore[possibly-undefined]
 
                     return instance  # type: ignore[possibly-undefined]
 
@@ -1678,13 +1741,15 @@ class Container:
 
                 if registration.lifetime == Lifetime.SINGLETON:
                     self._singletons[service_key] = instance
-                elif registration.lifetime == Lifetime.SCOPED_SINGLETON and cache_scope is not None:
-                    self._scoped_instances[(cache_scope, service_key)] = instance
+                elif registration.lifetime == Lifetime.SCOPED_SINGLETON and cache_key is not None:
+                    self._scoped_instances[cache_key] = instance
 
                 return instance
             finally:
                 if singleton_lock is not None and singleton_lock.locked():
                     singleton_lock.release()
+                if scoped_lock is not None and scoped_lock.locked():
+                    scoped_lock.release()
         finally:
             stack.pop()
 
@@ -1770,6 +1835,40 @@ class Container:
             self._async_scope_exit_stacks[scope_key] = async_exit_stack
         return async_exit_stack
 
+    async def _get_scoped_singleton_lock(
+        self,
+        cache_key: tuple[tuple[tuple[str | None, int], ...], ServiceKey],
+    ) -> asyncio.Lock:
+        """Get or create an async lock for scoped singleton resolution of the cache key.
+
+        Uses double-checked locking to minimize lock contention.
+        """
+        if cache_key not in self._scoped_singleton_locks:
+            async with self._scoped_singleton_locks_lock:
+                # Second check after acquiring lock - race timing dependent
+                if (
+                    cache_key not in self._scoped_singleton_locks
+                ):  # pragma: no cover - race timing dependent
+                    self._scoped_singleton_locks[cache_key] = asyncio.Lock()
+        return self._scoped_singleton_locks[cache_key]
+
+    def _get_sync_scoped_singleton_lock(
+        self,
+        cache_key: tuple[tuple[tuple[str | None, int], ...], ServiceKey],
+    ) -> threading.Lock:
+        """Get or create a thread lock for scoped singleton resolution of the cache key.
+
+        Uses double-checked locking to minimize lock contention.
+        """
+        if cache_key not in self._sync_scoped_singleton_locks:
+            with self._sync_scoped_singleton_locks_lock:
+                # Second check after acquiring lock - race timing dependent
+                if (
+                    cache_key not in self._sync_scoped_singleton_locks
+                ):  # pragma: no cover - race timing dependent
+                    self._sync_scoped_singleton_locks[cache_key] = threading.Lock()
+        return self._sync_scoped_singleton_locks[cache_key]
+
     async def _get_singleton_lock(self, key: ServiceKey) -> asyncio.Lock:
         """Get or create an async lock for singleton resolution of the given service key.
 
@@ -1820,6 +1919,12 @@ class Container:
         keys_to_remove = [k for k in self._scoped_instances if k[0] == scope_key]
         for k in keys_to_remove:
             del self._scoped_instances[k]
+        scoped_lock_keys = [k for k in self._sync_scoped_singleton_locks if k[0] == scope_key]
+        for k in scoped_lock_keys:
+            del self._sync_scoped_singleton_locks[k]
+        async_scoped_lock_keys = [k for k in self._scoped_singleton_locks if k[0] == scope_key]
+        for k in async_scoped_lock_keys:
+            del self._scoped_singleton_locks[k]
 
     def _get_scoped_registration(
         self,

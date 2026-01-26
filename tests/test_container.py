@@ -21,6 +21,7 @@ from diwire.container import (
 from diwire.dependencies import DependenciesExtractor
 from diwire.exceptions import (
     DIWireCircularDependencyError,
+    DIWireGeneratorFactoryDidNotYieldError,
     DIWireGeneratorFactoryUnsupportedLifetimeError,
     DIWireIgnoredServiceError,
     DIWireMissingDependenciesError,
@@ -1083,6 +1084,89 @@ class TestMissingCoverageSync:
             with pytest.raises(DIWireGeneratorFactoryUnsupportedLifetimeError):
                 container.resolve(ServiceA)
 
+    def test_compiled_factory_handler_generator_singleton_raises(self) -> None:
+        """Compiled factory handler rejects generator for SINGLETON lifetime."""
+
+        class ServiceA:
+            pass
+
+        class ScopedMarker:
+            pass
+
+        container = Container()
+        container.register(ScopedMarker, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        def generator_factory() -> Generator[ServiceA, None, None]:
+            yield ServiceA()
+
+        handler = container._make_compiled_factory_result_handler(
+            ServiceKey.from_value(ServiceA),
+            Lifetime.SINGLETON,
+            None,
+        )
+
+        with container.start_scope("request"):
+            with pytest.raises(DIWireGeneratorFactoryUnsupportedLifetimeError):
+                handler(generator_factory())
+
+    def test_compiled_factory_handler_generator_no_yield_raises(self) -> None:
+        """Compiled factory handler raises when generator yields nothing."""
+
+        class ServiceA:
+            pass
+
+        class ScopedMarker:
+            pass
+
+        container = Container()
+        container.register(ScopedMarker, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        def generator_factory() -> Generator[ServiceA, None, None]:
+            return
+            yield  # type: ignore[misc]  # unreachable but needed for generator
+
+        handler = container._make_compiled_factory_result_handler(
+            ServiceKey.from_value(ServiceA),
+            Lifetime.TRANSIENT,
+            None,
+        )
+
+        with container.start_scope("request"):
+            with pytest.raises(DIWireGeneratorFactoryDidNotYieldError):
+                handler(generator_factory())
+
+    def test_compiled_factory_handler_generator_yields_and_closes(self) -> None:
+        """Compiled factory handler yields instance and registers cleanup."""
+
+        class ServiceA:
+            pass
+
+        class ScopedMarker:
+            pass
+
+        cleanup: list[str] = []
+        container = Container()
+        container.register(ScopedMarker, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        def generator_factory() -> Generator[ServiceA, None, None]:
+            try:
+                yield ServiceA()
+            finally:
+                cleanup.append("closed")
+
+        handler = container._make_compiled_factory_result_handler(
+            ServiceKey.from_value(ServiceA),
+            Lifetime.TRANSIENT,
+            None,
+        )
+
+        with container.start_scope("request"):
+            instance = handler(generator_factory())
+            assert isinstance(instance, ServiceA)
+            assert cleanup == []
+
+        assert cleanup == ["closed"]
+
     def test_resolve_instance_registration_stores_singleton(self) -> None:
         """Instance registration without scope stores in _singletons."""
         container = Container(register_if_missing=False, auto_compile=False)
@@ -1135,6 +1219,30 @@ class TestCoverageEdgeCases:
         service_key_b = ServiceKey.from_value(ServiceB)
         assert service_key_a in container._compiled_providers
         assert service_key_b in container._compiled_providers
+
+    def test_compile_scoped_registration_without_scoped_registry(self) -> None:
+        """_compile_scoped_registration handles empty scoped registry."""
+        container = Container(auto_compile=False, register_if_missing=False)
+
+        class ServiceA:
+            pass
+
+        class ServiceB:
+            def __init__(self, a: ServiceA) -> None:
+                self.a = a
+
+        container.register(ServiceA, lifetime=Lifetime.TRANSIENT)
+
+        service_key_b = ServiceKey.from_value(ServiceB)
+        registration = Registration(
+            service_key=service_key_b,
+            lifetime=Lifetime.SCOPED_SINGLETON,
+            scope="request",
+        )
+
+        provider = container._compile_scoped_registration(service_key_b, registration, "request")
+
+        assert isinstance(provider, ScopedSingletonArgsProvider)
 
     def test_compile_auto_registration_returns_none(self) -> None:
         """_compile_or_get_provider auto-registers but compilation fails."""

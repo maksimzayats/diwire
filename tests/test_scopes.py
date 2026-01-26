@@ -1870,6 +1870,45 @@ class TestAsyncScopeContextManager:
             await scoped.aresolve(Session)
 
 
+class TestScopedSingletonConcurrency:
+    """Tests for scoped singleton behavior under concurrent async resolution."""
+
+    async def test_concurrent_scoped_singleton_aresolve_shares_instance(
+        self,
+        container: Container,
+    ) -> None:
+        """Concurrent aresolve within a scope returns the same instance."""
+        call_count = 0
+        factory_started = asyncio.Event()
+        factory_release = asyncio.Event()
+
+        async def session_factory() -> Session:
+            nonlocal call_count
+            call_count += 1
+            call_id = call_count
+            factory_started.set()
+            await factory_release.wait()
+            return Session(id=f"session-{call_id}")
+
+        container.register(
+            Session,
+            factory=session_factory,
+            scope="request",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        async with container.start_scope("request"):
+            task1 = asyncio.create_task(container.aresolve(Session))
+            await factory_started.wait()
+            task2 = asyncio.create_task(container.aresolve(Session))
+            await asyncio.sleep(0)
+            factory_release.set()
+            session1, session2 = await asyncio.gather(task1, task2)
+
+        assert session1 is session2
+        assert call_count == 1
+
+
 class TestMemoryAndReferenceEdgeCases:
     """Tests for memory and reference edge cases."""
 
