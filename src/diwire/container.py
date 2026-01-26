@@ -12,9 +12,20 @@ from dataclasses import dataclass, field
 from functools import wraps
 from inspect import signature
 from types import FunctionType, MethodType
-from typing import Annotated, Any, ClassVar, Generic, TypeVar, get_args, get_origin
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    ClassVar,
+    Generic,
+    TypeVar,
+    get_args,
+    get_origin,
+    overload,
+)
 
-from typing_extensions import Self, overload
+if TYPE_CHECKING:
+    from typing_extensions import Self
 
 from diwire.compiled_providers import (
     ArgsTypeProvider,
