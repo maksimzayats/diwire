@@ -1,13 +1,32 @@
 import uuid
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 from dataclasses import dataclass, field
 from inspect import signature
 from typing import Annotated
 
 import pytest
 
-from diwire.container import Container, Injected
-from diwire.exceptions import DIWireIgnoredServiceError, DIWireMissingDependenciesError
+from diwire.compiled_providers import ScopedSingletonArgsProvider
+from diwire.container import (
+    AsyncInjected,
+    AsyncScopedInjected,
+    Container,
+    Injected,
+    ScopedInjected,
+    ScopeId,
+    _current_scope,
+    _is_async_factory,
+)
+from diwire.dependencies import DependenciesExtractor
+from diwire.exceptions import (
+    DIWireCircularDependencyError,
+    DIWireGeneratorFactoryUnsupportedLifetimeError,
+    DIWireIgnoredServiceError,
+    DIWireMissingDependenciesError,
+    DIWireScopeMismatchError,
+)
+from diwire.registry import Registration
+from diwire.service_key import ServiceKey
 from diwire.types import FromDI, Lifetime
 
 
@@ -34,30 +53,15 @@ class _AsyncCircularB:
         self.a = a
 
 
-@pytest.fixture(scope="function")
-def auto_container() -> Container:
-    return Container(
-        register_if_missing=True,
-    )
-
-
-@pytest.fixture(scope="function")
-def auto_container_singleton() -> Container:
-    return Container(
-        register_if_missing=True,
-        autoregister_default_lifetime=Lifetime.SINGLETON,
-    )
-
-
-def test_auto_registers_class(auto_container: Container) -> None:
+def test_auto_registers_class(container: Container) -> None:
     class ServiceA:
         pass
 
-    instance = auto_container.resolve(ServiceA)
+    instance = container.resolve(ServiceA)
     assert isinstance(instance, ServiceA)
 
 
-def test_auto_registers_class_with_dependencies(auto_container: Container) -> None:
+def test_auto_registers_class_with_dependencies(container: Container) -> None:
     class ServiceA:
         pass
 
@@ -65,51 +69,51 @@ def test_auto_registers_class_with_dependencies(auto_container: Container) -> No
         def __init__(self, service_a: ServiceA) -> None:
             self.service_a = service_a
 
-    instance_b = auto_container.resolve(ServiceB)
+    instance_b = container.resolve(ServiceB)
     assert isinstance(instance_b, ServiceB)
     assert isinstance(instance_b.service_a, ServiceA)
 
 
-def test_auto_registers_kind_singleton(auto_container_singleton: Container) -> None:
+def test_auto_registers_kind_singleton(container_singleton: Container) -> None:
     class ServiceA:
         pass
 
-    instance1 = auto_container_singleton.resolve(ServiceA)
-    instance2 = auto_container_singleton.resolve(ServiceA)
+    instance1 = container_singleton.resolve(ServiceA)
+    instance2 = container_singleton.resolve(ServiceA)
     assert instance1 is instance2
 
 
-def test_auto_registers_kind_transient(auto_container: Container) -> None:
+def test_auto_registers_kind_transient(container: Container) -> None:
     class ServiceA:
         pass
 
-    instance1 = auto_container.resolve(ServiceA)
-    instance2 = auto_container.resolve(ServiceA)
+    instance1 = container.resolve(ServiceA)
+    instance2 = container.resolve(ServiceA)
     assert instance1 is not instance2
 
 
-def test_does_not_auto_register_ignored_class(auto_container: Container) -> None:
+def test_does_not_auto_register_ignored_class(container: Container) -> None:
     class IgnoredClass:
         pass
 
-    auto_container._autoregister_ignores.add(IgnoredClass)
+    container._autoregister_ignores.add(IgnoredClass)
 
     with pytest.raises(DIWireIgnoredServiceError):
-        auto_container.resolve(IgnoredClass)
+        container.resolve(IgnoredClass)
 
 
-def test_resolve_function_returns_injected(auto_container: Container) -> None:
+def test_resolve_function_returns_injected(container: Container) -> None:
     class ServiceA:
         pass
 
     def my_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
         return service
 
-    injected = auto_container.resolve(my_func)
+    injected = container.resolve(my_func)
     assert isinstance(injected, Injected)
 
 
-def test_injected_resolves_transient_deps_on_each_call(auto_container: Container) -> None:
+def test_injected_resolves_transient_deps_on_each_call(container: Container) -> None:
     """Transient dependencies should be created fresh on each function call."""
 
     class ServiceA:
@@ -118,7 +122,7 @@ def test_injected_resolves_transient_deps_on_each_call(auto_container: Container
     def my_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
         return service
 
-    injected = auto_container.resolve(my_func)
+    injected = container.resolve(my_func)
 
     result1 = injected()
     result2 = injected()
@@ -128,7 +132,7 @@ def test_injected_resolves_transient_deps_on_each_call(auto_container: Container
     assert result1 is not result2  # Different instances on each call
 
 
-def test_injected_resolves_singleton_deps_once(auto_container_singleton: Container) -> None:
+def test_injected_resolves_singleton_deps_once(container_singleton: Container) -> None:
     """Singleton dependencies should be the same instance on each call."""
 
     class ServiceA:
@@ -137,7 +141,7 @@ def test_injected_resolves_singleton_deps_once(auto_container_singleton: Contain
     def my_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
         return service
 
-    injected = auto_container_singleton.resolve(my_func)
+    injected = container_singleton.resolve(my_func)
 
     result1 = injected()
     result2 = injected()
@@ -146,7 +150,7 @@ def test_injected_resolves_singleton_deps_once(auto_container_singleton: Contain
     assert result1 is result2  # Same instance on each call
 
 
-def test_injected_allows_explicit_kwargs_override(auto_container: Container) -> None:
+def test_injected_allows_explicit_kwargs_override(container: Container) -> None:
     """Explicit kwargs should override resolved dependencies."""
 
     class ServiceA:
@@ -155,7 +159,7 @@ def test_injected_allows_explicit_kwargs_override(auto_container: Container) -> 
     def my_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
         return service
 
-    injected = auto_container.resolve(my_func)
+    injected = container.resolve(my_func)
     explicit_service = ServiceA()
 
     result = injected(service=explicit_service)
@@ -163,20 +167,20 @@ def test_injected_allows_explicit_kwargs_override(auto_container: Container) -> 
     assert result is explicit_service
 
 
-def test_injected_preserves_function_name(auto_container: Container) -> None:
+def test_injected_preserves_function_name(container: Container) -> None:
     class ServiceA:
         pass
 
     def my_named_function(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
         return service
 
-    injected = auto_container.resolve(my_named_function)
+    injected = container.resolve(my_named_function)
 
     assert injected.__name__ == "my_named_function"
     assert injected.__wrapped__ is my_named_function
 
 
-def test_injected_signature_excludes_injected_params(auto_container: Container) -> None:
+def test_injected_signature_excludes_injected_params(container: Container) -> None:
     """Signature should only show non-injected (non-FromDI) parameters."""
 
     class ServiceA:
@@ -185,7 +189,7 @@ def test_injected_signature_excludes_injected_params(auto_container: Container) 
     def my_func(value: int, service: Annotated[ServiceA, FromDI()]) -> int:
         return value
 
-    injected = auto_container.resolve(my_func)
+    injected = container.resolve(my_func)
     sig = signature(injected)
 
     # 'service' is marked with FromDI, should be removed from signature
@@ -195,7 +199,7 @@ def test_injected_signature_excludes_injected_params(auto_container: Container) 
     assert "service" not in param_names
 
 
-def test_todo(auto_container: Container) -> None:
+def test_todo(container: Container) -> None:
     class ServiceA:
         pass
 
@@ -203,7 +207,7 @@ def test_todo(auto_container: Container) -> None:
     class ServiceB:
         service_a: Annotated[ServiceA, FromDI()]
 
-    service_b = auto_container.resolve(ServiceB)
+    service_b = container.resolve(ServiceB)
     assert isinstance(service_b.service_a, ServiceA)
 
 
@@ -212,7 +216,7 @@ class TestIgnoredTypesWithDefaults:
 
     def test_resolve_class_with_ignored_type_and_default(
         self,
-        auto_container: Container,
+        container: Container,
     ) -> None:
         """str with default should resolve successfully."""
 
@@ -220,13 +224,13 @@ class TestIgnoredTypesWithDefaults:
             def __init__(self, name: str = "default_name") -> None:
                 self.name = name
 
-        instance = auto_container.resolve(MyClass)
+        instance = container.resolve(MyClass)
         assert isinstance(instance, MyClass)
         assert instance.name == "default_name"
 
     def test_resolve_dataclass_with_default_factory(
         self,
-        auto_container: Container,
+        container: Container,
     ) -> None:
         """Dataclass with field(default_factory=...) should work."""
 
@@ -234,14 +238,14 @@ class TestIgnoredTypesWithDefaults:
         class Session:
             id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
-        instance = auto_container.resolve(Session)
+        instance = container.resolve(Session)
         assert isinstance(instance, Session)
         assert isinstance(instance.id, str)
         assert len(instance.id) > 0
 
     def test_resolve_class_with_ignored_type_no_default_fails(
         self,
-        auto_container: Container,
+        container: Container,
     ) -> None:
         """str without default should fail with DIWireMissingDependenciesError."""
 
@@ -250,11 +254,11 @@ class TestIgnoredTypesWithDefaults:
                 self.name = name
 
         with pytest.raises(DIWireMissingDependenciesError):
-            auto_container.resolve(MyClass)
+            container.resolve(MyClass)
 
     def test_resolve_mixed_params_with_defaults(
         self,
-        auto_container: Container,
+        container: Container,
     ) -> None:
         """Mix of params: some with defaults, some without."""
 
@@ -267,7 +271,7 @@ class TestIgnoredTypesWithDefaults:
             name: str = "default"  # Ignored type with default, should use default
             count: int = 42  # Ignored type with default, should use default
 
-        instance = auto_container.resolve(MyClass)
+        instance = container.resolve(MyClass)
         assert isinstance(instance, MyClass)
         assert isinstance(instance.service, ServiceA)
         assert instance.name == "default"
@@ -275,7 +279,7 @@ class TestIgnoredTypesWithDefaults:
 
     def test_resolve_dataclass_with_default_value(
         self,
-        auto_container: Container,
+        container: Container,
     ) -> None:
         """Dataclass with field default (not factory) should work."""
 
@@ -284,14 +288,14 @@ class TestIgnoredTypesWithDefaults:
             timeout: int = 30
             retries: int = 3
 
-        instance = auto_container.resolve(Config)
+        instance = container.resolve(Config)
         assert isinstance(instance, Config)
         assert instance.timeout == 30
         assert instance.retries == 3
 
     def test_resolve_non_ignored_type_without_default_fails(
         self,
-        auto_container: Container,
+        container: Container,
     ) -> None:
         """Non-ignored type without default and not resolvable should fail."""
 
@@ -303,14 +307,14 @@ class TestIgnoredTypesWithDefaults:
                 self.service = service
 
         # Add UnregisteredService to ignores to simulate unresolvable
-        auto_container._autoregister_ignores.add(UnregisteredService)
+        container._autoregister_ignores.add(UnregisteredService)
 
         with pytest.raises(DIWireMissingDependenciesError):
-            auto_container.resolve(MyClass)
+            container.resolve(MyClass)
 
     def test_resolve_non_ignored_type_with_default_uses_default_on_failure(
         self,
-        auto_container: Container,
+        container: Container,
     ) -> None:
         """Non-ignored type that fails resolution but has default should use default."""
 
@@ -324,9 +328,9 @@ class TestIgnoredTypesWithDefaults:
                 self.service = service
 
         # Add to ignores to make resolution fail
-        auto_container._autoregister_ignores.add(UnregisteredService)
+        container._autoregister_ignores.add(UnregisteredService)
 
-        instance = auto_container.resolve(MyClass)
+        instance = container.resolve(MyClass)
         assert isinstance(instance, MyClass)
         assert instance.service is default_service
 
@@ -337,7 +341,7 @@ class TestAsyncResolveFunction:
     @pytest.mark.asyncio
     async def test_aresolve_on_sync_function_returns_injected(
         self,
-        auto_container: Container,
+        container: Container,
     ) -> None:
         """aresolve() on sync function returns Injected (not AsyncInjected)."""
 
@@ -347,7 +351,7 @@ class TestAsyncResolveFunction:
         def my_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
             return service
 
-        injected = await auto_container.aresolve(my_func)
+        injected = await container.aresolve(my_func)
 
         # Should be Injected, not AsyncInjected
         assert isinstance(injected, Injected)
@@ -361,7 +365,6 @@ class TestAsyncCallableClassFactory:
 
     def test_is_async_factory_with_async_callable_class(self) -> None:
         """Test _is_async_factory() detects callable class with async __call__."""
-        from diwire.container import _is_async_factory
 
         class AsyncCallableFactory:
             async def __call__(self) -> str:
@@ -371,7 +374,7 @@ class TestAsyncCallableClassFactory:
             def __call__(self) -> str:
                 return "sync result"
 
-        # Class with async __call__ should be detected as async factory (line 122)
+        # Class with async __call__ should be detected as async factory
         assert _is_async_factory(AsyncCallableFactory) is True
 
         # Class with sync __call__ should not be detected as async factory
@@ -389,11 +392,9 @@ class TestDescriptorProtocol:
 
     def test_injected_get_returns_self_when_obj_none(
         self,
-        auto_container: Container,
+        container: Container,
     ) -> None:
-        """Injected descriptor returns self when accessed on class (line 228)."""
-        from diwire.dependencies import DependenciesExtractor
-        from diwire.service_key import ServiceKey
+        """Injected descriptor returns self when accessed on class."""
 
         class ServiceA:
             pass
@@ -406,7 +407,7 @@ class TestDescriptorProtocol:
 
         injected = Injected(
             func=my_func,
-            container=auto_container,
+            container=container,
             dependencies_extractor=deps_extractor,
             service_key=service_key,
         )
@@ -417,12 +418,9 @@ class TestDescriptorProtocol:
 
     def test_scoped_injected_get_returns_self_when_obj_none(
         self,
-        auto_container: Container,
+        container: Container,
     ) -> None:
-        """ScopedInjected descriptor returns self when accessed on class (line 364)."""
-        from diwire.container import ScopedInjected
-        from diwire.dependencies import DependenciesExtractor
-        from diwire.service_key import ServiceKey
+        """ScopedInjected descriptor returns self when accessed on class."""
 
         class ServiceA:
             pass
@@ -435,7 +433,7 @@ class TestDescriptorProtocol:
 
         scoped_injected = ScopedInjected(
             func=my_func,
-            container=auto_container,
+            container=container,
             dependencies_extractor=deps_extractor,
             service_key=service_key,
             scope_name="request",
@@ -447,12 +445,9 @@ class TestDescriptorProtocol:
 
     def test_async_injected_get_returns_self_when_obj_none(
         self,
-        auto_container: Container,
+        container: Container,
     ) -> None:
-        """AsyncInjected descriptor returns self when accessed on class (line 433)."""
-        from diwire.container import AsyncInjected
-        from diwire.dependencies import DependenciesExtractor
-        from diwire.service_key import ServiceKey
+        """AsyncInjected descriptor returns self when accessed on class."""
 
         class ServiceA:
             pass
@@ -465,7 +460,7 @@ class TestDescriptorProtocol:
 
         async_injected = AsyncInjected(
             func=my_async_func,
-            container=auto_container,
+            container=container,
             dependencies_extractor=deps_extractor,
             service_key=service_key,
         )
@@ -476,12 +471,9 @@ class TestDescriptorProtocol:
 
     def test_async_scoped_injected_get_returns_self_when_obj_none(
         self,
-        auto_container: Container,
+        container: Container,
     ) -> None:
-        """AsyncScopedInjected descriptor returns self when accessed on class (line 503)."""
-        from diwire.container import AsyncScopedInjected
-        from diwire.dependencies import DependenciesExtractor
-        from diwire.service_key import ServiceKey
+        """AsyncScopedInjected descriptor returns self when accessed on class."""
 
         class ServiceA:
             pass
@@ -494,7 +486,7 @@ class TestDescriptorProtocol:
 
         async_scoped_injected = AsyncScopedInjected(
             func=my_async_func,
-            container=auto_container,
+            container=container,
             dependencies_extractor=deps_extractor,
             service_key=service_key,
             scope_name="request",
@@ -509,10 +501,7 @@ class TestCompilationEdgeCases:
     """Tests for compilation edge cases."""
 
     def test_async_deps_cache_diwire_error_continues(self) -> None:
-        """DIWireError during async deps cache building is caught and continues (lines 765-766)."""
-        from diwire.container import Container
-        from diwire.types import Lifetime
-
+        """DIWireError during async deps cache building is caught gracefully."""
         container = Container(register_if_missing=False, auto_compile=False)
 
         class ServiceA:
@@ -532,9 +521,7 @@ class TestCompilationEdgeCases:
         assert container._is_compiled is True
 
     def test_factory_provider_chain_compilation(self) -> None:
-        """Factory registration compiles with provider chain (line 779)."""
-        from diwire.container import Container
-        from diwire.types import Lifetime
+        """Factory registration compiles with provider chain."""
 
         class ServiceA:
             pass
@@ -548,18 +535,11 @@ class TestCompilationEdgeCases:
         container.compile()
 
         # Should have compiled the factory provider chain
-        from diwire.service_key import ServiceKey
-
         service_key = ServiceKey.from_value(ServiceA)
         assert service_key in container._compiled_providers
 
     def test_non_type_service_key_returns_none_during_compilation(self) -> None:
-        """Non-type service keys return None during compilation (line 797)."""
-        from diwire.container import Container
-        from diwire.registry import Registration
-        from diwire.service_key import ServiceKey
-        from diwire.types import Lifetime
-
+        """Non-type service keys return None during compilation."""
         container = Container(auto_compile=False)
 
         # Register a string key (non-type) - should skip during compilation
@@ -576,10 +556,7 @@ class TestCompilationEdgeCases:
         assert string_key not in container._compiled_providers
 
     def test_missing_required_ignored_dependency_during_compilation(self) -> None:
-        """Missing required ignored dep returns None during compilation (line 808)."""
-        from diwire.container import Container
-        from diwire.types import Lifetime
-
+        """Missing required ignored dependency returns None during compilation."""
         container = Container(register_if_missing=False, auto_compile=False)
 
         class ServiceWithStr:
@@ -590,16 +567,11 @@ class TestCompilationEdgeCases:
         container.compile()
 
         # ServiceWithStr should not have a compiled provider because str has no default
-        from diwire.service_key import ServiceKey
-
         service_key = ServiceKey.from_value(ServiceWithStr)
         assert service_key not in container._compiled_providers
 
     def test_auto_registration_provider_compilation_fallback(self) -> None:
-        """Auto-registration compiles providers during _compile_or_get_provider (lines 849-862)."""
-        from diwire.container import Container
-        from diwire.types import Lifetime
-
+        """Auto-registration compiles providers during resolution."""
         container = Container(register_if_missing=True, auto_compile=False)
 
         class ServiceA:
@@ -614,18 +586,11 @@ class TestCompilationEdgeCases:
         container.compile()
 
         # Both should be compiled
-        from diwire.service_key import ServiceKey
-
         assert ServiceKey.from_value(ServiceA) in container._compiled_providers
         assert ServiceKey.from_value(ServiceB) in container._compiled_providers
 
     def test_non_type_scoped_compilation_returns_none(self) -> None:
-        """Non-type for scoped compilation returns None (line 884)."""
-        from diwire.container import Container
-        from diwire.registry import Registration
-        from diwire.service_key import ServiceKey
-        from diwire.types import Lifetime
-
+        """Non-type for scoped compilation returns None."""
         container = Container(auto_compile=False)
 
         # Register a string key with scope - should skip during scoped compilation
@@ -643,12 +608,7 @@ class TestCompilationEdgeCases:
         assert (string_key, "request") not in container._scoped_compiled_providers
 
     def test_scoped_singleton_args_provider_creation_with_dependencies(self) -> None:
-        """Scoped singleton with deps creates ScopedSingletonArgsProvider (lines 894, 907)."""
-        from diwire.compiled_providers import ScopedSingletonArgsProvider
-        from diwire.container import Container
-        from diwire.service_key import ServiceKey
-        from diwire.types import Lifetime
-
+        """Scoped singleton with deps creates ScopedSingletonArgsProvider."""
         container = Container(auto_compile=False)
 
         class ServiceA:
@@ -674,9 +634,7 @@ class TestForwardReferenceHandling:
     """Tests for forward reference handling with NameError."""
 
     def test_forward_reference_name_error_in_resolve(self) -> None:
-        """NameError for forward refs defaults to no scope in resolve (lines 1033-1036)."""
-        from diwire.container import Container, Injected
-
+        """NameError for forward refs defaults to no scope in resolve."""
         container = Container()
 
         # Create a function with a forward reference that can't be resolved
@@ -692,9 +650,7 @@ class TestForwardReferenceHandling:
 
     @pytest.mark.asyncio
     async def test_aresolve_forward_reference_name_error(self) -> None:
-        """aresolve catches NameError for forward refs (lines 1299-1302)."""
-        from diwire.container import Container, Injected
-
+        """aresolve catches NameError for forward refs gracefully."""
         container = Container()
 
         # Create a function with a forward reference that can't be resolved
@@ -713,9 +669,7 @@ class TestAsyncResolutionEdgeCases:
 
     @pytest.mark.asyncio
     async def test_aresolve_decorator_pattern(self) -> None:
-        """aresolve(key=None) returns decorator (line 1279)."""
-        from diwire.container import Container
-
+        """aresolve with no key returns a decorator."""
         container = Container()
 
         # aresolve with no key should return a decorator
@@ -724,10 +678,7 @@ class TestAsyncResolutionEdgeCases:
 
     @pytest.mark.asyncio
     async def test_aresolve_type_singleton_cache_hit(self) -> None:
-        """aresolve uses type singleton cache (line 1285)."""
-        from diwire.container import Container
-        from diwire.types import Lifetime
-
+        """aresolve uses type singleton cache."""
         container = Container()
 
         class ServiceA:
@@ -745,28 +696,17 @@ class TestAsyncResolutionEdgeCases:
 
     @pytest.mark.asyncio
     async def test_aresolve_circular_dependency_detection(self) -> None:
-        """aresolve detects circular dependencies (line 1355)."""
-        from diwire.container import Container
-        from diwire.exceptions import DIWireCircularDependencyError
-
+        """aresolve detects circular dependencies."""
         container = Container()
 
         # Use module-level classes for circular dependency detection
         # These are defined at module level to avoid forward reference issues
-        from tests.test_container import _CircularServiceA  # type: ignore[unresolved-import]
-
         with pytest.raises(DIWireCircularDependencyError):
             await container.aresolve(_CircularServiceA)
 
     @pytest.mark.asyncio
     async def test_aresolve_scope_mismatch(self) -> None:
-        """aresolve raises scope mismatch error (line 1370)."""
-        from diwire.container import Container
-        from diwire.exceptions import DIWireScopeMismatchError
-        from diwire.registry import Registration
-        from diwire.service_key import ServiceKey
-        from diwire.types import Lifetime
-
+        """aresolve raises scope mismatch error."""
         container = Container(register_if_missing=False)
 
         class ServiceA:
@@ -789,10 +729,7 @@ class TestAsyncResolutionEdgeCases:
 
     @pytest.mark.asyncio
     async def test_aresolve_instance_registration_with_scoped_cache(self) -> None:
-        """aresolve caches scoped instances (lines 1386-1390)."""
-        from diwire.container import Container
-        from diwire.types import Lifetime
-
+        """aresolve caches scoped instances."""
         container = Container()
 
         class ServiceA:
@@ -812,13 +749,8 @@ class TestAsyncResolutionEdgeCases:
 
     @pytest.mark.asyncio
     async def test_aresolve_generator_factory_unsupported_lifetime(self) -> None:
-        """Singleton generator factory raises error (line 1407)."""
-        from collections.abc import Generator
+        """Singleton generator factory raises error for unsupported lifetime."""
         from typing import Any
-
-        from diwire.container import Container
-        from diwire.exceptions import DIWireGeneratorFactoryUnsupportedLifetimeError
-        from diwire.types import Lifetime
 
         class ServiceA:
             pass
@@ -840,12 +772,8 @@ class TestAsyncResolutionEdgeCases:
 
     @pytest.mark.asyncio
     async def test_aresolve_sync_generator_factory(self) -> None:
-        """aresolve handles sync generator factories (lines 1415-1427)."""
-        from collections.abc import Generator
+        """aresolve handles sync generator factories."""
         from typing import Any
-
-        from diwire.container import Container
-        from diwire.types import Lifetime
 
         cleanup_called = []
 
@@ -875,10 +803,7 @@ class TestAsyncResolutionEdgeCases:
 
     @pytest.mark.asyncio
     async def test_aresolve_singleton_caching_in_factory_path(self) -> None:
-        """aresolve caches singleton from factory (line 1430)."""
-        from diwire.container import Container
-        from diwire.types import Lifetime
-
+        """aresolve caches singleton instances from factory."""
         call_count = 0
 
         class ServiceA:
@@ -900,10 +825,7 @@ class TestAsyncResolutionEdgeCases:
 
     @pytest.mark.asyncio
     async def test_aresolve_missing_dependencies_error(self) -> None:
-        """aresolve raises missing deps error (line 1439)."""
-        from diwire.container import Container
-        from diwire.exceptions import DIWireMissingDependenciesError
-
+        """aresolve raises missing dependencies error."""
         container = Container(register_if_missing=False)
 
         class ServiceA:
@@ -920,9 +842,7 @@ class TestAsyncResolutionEdgeCases:
 
     @pytest.mark.asyncio
     async def test_aget_resolved_dependencies_async_fallback(self) -> None:
-        """Async dependency fallback paths in _aget_resolved_dependencies (lines 1473-1490)."""
-        from diwire.container import Container
-        from diwire.types import Lifetime
+        """Async dependency fallback paths in async resolution."""
 
         class ServiceA:
             pass
@@ -945,9 +865,7 @@ class TestAsyncResolutionEdgeCases:
 
     @pytest.mark.asyncio
     async def test_aget_resolved_dependencies_diwire_error_with_defaults(self) -> None:
-        """DIWireError uses defaults in async resolution (lines 1499-1501)."""
-        from diwire.container import Container
-
+        """DIWireError uses defaults in async resolution."""
         container = Container(register_if_missing=False)
 
         class UnregisteredService:
@@ -967,10 +885,7 @@ class TestAsyncResolutionEdgeCases:
 
     @pytest.mark.asyncio
     async def test_scope_exit_stack_cleanup(self) -> None:
-        """aclear_scope cleans up exit stack (line 1545)."""
-        from diwire.container import Container
-        from diwire.types import Lifetime
-
+        """aclear_scope cleans up exit stack."""
         cleanup_called = []
 
         class ServiceA:
@@ -999,11 +914,7 @@ class TestAsyncResolutionEdgeCases:
         assert cleanup_called == [True]
 
     def test_return_scoped_registration(self) -> None:
-        """_get_registration returns scoped registration (line 1591)."""
-        from diwire.container import Container, ScopeId, _current_scope
-        from diwire.service_key import ServiceKey
-        from diwire.types import Lifetime
-
+        """_get_registration returns scoped registration."""
         container = Container()
 
         class ServiceA:
@@ -1031,10 +942,7 @@ class TestAsyncResolutionEdgeCases:
 
     @pytest.mark.asyncio
     async def test_nested_scope_diwire_error_continues(self) -> None:
-        """DIWireError during nested scope detection continues (lines 1656-1657)."""
-        from diwire.container import Container
-        from diwire.types import Lifetime
-
+        """DIWireError during nested scope detection is caught gracefully."""
         container = Container(register_if_missing=False)
 
         class ServiceA:
@@ -1059,8 +967,6 @@ class TestAsyncResolutionEdgeCases:
         injected = container.resolve(handler, scope="request")
 
         # Verify it's a ScopedInjected (scope was detected from ServiceB registration)
-        from diwire.container import ScopedInjected
-
         assert isinstance(injected, ScopedInjected)
 
 
@@ -1069,10 +975,7 @@ class TestMissingCoverageSync:
 
     def test_sync_generator_factory_singleton_raises(self) -> None:
         """Sync generator factory with SINGLETON lifetime raises error."""
-        from collections.abc import Generator
         from typing import Any
-
-        from diwire.exceptions import DIWireGeneratorFactoryUnsupportedLifetimeError
 
         container = Container()
 
@@ -1095,9 +998,6 @@ class TestMissingCoverageSync:
 
     def test_resolve_instance_registration_stores_singleton(self) -> None:
         """Instance registration without scope stores in _singletons."""
-        from diwire.registry import Registration
-        from diwire.service_key import ServiceKey
-
         container = Container(register_if_missing=False, auto_compile=False)
 
         class ServiceA:
@@ -1124,9 +1024,7 @@ class TestCoverageEdgeCases:
     """Tests for specific edge cases to improve coverage."""
 
     def test_compile_dependency_from_registry(self) -> None:
-        """_compile_or_get_provider compiles dep from registry (line 851)."""
-        from diwire.service_key import ServiceKey
-
+        """_compile_or_get_provider compiles dependency from registry."""
         container = Container(auto_compile=False, register_if_missing=False)
 
         class ServiceA:
@@ -1152,9 +1050,7 @@ class TestCoverageEdgeCases:
         assert service_key_b in container._compiled_providers
 
     def test_compile_auto_registration_returns_none(self) -> None:
-        """_compile_or_get_provider auto-registers but compilation fails (line 860->862)."""
-        from diwire.service_key import ServiceKey
-
+        """_compile_or_get_provider auto-registers but compilation fails."""
         container = Container(auto_compile=False, register_if_missing=True)
 
         class ServiceA:
@@ -1184,8 +1080,6 @@ class TestCoverageEdgeCases:
 
     def test_compile_scoped_registration_returns_none(self) -> None:
         """_compile_registration returns None for scoped registrations."""
-        from diwire.service_key import ServiceKey
-
         container = Container(auto_compile=False)
 
         class ServiceA:
@@ -1202,9 +1096,7 @@ class TestCoverageEdgeCases:
         assert (service_key, "request") in container._scoped_compiled_providers
 
     def test_compile_scoped_registration_with_scoped_dependency(self) -> None:
-        """Scoped registration compilation returns None when dep can't be compiled (line 907)."""
-        from diwire.service_key import ServiceKey
-
+        """Scoped registration compilation returns None when dependency can't be compiled."""
         container = Container(auto_compile=False, register_if_missing=False)
 
         class ServiceA:
@@ -1222,14 +1114,12 @@ class TestCoverageEdgeCases:
         container.compile()
 
         # ServiceB should NOT have a scoped compiled provider because its dependency
-        # (ServiceA) couldn't be compiled (line 907 returns None)
+        # (ServiceA) couldn't be compiled
         service_key_b = ServiceKey.from_value(ServiceB)
         assert (service_key_b, "request") not in container._scoped_compiled_providers
 
     def test_compiled_scoped_provider_uses_cache(self) -> None:
-        """Compiled scoped provider caches instances correctly (lines 1097-1117)."""
-        from diwire.service_key import ServiceKey
-
+        """Compiled scoped provider caches instances correctly."""
         container = Container(auto_compile=False)
 
         class ServiceA:
@@ -1256,7 +1146,7 @@ class TestCoverageEdgeCases:
 
     @pytest.mark.asyncio
     async def test_aresolve_type_singleton_fast_path_cache_hit(self) -> None:
-        """aresolve uses _type_singletons cache (line 1285)."""
+        """aresolve uses _type_singletons cache."""
         container = Container()
 
         class ServiceA:
@@ -1272,9 +1162,7 @@ class TestCoverageEdgeCases:
 
     @pytest.mark.asyncio
     async def test_aresolve_circular_dependency_pure_async_path(self) -> None:
-        """aresolve detects circular deps in async resolution path (line 1355)."""
-        from diwire.exceptions import DIWireCircularDependencyError
-
+        """aresolve detects circular dependencies in async resolution path."""
         container = Container()
 
         # Use module-level classes to avoid forward reference issues
@@ -1295,11 +1183,7 @@ class TestCoverageEdgeCases:
 
     @pytest.mark.asyncio
     async def test_aresolve_async_generator_singleton_inside_scope(self) -> None:
-        """Async generator factory with SINGLETON lifetime raises inside scope (line 1407)."""
-        from collections.abc import AsyncGenerator
-
-        from diwire.exceptions import DIWireGeneratorFactoryUnsupportedLifetimeError
-
+        """Async generator factory with SINGLETON lifetime raises inside scope."""
         container = Container()
 
         class ServiceA:
@@ -1322,7 +1206,7 @@ class TestCoverageEdgeCases:
 
     @pytest.mark.asyncio
     async def test_aresolve_ignored_type_with_default(self) -> None:
-        """aresolve skips ignored type with default in _aget_resolved_dependencies (line 1474-1475)."""
+        """aresolve skips ignored type with default in async resolution."""
 
         class ServiceWithIgnoredDefault:
             def __init__(self, name: str = "default") -> None:
@@ -1351,10 +1235,7 @@ class TestCoverageEdgeCases:
         assert result.name == "explicit_value"
 
     def test_get_scoped_registration_with_anonymous_scopes(self) -> None:
-        """_get_scoped_registration iterates past anonymous scope segments (line 1571->1569)."""
-        from diwire.container import ScopeId, _current_scope
-        from diwire.service_key import ServiceKey
-
+        """_get_scoped_registration iterates past anonymous scope segments."""
         container = Container()
 
         class Session:
@@ -1377,9 +1258,7 @@ class TestCoverageEdgeCases:
             _current_scope.reset(token)
 
     def test_find_scope_in_dependencies_with_extraction_error(self) -> None:
-        """_find_scope_in_dependencies catches DIWireError and continues (lines 1656-1657)."""
-        from diwire.container import ScopedInjected
-
+        """_find_scope_in_dependencies catches DIWireError gracefully."""
         container = Container(register_if_missing=False)
 
         class ServiceA:
@@ -1403,7 +1282,7 @@ class TestCoverageEdgeCases:
         assert isinstance(injected, ScopedInjected)
 
     def test_resolve_dependencies_error_with_default(self) -> None:
-        """_resolve_dependencies handles error when param has default (line 1699->1686)."""
+        """_resolve_dependencies handles error when param has default."""
         container = Container(register_if_missing=False)
 
         class UnregisteredService:
@@ -1427,7 +1306,7 @@ class TestDependencyExtractionErrorHandling:
     """Tests for DIWireDependencyExtractionError handling in container."""
 
     def test_compile_handles_extraction_error_in_compute_async_deps(self) -> None:
-        """compile() catches DIWireDependencyExtractionError in _compute_async_dependencies (lines 765-766)."""
+        """compile() catches DIWireDependencyExtractionError in async deps computation."""
 
         # Create a class with a forward reference that cannot be resolved
         # This will cause get_type_hints to fail with NameError
@@ -1439,12 +1318,12 @@ class TestDependencyExtractionErrorHandling:
         container.register(BadAnnotation)
 
         # compile() should not raise - it catches the DIWireDependencyExtractionError
-        # and continues (lines 765-766)
+        # and continues
         container.compile()
         assert container._is_compiled is True
 
     def test_scoped_injected_handles_extraction_error_in_find_scope(self) -> None:
-        """ScopedInjected catches DIWireDependencyExtractionError in _find_scope_in_dependencies (lines 1656-1657)."""
+        """ScopedInjected catches DIWireDependencyExtractionError in scope detection."""
 
         # Create a class with unresolvable forward reference in its dependencies
         class ServiceWithBadNestedDep:
@@ -1459,7 +1338,7 @@ class TestDependencyExtractionErrorHandling:
             pass
 
         # resolve() should not raise during scope detection
-        # It catches the DIWireDependencyExtractionError and continues (lines 1656-1657)
+        # It catches the DIWireDependencyExtractionError and continues
         result = container.resolve(handler)
 
         # Should return Injected (no scope detected due to extraction error)

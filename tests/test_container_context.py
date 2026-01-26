@@ -1947,7 +1947,7 @@ class TestContextInjectedDescriptors:
     """Tests for context injected descriptor __get__ methods."""
 
     def test_context_injected_get_returns_self_when_obj_none(self) -> None:
-        """_ContextInjected descriptor returns self when accessed on class (line 64)."""
+        """_ContextInjected descriptor returns self when accessed on class."""
 
         def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
             return service
@@ -1960,7 +1960,7 @@ class TestContextInjectedDescriptors:
         assert result is context_injected
 
     def test_context_scoped_injected_get_returns_self_when_obj_none(self) -> None:
-        """_ContextScopedInjected descriptor returns self when accessed on class (line 106)."""
+        """_ContextScopedInjected descriptor returns self when accessed on class."""
 
         def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
             return service
@@ -1973,7 +1973,7 @@ class TestContextInjectedDescriptors:
         assert result is context_scoped_injected
 
     def test_context_scoped_injected_get_returns_method_when_obj_not_none(self) -> None:
-        """_ContextScopedInjected descriptor returns MethodType when accessed on instance (line 107)."""
+        """_ContextScopedInjected descriptor returns MethodType when accessed on instance."""
         import types
 
         def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
@@ -1988,7 +1988,7 @@ class TestContextInjectedDescriptors:
         assert isinstance(result, types.MethodType)
 
     def test_async_context_injected_get_returns_self_when_obj_none(self) -> None:
-        """_AsyncContextInjected descriptor returns self when accessed on class (line 146)."""
+        """_AsyncContextInjected descriptor returns self when accessed on class."""
 
         async def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
             return service
@@ -2001,7 +2001,7 @@ class TestContextInjectedDescriptors:
         assert result is async_context_injected
 
     def test_async_context_injected_get_returns_method_when_obj_not_none(self) -> None:
-        """_AsyncContextInjected descriptor returns MethodType when accessed on instance (line 147)."""
+        """_AsyncContextInjected descriptor returns MethodType when accessed on instance."""
         import types
 
         async def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
@@ -2016,7 +2016,7 @@ class TestContextInjectedDescriptors:
         assert isinstance(result, types.MethodType)
 
     def test_async_context_scoped_injected_get_returns_self_when_obj_none(self) -> None:
-        """_AsyncContextScopedInjected descriptor returns self when accessed on class (line 188)."""
+        """_AsyncContextScopedInjected descriptor returns self when accessed on class."""
 
         async def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
             return service
@@ -2029,7 +2029,7 @@ class TestContextInjectedDescriptors:
         assert result is async_context_scoped_injected
 
     def test_async_context_scoped_injected_get_returns_method_when_obj_not_none(self) -> None:
-        """_AsyncContextScopedInjected descriptor returns MethodType when accessed on instance (line 189)."""
+        """_AsyncContextScopedInjected descriptor returns MethodType when accessed on instance."""
         import types
 
         async def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:

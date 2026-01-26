@@ -109,32 +109,6 @@ class CircularForAsync_B:
 
 
 # =============================================================================
-# Test Fixtures
-# =============================================================================
-
-
-@pytest.fixture()
-def container() -> Container:
-    """Default container with auto-registration enabled."""
-    return Container(register_if_missing=True)
-
-
-@pytest.fixture()
-def container_singleton() -> Container:
-    """Container with lifetime singleton as default."""
-    return Container(
-        register_if_missing=True,
-        autoregister_default_lifetime=Lifetime.SINGLETON,
-    )
-
-
-@pytest.fixture()
-def container_no_autoregister() -> Container:
-    """Container with auto-registration disabled."""
-    return Container(register_if_missing=False)
-
-
-# =============================================================================
 # TestAsyncResolution - Basic aresolve() tests
 # =============================================================================
 

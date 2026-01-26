@@ -1,12 +1,20 @@
 """Tests for custom exception hierarchy."""
 
+from collections.abc import AsyncGenerator, Generator
+
 import pytest
 
 from diwire.container import Container
 from diwire.exceptions import (
+    DIWireAsyncDependencyInSyncContextError,
+    DIWireAsyncGeneratorFactoryDidNotYieldError,
+    DIWireAsyncGeneratorFactoryWithoutScopeError,
     DIWireAutoRegistrationError,
     DIWireComponentSpecifiedError,
     DIWireError,
+    DIWireGeneratorFactoryDidNotYieldError,
+    DIWireGeneratorFactoryUnsupportedLifetimeError,
+    DIWireGeneratorFactoryWithoutScopeError,
     DIWireIgnoredServiceError,
     DIWireMissingDependenciesError,
     DIWireNotAClassError,
@@ -16,23 +24,13 @@ from diwire.service_key import Component, ServiceKey
 from diwire.types import Lifetime
 
 
-@pytest.fixture()
-def no_autoregister_container() -> Container:
-    return Container(register_if_missing=False)
-
-
-@pytest.fixture()
-def auto_container() -> Container:
-    return Container(register_if_missing=True)
-
-
 class TestDIWireServiceNotRegisteredError:
-    def test_raises_when_service_not_registered(self, no_autoregister_container: Container) -> None:
+    def test_raises_when_service_not_registered(self, container_no_autoregister: Container) -> None:
         class UnregisteredService:
             pass
 
         with pytest.raises(DIWireServiceNotRegisteredError) as exc_info:
-            no_autoregister_container.resolve(UnregisteredService)
+            container_no_autoregister.resolve(UnregisteredService)
 
         assert exc_info.value.service_key.value is UnregisteredService
         assert "is not registered" in str(exc_info.value)
@@ -41,7 +39,7 @@ class TestDIWireServiceNotRegisteredError:
 class TestDIWireMissingDependenciesError:
     def test_raises_when_dependency_cannot_be_resolved(
         self,
-        no_autoregister_container: Container,
+        container_no_autoregister: Container,
     ) -> None:
         class DependencyA:
             pass
@@ -51,10 +49,10 @@ class TestDIWireMissingDependenciesError:
                 self.dep = dep
 
         # Register ServiceB but not DependencyA
-        no_autoregister_container.register(ServiceB)
+        container_no_autoregister.register(ServiceB)
 
         with pytest.raises(DIWireMissingDependenciesError) as exc_info:
-            no_autoregister_container.resolve(ServiceB)
+            container_no_autoregister.resolve(ServiceB)
 
         assert exc_info.value.service_key.value is ServiceB
         assert len(exc_info.value.missing) == 1
@@ -63,46 +61,46 @@ class TestDIWireMissingDependenciesError:
 
 
 class TestDIWireComponentSpecifiedError:
-    def test_raises_when_auto_registering_with_component(self, auto_container: Container) -> None:
+    def test_raises_when_auto_registering_with_component(self, container: Container) -> None:
         class ServiceA:
             pass
 
         service_key = ServiceKey(value=ServiceA, component=Component("test_component"))
 
         with pytest.raises(DIWireComponentSpecifiedError) as exc_info:
-            auto_container.resolve(service_key)
+            container.resolve(service_key)
 
         assert exc_info.value.service_key is service_key
         assert "component specified" in str(exc_info.value)
 
 
 class TestDIWireIgnoredServiceError:
-    def test_raises_when_auto_registering_ignored_class(self, auto_container: Container) -> None:
+    def test_raises_when_auto_registering_ignored_class(self, container: Container) -> None:
         class IgnoredClass:
             pass
 
-        auto_container._autoregister_ignores.add(IgnoredClass)
+        container._autoregister_ignores.add(IgnoredClass)
 
         with pytest.raises(DIWireIgnoredServiceError) as exc_info:
-            auto_container.resolve(IgnoredClass)
+            container.resolve(IgnoredClass)
 
         assert exc_info.value.service_key.value is IgnoredClass
         assert "ignore list" in str(exc_info.value)
 
 
 class TestDIWireNotAClassError:
-    def test_raises_when_auto_registering_non_class(self, auto_container: Container) -> None:
+    def test_raises_when_auto_registering_non_class(self, container: Container) -> None:
         non_class_value = "not_a_class"
 
         with pytest.raises(DIWireNotAClassError) as exc_info:
-            auto_container.resolve(non_class_value)
+            container.resolve(non_class_value)
 
         assert exc_info.value.service_key.value == non_class_value
         assert "not a class" in str(exc_info.value)
 
-    def test_raises_for_integer(self, auto_container: Container) -> None:
+    def test_raises_for_integer(self, container: Container) -> None:
         with pytest.raises(DIWireNotAClassError):
-            auto_container.resolve(42)
+            container.resolve(42)
 
 
 class TestExceptionHierarchy:
@@ -134,29 +132,29 @@ class TestExceptionHierarchy:
 
     def test_can_catch_all_with_diwire_error(
         self,
-        no_autoregister_container: Container,
-        auto_container: Container,
+        container_no_autoregister: Container,
+        container: Container,
     ) -> None:
         class UnregisteredService:
             pass
 
         # Test catching DIWireServiceNotRegisteredError with DIWireError
         with pytest.raises(DIWireError):
-            no_autoregister_container.resolve(UnregisteredService)
+            container_no_autoregister.resolve(UnregisteredService)
 
         # Test catching DIWireIgnoredServiceError with DIWireError
-        auto_container._autoregister_ignores.add(UnregisteredService)
+        container._autoregister_ignores.add(UnregisteredService)
         with pytest.raises(DIWireError):
-            auto_container.resolve(UnregisteredService)
+            container.resolve(UnregisteredService)
 
-    def test_can_catch_auto_registration_errors_with_base(self, auto_container: Container) -> None:
+    def test_can_catch_auto_registration_errors_with_base(self, container: Container) -> None:
         class IgnoredClass:
             pass
 
-        auto_container._autoregister_ignores.add(IgnoredClass)
+        container._autoregister_ignores.add(IgnoredClass)
 
         with pytest.raises(DIWireAutoRegistrationError):
-            auto_container.resolve(IgnoredClass)
+            container.resolve(IgnoredClass)
 
 
 class TestExceptionAttributes:
@@ -215,7 +213,6 @@ class TestAsyncExceptions:
 
     def test_async_dependency_in_sync_context_error_attributes(self) -> None:
         """DIWireAsyncDependencyInSyncContextError has correct attributes."""
-        from diwire.exceptions import DIWireAsyncDependencyInSyncContextError
 
         class ServiceA:
             pass
@@ -235,10 +232,9 @@ class TestAsyncExceptions:
 
     async def test_async_dependency_in_sync_context_error_raised(
         self,
-        auto_container: Container,
+        container: Container,
     ) -> None:
         """DIWireAsyncDependencyInSyncContextError is raised when resolving async dep synchronously."""
-        from diwire.exceptions import DIWireAsyncDependencyInSyncContextError
 
         class ServiceA:
             pass
@@ -246,16 +242,15 @@ class TestAsyncExceptions:
         async def async_factory() -> ServiceA:
             return ServiceA()
 
-        auto_container.register(ServiceA, factory=async_factory)
+        container.register(ServiceA, factory=async_factory)
 
         with pytest.raises(DIWireAsyncDependencyInSyncContextError) as exc_info:
-            auto_container.resolve(ServiceA)
+            container.resolve(ServiceA)
 
         assert exc_info.value.service_key.value is ServiceA
 
     def test_async_generator_factory_without_scope_error_attributes(self) -> None:
         """DIWireAsyncGeneratorFactoryWithoutScopeError has correct attributes."""
-        from diwire.exceptions import DIWireAsyncGeneratorFactoryWithoutScopeError
 
         class ServiceA:
             pass
@@ -269,12 +264,9 @@ class TestAsyncExceptions:
 
     async def test_async_generator_factory_without_scope_error_raised(
         self,
-        auto_container: Container,
+        container: Container,
     ) -> None:
         """DIWireAsyncGeneratorFactoryWithoutScopeError is raised when using async gen without scope."""
-        from collections.abc import AsyncGenerator
-
-        from diwire.exceptions import DIWireAsyncGeneratorFactoryWithoutScopeError
 
         class ServiceA:
             pass
@@ -282,16 +274,15 @@ class TestAsyncExceptions:
         async def async_gen_factory() -> AsyncGenerator[ServiceA, None]:
             yield ServiceA()
 
-        auto_container.register(ServiceA, factory=async_gen_factory)
+        container.register(ServiceA, factory=async_gen_factory)
 
         with pytest.raises(DIWireAsyncGeneratorFactoryWithoutScopeError) as exc_info:
-            await auto_container.aresolve(ServiceA)
+            await container.aresolve(ServiceA)
 
         assert exc_info.value.service_key.value is ServiceA
 
     def test_async_generator_factory_did_not_yield_error_attributes(self) -> None:
         """DIWireAsyncGeneratorFactoryDidNotYieldError has correct attributes."""
-        from diwire.exceptions import DIWireAsyncGeneratorFactoryDidNotYieldError
 
         class ServiceA:
             pass
@@ -308,7 +299,6 @@ class TestGeneratorFactoryExceptions:
 
     def test_generator_factory_did_not_yield_error_constructor(self) -> None:
         """DIWireGeneratorFactoryDidNotYieldError has correct message."""
-        from diwire.exceptions import DIWireGeneratorFactoryDidNotYieldError
 
         class ServiceA:
             pass
@@ -322,7 +312,6 @@ class TestGeneratorFactoryExceptions:
 
     def test_generator_factory_unsupported_lifetime_error_constructor(self) -> None:
         """DIWireGeneratorFactoryUnsupportedLifetimeError has correct message."""
-        from diwire.exceptions import DIWireGeneratorFactoryUnsupportedLifetimeError
 
         class ServiceA:
             pass
@@ -336,9 +325,6 @@ class TestGeneratorFactoryExceptions:
 
     def test_generator_factory_did_not_yield_raised_in_sync(self) -> None:
         """DIWireGeneratorFactoryDidNotYieldError raised when generator doesn't yield."""
-        from collections.abc import Generator
-
-        from diwire.exceptions import DIWireGeneratorFactoryDidNotYieldError
 
         class ServiceA:
             pass
@@ -357,12 +343,6 @@ class TestGeneratorFactoryExceptions:
 
     def test_generator_factory_unsupported_lifetime_raised(self) -> None:
         """DIWireGeneratorFactoryUnsupportedLifetimeError raised for singleton generator."""
-        from collections.abc import Generator
-
-        from diwire.exceptions import (
-            DIWireGeneratorFactoryUnsupportedLifetimeError,
-            DIWireGeneratorFactoryWithoutScopeError,
-        )
 
         class ServiceA:
             pass
@@ -391,9 +371,6 @@ class TestGeneratorFactoryExceptions:
 
     async def test_async_generator_factory_did_not_yield_raised(self) -> None:
         """DIWireAsyncGeneratorFactoryDidNotYieldError raised when async gen doesn't yield."""
-        from collections.abc import AsyncGenerator
-
-        from diwire.exceptions import DIWireAsyncGeneratorFactoryDidNotYieldError
 
         class ServiceA:
             pass
@@ -411,12 +388,6 @@ class TestGeneratorFactoryExceptions:
 
     async def test_async_generator_factory_unsupported_lifetime_raised(self) -> None:
         """DIWireAsyncGeneratorFactoryWithoutScopeError raised for singleton async gen."""
-        from collections.abc import AsyncGenerator
-
-        from diwire.exceptions import (
-            DIWireAsyncGeneratorFactoryWithoutScopeError,
-            DIWireGeneratorFactoryUnsupportedLifetimeError,
-        )
 
         class ServiceA:
             pass

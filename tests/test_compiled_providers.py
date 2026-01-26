@@ -3,7 +3,18 @@
 from dataclasses import dataclass, field
 from uuid import uuid4
 
+import pytest
+
+from diwire.compiled_providers import (
+    InstanceProvider,
+    ScopedSingletonArgsProvider,
+    ScopedSingletonProvider,
+    SingletonFactoryProvider,
+)
 from diwire.container import Container
+from diwire.exceptions import DIWireScopeMismatchError
+from diwire.registry import Registration
+from diwire.service_key import ServiceKey
 from diwire.types import Lifetime
 
 
@@ -116,8 +127,6 @@ class TestScopedSingletonProvider:
 
         # This tests the fallback path when scoped_cache is None
         # We need to test via internal provider mechanism
-        from diwire.service_key import ServiceKey
-
         service_key = ServiceKey.from_value(ServiceA)
         provider = container._scoped_compiled_providers.get((service_key, "request"))
         assert provider is not None
@@ -171,8 +180,6 @@ class TestScopedSingletonArgsProvider:
         container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
         container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
         container.compile()
-
-        from diwire.service_key import ServiceKey
 
         service_key_b = ServiceKey.from_value(ServiceB)
         provider = container._scoped_compiled_providers.get((service_key_b, "request"))
@@ -255,9 +262,6 @@ class TestCompiledProvidersCacheHit:
 
     def test_scoped_singleton_provider_cache_hit(self) -> None:
         """Test ScopedSingletonProvider returns cached instance on second call with scoped_cache."""
-        from diwire.compiled_providers import ScopedSingletonProvider
-        from diwire.service_key import ServiceKey
-
         service_key = ServiceKey.from_value(ServiceA)
         provider = ScopedSingletonProvider(ServiceA, service_key)
 
@@ -269,18 +273,12 @@ class TestCompiledProvidersCacheHit:
         assert isinstance(instance1, ServiceA)
         assert service_key in scoped_cache
 
-        # Second call - should return cached instance (lines 149-154)
+        # Second call - should return cached instance
         instance2 = provider(singletons, scoped_cache)
         assert instance2 is instance1
 
     def test_scoped_singleton_args_provider_cache_hit(self) -> None:
         """Test ScopedSingletonArgsProvider returns cached instance on second call with scoped_cache."""
-        from diwire.compiled_providers import (
-            InstanceProvider,
-            ScopedSingletonArgsProvider,
-        )
-        from diwire.service_key import ServiceKey
-
         service_key_b = ServiceKey.from_value(ServiceB)
         service_key_a = ServiceKey.from_value(ServiceA)
 
@@ -304,16 +302,13 @@ class TestCompiledProvidersCacheHit:
         assert isinstance(instance1, ServiceB)
         assert service_key_b in scoped_cache
 
-        # Second call - should return cached instance (lines 181-190)
+        # Second call - should return cached instance
         instance2 = provider(singletons, scoped_cache)
         assert instance2 is instance1
         assert instance2.service_a is dep_instance
 
     def test_singleton_factory_provider_cache_hit(self) -> None:
         """Test SingletonFactoryProvider returns cached instance without calling factory again."""
-        from diwire.compiled_providers import InstanceProvider, SingletonFactoryProvider
-        from diwire.service_key import ServiceKey
-
         call_count = 0
 
         class CountingFactory:
@@ -335,7 +330,7 @@ class TestCompiledProvidersCacheHit:
         assert call_count == 1
         assert isinstance(instance1, ServiceA)
 
-        # Second call - should return cached instance without calling factory (line 250)
+        # Second call - should return cached instance without calling factory
         instance2 = provider(singletons, None)
         assert instance2 is instance1
         assert call_count == 1  # Factory not called again
@@ -391,9 +386,7 @@ class TestCompilationMissingCoverage:
     """Tests for compilation missing coverage."""
 
     def test_compile_or_get_provider_registration_found(self) -> None:
-        """Registration found in registry and compiled (lines 849-852)."""
-        from diwire.service_key import ServiceKey
-
+        """Registration found in registry and compiled."""
         container = Container(register_if_missing=False, auto_compile=False)
 
         class ServiceALocal:
@@ -415,8 +408,6 @@ class TestCompilationMissingCoverage:
 
     def test_scoped_compilation_ignored_type_without_default(self) -> None:
         """Scoped registration with ignored type (str) without default returns None."""
-        from diwire.service_key import ServiceKey
-
         container = Container(register_if_missing=False, auto_compile=False)
 
         class ServiceWithStr:
@@ -436,8 +427,6 @@ class TestCompilationMissingCoverage:
 
     def test_scoped_compilation_dependency_fails(self) -> None:
         """Scoped registration where dependency compilation fails."""
-        from diwire.service_key import ServiceKey
-
         container = Container(register_if_missing=False, auto_compile=False)
 
         class UnregisteredDep:
@@ -461,9 +450,6 @@ class TestCompilationMissingCoverage:
 
     def test_async_deps_cache_non_class_key(self) -> None:
         """Non-class service key causes DIWireError during dependency extraction."""
-        from diwire.registry import Registration
-        from diwire.service_key import ServiceKey
-
         container = Container(register_if_missing=False, auto_compile=False)
 
         # Register a string service key - dependency extraction will fail
@@ -479,11 +465,6 @@ class TestCompilationMissingCoverage:
 
     def test_compiled_scoped_resolution_scope_mismatch_fallthrough(self) -> None:
         """Test branch 1107->1120: compiled scoped resolution falls through when scope doesn't match."""
-        import pytest
-
-        from diwire.exceptions import DIWireScopeMismatchError
-        from diwire.registry import Registration
-        from diwire.service_key import ServiceKey
 
         @dataclass
         class ScopedService:

@@ -1,10 +1,13 @@
+import inspect
 from dataclasses import dataclass
-from typing import NoReturn
+from typing import Annotated, NoReturn
+from unittest.mock import patch
 
 import pytest
 
 from diwire.dependencies import DependenciesExtractor
 from diwire.service_key import ServiceKey
+from diwire.types import FromDI
 
 
 @pytest.fixture(scope="module")
@@ -68,16 +71,12 @@ class TestDependenciesEdgeCases:
         self,
         dependencies_extractor: DependenciesExtractor,
     ) -> None:
-        """ValueError during signature inspection returns empty dict (lines 90-91)."""
-        import inspect
-        from unittest.mock import patch
+        """ValueError during signature inspection returns empty dict on error."""
 
         # Create a regular class for testing
         class RegularClass:
             def __init__(self, value: str) -> None:
                 self.value = value
-
-        from diwire.service_key import ServiceKey
 
         service_key = ServiceKey.from_value(RegularClass)
 
@@ -91,7 +90,7 @@ class TestDependenciesEdgeCases:
         self,
         dependencies_extractor: DependenciesExtractor,
     ) -> None:
-        """TypeError during signature inspection returns empty dict (lines 90-91)."""
+        """TypeError during signature inspection returns empty dict on error."""
 
         class BadSignatureClass:
             @property
@@ -102,8 +101,6 @@ class TestDependenciesEdgeCases:
                 pass
 
         # Directly test _get_parameter_defaults
-        from diwire.service_key import ServiceKey
-
         service_key = ServiceKey.from_value(BadSignatureClass)
 
         # The implementation will catch TypeError and return empty dict
@@ -114,11 +111,7 @@ class TestDependenciesEdgeCases:
         self,
         dependencies_extractor: DependenciesExtractor,
     ) -> None:
-        """Annotated with insufficient args returns None from _extract_from_di_type (line 125)."""
-        from typing import Annotated
-
-        from diwire.types import FromDI
-
+        """Annotated with insufficient args returns None from extraction."""
         # This tests the edge case where Annotated has fewer than MIN_ANNOTATED_ARGS
         # In practice, Annotated requires at least 2 args, but we test the guard
 

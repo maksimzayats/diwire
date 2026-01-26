@@ -3,10 +3,10 @@
 import asyncio
 import threading
 import uuid
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import Annotated
+from typing import Annotated, Any
 
 import pytest
 
@@ -24,12 +24,9 @@ from diwire.exceptions import (
     DIWireScopeMismatchError,
     DIWireServiceNotRegisteredError,
 )
+from diwire.registry import Registration
+from diwire.service_key import ServiceKey
 from diwire.types import FromDI, Lifetime
-
-
-@pytest.fixture()
-def container() -> Container:
-    return Container(register_if_missing=True)
 
 
 @dataclass
@@ -278,9 +275,6 @@ class TestScopeValidation:
     def test_scope_mismatch_error_with_global_registration(self) -> None:
         """DIWireScopeMismatchError raised when global registration has scope that doesn't match."""
         # This tests the case where registration is in global registry with scope set
-        from diwire.registry import Registration
-        from diwire.service_key import ServiceKey
-
         container = Container(register_if_missing=False)
         service_key = ServiceKey.from_value(Session)
         container._registry[service_key] = Registration(
@@ -408,9 +402,6 @@ class TestAutoScopeDetection:
         # Register in global registry with scope (not scoped registry)
         # This is done by registering without scope first, then the _find_scope_in_dependencies
         # checks global registry
-        from diwire.registry import Registration
-        from diwire.service_key import ServiceKey
-
         service_key = ServiceKey.from_value(Session)
         container._registry[service_key] = Registration(
             service_key=service_key,
@@ -517,8 +508,6 @@ class TestScopedInstanceRegistration:
 
     def test_scoped_instance_not_cached_in_global_singletons(self, container: Container) -> None:
         """Scoped instance should be cached in _scoped_instances, not _singletons."""
-        from diwire.service_key import ServiceKey
-
         specific_session = Session(id="scoped-instance")
         container.register(
             Session,
@@ -826,8 +815,6 @@ class TestScopeEdgeCases:
 
     def test_concurrent_scope_same_name_different_instances(self, container: Container) -> None:
         """Concurrent scopes with same name should be isolated."""
-        import threading
-
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
         results: dict[str, str] = {}
         errors: list[Exception] = []
@@ -957,9 +944,6 @@ class TestScopeContextVariableIsolation:
 
     def test_scope_context_isolated_between_threads(self, container: Container) -> None:
         """Each thread should have its own scope context."""
-        import threading
-        from typing import Any
-
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
         scope_values: dict[str, Any] = {}
         errors: list[Exception] = []
@@ -997,8 +981,6 @@ class TestScopeContextVariableIsolation:
 
     def test_async_scope_isolation(self, container: Container) -> None:
         """Async tasks should have isolated scope contexts."""
-        import asyncio
-
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
         results: dict[str, str] = {}
 
@@ -1627,9 +1609,6 @@ class TestScopeResolutionEdgeCases:
 
     def test_scoped_singleton_registered_globally(self, container: Container) -> None:
         """SCOPED_SINGLETON in global registry works in scope."""
-        from diwire.registry import Registration
-        from diwire.service_key import ServiceKey
-
         service_key = ServiceKey.from_value(Session)
         container._registry[service_key] = Registration(
             service_key=service_key,
@@ -1646,9 +1625,6 @@ class TestScopeResolutionEdgeCases:
 
     def test_empty_factory_registration_auto_instantiates(self, container: Container) -> None:
         """factory=None, no instance: falls back to auto-instantiation."""
-        from diwire.registry import Registration
-        from diwire.service_key import ServiceKey
-
         service_key = ServiceKey.from_value(Session)
         container._registry[service_key] = Registration(
             service_key=service_key,
@@ -1809,8 +1785,6 @@ class TestAsyncScopeContextManager:
         async def session_factory() -> Generator[Session, None, None]:
             raise AssertionError("Should not be called - use async generator below")
 
-        from collections.abc import AsyncGenerator
-
         async def async_session_factory() -> AsyncGenerator[Session, None]:
             try:
                 yield Session(id="async-session")
@@ -1833,8 +1807,6 @@ class TestAsyncScopeContextManager:
 
     async def test_async_cleanup_on_exception(self, container: Container) -> None:
         """Async scope cleanup happens even on exception."""
-        from collections.abc import AsyncGenerator
-
         cleanup_events: list[str] = []
 
         async def resource_factory() -> AsyncGenerator[Session, None]:
