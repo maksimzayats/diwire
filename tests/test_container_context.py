@@ -19,6 +19,7 @@ from diwire.container_context import (
     _ContextInjected,
     _ContextScopedInjected,
     _current_container,
+    _thread_local_fallback,
 )
 
 
@@ -808,6 +809,169 @@ class TestContextIsolation:
 
         assert results["task1"] == "task1"
         assert results["task2"] == "task2"
+
+
+# ============================================================================
+# Thread-Local Fallback Isolation Tests
+# ============================================================================
+
+
+class TestThreadLocalFallbackIsolation:
+    """Tests for thread-local fallback isolation to prevent cross-thread container leakage."""
+
+    def test_thread_local_fallback_isolated_between_threads(self) -> None:
+        """Direct thread-local access is isolated between threads."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        results: dict[str, str | None] = {}
+
+        def worker(thread_id: str) -> None:
+            # Set thread-local container
+            container = Container()
+            container.register(ServiceA, instance=ServiceA(id=thread_id))
+            _thread_local_fallback.container = container
+
+            # Verify we can read back our own container
+            local_container = getattr(_thread_local_fallback, "container", None)
+            if local_container is not None:
+                results[thread_id] = local_container.resolve(ServiceA).id
+            else:
+                results[thread_id] = None
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            executor.submit(worker, "thread1")
+            executor.submit(worker, "thread2")
+
+        # Each thread should see its own container
+        assert results["thread1"] == "thread1"
+        assert results["thread2"] == "thread2"
+
+    def test_concurrent_set_current_thread_isolation(self) -> None:
+        """Multiple threads calling set_current see their own containers."""
+        from concurrent.futures import ThreadPoolExecutor, wait
+
+        results: dict[str, str] = {}
+        errors: list[Exception] = []
+        barrier = threading.Barrier(3)
+
+        def worker(thread_id: str) -> None:
+            try:
+                container = Container()
+                container.register(ServiceA, instance=ServiceA(id=thread_id))
+
+                token = container_context.set_current(container)
+                try:
+                    # Wait for all threads to set their container
+                    barrier.wait()
+
+                    # Small delay to allow potential race conditions
+                    import time
+
+                    time.sleep(0.01)
+
+                    # Each thread should see its own container
+                    service = container_context.resolve(ServiceA)
+                    results[thread_id] = service.id
+                finally:
+                    container_context.reset(token)
+            except Exception as e:
+                errors.append(e)
+
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = [
+                executor.submit(worker, "t1"),
+                executor.submit(worker, "t2"),
+                executor.submit(worker, "t3"),
+            ]
+            wait(futures)
+
+        assert not errors, f"Errors occurred: {errors}"
+        assert results["t1"] == "t1"
+        assert results["t2"] == "t2"
+        assert results["t3"] == "t3"
+
+    def test_reset_clears_thread_local_fallback(self) -> None:
+        """Reset properly deletes thread-local fallback attribute."""
+        initial_token = _current_container.set(None)
+        try:
+            container = Container()
+            token = container_context.set_current(container)
+
+            # Verify fallback is set
+            assert hasattr(_thread_local_fallback, "container")
+            assert _thread_local_fallback.container is container
+
+            # Reset should clear the fallback
+            container_context.reset(token)
+
+            # Verify fallback is cleared
+            assert not hasattr(_thread_local_fallback, "container")
+        finally:
+            _current_container.reset(initial_token)
+
+    def test_thread_local_fallback_works_with_asyncio_run(self) -> None:
+        """Thread-local fallback works when ContextVar is reset by asyncio.run()."""
+        # Set container in main thread
+        container = Container()
+        container.register(ServiceA, instance=ServiceA(id="main-thread"))
+
+        token = container_context.set_current(container)
+        try:
+            # asyncio.run() creates a fresh context that doesn't inherit contextvar values
+            # The fallback should allow resolution to work
+
+            async def async_handler() -> str:
+                service = container_context.resolve(ServiceA)
+                return service.id
+
+            # This should work because the thread-local fallback is set
+            result = asyncio.run(async_handler())
+            assert result == "main-thread"
+        finally:
+            container_context.reset(token)
+
+    def test_stress_multiple_threads_with_fallback(self) -> None:
+        """Stress test with 50 threads using thread-local fallback."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        num_threads = 50
+        results: dict[int, str] = {}
+        errors: list[Exception] = []
+
+        def worker(thread_num: int) -> tuple[int, str]:
+            try:
+                container = Container()
+                container.register(ServiceA, instance=ServiceA(id=f"thread-{thread_num}"))
+
+                token = container_context.set_current(container)
+                try:
+                    # Do multiple resolutions to increase chance of race conditions
+                    for _ in range(10):
+                        service = container_context.resolve(ServiceA)
+                        if service.id != f"thread-{thread_num}":
+                            msg = f"Thread {thread_num} saw wrong container: {service.id}"
+                            raise AssertionError(msg)
+                    return thread_num, container_context.resolve(ServiceA).id
+                finally:
+                    container_context.reset(token)
+            except Exception as e:
+                errors.append(e)
+                raise
+
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            futures = [executor.submit(worker, i) for i in range(num_threads)]
+            for future in as_completed(futures):
+                # Errors are already captured in the errors list by the worker
+                if not future.exception():
+                    thread_num, result = future.result()
+                    results[thread_num] = result
+
+        assert not errors, f"Errors occurred: {errors}"
+        assert len(results) == num_threads
+
+        # Verify each thread saw its own container
+        for i in range(num_threads):
+            assert results[i] == f"thread-{i}", f"Thread {i} saw wrong value: {results[i]}"
 
 
 # ============================================================================

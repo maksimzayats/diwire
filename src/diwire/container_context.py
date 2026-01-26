@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import threading
 import types
 from collections.abc import Callable, Coroutine
 from contextvars import ContextVar, Token
@@ -23,6 +24,11 @@ _current_container: ContextVar[Container | None] = ContextVar(
     "diwire_current_container",
     default=None,
 )
+
+# Thread-local fallback for when ContextVar doesn't propagate (e.g., asyncio.run())
+# Each thread gets its own fallback container to prevent cross-thread leakage
+# See: https://github.com/python/cpython/issues/102609
+_thread_local_fallback: threading.local = threading.local()
 
 
 class _ContextInjected:
@@ -196,14 +202,10 @@ class ContainerContextProxy:
     with the actual container lookup happening at call time.
     """
 
-    # Fallback for when contextvar doesn't propagate (e.g., asyncio.run())
-    # See: https://github.com/python/cpython/issues/102609
-    _fallback_container: Container | None = None
-
     def set_current(self, container: Container) -> Token[Container | None]:
         """Set the current container in the context.
 
-        Note: Also stores in a class-level fallback because Python's asyncio.run()
+        Note: Also stores in a thread-local fallback because Python's asyncio.run()
         creates a fresh context that doesn't inherit contextvar values.
 
         Args:
@@ -213,13 +215,13 @@ class ContainerContextProxy:
             A token that can be used to reset the container.
 
         """
-        ContainerContextProxy._fallback_container = container
+        _thread_local_fallback.container = container
         return _current_container.set(container)
 
     def get_current(self) -> Container:
         """Get the current container from the context.
 
-        Tries contextvar first, then falls back to class-level storage.
+        Tries contextvar first, then falls back to thread-local storage.
 
         Returns:
             The current container.
@@ -231,7 +233,7 @@ class ContainerContextProxy:
         container = _current_container.get()
         if container is None:
             # Fallback when contextvar not propagated (e.g., asyncio.run())
-            container = self._fallback_container
+            container = getattr(_thread_local_fallback, "container", None)
         if container is None:
             raise DIWireContainerNotSetError
         return container
@@ -244,9 +246,9 @@ class ContainerContextProxy:
 
         """
         _current_container.reset(token)
-        # Also reset fallback if contextvar is now None
-        if _current_container.get() is None:
-            self._fallback_container = None
+        # Also reset thread-local fallback if contextvar is now None
+        if _current_container.get() is None and hasattr(_thread_local_fallback, "container"):
+            del _thread_local_fallback.container
 
     # Decorator overloads
     @overload
