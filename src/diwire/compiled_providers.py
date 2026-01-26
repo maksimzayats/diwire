@@ -7,6 +7,7 @@ eliminating runtime reflection and minimizing dict lookups.
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
@@ -23,6 +24,9 @@ class CompiledProvider(Protocol):
     ) -> Any:
         """Resolve and return an instance."""
         ...
+
+
+FactoryResultHandler = Callable[[Any], Any]
 
 
 class TypeProvider:
@@ -227,10 +231,15 @@ class InstanceProvider:
 class FactoryProvider:
     """Provider that uses a factory to create instances."""
 
-    __slots__ = ("_factory_provider",)
+    __slots__ = ("_factory_provider", "_result_handler")
 
-    def __init__(self, factory_provider: CompiledProvider) -> None:
+    def __init__(
+        self,
+        factory_provider: CompiledProvider,
+        result_handler: FactoryResultHandler | None = None,
+    ) -> None:
         self._factory_provider = factory_provider
+        self._result_handler = result_handler
 
     def __call__(
         self,
@@ -238,7 +247,10 @@ class FactoryProvider:
         scoped_cache: dict[ServiceKey, Any] | None,
     ) -> Any:
         factory = self._factory_provider(singletons, scoped_cache)
-        return factory()
+        result = factory()
+        if self._result_handler is not None:
+            return self._result_handler(result)
+        return result
 
 
 class SingletonFactoryProvider:
@@ -248,13 +260,19 @@ class SingletonFactoryProvider:
     Uses double-check locking for thread safety.
     """
 
-    __slots__ = ("_factory_provider", "_instance", "_key", "_lock")
+    __slots__ = ("_factory_provider", "_instance", "_key", "_lock", "_result_handler")
 
-    def __init__(self, key: ServiceKey, factory_provider: CompiledProvider) -> None:
+    def __init__(
+        self,
+        key: ServiceKey,
+        factory_provider: CompiledProvider,
+        result_handler: FactoryResultHandler | None = None,
+    ) -> None:
         self._key = key
         self._factory_provider = factory_provider
         self._instance: Any = None
         self._lock = threading.Lock()
+        self._result_handler = result_handler
 
     def __call__(
         self,
@@ -269,6 +287,8 @@ class SingletonFactoryProvider:
                 return self._instance  # type: ignore[unreachable]
             factory = self._factory_provider(singletons, scoped_cache)
             instance = factory()
+            if self._result_handler is not None:
+                instance = self._result_handler(instance)
             self._instance = instance
             singletons[self._key] = instance
             return instance

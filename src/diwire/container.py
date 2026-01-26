@@ -667,7 +667,9 @@ class Container:
                 concrete implementation class.
             factory: Optional factory to create instances.
             instance: Optional pre-created instance.
-            lifetime: The lifetime of the service.
+            lifetime: The lifetime of the service. This default applies only to explicit
+                registrations via `register`; auto-registration uses
+                `autoregister_default_lifetime` from container configuration.
             scope: Optional scope name for SCOPED_SINGLETON services.
             is_async: Whether the factory is async. If None, auto-detected from factory.
             provides: Optional interface/abstract type that this registration provides.
@@ -859,6 +861,8 @@ class Container:
         # Skip scoped registrations (handled separately)
         if registration.scope is not None:
             return None
+        if registration.is_async:
+            return None
 
         # Handle pre-created instances
         if registration.instance is not None:
@@ -870,9 +874,14 @@ class Container:
             factory_provider = self._compile_or_get_provider(factory_key)
             if factory_provider is None:
                 return None
+            result_handler = self._make_compiled_factory_result_handler(
+                service_key,
+                registration.lifetime,
+                registration.scope,
+            )
             if registration.lifetime == Lifetime.SINGLETON:
-                return SingletonFactoryProvider(service_key, factory_provider)
-            return FactoryProvider(factory_provider)
+                return SingletonFactoryProvider(service_key, factory_provider, result_handler)
+            return FactoryProvider(factory_provider, result_handler)
 
         # Use concrete_type if registered with provides parameter
         instantiation_type = registration.concrete_type or service_key.value

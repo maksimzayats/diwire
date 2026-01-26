@@ -200,7 +200,7 @@ def test_injected_signature_excludes_injected_params(container: Container) -> No
     assert "service" not in param_names
 
 
-def test_todo(container: Container) -> None:
+def test_resolve_dataclass_injects_from_di_field(container: Container) -> None:
     class ServiceA:
         pass
 
