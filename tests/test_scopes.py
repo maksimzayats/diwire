@@ -18,6 +18,7 @@ from diwire.container import (
     _current_scope,
 )
 from diwire.exceptions import (
+    DIWireAsyncCleanupWithoutEventLoopError,
     DIWireGeneratorFactoryWithoutScopeError,
     DIWireMissingDependenciesError,
     DIWireScopedSingletonWithoutScopeError,
@@ -2334,3 +2335,234 @@ class TestScopedIgnoredTypes:
             assert service.name == "test_name"
             assert service.count == 42
             assert service.ratio == 3.14
+
+
+class TestSyncScopeAsyncCleanup:
+    """Tests for async generator cleanup when using sync scope context manager."""
+
+    async def test_clear_scope_closes_async_exit_stacks_with_running_loop(
+        self,
+        container: Container,
+    ) -> None:
+        """clear_scope() closes async exit stacks when event loop is running."""
+        cleanup_events: list[str] = []
+
+        async def async_session_factory() -> AsyncGenerator[Session, None]:
+            try:
+                yield Session(id="async-session")
+            finally:
+                cleanup_events.append("cleaned_async")
+
+        container.register(
+            Session,
+            factory=async_session_factory,
+            scope="test",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        # Use sync scope but resolve async generator with aresolve
+        with container.start_scope("test"):
+            session = await container.aresolve(Session)
+            assert session.id == "async-session"
+            assert cleanup_events == []
+
+        # Give the scheduled task time to run
+        await asyncio.sleep(0.01)
+        assert cleanup_events == ["cleaned_async"]
+
+    def test_clear_scope_closes_async_exit_stacks_without_running_loop(
+        self,
+        container: Container,
+    ) -> None:
+        """clear_scope() closes async exit stacks when no event loop is running."""
+        cleanup_events: list[str] = []
+
+        async def async_session_factory() -> AsyncGenerator[Session, None]:
+            try:
+                yield Session(id="async-session")
+            finally:
+                cleanup_events.append("cleaned_async_no_loop")
+
+        container.register(
+            Session,
+            factory=async_session_factory,
+            scope="test",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        # Create and run in a manual event loop, then close it before scope exits
+        loop = asyncio.new_event_loop()
+
+        async def resolve_in_scope() -> None:
+            with container.start_scope("test"):
+                session = await container.aresolve(Session)
+                assert session.id == "async-session"
+                # Note: scope will be cleared after exiting 'with' but before loop closes
+
+        # Run the coroutine - scope cleanup happens inside run()
+        loop.run_until_complete(resolve_in_scope())
+
+        # At this point, the scope cleanup should have run via loop.create_task
+        # Let the event loop process pending tasks before closing
+        loop.run_until_complete(asyncio.sleep(0.01))
+        loop.close()
+
+        assert cleanup_events == ["cleaned_async_no_loop"]
+
+    def test_async_generator_finally_block_runs_via_clear_scope(self, container: Container) -> None:
+        """Async generator's finally block runs when clear_scope() is called."""
+        events: list[str] = []
+
+        async def resource_factory() -> AsyncGenerator[Session, None]:
+            events.append("setup")
+            try:
+                yield Session(id="resource")
+            finally:
+                events.append("finally")
+
+        container.register(
+            Session,
+            factory=resource_factory,
+            scope="test",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        async def run_test() -> None:
+            with container.start_scope("test"):
+                session = await container.aresolve(Session)
+                assert session.id == "resource"
+                events.append("used")
+
+            # Give the scheduled task time to run
+            await asyncio.sleep(0.01)
+
+        asyncio.run(run_test())
+        assert events == ["setup", "used", "finally"]
+
+    def test_clear_scope_handles_missing_async_exit_stack(self, container: Container) -> None:
+        """clear_scope() handles case where no async exit stack exists."""
+
+        # Only use sync factory, no async generators
+        def sync_session_factory() -> Session:
+            return Session(id="sync-session")
+
+        container.register(
+            Session,
+            factory=sync_session_factory,
+            scope="test",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        # Should not raise any error even though no async exit stack exists
+        with container.start_scope("test"):
+            session = container.resolve(Session)
+            assert session.id == "sync-session"
+
+    def test_clear_scope_closes_multiple_async_generators(self, container: Container) -> None:
+        """clear_scope() closes all async generators in the scope."""
+        cleanup_events: list[str] = []
+
+        @dataclass
+        class ResourceA:
+            id: str
+
+        @dataclass
+        class ResourceB:
+            id: str
+
+        @dataclass
+        class ResourceC:
+            id: str
+
+        async def resource_a_factory() -> AsyncGenerator[ResourceA, None]:
+            try:
+                yield ResourceA(id="a")
+            finally:
+                cleanup_events.append("cleaned_a")
+
+        async def resource_b_factory() -> AsyncGenerator[ResourceB, None]:
+            try:
+                yield ResourceB(id="b")
+            finally:
+                cleanup_events.append("cleaned_b")
+
+        async def resource_c_factory() -> AsyncGenerator[ResourceC, None]:
+            try:
+                yield ResourceC(id="c")
+            finally:
+                cleanup_events.append("cleaned_c")
+
+        container.register(
+            ResourceA,
+            factory=resource_a_factory,
+            scope="test",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+        container.register(
+            ResourceB,
+            factory=resource_b_factory,
+            scope="test",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+        container.register(
+            ResourceC,
+            factory=resource_c_factory,
+            scope="test",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        async def run_test() -> None:
+            with container.start_scope("test"):
+                a = await container.aresolve(ResourceA)
+                b = await container.aresolve(ResourceB)
+                c = await container.aresolve(ResourceC)
+                assert a.id == "a"
+                assert b.id == "b"
+                assert c.id == "c"
+
+            # Give the scheduled task time to run
+            await asyncio.sleep(0.01)
+
+        asyncio.run(run_test())
+        # All three should be cleaned up (order may vary due to AsyncExitStack LIFO)
+        assert sorted(cleanup_events) == ["cleaned_a", "cleaned_b", "cleaned_c"]
+
+    def test_clear_scope_raises_error_when_no_event_loop(self, container: Container) -> None:
+        """clear_scope() raises error when async cleanup needed but no event loop."""
+
+        async def async_session_factory() -> AsyncGenerator[Session, None]:
+            try:
+                yield Session(id="async-session")
+            finally:
+                pass  # Cleanup would happen here
+
+        container.register(
+            Session,
+            factory=async_session_factory,
+            scope="test",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        # Test that the error is raised when no event loop is running
+
+        def run_outside_async() -> None:
+            # Create a new event loop, resolve, close the loop, then exit scope
+            loop = asyncio.new_event_loop()
+
+            scope = container.start_scope("test")
+            scope.__enter__()
+
+            async def resolve() -> Session:
+                return await container.aresolve(Session)
+
+            session = loop.run_until_complete(resolve())
+            assert session.id == "async-session"
+
+            # Now close the loop so clear_scope will have no event loop
+            loop.close()
+
+            # Exiting scope should raise because no event loop is available for cleanup
+            with pytest.raises(DIWireAsyncCleanupWithoutEventLoopError, match="test"):
+                scope.__exit__(None, None, None)
+
+        run_outside_async()

@@ -35,6 +35,7 @@ from diwire.defaults import (
 )
 from diwire.dependencies import DependenciesExtractor
 from diwire.exceptions import (
+    DIWireAsyncCleanupWithoutEventLoopError,
     DIWireAsyncDependencyInSyncContextError,
     DIWireAsyncGeneratorFactoryDidNotYieldError,
     DIWireAsyncGeneratorFactoryWithoutScopeError,
@@ -572,6 +573,7 @@ class Container:
         "_autoregister_default_lifetime",
         "_autoregister_ignores",
         "_autoregister_registration_factories",
+        "_cleanup_tasks",
         "_compiled_providers",
         "_dependencies_extractor",
         "_has_scoped_registrations",
@@ -624,6 +626,8 @@ class Container:
         # Scope exit stacks keyed by tuple for consistency
         self._scope_exit_stacks: dict[tuple[tuple[str | None, int], ...], ExitStack] = {}
         self._async_scope_exit_stacks: dict[tuple[tuple[str | None, int], ...], AsyncExitStack] = {}
+        # Background cleanup tasks (to prevent garbage collection)
+        self._cleanup_tasks: set[asyncio.Task[None]] = set()
 
         self._dependencies_extractor = DependenciesExtractor()
 
@@ -795,6 +799,21 @@ class Container:
         scope_exit_stack = self._scope_exit_stacks.pop(scope_key, None)
         if scope_exit_stack is not None:
             scope_exit_stack.close()
+
+        # Close async exit stack (if any async generators were resolved in this scope)
+        async_exit_stack = self._async_scope_exit_stacks.pop(scope_key, None)
+        if async_exit_stack is not None:
+            try:
+                loop = asyncio.get_running_loop()
+                # Event loop is running - schedule cleanup as a task
+                task = loop.create_task(async_exit_stack.aclose())
+                self._cleanup_tasks.add(task)
+                task.add_done_callback(self._cleanup_tasks.discard)
+            except RuntimeError:
+                # No running event loop - cannot clean up async resources
+                scope_name = scope_key[-1][0] if scope_key else None
+                raise DIWireAsyncCleanupWithoutEventLoopError(scope_name) from None
+
         # Remove all scoped instances with keys starting with this scope
         keys_to_remove = [k for k in self._scoped_instances if k[0] == scope_key]
         for k in keys_to_remove:

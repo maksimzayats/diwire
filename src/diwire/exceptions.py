@@ -202,3 +202,16 @@ class DIWireProvidesRequiresClassError(DIWireError):
             f"When using 'provides={provides.__name__}', the 'key' must be a class, "
             f"got {type(key).__name__}: {key}",
         )
+
+
+class DIWireAsyncCleanupWithoutEventLoopError(DIWireError):
+    """Async cleanup required but no event loop is running."""
+
+    def __init__(self, scope_name: str | None) -> None:
+        self.scope_name = scope_name
+        scope_desc = f"'{scope_name}'" if scope_name else "anonymous scope"
+        super().__init__(
+            f"Scope {scope_desc} has async resources that need cleanup, but no event loop is "
+            "running. Use 'async with container.start_scope()' instead of 'with' when resolving "
+            "async generators, or ensure an event loop is running when the scope exits.",
+        )
