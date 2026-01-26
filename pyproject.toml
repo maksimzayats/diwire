@@ -52,6 +52,8 @@ dev = [
     "pytest-benchmark[histogram]>=5.1.0",
     "pytest-asyncio>=1.3.0",
     "uvicorn>=0.40.0",
+    # Testing
+    "httpx>=0.27.0",
 ]
 
 [build-system]
@@ -96,13 +98,14 @@ exclude = [
 ]
 
 [tool.ty.src]
-exclude = ["benchmarks/"]
+exclude = ["benchmarks/", "tests/examples/"]
 
 [tool.ty.rules]
 unused-ignore-comment = "ignore"
 
 [tool.pyrefly]
-project-excludes = ["benchmarks/**", "benchmarks/", "examples/**"]
+project-excludes = ["benchmarks/**", "benchmarks/", "examples/**", "tests/examples/**"]
+search-path = ["."]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,1 @@
+"""Named component registration examples."""
