@@ -110,7 +110,13 @@ class DependenciesExtractor:
             return cached
 
         init_func = self._get_init_func(service_key)
-        type_hints = get_type_hints(init_func, include_extras=True)
+        try:
+            type_hints = get_type_hints(init_func, include_extras=True)
+        except (NameError, TypeError):
+            try:
+                type_hints = get_type_hints(init_func)
+            except (NameError, TypeError):
+                type_hints = {}
 
         result = {}
         for name, hint in type_hints.items():
@@ -142,4 +148,4 @@ class DependenciesExtractor:
         if isinstance(service_key.value, FunctionType | MethodType):
             return service_key.value
 
-        return getattr(service_key.value, "__init__", service_key)
+        return getattr(service_key.value, "__init__", service_key.value)
