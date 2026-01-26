@@ -150,9 +150,11 @@ class TestConcurrentRegistration:
 
 class TestRaceConditions:
     def test_singleton_double_creation_race_condition(self) -> None:
-        """Test that singleton creation doesn't create multiple instances under race."""
-        # This test documents current behavior - may create multiple instances
-        # under high contention before one is cached
+        """Test that singleton creation creates only one instance under race conditions.
+
+        With proper double-check locking, only a single instance should be created
+        even when many threads race to resolve the same singleton.
+        """
         container = Container(
             register_if_missing=True,
             autoregister_default_lifetime=Lifetime.SINGLETON,
@@ -175,10 +177,12 @@ class TestRaceConditions:
             for f in as_completed(futures):
                 f.result()  # Raise any exceptions
 
-        # All results should be the same instance (eventually)
-        # Note: Without proper locking, there may be a small window where
-        # multiple instances are created, but ultimately only one is cached
+        # All results should be the same instance
         assert len(results) == 20
+        # Only one instance should have been created
+        assert SlowInit.instance_count == 1
+        # All resolved instances should be the same object
+        assert all(r is results[0] for r in results)
 
 
 class TestStress:
@@ -525,3 +529,233 @@ class TestAsyncConcurrentResolution:
         assert result is injected_instance
         # Factory should not have been called again
         assert SlowAsyncService.get_count() == initial_count
+
+
+class TestSyncSingletonLocking:
+    """Tests for thread-safe sync singleton resolution."""
+
+    def test_sync_singleton_lock_creation(self) -> None:
+        """Verify per-service locks are created correctly."""
+        from diwire.service_key import ServiceKey
+
+        container = Container(register_if_missing=True)
+
+        class TestService:
+            pass
+
+        service_key = ServiceKey.from_value(TestService)
+
+        # Lock should not exist before resolution
+        assert service_key not in container._sync_singleton_locks
+
+        # Get a lock
+        lock = container._get_sync_singleton_lock(service_key)
+
+        # Lock should now exist
+        assert service_key in container._sync_singleton_locks
+        assert lock is container._sync_singleton_locks[service_key]
+
+        # Getting the same lock again should return the same object
+        lock2 = container._get_sync_singleton_lock(service_key)
+        assert lock is lock2
+
+    def test_sync_singleton_double_check_locking(self) -> None:
+        """Test double-check locking with barrier synchronization."""
+        container = Container(
+            register_if_missing=True,
+            autoregister_default_lifetime=Lifetime.SINGLETON,
+            auto_compile=False,  # Disable compilation to test uncompiled path
+        )
+
+        class BarrierService:
+            instance_count = 0
+
+            def __init__(self) -> None:
+                BarrierService.instance_count += 1
+
+        barrier = threading.Barrier(20)
+        results: list[BarrierService] = []
+
+        def resolve_with_barrier() -> None:
+            barrier.wait()  # All threads start together
+            instance = container.resolve(BarrierService)
+            results.append(instance)
+
+        threads = [threading.Thread(target=resolve_with_barrier) for _ in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(results) == 20
+        # Only one instance should have been created
+        assert BarrierService.instance_count == 1
+        # All results should be the same instance
+        assert all(r is results[0] for r in results)
+
+    def test_slow_singleton_only_created_once(self) -> None:
+        """Singleton with delay in __init__ should only be created once."""
+        import time
+
+        container = Container(
+            register_if_missing=True,
+            autoregister_default_lifetime=Lifetime.SINGLETON,
+            auto_compile=False,  # Test uncompiled path
+        )
+
+        class SlowSingleton:
+            instance_count = 0
+
+            def __init__(self) -> None:
+                SlowSingleton.instance_count += 1
+                time.sleep(0.05)  # Simulate slow initialization
+
+        results: list[SlowSingleton] = []
+        errors: list[Exception] = []
+
+        def resolve_slow() -> None:
+            try:
+                instance = container.resolve(SlowSingleton)
+                results.append(instance)
+            except Exception as e:
+                errors.append(e)
+
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            futures = [executor.submit(resolve_slow) for _ in range(20)]
+            for f in as_completed(futures):
+                f.result()
+
+        assert not errors
+        assert len(results) == 20
+        # Only one instance should be created
+        assert SlowSingleton.instance_count == 1
+        # All results should be the same instance
+        assert all(r is results[0] for r in results)
+
+
+class TestCompiledProviderThreadSafety:
+    """Tests for thread-safety of compiled singleton providers."""
+
+    def test_singleton_type_provider_thread_safe(self) -> None:
+        """SingletonTypeProvider should be thread-safe."""
+        container = Container(
+            register_if_missing=True,
+            autoregister_default_lifetime=Lifetime.SINGLETON,
+            auto_compile=True,
+        )
+
+        class CompiledSingleton:
+            instance_count = 0
+
+            def __init__(self) -> None:
+                CompiledSingleton.instance_count += 1
+
+        # Pre-compile the container
+        container.register(CompiledSingleton, lifetime=Lifetime.SINGLETON)
+        container.compile()
+
+        barrier = threading.Barrier(20)
+        results: list[CompiledSingleton] = []
+
+        def resolve_compiled() -> None:
+            barrier.wait()
+            instance = container.resolve(CompiledSingleton)
+            results.append(instance)
+
+        threads = [threading.Thread(target=resolve_compiled) for _ in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(results) == 20
+        assert CompiledSingleton.instance_count == 1
+        assert all(r is results[0] for r in results)
+
+    def test_singleton_args_provider_thread_safe(self) -> None:
+        """SingletonArgsTypeProvider should be thread-safe."""
+        container = Container(
+            register_if_missing=True,
+            autoregister_default_lifetime=Lifetime.SINGLETON,
+            auto_compile=True,
+        )
+
+        class Dependency:
+            pass
+
+        class SingletonWithDeps:
+            instance_count = 0
+
+            def __init__(self, dep: Dependency) -> None:
+                SingletonWithDeps.instance_count += 1
+                self.dep = dep
+
+        # Register and compile
+        container.register(Dependency, lifetime=Lifetime.SINGLETON)
+        container.register(SingletonWithDeps, lifetime=Lifetime.SINGLETON)
+        container.compile()
+
+        barrier = threading.Barrier(20)
+        results: list[SingletonWithDeps] = []
+
+        def resolve_with_deps() -> None:
+            barrier.wait()
+            instance = container.resolve(SingletonWithDeps)
+            results.append(instance)
+
+        threads = [threading.Thread(target=resolve_with_deps) for _ in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(results) == 20
+        assert SingletonWithDeps.instance_count == 1
+        assert all(r is results[0] for r in results)
+        # Dependency should also be singleton
+        assert all(r.dep is results[0].dep for r in results)
+
+    def test_singleton_factory_provider_thread_safe(self) -> None:
+        """SingletonFactoryProvider should be thread-safe."""
+        container = Container(
+            register_if_missing=False,
+            auto_compile=True,
+        )
+
+        class FactorySingleton:
+            instance_count = 0
+
+            def __init__(self, value: int) -> None:
+                FactorySingleton.instance_count += 1
+                self.value = value
+
+        class FactoryClass:
+            call_count = 0
+
+            def __call__(self) -> FactorySingleton:
+                FactoryClass.call_count += 1
+                return FactorySingleton(42)
+
+        # Register with factory and compile
+        container.register(FactoryClass)
+        container.register(FactorySingleton, factory=FactoryClass, lifetime=Lifetime.SINGLETON)
+        container.compile()
+
+        barrier = threading.Barrier(20)
+        results: list[FactorySingleton] = []
+
+        def resolve_factory() -> None:
+            barrier.wait()
+            instance = container.resolve(FactorySingleton)
+            results.append(instance)
+
+        threads = [threading.Thread(target=resolve_factory) for _ in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(results) == 20
+        assert FactorySingleton.instance_count == 1
+        assert all(r is results[0] for r in results)
+        assert results[0].value == 42

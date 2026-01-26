@@ -1033,3 +1033,243 @@ class TestAsyncMissingCoverage:
 
         result = await container.aresolve(ServiceB)
         assert isinstance(result.service_a, ServiceA)
+
+
+# =============================================================================
+# TestAresolveScopedOverride - Fast-path scope check tests
+# =============================================================================
+
+
+class TestAresolveScopedOverride:
+    """Tests for aresolve() properly respecting scoped overrides."""
+
+    async def test_aresolve_singleton_fast_path_respects_scoped_override(
+        self,
+        container_singleton: Container,
+    ) -> None:
+        """aresolve() fast-path does not bypass scoped overrides.
+
+        Regression test: The fast-path for cached singletons must check whether
+        we're inside an active scope before returning the cached singleton.
+        Otherwise, scoped overrides would be incorrectly bypassed.
+        """
+        # First, resolve the singleton to cache it in _type_singletons
+        global_instance = await container_singleton.aresolve(ServiceA)
+        assert isinstance(global_instance, ServiceA)
+
+        # Register a scoped override for ServiceA
+        scoped_instance = ServiceA(id="scoped-override")
+        container_singleton.register(
+            ServiceA,
+            instance=scoped_instance,
+            scope="request",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        # Inside a scope, aresolve should return the scoped override, NOT the cached singleton
+        async with container_singleton.start_scope("request"):
+            resolved = await container_singleton.aresolve(ServiceA)
+            assert resolved is scoped_instance, (
+                f"Expected scoped instance (id={scoped_instance.id}), "
+                f"but got global singleton (id={resolved.id})"
+            )
+
+        # Outside the scope, aresolve should return the global singleton
+        resolved_outside = await container_singleton.aresolve(ServiceA)
+        assert resolved_outside is global_instance
+
+
+# =============================================================================
+# TestNameErrorHandlingInFunctionResolution - NameError fallback path tests
+# =============================================================================
+
+
+class TestNameErrorHandlingInFunctionResolution:
+    """Tests for NameError exception handling when resolving functions.
+
+    When get_injected_dependencies raises NameError (e.g., due to PEP 563 forward
+    references that can't be resolved), the container should gracefully fall back
+    to using no scope (effective_scope = None).
+    """
+
+    def test_resolve_function_with_nameerror_falls_back_to_no_scope(
+        self,
+        container: Container,
+    ) -> None:
+        """resolve() on function falls back to Injected when NameError occurs."""
+        from unittest.mock import patch
+
+        def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+            return service
+
+        # Patch get_injected_dependencies to raise NameError
+        with patch.object(
+            container._dependencies_extractor,
+            "get_injected_dependencies",
+            side_effect=NameError("name 'ForwardRef' is not defined"),
+        ):
+            injected = container.resolve(handler)
+
+        # Should return Injected (not ScopedInjected) since effective_scope = None
+        assert isinstance(injected, Injected)
+        assert not isinstance(injected, ScopedInjected)  # type: ignore[unreachable]
+
+    def test_resolve_async_function_with_nameerror_falls_back_to_async_injected(
+        self,
+        container: Container,
+    ) -> None:
+        """resolve() on async function falls back to AsyncInjected when NameError occurs."""
+        from unittest.mock import patch
+
+        async def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+            return service
+
+        # Patch get_injected_dependencies to raise NameError
+        with patch.object(
+            container._dependencies_extractor,
+            "get_injected_dependencies",
+            side_effect=NameError("name 'ForwardRef' is not defined"),
+        ):
+            injected = container.resolve(handler)
+
+        # Should return AsyncInjected (not AsyncScopedInjected) since effective_scope = None
+        assert isinstance(injected, AsyncInjected)
+        assert not isinstance(injected, AsyncScopedInjected)  # type: ignore[unreachable]
+
+    async def test_aresolve_function_with_nameerror_falls_back_to_no_scope(
+        self,
+        container: Container,
+    ) -> None:
+        """aresolve() on function falls back to Injected when NameError occurs."""
+        from unittest.mock import patch
+
+        def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+            return service
+
+        # Patch get_injected_dependencies to raise NameError
+        with patch.object(
+            container._dependencies_extractor,
+            "get_injected_dependencies",
+            side_effect=NameError("name 'ForwardRef' is not defined"),
+        ):
+            injected = await container.aresolve(handler)
+
+        # Should return Injected (not ScopedInjected) since effective_scope = None
+        assert isinstance(injected, Injected)
+        assert not isinstance(injected, ScopedInjected)  # type: ignore[unreachable]
+
+    async def test_aresolve_async_function_with_nameerror_falls_back_to_async_injected(
+        self,
+        container: Container,
+    ) -> None:
+        """aresolve() on async function falls back to AsyncInjected when NameError occurs."""
+        from unittest.mock import patch
+
+        async def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+            return service
+
+        # Patch get_injected_dependencies to raise NameError
+        with patch.object(
+            container._dependencies_extractor,
+            "get_injected_dependencies",
+            side_effect=NameError("name 'ForwardRef' is not defined"),
+        ):
+            injected = await container.aresolve(handler)
+
+        # Should return AsyncInjected (not AsyncScopedInjected) since effective_scope = None
+        assert isinstance(injected, AsyncInjected)
+        assert not isinstance(injected, AsyncScopedInjected)  # type: ignore[unreachable]
+
+
+# =============================================================================
+# TestSingletonLockCreation - Async singleton lock creation tests
+# =============================================================================
+
+
+class TestSingletonLockCreation:
+    """Tests for _get_singleton_lock creation path.
+
+    These tests exercise the double-checked locking mechanism that creates
+    asyncio.Lock objects for async singleton resolution.
+    """
+
+    async def test_singleton_lock_created_on_first_access(
+        self,
+        container_singleton: Container,
+    ) -> None:
+        """_get_singleton_lock creates a new lock when key doesn't exist."""
+        from diwire.service_key import ServiceKey
+
+        # Clear any existing locks
+        container_singleton._singleton_locks.clear()
+
+        service_key = ServiceKey.from_value(ServiceA)
+
+        # Lock doesn't exist yet
+        assert service_key not in container_singleton._singleton_locks
+
+        # Get the lock - this should create it
+        lock = await container_singleton._get_singleton_lock(service_key)
+
+        # Lock should now exist and be an asyncio.Lock
+        assert service_key in container_singleton._singleton_locks
+        assert isinstance(lock, asyncio.Lock)
+
+    async def test_singleton_lock_reused_on_subsequent_access(
+        self,
+        container_singleton: Container,
+    ) -> None:
+        """_get_singleton_lock returns the same lock on subsequent calls."""
+        from diwire.service_key import ServiceKey
+
+        # Clear any existing locks
+        container_singleton._singleton_locks.clear()
+
+        service_key = ServiceKey.from_value(ServiceA)
+
+        lock1 = await container_singleton._get_singleton_lock(service_key)
+        lock2 = await container_singleton._get_singleton_lock(service_key)
+
+        assert lock1 is lock2
+
+    async def test_concurrent_singleton_lock_creation(
+        self,
+        container_singleton: Container,
+    ) -> None:
+        """Concurrent calls to _get_singleton_lock for same key return same lock."""
+        from diwire.service_key import ServiceKey
+
+        # Clear any existing locks
+        container_singleton._singleton_locks.clear()
+
+        service_key = ServiceKey.from_value(ServiceA)
+        locks: list[asyncio.Lock] = []
+
+        async def get_lock() -> None:
+            lock = await container_singleton._get_singleton_lock(service_key)
+            locks.append(lock)
+
+        # Launch concurrent calls
+        await asyncio.gather(*[get_lock() for _ in range(10)])
+
+        # All should be the same lock
+        assert len(locks) == 10
+        assert all(lock is locks[0] for lock in locks)
+
+    async def test_different_keys_get_different_locks(
+        self,
+        container_singleton: Container,
+    ) -> None:
+        """Different service keys get different locks."""
+        from diwire.service_key import ServiceKey
+
+        # Clear any existing locks
+        container_singleton._singleton_locks.clear()
+
+        key_a = ServiceKey.from_value(ServiceA)
+        key_b = ServiceKey.from_value(ServiceB)
+
+        lock_a = await container_singleton._get_singleton_lock(key_a)
+        lock_b = await container_singleton._get_singleton_lock(key_b)
+
+        assert lock_a is not lock_b

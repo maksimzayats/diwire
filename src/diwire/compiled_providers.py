@@ -6,6 +6,7 @@ eliminating runtime reflection and minimizing dict lookups.
 
 from __future__ import annotations
 
+import threading
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
@@ -44,14 +45,16 @@ class SingletonTypeProvider:
     """Provider for singletons with no dependencies.
 
     Stores instance directly in the provider for fastest possible cache hit.
+    Uses double-check locking for thread safety.
     """
 
-    __slots__ = ("_instance", "_key", "_type")
+    __slots__ = ("_instance", "_key", "_lock", "_type")
 
     def __init__(self, t: type, key: ServiceKey) -> None:
         self._type = t
         self._key = key
         self._instance: Any = None
+        self._lock = threading.Lock()
 
     def __call__(
         self,
@@ -60,10 +63,14 @@ class SingletonTypeProvider:
     ) -> Any:
         if self._instance is not None:
             return self._instance
-        instance = self._type()
-        self._instance = instance
-        singletons[self._key] = instance
-        return instance
+        with self._lock:
+            # Double-check: another thread may have created the instance while we waited
+            if self._instance is not None:  # pragma: no cover - race timing dependent
+                return self._instance  # type: ignore[unreachable]
+            instance = self._type()
+            self._instance = instance
+            singletons[self._key] = instance
+            return instance
 
 
 class ArgsTypeProvider:
@@ -97,9 +104,10 @@ class SingletonArgsTypeProvider:
     """Provider for singletons with dependencies.
 
     Stores instance directly in the provider for fastest possible cache hit.
+    Uses double-check locking for thread safety.
     """
 
-    __slots__ = ("_dep_providers", "_instance", "_key", "_param_names", "_type")
+    __slots__ = ("_dep_providers", "_instance", "_key", "_lock", "_param_names", "_type")
 
     def __init__(
         self,
@@ -113,6 +121,7 @@ class SingletonArgsTypeProvider:
         self._param_names = param_names
         self._dep_providers = dep_providers
         self._instance: Any = None
+        self._lock = threading.Lock()
 
     def __call__(
         self,
@@ -121,14 +130,18 @@ class SingletonArgsTypeProvider:
     ) -> Any:
         if self._instance is not None:
             return self._instance
-        args = {
-            name: provider(singletons, scoped_cache)
-            for name, provider in zip(self._param_names, self._dep_providers, strict=True)
-        }
-        instance = self._type(**args)
-        self._instance = instance
-        singletons[self._key] = instance
-        return instance
+        with self._lock:
+            # Double-check: another thread may have created the instance while we waited
+            if self._instance is not None:  # pragma: no cover - race timing dependent
+                return self._instance  # type: ignore[unreachable]
+            args = {
+                name: provider(singletons, scoped_cache)
+                for name, provider in zip(self._param_names, self._dep_providers, strict=True)
+            }
+            instance = self._type(**args)
+            self._instance = instance
+            singletons[self._key] = instance
+            return instance
 
 
 class ScopedSingletonProvider:
@@ -232,14 +245,16 @@ class SingletonFactoryProvider:
     """Provider for singletons created by a factory.
 
     Stores instance directly in the provider for fastest possible cache hit.
+    Uses double-check locking for thread safety.
     """
 
-    __slots__ = ("_factory_provider", "_instance", "_key")
+    __slots__ = ("_factory_provider", "_instance", "_key", "_lock")
 
     def __init__(self, key: ServiceKey, factory_provider: CompiledProvider) -> None:
         self._key = key
         self._factory_provider = factory_provider
         self._instance: Any = None
+        self._lock = threading.Lock()
 
     def __call__(
         self,
@@ -248,8 +263,12 @@ class SingletonFactoryProvider:
     ) -> Any:
         if self._instance is not None:
             return self._instance
-        factory = self._factory_provider(singletons, scoped_cache)
-        instance = factory()
-        self._instance = instance
-        singletons[self._key] = instance
-        return instance
+        with self._lock:
+            # Double-check: another thread may have created the instance while we waited
+            if self._instance is not None:  # pragma: no cover - race timing dependent
+                return self._instance  # type: ignore[unreachable]
+            factory = self._factory_provider(singletons, scoped_cache)
+            instance = factory()
+            self._instance = instance
+            singletons[self._key] = instance
+            return instance

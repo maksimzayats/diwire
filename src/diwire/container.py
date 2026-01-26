@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import itertools
+import threading
 import types
 from collections.abc import AsyncGenerator, Callable, Coroutine, Generator
 from contextlib import AsyncExitStack, ExitStack
@@ -534,6 +535,8 @@ class Container:
         "_singleton_locks",
         "_singleton_locks_lock",
         "_singletons",
+        "_sync_singleton_locks",
+        "_sync_singleton_locks_lock",
         "_type_providers",
         "_type_singletons",
     )
@@ -589,6 +592,10 @@ class Container:
         # Per-service-key locks for async singleton resolution to prevent race conditions
         self._singleton_locks: dict[ServiceKey, asyncio.Lock] = {}
         self._singleton_locks_lock = asyncio.Lock()
+
+        # Per-service-key locks for sync singleton resolution to prevent race conditions
+        self._sync_singleton_locks: dict[ServiceKey, threading.Lock] = {}
+        self._sync_singleton_locks_lock = threading.Lock()
 
         self.register(type(self), instance=self, lifetime=Lifetime.SINGLETON)
 
@@ -1209,19 +1216,59 @@ class Container:
                     self._singletons[service_key] = registration.instance
                 return registration.instance
 
-            if registration.factory is not None:
-                instance = self.resolve(registration.factory)()
-                if isinstance(instance, Generator):
-                    if cache_scope is None:
-                        raise DIWireGeneratorFactoryWithoutScopeError(service_key)
+            # For singletons, use lock to prevent race conditions in threaded resolution
+            is_global_singleton = (
+                registration.lifetime == Lifetime.SINGLETON and scoped_registration is None
+            )
+            singleton_lock: threading.Lock | None = None
+
+            if is_global_singleton:
+                singleton_lock = self._get_sync_singleton_lock(service_key)
+                singleton_lock.acquire()
+                # Double-check: re-check cache after acquiring lock
+                if service_key in self._singletons:
+                    singleton_lock.release()
+                    return self._singletons[service_key]
+
+            try:
+                if registration.factory is not None:
+                    instance = self.resolve(registration.factory)()
+                    if isinstance(instance, Generator):
+                        if cache_scope is None:
+                            raise DIWireGeneratorFactoryWithoutScopeError(service_key)
+                        if registration.lifetime == Lifetime.SINGLETON:
+                            raise DIWireGeneratorFactoryUnsupportedLifetimeError(service_key)
+                        try:
+                            generated_instance = next(instance)
+                        except StopIteration as exc:
+                            raise DIWireGeneratorFactoryDidNotYieldError(service_key) from exc
+                        self._get_scope_exit_stack(cache_scope).callback(instance.close)
+                        instance = generated_instance  # type: ignore[possibly-undefined]
+
                     if registration.lifetime == Lifetime.SINGLETON:
-                        raise DIWireGeneratorFactoryUnsupportedLifetimeError(service_key)
-                    try:
-                        generated_instance = next(instance)
-                    except StopIteration as exc:
-                        raise DIWireGeneratorFactoryDidNotYieldError(service_key) from exc
-                    self._get_scope_exit_stack(cache_scope).callback(instance.close)
-                    instance = generated_instance  # type: ignore[possibly-undefined]
+                        self._singletons[service_key] = instance
+                    elif (
+                        registration.lifetime == Lifetime.SCOPED_SINGLETON and cache_scope is not None
+                    ):
+                        self._scoped_instances[(cache_scope, service_key)] = instance
+
+                    return instance
+
+                # Use concrete_type if registered with provides parameter
+                instantiation_type = registration.concrete_type or service_key.value
+                instantiation_key = (
+                    ServiceKey.from_value(instantiation_type)
+                    if registration.concrete_type is not None
+                    else service_key
+                )
+
+                resolved_dependencies = self._get_resolved_dependencies(
+                    service_key=instantiation_key,
+                )
+                if resolved_dependencies.missing:
+                    raise DIWireMissingDependenciesError(service_key, resolved_dependencies.missing)
+
+                instance = instantiation_type(**resolved_dependencies.dependencies)
 
                 if registration.lifetime == Lifetime.SINGLETON:
                     self._singletons[service_key] = instance
@@ -1229,27 +1276,9 @@ class Container:
                     self._scoped_instances[(cache_scope, service_key)] = instance
 
                 return instance
-
-            # Use concrete_type if registered with provides parameter
-            instantiation_type = registration.concrete_type or service_key.value
-            instantiation_key = (
-                ServiceKey.from_value(instantiation_type)
-                if registration.concrete_type is not None
-                else service_key
-            )
-
-            resolved_dependencies = self._get_resolved_dependencies(service_key=instantiation_key)
-            if resolved_dependencies.missing:
-                raise DIWireMissingDependenciesError(service_key, resolved_dependencies.missing)
-
-            instance = instantiation_type(**resolved_dependencies.dependencies)
-
-            if registration.lifetime == Lifetime.SINGLETON:
-                self._singletons[service_key] = instance
-            elif registration.lifetime == Lifetime.SCOPED_SINGLETON and cache_scope is not None:
-                self._scoped_instances[(cache_scope, service_key)] = instance
-
-            return instance
+            finally:
+                if singleton_lock is not None and singleton_lock.locked():
+                    singleton_lock.release()
         finally:
             stack.pop()
 
@@ -1335,7 +1364,12 @@ class Container:
             return decorator
 
         # FAST PATH for cached singletons (same as sync resolve)
-        if isinstance(key, type) and scope is None:
+        # Only use fast path when not in a scope (scoped registrations may override)
+        if (
+            isinstance(key, type)
+            and scope is None
+            and (not self._has_scoped_registrations or _current_scope.get() is None)
+        ):
             cached = self._type_singletons.get(key)
             if cached is not None:
                 return cached
@@ -1625,9 +1659,22 @@ class Container:
         """
         if key not in self._singleton_locks:
             async with self._singleton_locks_lock:
-                if key not in self._singleton_locks:
+                # Second check after acquiring lock - race timing dependent
+                if key not in self._singleton_locks:  # pragma: no cover - race timing dependent
                     self._singleton_locks[key] = asyncio.Lock()
         return self._singleton_locks[key]
+
+    def _get_sync_singleton_lock(self, key: ServiceKey) -> threading.Lock:
+        """Get or create a thread lock for singleton resolution of the given service key.
+
+        Uses double-checked locking to minimize lock contention.
+        """
+        if key not in self._sync_singleton_locks:
+            with self._sync_singleton_locks_lock:
+                # Second check after acquiring lock - race timing dependent
+                if key not in self._sync_singleton_locks:  # pragma: no cover - race timing dependent
+                    self._sync_singleton_locks[key] = threading.Lock()
+        return self._sync_singleton_locks[key]
 
     async def aclear_scope(self, scope_id: ScopeId) -> None:
         """Asynchronously clear cached instances for a scope.
