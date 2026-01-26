@@ -246,9 +246,12 @@ class ContainerContextProxy:
 
         """
         _current_container.reset(token)
-        # Also reset thread-local fallback if contextvar is now None
-        if _current_container.get() is None and hasattr(_thread_local_fallback, "container"):
-            del _thread_local_fallback.container
+        current = _current_container.get()
+        if current is None:
+            if hasattr(_thread_local_fallback, "container"):
+                del _thread_local_fallback.container
+        else:
+            _thread_local_fallback.container = current
 
     # Decorator overloads
     @overload
