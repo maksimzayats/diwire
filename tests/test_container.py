@@ -1,6 +1,7 @@
 import uuid
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Generator
 from dataclasses import dataclass, field
+from functools import partial
 from inspect import signature
 from typing import Annotated
 
@@ -412,6 +413,37 @@ class TestAsyncCallableClassFactory:
 
         # Instance with async generator __call__ should be detected as async
         assert _is_async_factory(AsyncGenCallableFactory()) is True
+
+    def test_is_async_factory_with_partial_wrapped_callable(self) -> None:
+        """Test _is_async_factory() detects async partials via wrapped function."""
+
+        async def async_factory() -> str:
+            return "async result"
+
+        def sync_factory() -> str:
+            return "sync result"
+
+        assert _is_async_factory(partial(async_factory)) is True
+        assert _is_async_factory(partial(sync_factory)) is False
+
+    def test_is_async_factory_with_wrapped_func_attribute(self) -> None:
+        """Test _is_async_factory() checks wrapped func before __call__."""
+
+        async def async_factory() -> str:
+            return "async result"
+
+        def sync_factory() -> str:
+            return "sync result"
+
+        class FuncWrapper:
+            def __init__(self, func: Callable[[], object]) -> None:
+                self.func = func
+
+            def __call__(self) -> str:
+                return "sync result"
+
+        assert _is_async_factory(FuncWrapper(async_factory)) is True
+        assert _is_async_factory(FuncWrapper(sync_factory)) is False
 
     def test_registration_detects_async_callable_instance_factory(self) -> None:
         """Test that registration correctly detects async callable instance factory."""
