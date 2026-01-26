@@ -1414,7 +1414,9 @@ class TestMultipleFromDIParameters:
             result = handler()
             assert isinstance(result[0], ServiceA)
             assert isinstance(result[1], ServiceA)
-            # Both should be the same instance (transient by default)
+            # (transient by default)
+            # TRANSIENT means each parameter gets a fresh instance
+            assert result[0] is not result[1]
         finally:
             container_context.reset(token)
 
