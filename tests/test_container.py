@@ -756,15 +756,6 @@ class TestAsyncResolutionEdgeCases:
     """Tests for async resolution edge cases."""
 
     @pytest.mark.asyncio
-    async def test_aresolve_decorator_pattern(self) -> None:
-        """aresolve with no key returns a decorator."""
-        container = Container()
-
-        # aresolve with no key should return a decorator
-        decorator = await container.aresolve(scope="request")
-        assert callable(decorator)
-
-    @pytest.mark.asyncio
     async def test_aresolve_type_singleton_cache_hit(self) -> None:
         """aresolve uses type singleton cache."""
         container = Container()

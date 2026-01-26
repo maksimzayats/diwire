@@ -1445,23 +1445,6 @@ class Container:
         finally:
             stack.pop()
 
-    # Decorator overloads (key=None) - returns a decorator that wraps functions
-    @overload
-    async def aresolve(
-        self,
-        key: None = None,
-        *,
-        scope: str,
-    ) -> Callable[[Callable[..., Any]], Any]: ...
-
-    @overload
-    async def aresolve(
-        self,
-        key: None = None,
-        *,
-        scope: None = None,
-    ) -> Callable[[Callable[..., Any]], Any]: ...
-
     @overload
     async def aresolve(self, key: type[T], *, scope: None = None) -> T: ...
 
@@ -1490,17 +1473,18 @@ class Container:
     @overload
     async def aresolve(self, key: Any, *, scope: str | None = None) -> Any: ...
 
-    async def aresolve(self, key: Any | None = None, *, scope: str | None = None) -> Any:  # noqa: PLR0915
+    async def aresolve(self, key: Any, *, scope: str | None = None) -> Any:  # noqa: PLR0915
         """Asynchronously resolve and return a service instance by its key.
-
-        When called with key=None, returns a decorator that can be applied to
-        functions to enable dependency injection.
 
         This method supports async factories and async generator factories.
         Use this method when resolving services that have async dependencies.
 
+        Note:
+            For decorator usage, use the synchronous `.resolve()` method which
+            handles both sync and async functions correctly.
+
         Args:
-            key: The service key to resolve. If None, returns a decorator.
+            key: The service key to resolve.
             scope: Optional scope name. If provided and key is a function,
                    returns an AsyncScopedInjected that creates a new scope per call.
 
@@ -1512,20 +1496,7 @@ class Container:
             # Direct usage:
             injected = await container.aresolve(my_func, scope="request")
 
-            # Decorator usage:
-            @container.aresolve(scope="request")
-            async def handler(service: Annotated[Service, FromDI()]) -> dict:
-                ...
-
         """
-        # DECORATOR PATTERN: aresolve(scope="...") or aresolve() returns decorator
-        if key is None:
-
-            def decorator(func: Callable[..., Any]) -> Any:
-                return self.resolve(func, scope=scope)
-
-            return decorator
-
         # FAST PATH for cached singletons (same as sync resolve)
         # Only use fast path when not in a scope (scoped registrations may override)
         if (
