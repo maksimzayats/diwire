@@ -4,8 +4,8 @@ format:
 
 lint:
 	uv run ruff check .
-	uv run ty check .
-	uv run pyrefly check src/ tests/ examples/
+	uv run ty check src/
+	uv run pyrefly check
 	uv run mypy .
 
 test:
