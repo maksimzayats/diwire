@@ -166,6 +166,146 @@ class TestRegisterWithFactory:
         assert instance.value == 42
 
 
+class TestRegisterWithCallableFactory:
+    """Tests for registering services with callable factories (functions/methods/lambdas)."""
+
+    def test_register_with_function_factory(self, container: Container) -> None:
+        """Register with a function factory."""
+
+        class ServiceA:
+            def __init__(self, value: str) -> None:
+                self.value = value
+
+        def create_service_a() -> ServiceA:
+            return ServiceA("from_function")
+
+        container.register(ServiceA, factory=create_service_a)
+        instance = container.resolve(ServiceA)
+
+        assert isinstance(instance, ServiceA)
+        assert instance.value == "from_function"
+
+    def test_register_with_method_factory(self, container: Container) -> None:
+        """Register with a method factory (like ContextVar.get)."""
+        from contextvars import ContextVar
+
+        class Request:
+            def __init__(self, request_id: str) -> None:
+                self.request_id = request_id
+
+        request_var: ContextVar[Request] = ContextVar("request")
+        expected_request = Request("test-123")
+        request_var.set(expected_request)
+
+        container.register(Request, factory=request_var.get)
+        instance = container.resolve(Request)
+
+        assert instance is expected_request
+
+    def test_register_with_lambda_factory(self, container: Container) -> None:
+        """Register with a lambda factory."""
+
+        class ServiceA:
+            def __init__(self, value: int) -> None:
+                self.value = value
+
+        container.register(ServiceA, factory=lambda: ServiceA(99))
+        instance = container.resolve(ServiceA)
+
+        assert isinstance(instance, ServiceA)
+        assert instance.value == 99
+
+    def test_class_factory_still_works(self, container: Container) -> None:
+        """Ensure class factories (original behavior) still work."""
+
+        class ServiceA:
+            def __init__(self, value: str) -> None:
+                self.value = value
+
+        class ServiceAFactory:
+            def __call__(self) -> ServiceA:
+                return ServiceA("from_class_factory")
+
+        container.register(ServiceA, factory=ServiceAFactory)
+        instance = container.resolve(ServiceA)
+
+        assert isinstance(instance, ServiceA)
+        assert instance.value == "from_class_factory"
+
+    async def test_async_resolve_with_function_factory(self, container: Container) -> None:
+        """Async resolution with a function factory."""
+
+        class ServiceA:
+            def __init__(self, value: str) -> None:
+                self.value = value
+
+        def create_service_a() -> ServiceA:
+            return ServiceA("async_function")
+
+        container.register(ServiceA, factory=create_service_a)
+        instance = await container.aresolve(ServiceA)
+
+        assert isinstance(instance, ServiceA)
+        assert instance.value == "async_function"
+
+    async def test_async_resolve_with_method_factory(self, container: Container) -> None:
+        """Async resolution with a method factory."""
+        from contextvars import ContextVar
+
+        class Request:
+            def __init__(self, request_id: str) -> None:
+                self.request_id = request_id
+
+        request_var: ContextVar[Request] = ContextVar("request")
+        expected_request = Request("async-test-456")
+        request_var.set(expected_request)
+
+        container.register(Request, factory=request_var.get)
+        instance = await container.aresolve(Request)
+
+        assert instance is expected_request
+
+    def test_callable_factory_with_singleton_lifetime(self, container: Container) -> None:
+        """Callable factory with singleton lifetime returns same instance."""
+        call_count = 0
+
+        class ServiceA:
+            def __init__(self, value: int) -> None:
+                self.value = value
+
+        def create_service_a() -> ServiceA:
+            nonlocal call_count
+            call_count += 1
+            return ServiceA(call_count)
+
+        container.register(ServiceA, factory=create_service_a, lifetime=Lifetime.SINGLETON)
+        instance1 = container.resolve(ServiceA)
+        instance2 = container.resolve(ServiceA)
+
+        assert instance1 is instance2
+        assert call_count == 1
+
+    def test_compiled_callable_factory(self, container: Container) -> None:
+        """Callable factory works with compiled container."""
+        call_count = 0
+
+        class ServiceA:
+            def __init__(self, value: int) -> None:
+                self.value = value
+
+        def create_service_a() -> ServiceA:
+            nonlocal call_count
+            call_count += 1
+            return ServiceA(call_count)
+
+        container.register(ServiceA, factory=create_service_a)
+        container.compile()
+        instance = container.resolve(ServiceA)
+
+        assert isinstance(instance, ServiceA)
+        assert instance.value == 1
+
+
 class TestRegisterWithInstance:
     def test_register_with_instance(self, container: Container) -> None:
         """Register with pre-created instance."""
@@ -453,3 +593,202 @@ class TestRegisterAsyncFactory:
             assert cleanup_called == []
 
         assert cleanup_called == [True]
+
+
+class TestFactoryFunctionAutoInjectsDependencies:
+    """Tests for factory functions auto-injecting all dependencies without FromDI."""
+
+    def test_factory_function_auto_injects_dependencies(self, container: Container) -> None:
+        """Function factory should have all typed params auto-injected."""
+
+        class Request:
+            def __init__(self, request_id: str = "default") -> None:
+                self.request_id = request_id
+
+        class Service:
+            pass
+
+        def service_factory(request: Request) -> Service:
+            assert isinstance(request, Request)
+            return Service()
+
+        container.register(Request, instance=Request("test-123"))
+        container.register(Service, factory=service_factory)
+        instance = container.resolve(Service)
+
+        assert isinstance(instance, Service)
+
+    async def test_factory_async_generator_auto_injects_dependencies(
+        self, container: Container,
+    ) -> None:
+        """Async generator factory should have all typed params auto-injected."""
+        from collections.abc import AsyncGenerator
+
+        class Request:
+            def __init__(self, request_id: str = "default") -> None:
+                self.request_id = request_id
+
+        class Service:
+            pass
+
+        cleanup_called = []
+        received_request = []
+
+        async def service_factory(request: Request) -> AsyncGenerator[Service, None]:
+            received_request.append(request)
+            try:
+                yield Service()
+            finally:
+                cleanup_called.append(True)
+
+        expected_request = Request("test-456")
+        container.register(Request, instance=expected_request)
+        container.register(
+            Service,
+            factory=service_factory,
+            scope="request",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        async with container.start_scope("request"):
+            instance = await container.aresolve(Service)
+            assert isinstance(instance, Service)
+            assert received_request[0] is expected_request
+            assert cleanup_called == []
+
+        assert cleanup_called == [True]
+
+    def test_factory_with_mixed_deps_and_defaults(self, container: Container) -> None:
+        """Factory with some dependencies and some defaults should work."""
+
+        class DependencyA:
+            pass
+
+        class Service:
+            pass
+
+        def service_factory(
+            dep: DependencyA,
+            config: str = "default_config",
+        ) -> Service:
+            assert isinstance(dep, DependencyA)
+            assert config == "default_config"
+            return Service()
+
+        container.register(Service, factory=service_factory)
+        instance = container.resolve(Service)
+
+        assert isinstance(instance, Service)
+
+    def test_factory_class_still_works(self, container: Container) -> None:
+        """Class factories should still work with the new changes."""
+
+        class DependencyA:
+            pass
+
+        class Service:
+            def __init__(self, value: str) -> None:
+                self.value = value
+
+        class ServiceFactory:
+            def __init__(self, dep: DependencyA) -> None:
+                self.dep = dep
+
+            def __call__(self) -> Service:
+                return Service("from_class_factory")
+
+        container.register(Service, factory=ServiceFactory)
+        instance = container.resolve(Service)
+
+        assert isinstance(instance, Service)
+        assert instance.value == "from_class_factory"
+
+    async def test_async_factory_function_auto_injects_dependencies(
+        self, container: Container,
+    ) -> None:
+        """Async factory function should have all typed params auto-injected."""
+
+        class Request:
+            def __init__(self, request_id: str = "default") -> None:
+                self.request_id = request_id
+
+        class Service:
+            pass
+
+        received_request = []
+
+        async def service_factory(request: Request) -> Service:
+            received_request.append(request)
+            return Service()
+
+        expected_request = Request("async-test-789")
+        container.register(Request, instance=expected_request)
+        container.register(Service, factory=service_factory)
+        instance = await container.aresolve(Service)
+
+        assert isinstance(instance, Service)
+        assert received_request[0] is expected_request
+
+    def test_factory_sync_generator_auto_injects_dependencies(self, container: Container) -> None:
+        """Sync generator factory should have all typed params auto-injected."""
+        from collections.abc import Generator
+
+        class Request:
+            def __init__(self, request_id: str = "default") -> None:
+                self.request_id = request_id
+
+        class Service:
+            pass
+
+        cleanup_called = []
+        received_request = []
+
+        def service_factory(request: Request) -> Generator[Service, None, None]:
+            received_request.append(request)
+            try:
+                yield Service()
+            finally:
+                cleanup_called.append(True)
+
+        expected_request = Request("gen-test-101")
+        container.register(Request, instance=expected_request)
+        container.register(
+            Service,
+            factory=service_factory,
+            scope="request",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        with container.start_scope("request"):
+            instance = container.resolve(Service)
+            assert isinstance(instance, Service)
+            assert received_request[0] is expected_request
+            assert cleanup_called == []
+
+        assert cleanup_called == [True]
+
+    def test_factory_function_with_multiple_dependencies(self, container: Container) -> None:
+        """Factory function with multiple dependencies should resolve all."""
+
+        class DependencyA:
+            pass
+
+        class DependencyB:
+            pass
+
+        class Service:
+            pass
+
+        received_deps: list[tuple[DependencyA, DependencyB]] = []
+
+        def service_factory(a: DependencyA, b: DependencyB) -> Service:
+            received_deps.append((a, b))
+            return Service()
+
+        container.register(Service, factory=service_factory)
+        instance = container.resolve(Service)
+
+        assert isinstance(instance, Service)
+        assert len(received_deps) == 1
+        assert isinstance(received_deps[0][0], DependencyA)
+        assert isinstance(received_deps[0][1], DependencyB)

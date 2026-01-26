@@ -894,10 +894,19 @@ class Container:
 
         # Handle factory registrations
         if registration.factory is not None:
-            factory_key = ServiceKey.from_value(registration.factory)
-            factory_provider = self._compile_or_get_provider(factory_key)
-            if factory_provider is None:
+            if isinstance(registration.factory, type):
+                # Factory is a class - compile it as a provider
+                factory_key = ServiceKey.from_value(registration.factory)
+                factory_provider = self._compile_or_get_provider(factory_key)
+                if factory_provider is None:
+                    return None
+            elif isinstance(registration.factory, FunctionType | MethodType):
+                # Functions/methods need resolution - skip compilation for now
+                # They may have FromDI parameters that need injection
                 return None
+            else:
+                # Factory is a built-in callable (e.g., ContextVar.get) - wrap directly
+                factory_provider = InstanceProvider(registration.factory)
             result_handler = self._make_compiled_factory_result_handler(
                 service_key,
                 registration.lifetime,
@@ -1393,7 +1402,21 @@ class Container:
 
             try:
                 if registration.factory is not None:
-                    instance = self.resolve(registration.factory)()
+                    if isinstance(registration.factory, type):
+                        # Factory is a class - resolve via container to instantiate
+                        factory: Any = self.resolve(registration.factory)
+                        instance = factory()
+                    elif isinstance(registration.factory, FunctionType | MethodType):
+                        # Function/method factory - resolve ALL deps and call directly
+                        # This allows factory functions to have all params auto-injected
+                        factory_key = ServiceKey.from_value(registration.factory)
+                        resolved = self._get_resolved_dependencies(factory_key)
+                        if resolved.missing:
+                            raise DIWireMissingDependenciesError(factory_key, resolved.missing)
+                        instance = registration.factory(**resolved.dependencies)
+                    else:
+                        # Factory is a built-in callable (e.g., ContextVar.get) - use directly
+                        instance = registration.factory()
                     if isinstance(instance, Generator):
                         if cache_scope is None:
                             raise DIWireGeneratorFactoryWithoutScopeError(service_key)
@@ -1648,11 +1671,22 @@ class Container:
 
             try:
                 if registration.factory is not None:
-                    # Resolve the factory
-                    factory = await self.aresolve(registration.factory)
-
-                    # Call the factory
-                    result = factory()
+                    # Call the factory based on its type
+                    if isinstance(registration.factory, type):
+                        # Factory is a class - resolve via container to instantiate
+                        factory: Any = await self.aresolve(registration.factory)
+                        result = factory()
+                    elif isinstance(registration.factory, FunctionType | MethodType):
+                        # Function/method factory - resolve ALL deps and call directly
+                        # This allows factory functions to have all params auto-injected
+                        factory_key = ServiceKey.from_value(registration.factory)
+                        resolved = await self._aget_resolved_dependencies(factory_key)
+                        if resolved.missing:
+                            raise DIWireMissingDependenciesError(factory_key, resolved.missing)
+                        result = registration.factory(**resolved.dependencies)
+                    else:
+                        # Factory is a built-in callable (e.g., ContextVar.get) - use directly
+                        result = registration.factory()
 
                     # Handle async factories
                     if inspect.iscoroutine(result):
