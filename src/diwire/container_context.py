@@ -25,8 +25,10 @@ _current_container: ContextVar[Container | None] = ContextVar(
     default=None,
 )
 
-# Thread-local fallback for when ContextVar doesn't propagate (e.g., asyncio.run())
-# Each thread gets its own fallback container to prevent cross-thread leakage
+# Thread-local fallback for when ContextVar is explicitly cleared or not set.
+# Note: asyncio.run() does propagate ContextVar values; this fallback is primarily
+# for cases where a new context is created without copying the parent context.
+# Each thread gets its own fallback container to prevent cross-thread leakage.
 # See: https://github.com/python/cpython/issues/102609
 _thread_local_fallback: threading.local = threading.local()
 

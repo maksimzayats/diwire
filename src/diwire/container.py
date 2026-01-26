@@ -801,18 +801,21 @@ class Container:
             scope_exit_stack.close()
 
         # Close async exit stack (if any async generators were resolved in this scope)
-        async_exit_stack = self._async_scope_exit_stacks.pop(scope_key, None)
+        # Peek first without removing - only remove after successfully scheduling cleanup
+        async_exit_stack = self._async_scope_exit_stacks.get(scope_key)
         if async_exit_stack is not None:
             try:
                 loop = asyncio.get_running_loop()
-                # Event loop is running - schedule cleanup as a task
-                task = loop.create_task(async_exit_stack.aclose())
-                self._cleanup_tasks.add(task)
-                task.add_done_callback(self._cleanup_tasks.discard)
             except RuntimeError:
-                # No running event loop - cannot clean up async resources
+                # No running event loop - leave stack in place for later aclear_scope() call
                 scope_name = scope_key[-1][0] if scope_key else None
                 raise DIWireAsyncCleanupWithoutEventLoopError(scope_name) from None
+            # Event loop is running - schedule cleanup as a task
+            task = loop.create_task(async_exit_stack.aclose())
+            self._cleanup_tasks.add(task)
+            task.add_done_callback(self._cleanup_tasks.discard)
+            # Only remove after successfully scheduling cleanup
+            del self._async_scope_exit_stacks[scope_key]
 
         # Remove all scoped instances with keys starting with this scope
         keys_to_remove = [k for k in self._scoped_instances if k[0] == scope_key]

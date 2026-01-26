@@ -947,19 +947,25 @@ class TestThreadLocalFallbackIsolation:
             proxy._default_container = original_default
 
     def test_thread_local_fallback_works_with_asyncio_run(self) -> None:
-        """Thread-local fallback works when ContextVar is reset by asyncio.run()."""
+        """Thread-local fallback works when ContextVar is explicitly cleared."""
         # Set container in main thread
         container = Container()
         container.register(ServiceA, instance=ServiceA(id="main-thread"))
 
         token = container_context.set_current(container)
         try:
-            # asyncio.run() creates a fresh context that doesn't inherit contextvar values
-            # The fallback should allow resolution to work
+            # Note: asyncio.run() actually propagates ContextVar values to the coroutine.
+            # To test the thread-local fallback, we explicitly clear the ContextVar
+            # inside the async function.
 
             async def async_handler() -> str:
-                service = container_context.resolve(ServiceA)
-                return service.id
+                # Clear the ContextVar to force fallback to thread-local storage
+                inner_token = _current_container.set(None)
+                try:
+                    service = container_context.resolve(ServiceA)
+                    return service.id
+                finally:
+                    _current_container.reset(inner_token)
 
             # This should work because the thread-local fallback is set
             result = asyncio.run(async_handler())
