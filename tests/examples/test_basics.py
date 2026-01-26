@@ -72,10 +72,9 @@ def test_ex04_decorator_registration(capsys: pytest.CaptureFixture[str]) -> None
         "UserRepository has db: True",
         "=== Scoped Singleton Demo ===",
         "Same request context: True",
-        "=== Static/Class Method Factory Demo ===",
+        "=== Static Method Factory Demo ===",
         "Sending email to user@example.com",
         "Connection pool:",
-        "Factory metadata:",
     )
 
 

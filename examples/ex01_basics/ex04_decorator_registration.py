@@ -6,7 +6,7 @@ Demonstrates using @container.register as a decorator for:
 3. Interface/Protocol registration via provides parameter
 4. Async factory function registration
 5. Factory functions with auto-injected dependencies
-6. Static method and class method factories
+6. Static method factories
 """
 
 import asyncio
@@ -139,14 +139,6 @@ class ConnectionPool:
         self.connections = connections
 
 
-class FactoryMetadata:
-    """Metadata about the factory."""
-
-    def __init__(self, factory_class: str, version: str) -> None:
-        self.factory_class = factory_class
-        self.version = version
-
-
 class ServiceFactories:
     """A collection of factory methods for creating services."""
 
@@ -164,15 +156,6 @@ class ServiceFactories:
         """Static method factory that creates a singleton connection pool."""
         print("Creating connection pool...")
         return ConnectionPool(["conn1", "conn2", "conn3"])
-
-    # Pattern 9c: Class method factory
-    # Note: When used as a DI factory, 'cls' is None (class not available during resolution)
-    @classmethod
-    @container.register(lifetime=Lifetime.SINGLETON)
-    def create_factory_metadata(cls) -> FactoryMetadata:
-        """Class method factory. Note: cls is None when called via DI."""
-        class_name = cls.__name__ if cls is not None else "ServiceFactories"
-        return FactoryMetadata(factory_class=class_name, version="1.0")
 
 
 # Pattern 10: Async generator factory with cleanup (using staticmethod)
@@ -231,16 +214,13 @@ def main() -> None:
         print(f"Same request context: {ctx1 is ctx2}")
         print(f"Request ID: {ctx1.request_id}")
 
-    # Demonstrate staticmethod and classmethod factories
-    print("\n=== Static/Class Method Factory Demo ===")
+    # Demonstrate staticmethod factories
+    print("\n=== Static Method Factory Demo ===")
     email_service = container.resolve(EmailService)
     email_service.send("user@example.com", "Hello!")
 
     conn_pool = container.resolve(ConnectionPool)
     print(f"Connection pool: {conn_pool.connections}")
-
-    metadata = container.resolve(FactoryMetadata)
-    print(f"Factory metadata: {metadata.factory_class} v{metadata.version}")
 
 
 async def async_main() -> None:
