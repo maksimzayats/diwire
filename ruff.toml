@@ -105,18 +105,6 @@ ignore = [
     "PLC0415", # Import outside top-level
     "SLF001", # Private member access
 ]
-"tmp/**" = [
-    # Documentation (scratch code)
-    "D", # All docstring rules
-
-    # Print and debugging
-    "T201", # Print statement found
-    "ERA001", # Commented-out code
-
-    # Scratch code warnings
-    "F401", # Unused imports
-    "B024", # Abstract base class without abstract methods
-]
 "src/diwire/container.py" = [
     # Complexity (DI container by design)
     "C901", # Too complex (McCabe)
@@ -157,6 +145,10 @@ ignore = [
     # Protocol implementations
     "D102", # Missing docstring in public method
     "ARG002", # Unused method argument (protocol signature)
+]
+"tmp/**" = [
+    # All rules ignored in temporary files
+    "ALL",
 ]
 
 [lint.isort]

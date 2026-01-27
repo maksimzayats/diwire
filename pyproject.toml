@@ -98,13 +98,13 @@ exclude = [
 ]
 
 [tool.ty.src]
-exclude = ["benchmarks/", "tests/examples/"]
+exclude = ["benchmarks/", "tests/examples/", "tmp/"]
 
 [tool.ty.rules]
 unused-ignore-comment = "ignore"
 
 [tool.pyrefly]
-project-excludes = ["benchmarks/**", "benchmarks/", "examples/**", "tests/examples/**"]
+project-excludes = ["benchmarks/**", "benchmarks/", "examples/**", "tests/examples/**", "tmp/**", "tmp/"]
 search-path = ["."]
 
 [tool.pytest.ini_options]
