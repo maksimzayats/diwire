@@ -955,14 +955,17 @@ class TestRegisterClassAsDecorator:
         instance2 = container.resolve(MyTransient)
         assert instance1 is not instance2
 
-    def test_decorator_with_provides_interface(self, container: Container) -> None:
-        """@container.register(provides=Interface) should register as interface."""
+    def test_decorator_with_interface_key(self, container: Container) -> None:
+        """@container.register(Interface, lifetime=...) should register class under interface."""
 
         class IService:
             def do_something(self) -> str:
                 raise NotImplementedError
 
-        @container.register(provides=IService)
+        # Note: When using @container.register(Interface) as a decorator for another class,
+        # a non-default keyword argument (like lifetime=SINGLETON) is required to
+        # distinguish from bare decorator pattern.
+        @container.register(IService, lifetime=Lifetime.SINGLETON)
         class ServiceImpl(IService):
             def do_something(self) -> str:
                 return "implemented"
@@ -999,7 +1002,7 @@ class TestRegisterClassAsDecorator:
         class ILogger:
             pass
 
-        @container.register(lifetime=Lifetime.SINGLETON, provides=ILogger)
+        @container.register(ILogger, lifetime=Lifetime.SINGLETON)
         class Logger(ILogger):
             pass
 
@@ -1007,6 +1010,25 @@ class TestRegisterClassAsDecorator:
         instance2 = container.resolve(ILogger)
         assert instance1 is instance2
         assert isinstance(instance1, Logger)
+
+    def test_decorator_same_type_as_interface_key(self, container: Container) -> None:
+        """Decorating a class with its own type as interface_key should work."""
+        # This tests the edge case where interface_key is target (same class)
+        # The registration happens in Case 4, decorator just returns the class
+        # Note: We need to forward-declare the class name to use it in the decorator
+
+        # Define name first, then decorate
+        class MyService:
+            pass
+
+        # Use global to get the class defined above and decorate
+        decorated = container.register(MyService, lifetime=Lifetime.SINGLETON)(MyService)
+        assert decorated is MyService
+
+        instance1 = container.resolve(MyService)
+        instance2 = container.resolve(MyService)
+        assert instance1 is instance2
+        assert isinstance(instance1, MyService)
 
 
 class TestRegisterFactoryAsDecorator:
@@ -1032,8 +1054,8 @@ class TestRegisterFactoryAsDecorator:
         assert instance.host == "localhost"
         assert instance.port == 5432
 
-    def test_factory_decorator_with_explicit_provides(self, container: Container) -> None:
-        """@container.register(provides=Type) should use explicit type."""
+    def test_factory_decorator_with_explicit_key(self, container: Container) -> None:
+        """@container.register(Type) should use explicit type as registration key."""
 
         class IDatabase:
             pass
@@ -1041,18 +1063,20 @@ class TestRegisterFactoryAsDecorator:
         class PostgresDB(IDatabase):
             pass
 
-        @container.register(provides=IDatabase)
+        # Note: A non-default keyword arg (like lifetime=SINGLETON) needed to use type as
+        # decorator key vs bare registration
+        @container.register(IDatabase, lifetime=Lifetime.SINGLETON)
         def create_database() -> PostgresDB:
             return PostgresDB()
 
         instance = container.resolve(IDatabase)
         assert isinstance(instance, PostgresDB)
 
-    def test_factory_decorator_provides_overrides_return_annotation(
+    def test_factory_decorator_key_overrides_return_annotation(
         self,
         container: Container,
     ) -> None:
-        """provides= should take precedence over return annotation."""
+        """Explicit key should take precedence over return annotation."""
 
         class IService:
             pass
@@ -1060,7 +1084,9 @@ class TestRegisterFactoryAsDecorator:
         class ServiceImpl(IService):
             pass
 
-        @container.register(provides=IService)
+        # Note: A non-default keyword arg (like lifetime=SINGLETON) needed to use type as
+        # decorator key vs bare registration
+        @container.register(IService, lifetime=Lifetime.SINGLETON)
         def create_service() -> ServiceImpl:
             return ServiceImpl()
 
@@ -1496,8 +1522,8 @@ class TestStaticMethodDecorator:
         instance2 = container.resolve(Config)
         assert instance1 is instance2
 
-    def test_staticmethod_with_provides(self, container: Container) -> None:
-        """@staticmethod @container.register(provides=...) should work."""
+    def test_staticmethod_with_interface_key(self, container: Container) -> None:
+        """@staticmethod @container.register(Interface) should work."""
 
         class IService:
             pass
@@ -1507,7 +1533,8 @@ class TestStaticMethodDecorator:
 
         class Factories:
             @staticmethod
-            @container.register(provides=IService)
+            # Note: A non-default keyword arg needed to use type as decorator key vs bare registration
+            @container.register(IService, lifetime=Lifetime.SINGLETON)
             def create_service() -> ServiceImpl:
                 return ServiceImpl()
 

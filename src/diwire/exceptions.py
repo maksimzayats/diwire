@@ -192,15 +192,14 @@ class DIWireDependencyExtractionError(DIWireError):
         super().__init__(f"Failed to extract dependencies from {service_key}: {cause}")
 
 
-class DIWireProvidesRequiresClassError(DIWireError):
-    """The 'provides' parameter requires 'key' to be a class when no factory/instance is given."""
+class DIWireConcreteClassRequiresClassError(DIWireError):
+    """The 'concrete_class' parameter requires a class type."""
 
-    def __init__(self, key: object, provides: type) -> None:
-        self.key = key
-        self.provides = provides
+    def __init__(self, concrete_class: object) -> None:
+        self.concrete_class = concrete_class
         super().__init__(
-            f"When using 'provides={provides.__name__}', the 'key' must be a class, "
-            f"got {type(key).__name__}: {key}",
+            f"'concrete_class' must be a class type, "
+            f"got {type(concrete_class).__name__}: {concrete_class}",
         )
 
 
@@ -221,7 +220,7 @@ class DIWireDecoratorFactoryMissingReturnAnnotationError(DIWireError):
     """Raised when factory decorator cannot determine service type.
 
     This happens when:
-    - No 'provides' parameter is given, AND
+    - No explicit key is given, AND
     - The function has no return type annotation (or returns None)
     """
 
@@ -230,7 +229,7 @@ class DIWireDecoratorFactoryMissingReturnAnnotationError(DIWireError):
         factory_name = getattr(factory, "__name__", repr(factory))
         super().__init__(
             f"Factory '{factory_name}' has no return annotation. "
-            f"Either add a return type annotation or use provides=SomeType.",
+            f"Either add a return type annotation or use @container.register(SomeType).",
         )
 
 

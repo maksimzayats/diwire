@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Generic, TypeVar
 
-from diwire import Container
+from diwire import Container, Lifetime
 
 
 class Model:
@@ -26,6 +26,11 @@ class ModelBox(Generic[M]):
     model: M
 
 
+@dataclass
+class NonGenericModelBox:
+    value: str
+
+
 container = Container()
 
 
@@ -39,6 +44,21 @@ def create_model_box(model_cls: type[M]) -> ModelBox[M]:
     return ModelBox(model=model_cls())
 
 
+# When using a type as the key for a factory decorator, a non-default parameter is required
+# to distinguish from bare decorator pattern. Here we use lifetime=SINGLETON.
+@container.register(NonGenericModelBox, lifetime=Lifetime.SINGLETON)
+def create_non_generic_model_box() -> NonGenericModelBox:
+    return NonGenericModelBox(value="non-generic box")
+
+
+@container.register
+@dataclass
+class NonGenericModelBox2:
+    value: str = "non-generic box 2"
+
+
 print(container.resolve(AnyBox[int]))
 print(container.resolve(AnyBox[str]))
 print(container.resolve(ModelBox[User]))
+print(container.resolve(NonGenericModelBox))
+print(container.resolve(NonGenericModelBox2))

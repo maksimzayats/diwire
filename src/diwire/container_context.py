@@ -44,7 +44,7 @@ class _DeferredRegistration:
     lifetime: Lifetime
     scope: str | None
     is_async: bool | None
-    provides: Any | None
+    concrete_class: type | None
     via_decorator: bool
 
     def apply(self, container: Container) -> None:
@@ -53,7 +53,7 @@ class _DeferredRegistration:
                 lifetime=self.lifetime,
                 scope=self.scope,
                 is_async=self.is_async,
-                provides=self.provides,
+                concrete_class=self.concrete_class,
             )
             decorator(self.key)
             return
@@ -65,7 +65,7 @@ class _DeferredRegistration:
             lifetime=self.lifetime,
             scope=self.scope,
             is_async=self.is_async,
-            provides=self.provides,
+            concrete_class=self.concrete_class,
         )
 
 
@@ -457,7 +457,7 @@ class ContainerContextProxy:
         lifetime: Lifetime = ...,
         scope: str | None = ...,
         is_async: bool | None = ...,  # noqa: FBT001
-        provides: type | None = ...,
+        concrete_class: type | None = ...,
     ) -> Callable[[T], T]: ...
 
     @overload
@@ -470,7 +470,7 @@ class ContainerContextProxy:
         lifetime: Lifetime = ...,
         scope: str | None = ...,
         is_async: bool | None = ...,  # noqa: FBT001
-        provides: Any | None = ...,
+        concrete_class: type | None = ...,
     ) -> None: ...
 
     def register(  # noqa: PLR0913
@@ -482,7 +482,7 @@ class ContainerContextProxy:
         lifetime: Lifetime = Lifetime.TRANSIENT,
         scope: str | None = None,
         is_async: bool | None = None,  # noqa: FBT001
-        provides: Any | None = None,
+        concrete_class: type | None = None,
     ) -> Any:
         """Register a service with the current container.
 
@@ -498,7 +498,7 @@ class ContainerContextProxy:
                 lifetime=lifetime,
                 scope=scope,
                 is_async=is_async,
-                provides=provides,
+                concrete_class=concrete_class,
             )
 
         all_params_at_defaults = (
@@ -507,7 +507,7 @@ class ContainerContextProxy:
             and lifetime == Lifetime.TRANSIENT
             and scope is None
             and is_async is None
-            and provides is None
+            and concrete_class is None
         )
 
         if key is None:
@@ -519,7 +519,7 @@ class ContainerContextProxy:
                         lifetime=lifetime,
                         scope=scope,
                         is_async=is_async,
-                        provides=provides,
+                        concrete_class=concrete_class,
                     )
                     register_decorator(target)
                     return target
@@ -532,7 +532,7 @@ class ContainerContextProxy:
                         lifetime=lifetime,
                         scope=scope,
                         is_async=is_async,
-                        provides=provides,
+                        concrete_class=concrete_class,
                         via_decorator=True,
                     ),
                 )
@@ -560,7 +560,7 @@ class ContainerContextProxy:
                     lifetime=lifetime,
                     scope=scope,
                     is_async=is_async,
-                    provides=provides,
+                    concrete_class=concrete_class,
                     via_decorator=False,
                 ),
             )
@@ -574,7 +574,7 @@ class ContainerContextProxy:
                 lifetime=lifetime,
                 scope=scope,
                 is_async=is_async,
-                provides=provides,
+                concrete_class=concrete_class,
                 via_decorator=False,
             ),
         )

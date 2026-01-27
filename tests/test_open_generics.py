@@ -157,7 +157,7 @@ def test_open_generic_instance_registration_error(container: Container) -> None:
         container.register(box_key, instance=Box(value="x"))
 
 
-def test_open_generic_provides_unsupported(container: Container) -> None:
+def test_open_generic_concrete_class_unsupported(container: Container) -> None:
     @dataclass
     class Box(Generic[T]):
         value: str
@@ -171,7 +171,7 @@ def test_open_generic_provides_unsupported(container: Container) -> None:
         box_key = Box[T]
 
     with pytest.raises(DIWireOpenGenericRegistrationError):
-        container.register(Concrete, provides=box_key)
+        container.register(box_key, concrete_class=Concrete)
 
 
 def test_open_generic_partial_registration_error(container: Container) -> None:

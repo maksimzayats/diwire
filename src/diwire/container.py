@@ -54,6 +54,7 @@ from diwire.exceptions import (
     DIWireAsyncGeneratorFactoryWithoutScopeError,
     DIWireCircularDependencyError,
     DIWireComponentSpecifiedError,
+    DIWireConcreteClassRequiresClassError,
     DIWireDecoratorFactoryMissingReturnAnnotationError,
     DIWireError,
     DIWireGeneratorFactoryDidNotYieldError,
@@ -65,7 +66,6 @@ from diwire.exceptions import (
     DIWireNotAClassError,
     DIWireOpenGenericRegistrationError,
     DIWireOpenGenericResolutionError,
-    DIWireProvidesRequiresClassError,
     DIWireScopedSingletonWithoutScopeError,
     DIWireScopeMismatchError,
     DIWireServiceNotRegisteredError,
@@ -802,6 +802,7 @@ class Container:
         self.register(type(self), instance=self, lifetime=Lifetime.SINGLETON)
 
     # Overload 1: Bare class decorator - @container.register
+    # Must come first to match the direct decorator pattern
     @overload
     def register(self, key: _C, /) -> _C: ...
 
@@ -809,7 +810,7 @@ class Container:
     @overload
     def register(self, key: Callable[..., T], /) -> Callable[..., T]: ...
 
-    # Overload 3: Parameterized decorator - @container.register(lifetime=..., provides=...)
+    # Overload 3: Parameterized decorator without key - @container.register(lifetime=...)
     # Returns a decorator that accepts classes or functions
     @overload
     def register(
@@ -821,10 +822,24 @@ class Container:
         lifetime: Lifetime = ...,
         scope: str | None = ...,
         is_async: bool | None = ...,
-        provides: type | None = ...,
+        concrete_class: type | None = ...,
     ) -> Callable[[T], T]: ...
 
-    # Overload 4: Direct call with explicit key - container.register(MyClass, factory=...)
+    # Overload 4: Interface decorator - @container.register(Interface, lifetime=...)
+    # When a type is passed with optional keyword args (no factory/instance/concrete_class),
+    # returns a decorator
+    @overload
+    def register(
+        self,
+        key: type,
+        /,
+        *,
+        lifetime: Lifetime = ...,
+        scope: str | None = ...,
+        is_async: bool | None = ...,
+    ) -> Callable[[T], T]: ...
+
+    # Overload 5: Direct call with explicit key - container.register(Interface, concrete_class=...)
     @overload
     def register(
         self,
@@ -835,7 +850,7 @@ class Container:
         lifetime: Lifetime = ...,
         scope: str | None = ...,
         is_async: bool | None = ...,
-        provides: Any | None = ...,
+        concrete_class: type | None = ...,
     ) -> None: ...
 
     def register(
@@ -847,19 +862,21 @@ class Container:
         lifetime: Lifetime = Lifetime.TRANSIENT,
         scope: str | None = None,
         is_async: bool | None = None,
-        provides: Any | None = None,
+        concrete_class: type | None = None,
     ) -> Any:
         """Register a service with the container.
 
         Can be used as:
         - Bare class decorator: @container.register
         - Parameterized decorator: @container.register(lifetime=Lifetime.SINGLETON)
+        - Interface decorator: @container.register(IService) on a class
         - Factory function decorator: @container.register (with return annotation)
-        - Direct call: container.register(MyClass, factory=my_factory)
+        - Direct call: container.register(IService, concrete_class=MyService)
 
         Args:
-            key: The service key to register. When used with `provides`, this is the
-                concrete implementation class. When None, returns a decorator.
+            key: The service key (interface/type) to register under. When None, returns
+                a decorator. When used with @container.register(Interface) on a class,
+                the decorated class becomes the implementation.
             factory: Optional factory to create instances.
             instance: Optional pre-created instance.
             lifetime: The lifetime of the service. This default applies only to explicit
@@ -867,8 +884,8 @@ class Container:
                 `autoregister_default_lifetime` from container configuration.
             scope: Optional scope name for SCOPED_SINGLETON services.
             is_async: Whether the factory is async. If None, auto-detected from factory.
-            provides: Optional interface/abstract type that this registration provides.
-                When specified, the service is registered under this type instead of `key`.
+            concrete_class: Optional concrete implementation class. When specified, `key`
+                is used as the interface and `concrete_class` is the implementation.
 
         Returns:
             - When used as a bare decorator on a class: returns the class unchanged
@@ -878,10 +895,9 @@ class Container:
         Raises:
             DIWireScopedSingletonWithoutScopeError: If lifetime is SCOPED_SINGLETON but
                 no scope is provided.
-            DIWireProvidesRequiresClassError: If `provides` is used but `key` is not a class
-                (when no factory/instance is given).
+            DIWireConcreteClassRequiresClassError: If `concrete_class` is not a class type.
             DIWireDecoratorFactoryMissingReturnAnnotationError: If used as a factory decorator
-                but the function has no return annotation and no `provides` parameter.
+                but the function has no return annotation and no explicit key.
 
         """
         # Check if all optional params are at defaults (for bare decorator detection)
@@ -891,19 +907,32 @@ class Container:
             and lifetime == Lifetime.TRANSIENT
             and scope is None
             and is_async is None
-            and provides is None
+            and concrete_class is None
         )
 
-        # Case 1: Parameterized decorator - @container.register(lifetime=..., provides=...)
+        # Case 1: Parameterized decorator without key - @container.register(lifetime=...)
         if key is None:
             return self._make_decorator(
                 lifetime=lifetime,
                 scope=scope,
                 is_async=is_async,
-                provides=provides,
+                interface_key=None,
             )
 
-        # Case 2: Bare decorator on a class - @container.register
+        # Case 2: Open generic decorator - @container.register(MyGeneric[T])
+        if factory is None and instance is None and concrete_class is None:
+            origin, args = _get_generic_origin_and_args(key)
+            if origin is not None and any(_is_typevar(arg) for arg in args):
+                return self._make_decorator(
+                    lifetime=lifetime,
+                    scope=scope,
+                    is_async=is_async,
+                    interface_key=key,
+                )
+
+        # Case 3: Bare decorator on a class - @container.register
+        # When all params are at defaults and key is a type, this is the bare decorator pattern.
+        # We register the class directly and return it (no decorator factory).
         if isinstance(key, type) and all_params_at_defaults:
             self._do_register(
                 key=key,
@@ -912,20 +941,39 @@ class Container:
                 lifetime=lifetime,
                 scope=scope,
                 is_async=is_async,
-                provides=None,
+                concrete_class=None,
             )
             return key
 
-        # Case 2b: Open generic decorator - @container.register(MyGeneric[T], ...)
-        if factory is None and instance is None:
-            origin, args = _get_generic_origin_and_args(key)
-            if origin is not None and any(_is_typevar(arg) for arg in args):
-                return self._make_decorator(
-                    lifetime=lifetime,
-                    scope=scope,
-                    is_async=is_async,
-                    provides=key,
-                )
+        # Case 4: Type with non-default params - container.register(Type, lifetime=...)
+        # This is ambiguous: could be direct call or decorator factory.
+        # For direct call: register the type directly
+        # For decorator: also return a decorator that can register another class under this type
+        # The decorator will check if the target is different from the key.
+        if (
+            isinstance(key, type)
+            and factory is None
+            and instance is None
+            and concrete_class is None
+        ):
+            # Register the type directly (handles direct call case)
+            self._do_register(
+                key=key,
+                factory=None,
+                instance=None,
+                lifetime=lifetime,
+                scope=scope,
+                is_async=is_async,
+                concrete_class=None,
+            )
+            # Return a decorator for interface decorator pattern
+            # The decorator checks if target != key to avoid double registration
+            return self._make_decorator(
+                lifetime=lifetime,
+                scope=scope,
+                is_async=is_async,
+                interface_key=key,
+            )
 
         # Case 3: Bare decorator on a function - @container.register
         # Check that key is a proper function/method, not a generic alias like Annotated[T, ...]
@@ -948,7 +996,7 @@ class Container:
                 lifetime=lifetime,
                 scope=scope,
                 is_async=is_async,
-                provides=None,
+                concrete_class=None,
             )
             return key
 
@@ -969,11 +1017,11 @@ class Container:
                 lifetime=lifetime,
                 scope=scope,
                 is_async=is_async,
-                provides=None,
+                concrete_class=None,
             )
             return key
 
-        # Case 5: Direct call - container.register(MyClass, factory=...)
+        # Case 5: Direct call - container.register(Interface, concrete_class=Impl)
         self._do_register(
             key=key,
             factory=factory,
@@ -981,7 +1029,7 @@ class Container:
             lifetime=lifetime,
             scope=scope,
             is_async=is_async,
-            provides=provides,
+            concrete_class=concrete_class,
         )
         return None
 
@@ -990,28 +1038,51 @@ class Container:
         lifetime: Lifetime,
         scope: str | None,
         is_async: bool | None,
-        provides: Any | None,
+        interface_key: Any | None,
     ) -> Callable[[T], T]:
-        """Create a decorator function for parameterized @container.register(...) usage."""
+        """Create a decorator function for parameterized @container.register(...) usage.
+
+        Args:
+            lifetime: The lifetime of the service.
+            scope: Optional scope name for SCOPED_SINGLETON services.
+            is_async: Whether the factory is async.
+            interface_key: If provided, the decorated class/factory will be registered
+                under this key (interface registration pattern).
+
+        """
 
         def decorator(target: T) -> T:
             if isinstance(target, type):
                 # Class decoration
-                self._do_register(
-                    key=target,
-                    factory=None,
-                    instance=None,
-                    lifetime=lifetime,
-                    scope=scope,
-                    is_async=is_async,
-                    provides=provides,
-                )
+                if interface_key is not None and interface_key is not target:
+                    # Interface registration: @container.register(Interface, ...) on a different class
+                    self._do_register(
+                        key=interface_key,
+                        factory=None,
+                        instance=None,
+                        lifetime=lifetime,
+                        scope=scope,
+                        is_async=is_async,
+                        concrete_class=target,
+                    )
+                elif interface_key is None:
+                    # Regular class registration (interface_key is None)
+                    self._do_register(
+                        key=target,
+                        factory=None,
+                        instance=None,
+                        lifetime=lifetime,
+                        scope=scope,
+                        is_async=is_async,
+                        concrete_class=None,
+                    )
+                # else: interface_key is target - already registered in Case 4, skip
             elif _is_method_descriptor(target):
                 # staticmethod decoration
                 # _is_method_descriptor guarantees target is staticmethod,
                 # so unwrapped_func is always non-None
                 unwrapped_func, _ = _unwrap_method_descriptor(target)
-                service_type = provides
+                service_type = interface_key
                 if service_type is None:
                     service_type = _get_return_annotation(unwrapped_func)  # type: ignore[arg-type]
                     if service_type is None:
@@ -1027,11 +1098,11 @@ class Container:
                     lifetime=lifetime,
                     scope=scope,
                     is_async=is_async,
-                    provides=None,  # Already resolved to service_type
+                    concrete_class=None,
                 )
             else:
                 # Factory function decoration - infer type from return annotation
-                service_type = provides
+                service_type = interface_key
                 if service_type is None:
                     service_type = _get_return_annotation(target)  # type: ignore[arg-type]
                     if service_type is None:
@@ -1043,7 +1114,7 @@ class Container:
                     lifetime=lifetime,
                     scope=scope,
                     is_async=is_async,
-                    provides=None,  # Already resolved to service_type
+                    concrete_class=None,
                 )
             return target
 
@@ -1094,21 +1165,19 @@ class Container:
         lifetime: Lifetime,
         scope: str | None,
         is_async: bool | None,
-        provides: Any | None,
+        concrete_class: type | None,
     ) -> None:
         """Perform the actual registration logic."""
-        # Determine service_key and concrete_type based on provides parameter
-        if provides is not None:
-            service_key = ServiceKey.from_value(provides)
-            if instance is None and factory is None:
-                if not isinstance(key, type):
-                    raise DIWireProvidesRequiresClassError(key, provides)
-                concrete_type: type | None = key
-            else:
-                concrete_type = key if isinstance(key, type) else None
+        # Determine service_key and concrete_type based on concrete_class parameter
+        if concrete_class is not None:
+            # Interface registration: key is the interface, concrete_class is the implementation
+            if not isinstance(concrete_class, type):
+                raise DIWireConcreteClassRequiresClassError(concrete_class)
+            service_key = ServiceKey.from_value(key)
+            concrete_type: type | None = concrete_class
         else:
             service_key = ServiceKey.from_value(key)
-            concrete_type = None
+            concrete_type = key if isinstance(key, type) else None
 
         if lifetime == Lifetime.SCOPED_SINGLETON and scope is None:
             raise DIWireScopedSingletonWithoutScopeError(service_key)
@@ -1122,10 +1191,10 @@ class Container:
 
         open_generic_info = self._get_open_generic_info_for_registration(service_key)
         if open_generic_info is not None:
-            if provides is not None:
+            if concrete_class is not None:
                 raise DIWireOpenGenericRegistrationError(
                     service_key,
-                    "Open generic 'provides' registrations are not supported.",
+                    "Open generic registrations with 'concrete_class' are not supported.",
                 )
             if instance is not None:
                 raise DIWireOpenGenericRegistrationError(

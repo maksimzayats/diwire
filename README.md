@@ -59,7 +59,7 @@ print(service.repo.db.host)
 
 ## Registering services
 
-You can register classes, factories, or instances. `provides` lets you register by interface or abstract base class.
+You can register classes, factories, or instances. `concrete_class` lets you register by interface or abstract base class.
 
 ```python
 from dataclasses import dataclass
@@ -80,7 +80,7 @@ class SystemClock:
 
 
 container = Container()
-container.register(SystemClock, provides=Clock, lifetime=Lifetime.SINGLETON)
+container.register(Clock, concrete_class=SystemClock, lifetime=Lifetime.SINGLETON)
 clock = container.resolve(Clock)
 ```
 
@@ -133,7 +133,7 @@ print(container.resolve(ModelBox[Model]))
 
 Limitations:
 - Open generic registrations currently support factory/decorator registration only.
-- `provides=` and `instance=` are not supported for open generics.
+- `concrete_class=` and `instance=` are not supported for open generics.
 
 ## Function injection
 
