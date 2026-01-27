@@ -63,6 +63,17 @@ class DIWireNotAClassError(DIWireAutoRegistrationError):
         super().__init__(f"Cannot auto-register service key {service_key!r} which is not a class.")
 
 
+class DIWireUnionTypeError(DIWireAutoRegistrationError):
+    """Cannot auto-register a union type."""
+
+    def __init__(self, service_key: ServiceKey) -> None:
+        self.service_key = service_key
+        super().__init__(
+            f"Cannot auto-register union type {service_key!r}. "
+            f"Union types must be explicitly registered with a factory.",
+        )
+
+
 class DIWireCircularDependencyError(DIWireError):
     """Circular dependency detected during resolution."""
 
