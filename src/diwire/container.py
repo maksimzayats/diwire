@@ -314,13 +314,9 @@ def _type_arg_matches_constraint(arg: Any, constraint: Any) -> bool:
     """Check whether a type argument satisfies a bound/constraint."""
     if _is_any_type(arg) or _is_any_type(constraint):
         return True
-    if isinstance(arg, type) and isinstance(constraint, type):
-        try:
-            return issubclass(arg, constraint)
-        except TypeError:
-            return False
-    # For generic aliases (e.g., list[int]), compare structurally
-    # since equality may fail in Python 3.10
+    # For generic aliases (e.g., list[int]), compare structurally.
+    # This check must come BEFORE isinstance(arg, type) because in Python 3.10,
+    # types.GenericAlias passes isinstance(arg, type) but issubclass fails on it.
     arg_origin = get_origin(arg)
     constraint_origin = get_origin(constraint)
     if arg_origin is not None and constraint_origin is not None:
@@ -334,6 +330,11 @@ def _type_arg_matches_constraint(arg: Any, constraint: Any) -> bool:
             _type_arg_matches_constraint(a, c)
             for a, c in zip(arg_args, constraint_args, strict=True)
         )
+    if isinstance(arg, type) and isinstance(constraint, type):
+        try:
+            return issubclass(arg, constraint)
+        except TypeError:
+            return False
     return arg == constraint
 
 
