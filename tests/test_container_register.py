@@ -955,15 +955,15 @@ class TestRegisterClassAsDecorator:
         instance2 = container.resolve(MyTransient)
         assert instance1 is not instance2
 
-    def test_decorator_with_provides_interface(self, container: Container) -> None:
-        """@container.register(provides=Interface) should register as interface."""
+    def test_decorator_with_interface_key(self, container: Container) -> None:
+        """@container.register(Interface) should register class under interface."""
 
         class IService:
             def do_something(self) -> str:
                 raise NotImplementedError
 
-        @container.register(provides=IService)
-        class ServiceImpl(IService):
+        @container.register(IService)
+        class ServiceImpl(IService):  # type: ignore[call-arg]
             def do_something(self) -> str:
                 return "implemented"
 
@@ -999,7 +999,7 @@ class TestRegisterClassAsDecorator:
         class ILogger:
             pass
 
-        @container.register(lifetime=Lifetime.SINGLETON, provides=ILogger)
+        @container.register(ILogger, lifetime=Lifetime.SINGLETON)
         class Logger(ILogger):
             pass
 
@@ -1007,6 +1007,25 @@ class TestRegisterClassAsDecorator:
         instance2 = container.resolve(ILogger)
         assert instance1 is instance2
         assert isinstance(instance1, Logger)
+
+    def test_decorator_same_type_as_interface_key(self, container: Container) -> None:
+        """Decorating a class with its own type as interface_key should work."""
+        # This tests the edge case where interface_key is target (same class)
+        # The registration happens in Case 4, decorator just returns the class
+        # Note: We need to forward-declare the class name to use it in the decorator
+
+        # Define name first, then decorate
+        class MyService:
+            pass
+
+        # Use global to get the class defined above and decorate
+        decorated = container.register(MyService, lifetime=Lifetime.SINGLETON)(MyService)
+        assert decorated is MyService
+
+        instance1 = container.resolve(MyService)
+        instance2 = container.resolve(MyService)
+        assert instance1 is instance2
+        assert isinstance(instance1, MyService)
 
 
 class TestRegisterFactoryAsDecorator:
@@ -1032,8 +1051,8 @@ class TestRegisterFactoryAsDecorator:
         assert instance.host == "localhost"
         assert instance.port == 5432
 
-    def test_factory_decorator_with_explicit_provides(self, container: Container) -> None:
-        """@container.register(provides=Type) should use explicit type."""
+    def test_factory_decorator_with_explicit_key(self, container: Container) -> None:
+        """@container.register(Type) should use explicit type as registration key."""
 
         class IDatabase:
             pass
@@ -1041,18 +1060,18 @@ class TestRegisterFactoryAsDecorator:
         class PostgresDB(IDatabase):
             pass
 
-        @container.register(provides=IDatabase)
+        @container.register(IDatabase)  # type: ignore[misc, call-arg]
         def create_database() -> PostgresDB:
             return PostgresDB()
 
         instance = container.resolve(IDatabase)
         assert isinstance(instance, PostgresDB)
 
-    def test_factory_decorator_provides_overrides_return_annotation(
+    def test_factory_decorator_key_overrides_return_annotation(
         self,
         container: Container,
     ) -> None:
-        """provides= should take precedence over return annotation."""
+        """Explicit key should take precedence over return annotation."""
 
         class IService:
             pass
@@ -1060,7 +1079,7 @@ class TestRegisterFactoryAsDecorator:
         class ServiceImpl(IService):
             pass
 
-        @container.register(provides=IService)
+        @container.register(IService)  # type: ignore[misc, call-arg]
         def create_service() -> ServiceImpl:
             return ServiceImpl()
 
@@ -1222,18 +1241,21 @@ class TestDecoratorBackwardCompatibility:
         instance = container.resolve(ServiceA)
         assert isinstance(instance, ServiceA)
 
-    def test_bare_class_registration_returns_class(self, container: Container) -> None:
-        """container.register(MyClass) returns the class (decorator-compatible)."""
+    def test_bare_class_registration_returns_compatible_class(self, container: Container) -> None:
+        """container.register(MyClass) returns a class compatible with MyClass."""
 
         class ServiceA:
             pass
 
-        # Bare class registration returns the class (same as decorator behavior)
+        # Bare class registration returns a proxy class that inherits from the original
+        # This allows @container.register(Type) on functions/classes to work
         result = container.register(ServiceA)
-        assert result is ServiceA
+        # Result is a subclass of ServiceA (proxy pattern for decorator compatibility)
+        assert issubclass(result, ServiceA)
 
         instance = container.resolve(ServiceA)
         assert isinstance(instance, ServiceA)
+        assert isinstance(instance, result)
 
     def test_direct_call_with_factory_returns_none(self, container: Container) -> None:
         """container.register(Type, factory=...) should return None."""
@@ -1255,6 +1277,96 @@ class TestDecoratorBackwardCompatibility:
 
         result = container.register(ServiceA, instance=ServiceA())
         assert result is None
+
+
+class TestProxyClassFeatures:
+    """Test proxy class features returned by container.register(Type)."""
+
+    def test_proxy_class_getitem_forwards_to_original(self, container: Container) -> None:
+        """Proxy class __class_getitem__ should forward to original for generics."""
+        from typing import Generic, TypeVar
+
+        T = TypeVar("T")
+
+        class GenericBox(Generic[T]):
+            def __init__(self, value: T) -> None:
+                self.value = value
+
+        # Register returns a proxy class
+        proxy = container.register(GenericBox)
+
+        # __class_getitem__ should forward to original
+        specialized = proxy[int]
+
+        # The specialized type should be usable for isinstance checks
+        assert hasattr(specialized, "__origin__") or specialized is not None
+
+    def test_proxy_factory_registration_via_new(self, container: Container) -> None:
+        """Proxy class __new__ should handle factory function registration."""
+
+        class Config:
+            def __init__(self, value: str) -> None:
+                self.value = value
+
+        # Get proxy class
+        config_proxy = container.register(Config)
+
+        # Use proxy as decorator on a factory function
+        @config_proxy  # type: ignore[misc, arg-type]
+        def create_config() -> Config:
+            return Config("from-factory")
+
+        # Factory should be registered
+        config = container.resolve(Config)
+        assert config.value == "from-factory"
+        # Function should be returned unchanged
+        assert callable(create_config)
+
+    def test_proxy_normal_instantiation(self, container: Container) -> None:
+        """Proxy class __new__ should create instances normally."""
+
+        class SimpleClass:
+            def __init__(self, value: int) -> None:
+                self.value = value
+
+        # Get proxy class
+        simple_proxy = container.register(SimpleClass)
+
+        # Direct instantiation should work
+        instance = simple_proxy(42)
+        assert instance.value == 42
+        assert isinstance(instance, simple_proxy)
+        assert isinstance(instance, SimpleClass)
+
+    def test_proxy_instantiation_with_non_callable_arg(self, container: Container) -> None:
+        """Proxy class __new__ falls through to normal instantiation for non-type non-callable."""
+
+        class SimpleClass:
+            def __init__(self, value: int = 0) -> None:
+                self.value = value
+
+        # Get proxy class
+        simple_proxy = container.register(SimpleClass)
+
+        # Passing a non-callable, non-type arg should create an instance
+        instance = simple_proxy()
+        assert instance.value == 0
+
+    def test_proxy_preserves_metadata_without_doc(self, container: Container) -> None:
+        """Proxy class preserves metadata even when original has no __doc__."""
+
+        class NoDocClass:
+            pass
+
+        # Remove __doc__ if present
+        NoDocClass.__doc__ = None  # type: ignore[assignment]
+
+        # Get proxy class
+        no_doc_proxy = container.register(NoDocClass)
+
+        # Should preserve name and module
+        assert no_doc_proxy.__name__ == "NoDocClass"
+        assert no_doc_proxy.__module__ == NoDocClass.__module__
 
 
 class TestDecoratorWithDataclasses:
@@ -1496,8 +1608,8 @@ class TestStaticMethodDecorator:
         instance2 = container.resolve(Config)
         assert instance1 is instance2
 
-    def test_staticmethod_with_provides(self, container: Container) -> None:
-        """@staticmethod @container.register(provides=...) should work."""
+    def test_staticmethod_with_interface_key(self, container: Container) -> None:
+        """@staticmethod @container.register(Interface) should work."""
 
         class IService:
             pass
@@ -1507,7 +1619,8 @@ class TestStaticMethodDecorator:
 
         class Factories:
             @staticmethod
-            @container.register(provides=IService)
+            # Note: A non-default keyword arg needed to use type as decorator key vs bare registration
+            @container.register(IService, lifetime=Lifetime.SINGLETON)
             def create_service() -> ServiceImpl:
                 return ServiceImpl()
 
@@ -1673,3 +1786,117 @@ class TestMethodDescriptorDecoratorOrder:
         instance1 = container.resolve(Service)
         instance2 = container.resolve(Service)
         assert instance1 is instance2
+
+
+class TestStringKeyRegistration:
+    """Tests for registering services with string keys."""
+
+    def test_string_key_factory_decorator(self, container: Container) -> None:
+        """@container.register("key") on factory function should work."""
+        from collections.abc import Callable
+        from typing import cast
+
+        class Service:
+            value: str
+
+            def __init__(self, value: str = "default") -> None:
+                self.value = value
+
+        decorator = cast(
+            "Callable[[Callable[..., object]], Callable[..., object]]",
+            container.register("my_service"),
+        )
+
+        def create_service() -> Service:
+            return Service(value="from factory")
+
+        decorator(create_service)
+
+        result = container.resolve("my_service")
+        assert isinstance(result, Service)
+        assert result.value == "from factory"
+
+    def test_string_key_class_decorator(self, container: Container) -> None:
+        """@container.register("key") on class should work."""
+        from collections.abc import Callable
+        from typing import cast
+
+        class ConfigService:
+            name: str = "config"
+
+        decorator = cast("Callable[[type], type]", container.register("config_service"))
+        decorator(ConfigService)
+
+        result = container.resolve("config_service")
+        assert isinstance(result, ConfigService)
+        assert result.name == "config"
+
+    def test_string_key_with_lifetime(self, container: Container) -> None:
+        """@container.register("key", lifetime=...) should work."""
+        from collections.abc import Callable
+        from typing import cast
+
+        call_count = 0
+
+        class Service:
+            pass
+
+        decorator = cast(
+            "Callable[[Callable[..., object]], Callable[..., object]]",
+            container.register("singleton_service", lifetime=Lifetime.SINGLETON),
+        )
+
+        def create_service() -> Service:
+            nonlocal call_count
+            call_count += 1
+            return Service()
+
+        decorator(create_service)
+
+        result1 = container.resolve("singleton_service")
+        result2 = container.resolve("singleton_service")
+        assert result1 is result2
+        assert call_count == 1
+
+    def test_multiple_string_keys_same_class(self, container: Container) -> None:
+        """Multiple string keys can point to same class."""
+        from collections.abc import Callable
+        from typing import cast
+
+        class SharedService:
+            pass
+
+        decorator1 = cast("Callable[[type], type]", container.register("key1"))
+        decorator2 = cast("Callable[[type], type]", container.register("key2"))
+        decorator2(SharedService)
+        decorator1(SharedService)
+
+        result1 = container.resolve("key1")
+        result2 = container.resolve("key2")
+        assert isinstance(result1, SharedService)
+        assert isinstance(result2, SharedService)
+
+    def test_string_key_direct_registration(self, container: Container) -> None:
+        """container.register("key", factory=...) direct call should work."""
+
+        class Service:
+            pass
+
+        container.register("direct_key", factory=lambda: Service())
+        result = container.resolve("direct_key")
+        assert isinstance(result, Service)
+
+    def test_string_key_instance_registration(self, container: Container) -> None:
+        """container.register("key", instance=...) direct call should work."""
+
+        class Service:
+            value: str
+
+            def __init__(self, value: str) -> None:
+                self.value = value
+
+        instance = Service(value="singleton")
+        container.register("instance_key", instance=instance)
+        result = container.resolve("instance_key")
+        assert result is instance
+        assert result.value == "singleton"

@@ -59,7 +59,7 @@ print(service.repo.db.host)
 
 ## Registering services
 
-You can register classes, factories, or instances. `provides` lets you register by interface or abstract base class.
+You can register classes, factories, or instances. `concrete_class` lets you register by interface or abstract base class.
 
 ```python
 from dataclasses import dataclass
@@ -80,8 +80,55 @@ class SystemClock:
 
 
 container = Container()
-container.register(SystemClock, provides=Clock, lifetime=Lifetime.SINGLETON)
+container.register(Clock, concrete_class=SystemClock, lifetime=Lifetime.SINGLETON)
 clock = container.resolve(Clock)
+```
+
+## Open generics
+
+Register open generic factories and resolve closed generics with type-safe validation. Type arguments can be
+injected by annotating parameters as `type[T]`, and TypeVar bounds/constraints are enforced at resolution time.
+
+```python
+from dataclasses import dataclass
+from typing import Generic, TypeVar
+
+from diwire import Container
+
+
+class Model:
+    pass
+
+
+T = TypeVar("T")
+M = TypeVar("M", bound=Model)
+
+
+@dataclass
+class AnyBox(Generic[T]):
+    value: str
+
+
+@dataclass
+class ModelBox(Generic[M]):
+    model: M
+
+
+container = Container()
+
+
+@container.register(AnyBox[T])
+def create_any_box(type_arg: type[T]) -> AnyBox[T]:
+    return AnyBox(value=type_arg.__name__)
+
+
+@container.register(ModelBox[M])
+def create_model_box(model_cls: type[M]) -> ModelBox[M]:
+    return ModelBox(model=model_cls())
+
+
+print(container.resolve(AnyBox[int]))
+print(container.resolve(ModelBox[Model]))
 ```
 
 ## Function injection

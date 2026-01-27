@@ -1,7 +1,7 @@
-"""Interface registration pattern using the 'provides' parameter.
+"""Interface registration pattern using the 'concrete_class' parameter.
 
 This example demonstrates how to program to interfaces/abstractions
-rather than concrete implementations using diwire's 'provides' parameter.
+rather than concrete implementations using diwire's 'concrete_class' parameter.
 """
 
 from abc import ABC, abstractmethod
@@ -93,22 +93,22 @@ def main() -> None:
     container = Container()
 
     # Register concrete implementations for interfaces
-    # The key is the concrete class, 'provides' specifies the interface
+    # The key is the interface, 'concrete_class' specifies the implementation
     container.register(
-        ConsoleLogger,
-        provides=ILogger,
+        ILogger,
+        concrete_class=ConsoleLogger,
         lifetime=Lifetime.SINGLETON,
     )
 
     container.register(
-        FileRepository,
-        provides=IRepository,
+        IRepository,
+        concrete_class=FileRepository,
         lifetime=Lifetime.SINGLETON,
     )
 
     container.register(
-        SmtpEmailService,
-        provides=IEmailService,
+        IEmailService,
+        concrete_class=SmtpEmailService,
         lifetime=Lifetime.SINGLETON,
     )
 

@@ -15,3 +15,4 @@ class Registration:
     scope: str | None = None
     is_async: bool = False
     concrete_type: type | None = None
+    typevar_map: dict[Any, Any] | None = None

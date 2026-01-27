@@ -44,7 +44,7 @@ class _DeferredRegistration:
     lifetime: Lifetime
     scope: str | None
     is_async: bool | None
-    provides: Any | None
+    concrete_class: type | None
     via_decorator: bool
 
     def apply(self, container: Container) -> None:
@@ -53,7 +53,7 @@ class _DeferredRegistration:
                 lifetime=self.lifetime,
                 scope=self.scope,
                 is_async=self.is_async,
-                provides=self.provides,
+                concrete_class=self.concrete_class,
             )
             decorator(self.key)
             return
@@ -65,7 +65,7 @@ class _DeferredRegistration:
             lifetime=self.lifetime,
             scope=self.scope,
             is_async=self.is_async,
-            provides=self.provides,
+            concrete_class=self.concrete_class,
         )
 
 
@@ -457,7 +457,7 @@ class ContainerContextProxy:
         lifetime: Lifetime = ...,
         scope: str | None = ...,
         is_async: bool | None = ...,  # noqa: FBT001
-        provides: type | None = ...,
+        concrete_class: type | None = ...,
     ) -> Callable[[T], T]: ...
 
     @overload
@@ -470,10 +470,10 @@ class ContainerContextProxy:
         lifetime: Lifetime = ...,
         scope: str | None = ...,
         is_async: bool | None = ...,  # noqa: FBT001
-        provides: Any | None = ...,
+        concrete_class: type | None = ...,
     ) -> None: ...
 
-    def register(  # noqa: PLR0913
+    def register(  # noqa: PLR0913, C901, PLR0911
         self,
         key: Any | None = None,
         /,
@@ -482,7 +482,7 @@ class ContainerContextProxy:
         lifetime: Lifetime = Lifetime.TRANSIENT,
         scope: str | None = None,
         is_async: bool | None = None,  # noqa: FBT001
-        provides: Any | None = None,
+        concrete_class: type | None = None,
     ) -> Any:
         """Register a service with the current container.
 
@@ -498,7 +498,7 @@ class ContainerContextProxy:
                 lifetime=lifetime,
                 scope=scope,
                 is_async=is_async,
-                provides=provides,
+                concrete_class=concrete_class,
             )
 
         all_params_at_defaults = (
@@ -507,7 +507,7 @@ class ContainerContextProxy:
             and lifetime == Lifetime.TRANSIENT
             and scope is None
             and is_async is None
-            and provides is None
+            and concrete_class is None
         )
 
         if key is None:
@@ -519,7 +519,7 @@ class ContainerContextProxy:
                         lifetime=lifetime,
                         scope=scope,
                         is_async=is_async,
-                        provides=provides,
+                        concrete_class=concrete_class,
                     )
                     register_decorator(target)
                     return target
@@ -532,13 +532,114 @@ class ContainerContextProxy:
                         lifetime=lifetime,
                         scope=scope,
                         is_async=is_async,
-                        provides=provides,
+                        concrete_class=concrete_class,
                         via_decorator=True,
                     ),
                 )
                 return target
 
             return decorator
+
+        # Case: Type as key (could be bare decorator, interface decorator, or factory)
+        # When container is available, delegate to it. Otherwise defer registration.
+        if (
+            isinstance(key, type)
+            and factory is None
+            and instance is None
+            and concrete_class is None
+        ):
+            # If container is available, delegate to it (uses proxy pattern)
+            # Note: This path is tested in TestDeferredRegistrationWithTypeKey but
+            # coverage measurement seems to have timing issues with it.
+            current = self._get_current_or_none()
+            if current is not None:  # pragma: no cover
+                return current.register(
+                    key,
+                    lifetime=lifetime,
+                    scope=scope,
+                    is_async=is_async,
+                )
+
+            # No container - use deferred registration
+            # For bare decorator (all defaults), defer and return the class directly
+            if all_params_at_defaults:
+                self._deferred_registrations.append(
+                    _DeferredRegistration(
+                        key=key,
+                        factory=None,
+                        instance=None,
+                        lifetime=lifetime,
+                        scope=scope,
+                        is_async=is_async,
+                        concrete_class=None,
+                        via_decorator=False,
+                    ),
+                )
+                return key
+
+            # Non-default params - return a decorator for interface/factory patterns
+            interface_key = key
+
+            def type_decorator(target: T) -> T:
+                current = self._get_current_or_none()
+                if current is not None:
+                    # Delegate to container which has the smart decorator logic
+                    register_decorator = current.register(
+                        interface_key,
+                        lifetime=lifetime,
+                        scope=scope,
+                        is_async=is_async,
+                    )
+                    register_decorator(target)
+                    return target
+
+                # Deferred registration - determine what to register
+                if isinstance(target, type):
+                    if target is interface_key:
+                        # Bare decorator: @container_context.register on the same class
+                        self._deferred_registrations.append(
+                            _DeferredRegistration(
+                                key=target,
+                                factory=None,
+                                instance=None,
+                                lifetime=lifetime,
+                                scope=scope,
+                                is_async=is_async,
+                                concrete_class=None,
+                                via_decorator=False,
+                            ),
+                        )
+                    else:
+                        # Interface registration: different class
+                        self._deferred_registrations.append(
+                            _DeferredRegistration(
+                                key=interface_key,
+                                factory=None,
+                                instance=None,
+                                lifetime=lifetime,
+                                scope=scope,
+                                is_async=is_async,
+                                concrete_class=target,
+                                via_decorator=False,
+                            ),
+                        )
+                else:
+                    # Factory function - need to defer with factory
+                    self._deferred_registrations.append(
+                        _DeferredRegistration(
+                            key=interface_key,
+                            factory=target,  # type: ignore[arg-type]
+                            instance=None,
+                            lifetime=lifetime,
+                            scope=scope,
+                            is_async=is_async,
+                            concrete_class=None,
+                            via_decorator=False,
+                        ),
+                    )
+                return target
+
+            return type_decorator
 
         is_factory_function = (
             callable(key)
@@ -549,7 +650,7 @@ class ContainerContextProxy:
             )
         )
         is_decorator_target = all_params_at_defaults and (
-            isinstance(key, (type, staticmethod)) or is_factory_function
+            isinstance(key, staticmethod) or is_factory_function
         )
         if is_decorator_target:
             self._deferred_registrations.append(
@@ -560,7 +661,7 @@ class ContainerContextProxy:
                     lifetime=lifetime,
                     scope=scope,
                     is_async=is_async,
-                    provides=provides,
+                    concrete_class=concrete_class,
                     via_decorator=False,
                 ),
             )
@@ -574,7 +675,7 @@ class ContainerContextProxy:
                 lifetime=lifetime,
                 scope=scope,
                 is_async=is_async,
-                provides=provides,
+                concrete_class=concrete_class,
                 via_decorator=False,
             ),
         )

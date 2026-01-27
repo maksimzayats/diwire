@@ -146,6 +146,10 @@ ignore = [
     "D102", # Missing docstring in public method
     "ARG002", # Unused method argument (protocol signature)
 ]
+"tmp/**" = [
+    # All rules ignored in temporary files
+    "ALL",
+]
 
 [lint.isort]
 combine-as-imports = true

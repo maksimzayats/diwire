@@ -3,7 +3,7 @@
 Demonstrates using @container.register as a decorator for:
 1. Class registration with automatic or custom lifetimes
 2. Factory function registration with type inference
-3. Interface/Protocol registration via provides parameter
+3. Interface/Protocol registration via @container.register(Interface)
 4. Factory functions with auto-injected dependencies
 5. Scoped singleton decorator usage
 6. Async factory function registration
@@ -51,8 +51,9 @@ class Logger:
         print(f"[LOG] {message}")
 
 
-# Pattern 3: Interface registration with provides parameter
-@container.register(provides=IDatabase)
+# Pattern 3: Interface registration with @container.register(Interface, lifetime=...)
+# Note: A non-default keyword argument (e.g., SINGLETON) is required to use a type as decorator key
+@container.register(IDatabase, lifetime=Lifetime.SINGLETON)
 class PostgresDatabase:
     """Concrete database implementation registered as IDatabase interface."""
 
@@ -75,14 +76,14 @@ def create_cache() -> Cache:
     return Cache({"initialized": "true"})
 
 
-# Pattern 5: Factory with explicit provides (overrides return annotation)
+# Pattern 5: Factory with explicit key (overrides return annotation)
 @dataclass
 class AppSettings:
     name: str
     version: str
 
 
-@container.register(provides=AppSettings, lifetime=Lifetime.SINGLETON)
+@container.register(AppSettings, lifetime=Lifetime.SINGLETON)
 def create_settings() -> AppSettings:
     return AppSettings(name="MyApp", version="1.0.0")
 

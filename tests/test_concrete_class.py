@@ -1,4 +1,4 @@
-"""Tests for the 'provides' parameter in Container.register()."""
+"""Tests for the 'concrete_class' parameter in Container.register()."""
 
 from abc import ABC, abstractmethod
 from typing import Annotated, Protocol
@@ -6,16 +6,16 @@ from typing import Annotated, Protocol
 import pytest
 
 from diwire.container import Container
-from diwire.exceptions import DIWireProvidesRequiresClassError
+from diwire.exceptions import DIWireConcreteClassRequiresClassError
 from diwire.service_key import Component
 from diwire.types import Lifetime
 
 
-class TestProvidesBasic:
-    """Test basic 'provides' functionality."""
+class TestConcreteClassBasic:
+    """Test basic 'concrete_class' functionality."""
 
-    def test_register_concrete_provides_interface(self, container: Container) -> None:
-        """Register a concrete class that provides an interface."""
+    def test_register_interface_with_concrete_class(self, container: Container) -> None:
+        """Register an interface with a concrete implementation class."""
 
         class IRepository(ABC):
             @abstractmethod
@@ -25,14 +25,14 @@ class TestProvidesBasic:
             def get(self) -> str:
                 return "data"
 
-        container.register(ConcreteRepository, provides=IRepository)
+        container.register(IRepository, concrete_class=ConcreteRepository)
         result = container.resolve(IRepository)
 
         assert isinstance(result, ConcreteRepository)
         assert result.get() == "data"
 
-    def test_register_concrete_provides_protocol(self, container: Container) -> None:
-        """Register a concrete class that provides a Protocol."""
+    def test_register_protocol_with_concrete_class(self, container: Container) -> None:
+        """Register a Protocol with a concrete implementation class."""
 
         class IService(Protocol):
             def execute(self) -> str: ...
@@ -41,7 +41,7 @@ class TestProvidesBasic:
             def execute(self) -> str:
                 return "executed"
 
-        container.register(ConcreteService, provides=IService)
+        container.register(IService, concrete_class=ConcreteService)
         result = container.resolve(IService)
 
         assert isinstance(result, ConcreteService)
@@ -58,18 +58,18 @@ class TestProvidesBasic:
             def log(self, msg: str) -> None:
                 pass
 
-        container.register(FileLogger, provides=ILogger)
+        container.register(ILogger, concrete_class=FileLogger)
 
         # Should be able to resolve by interface
         logger = container.resolve(ILogger)
         assert isinstance(logger, FileLogger)
 
 
-class TestProvidesWithFactory:
-    """Test 'provides' with factory functions."""
+class TestConcreteClassWithFactory:
+    """Test 'concrete_class' with factory functions."""
 
-    def test_factory_provides_interface(self, container: Container) -> None:
-        """Factory can provide an interface implementation."""
+    def test_factory_with_interface_key(self, container: Container) -> None:
+        """Factory can be registered under an interface key."""
 
         class IDatabase(ABC):
             @abstractmethod
@@ -83,17 +83,16 @@ class TestProvidesWithFactory:
             return PostgresDatabase()
 
         container.register(
-            PostgresDatabase,
+            IDatabase,
             factory=create_database,
-            provides=IDatabase,
         )
 
         result = container.resolve(IDatabase)
         assert isinstance(result, PostgresDatabase)
         assert result.connect() == "postgres"
 
-    def test_factory_class_provides_interface(self, container: Container) -> None:
-        """Factory class can provide an interface implementation."""
+    def test_factory_class_with_interface_key(self, container: Container) -> None:
+        """Factory class can be registered under an interface key."""
 
         class ICache(ABC):
             @abstractmethod
@@ -108,20 +107,19 @@ class TestProvidesWithFactory:
                 return RedisCache()
 
         container.register(
-            RedisCache,
+            ICache,
             factory=RedisCacheFactory,
-            provides=ICache,
         )
 
         result = container.resolve(ICache)
         assert isinstance(result, RedisCache)
 
 
-class TestProvidesWithInstance:
-    """Test 'provides' with pre-created instances."""
+class TestConcreteClassWithInstance:
+    """Test 'concrete_class' with pre-created instances."""
 
-    def test_instance_provides_interface(self, container: Container) -> None:
-        """Pre-created instance can provide an interface."""
+    def test_instance_registered_under_interface(self, container: Container) -> None:
+        """Pre-created instance can be registered under an interface."""
 
         class IConfig(ABC):
             @abstractmethod
@@ -135,17 +133,17 @@ class TestProvidesWithInstance:
                 return self._value
 
         config = AppConfig("production")
-        container.register(AppConfig, instance=config, provides=IConfig)
+        container.register(IConfig, instance=config)
 
         result = container.resolve(IConfig)
         assert result is config  # type: ignore[comparison-overlap]
         assert result.get_value() == "production"  # type: ignore[attr-defined]
 
 
-class TestProvidesWithLifetime:
-    """Test 'provides' with different lifetimes."""
+class TestConcreteClassWithLifetime:
+    """Test 'concrete_class' with different lifetimes."""
 
-    def test_provides_transient_lifetime(self, container: Container) -> None:
+    def test_concrete_class_transient_lifetime(self, container: Container) -> None:
         """Transient lifetime creates new instance each time."""
 
         class IService(Protocol):
@@ -155,8 +153,8 @@ class TestProvidesWithLifetime:
             pass
 
         container.register(
-            TransientService,
-            provides=IService,
+            IService,
+            concrete_class=TransientService,
             lifetime=Lifetime.TRANSIENT,
         )
 
@@ -167,7 +165,7 @@ class TestProvidesWithLifetime:
         assert isinstance(result2, TransientService)
         assert result1 is not result2
 
-    def test_provides_singleton_lifetime(self, container: Container) -> None:
+    def test_concrete_class_singleton_lifetime(self, container: Container) -> None:
         """Singleton lifetime returns same instance."""
 
         class IService(Protocol):
@@ -177,8 +175,8 @@ class TestProvidesWithLifetime:
             pass
 
         container.register(
-            SingletonService,
-            provides=IService,
+            IService,
+            concrete_class=SingletonService,
             lifetime=Lifetime.SINGLETON,
         )
 
@@ -188,7 +186,7 @@ class TestProvidesWithLifetime:
         assert isinstance(result1, SingletonService)
         assert result1 is result2
 
-    def test_provides_scoped_singleton_lifetime(self, container: Container) -> None:
+    def test_concrete_class_scoped_singleton_lifetime(self, container: Container) -> None:
         """Scoped singleton lifetime returns same instance within scope."""
 
         class IService(Protocol):
@@ -198,8 +196,8 @@ class TestProvidesWithLifetime:
             pass
 
         container.register(
-            ScopedService,
-            provides=IService,
+            IService,
+            concrete_class=ScopedService,
             lifetime=Lifetime.SCOPED_SINGLETON,
             scope="request",
         )
@@ -217,8 +215,8 @@ class TestProvidesWithLifetime:
             assert result3 is not result1
 
 
-class TestProvidesWithDependencies:
-    """Test 'provides' with dependencies in concrete class."""
+class TestConcreteClassWithDependencies:
+    """Test 'concrete_class' with dependencies in concrete class."""
 
     def test_concrete_with_dependencies(self, container: Container) -> None:
         """Concrete class dependencies are resolved correctly."""
@@ -242,8 +240,8 @@ class TestProvidesWithDependencies:
             def save(self, data: str) -> None:
                 self.logger.log(f"Saving: {data}")
 
-        container.register(ConsoleLogger, provides=ILogger, lifetime=Lifetime.SINGLETON)
-        container.register(DatabaseRepository, provides=IRepository)
+        container.register(ILogger, concrete_class=ConsoleLogger, lifetime=Lifetime.SINGLETON)
+        container.register(IRepository, concrete_class=DatabaseRepository)
 
         repo = container.resolve(IRepository)
 
@@ -274,9 +272,9 @@ class TestProvidesWithDependencies:
             logger: ILogger
             config: Config
 
-        container.register(ConsoleLogger, provides=ILogger, lifetime=Lifetime.SINGLETON)
+        container.register(ILogger, concrete_class=ConsoleLogger, lifetime=Lifetime.SINGLETON)
         container.register(Config, lifetime=Lifetime.SINGLETON)
-        container.register(Service, provides=IService)
+        container.register(IService, concrete_class=Service)
 
         service = container.resolve(IService)
 
@@ -285,8 +283,8 @@ class TestProvidesWithDependencies:
         assert isinstance(service.config, Config)
 
 
-class TestProvidesWithComponent:
-    """Test 'provides' with named components."""
+class TestConcreteClassWithComponent:
+    """Test 'concrete_class' with named components."""
 
     def test_multiple_implementations_with_component(self, container: Container) -> None:
         """Register multiple implementations of same interface with different components."""
@@ -307,8 +305,8 @@ class TestProvidesWithComponent:
         memory_cache_type = Annotated[ICache, Component("memory")]
         redis_cache_type = Annotated[ICache, Component("redis")]
 
-        container.register(MemoryCache, provides=memory_cache_type)
-        container.register(RedisCache, provides=redis_cache_type)
+        container.register(memory_cache_type, concrete_class=MemoryCache)
+        container.register(redis_cache_type, concrete_class=RedisCache)
 
         memory_cache = container.resolve(memory_cache_type)
         redis_cache = container.resolve(redis_cache_type)
@@ -319,71 +317,31 @@ class TestProvidesWithComponent:
         assert redis_cache.get("key") == "redis"
 
 
-class TestProvidesErrors:
-    """Test error handling for 'provides' parameter."""
+class TestConcreteClassErrors:
+    """Test error handling for 'concrete_class' parameter."""
 
-    def test_provides_requires_class_when_no_factory_or_instance(
+    def test_concrete_class_requires_class_type(
         self,
         container: Container,
     ) -> None:
-        """Error when 'provides' used with non-class key and no factory/instance."""
+        """Error when 'concrete_class' is not a class type."""
 
         class IService(Protocol):
             pass
 
-        with pytest.raises(DIWireProvidesRequiresClassError) as exc_info:
-            container.register("not_a_class", provides=IService)
+        with pytest.raises(DIWireConcreteClassRequiresClassError) as exc_info:
+            container.register(IService, concrete_class="not_a_class")  # type: ignore[call-overload]
 
-        assert exc_info.value.key == "not_a_class"
-        assert exc_info.value.provides is IService
+        assert exc_info.value.concrete_class == "not_a_class"
         assert "must be a class" in str(exc_info.value)
 
-    def test_provides_allows_non_class_with_factory(self, container: Container) -> None:
-        """Non-class key is allowed when factory is provided."""
 
-        class IService(ABC):
-            @abstractmethod
-            def run(self) -> str: ...
-
-        class ConcreteService(IService):
-            def run(self) -> str:
-                return "running"
-
-        def create_service() -> ConcreteService:
-            return ConcreteService()
-
-        # Should not raise - factory is provided
-        container.register("my_service", factory=create_service, provides=IService)
-
-        result = container.resolve(IService)
-        assert isinstance(result, ConcreteService)
-
-    def test_provides_allows_non_class_with_instance(self, container: Container) -> None:
-        """Non-class key is allowed when instance is provided."""
-
-        class IService(ABC):
-            @abstractmethod
-            def run(self) -> str: ...
-
-        class ConcreteService(IService):
-            def run(self) -> str:
-                return "running"
-
-        instance = ConcreteService()
-
-        # Should not raise - instance is provided
-        container.register("my_service", instance=instance, provides=IService)
-
-        result = container.resolve(IService)
-        assert result is instance  # type: ignore[comparison-overlap]
-
-
-class TestProvidesAsync:
-    """Test 'provides' with async resolution."""
+class TestConcreteClassAsync:
+    """Test 'concrete_class' with async resolution."""
 
     @pytest.mark.anyio
-    async def test_async_resolve_provides_interface(self, container: Container) -> None:
-        """Async resolution works with provides parameter."""
+    async def test_async_resolve_with_concrete_class(self, container: Container) -> None:
+        """Async resolution works with concrete_class parameter."""
 
         class IService(ABC):
             @abstractmethod
@@ -393,7 +351,7 @@ class TestProvidesAsync:
             def get_data(self) -> str:
                 return "async_data"
 
-        container.register(AsyncService, provides=IService, lifetime=Lifetime.SINGLETON)
+        container.register(IService, concrete_class=AsyncService, lifetime=Lifetime.SINGLETON)
 
         result = await container.aresolve(IService)
 
@@ -401,8 +359,8 @@ class TestProvidesAsync:
         assert result.get_data() == "async_data"
 
     @pytest.mark.anyio
-    async def test_async_factory_provides_interface(self, container: Container) -> None:
-        """Async factory can provide an interface implementation."""
+    async def test_async_factory_with_interface_key(self, container: Container) -> None:
+        """Async factory can be registered under an interface key."""
 
         class IDatabase(ABC):
             @abstractmethod
@@ -416,9 +374,8 @@ class TestProvidesAsync:
             return AsyncDatabase()
 
         container.register(
-            AsyncDatabase,
+            IDatabase,
             factory=create_database,
-            provides=IDatabase,
         )
 
         result = await container.aresolve(IDatabase)
@@ -427,8 +384,8 @@ class TestProvidesAsync:
         assert result.query() == "result"
 
 
-class TestProvidesCompilation:
-    """Test 'provides' with container compilation."""
+class TestConcreteClassCompilation:
+    """Test 'concrete_class' with container compilation."""
 
     def test_compiled_container_resolves_interface(self, container: Container) -> None:
         """Compiled container correctly resolves interfaces."""
@@ -441,7 +398,7 @@ class TestProvidesCompilation:
             def execute(self) -> str:
                 return "compiled"
 
-        container.register(CompiledService, provides=IService, lifetime=Lifetime.SINGLETON)
+        container.register(IService, concrete_class=CompiledService, lifetime=Lifetime.SINGLETON)
         container.compile()
 
         result = container.resolve(IService)
@@ -465,8 +422,8 @@ class TestProvidesCompilation:
             def __init__(self, logger: ILogger) -> None:
                 self.logger = logger
 
-        container.register(Logger, provides=ILogger, lifetime=Lifetime.SINGLETON)
-        container.register(Service, provides=IService)
+        container.register(ILogger, concrete_class=Logger, lifetime=Lifetime.SINGLETON)
+        container.register(IService, concrete_class=Service)
         container.compile()
 
         result = container.resolve(IService)

@@ -2,7 +2,7 @@ import dataclasses
 import inspect
 from dataclasses import dataclass
 from types import FunctionType, MethodType
-from typing import Annotated, Any, get_args, get_origin, get_type_hints
+from typing import Annotated, Any, TypeVar, get_args, get_origin, get_type_hints
 
 from diwire.exceptions import DIWireDependencyExtractionError
 from diwire.service_key import ServiceKey
@@ -17,6 +17,7 @@ class ParameterInfo:
 
     service_key: ServiceKey
     has_default: bool
+    typevar: Any | None = None
 
 
 class DependenciesExtractor:
@@ -40,11 +41,13 @@ class DependenciesExtractor:
         except (TypeError, NameError) as e:
             raise DIWireDependencyExtractionError(service_key, e) from e
 
-        result = {
-            name: ServiceKey.from_value(hint)
-            for name, hint in type_hints.items()
-            if name != "return"
-        }
+        result: dict[str, ServiceKey] = {}
+        for name, hint in type_hints.items():
+            if name == "return":
+                continue
+            if self._extract_typevar_from_annotation(hint) is not None:
+                continue
+            result[name] = ServiceKey.from_value(hint)
         self._deps_cache[service_key] = result
         return result
 
@@ -64,14 +67,16 @@ class DependenciesExtractor:
             raise DIWireDependencyExtractionError(service_key, e) from e
         defaults = self._get_parameter_defaults(service_key)
 
-        result = {
-            name: ParameterInfo(
-                service_key=ServiceKey.from_value(hint),
+        result: dict[str, ParameterInfo] = {}
+        for name, hint in type_hints.items():
+            if name == "return":
+                continue
+            typevar = self._extract_typevar_from_annotation(hint)
+            result[name] = ParameterInfo(
+                service_key=ServiceKey.from_value(type if typevar is not None else hint),
                 has_default=defaults.get(name, False),
+                typevar=typevar,
             )
-            for name, hint in type_hints.items()
-            if name != "return"
-        }
         self._deps_with_defaults_cache[service_key] = result
         return result
 
@@ -143,6 +148,25 @@ class DependenciesExtractor:
                 return args[0]  # Return the actual type T from Annotated[T, FromDI()]
 
         return None
+
+    def _unwrap_annotated(self, hint: Any) -> Any:
+        """Unwrap Annotated[T, ...] to T if present."""
+        if get_origin(hint) is not Annotated:
+            return hint
+        args = get_args(hint)
+        return args[0] if args else hint
+
+    def _extract_typevar_from_annotation(self, hint: Any) -> TypeVar | None:
+        """Return TypeVar if annotation is type[T] or Type[T]."""
+        hint = self._unwrap_annotated(hint)
+        origin = get_origin(hint)
+        if origin is not type:
+            return None
+        args = get_args(hint)
+        if len(args) != 1:
+            return None
+        arg = args[0]
+        return arg if isinstance(arg, TypeVar) else None
 
     def _get_init_func(self, service_key: ServiceKey) -> Any:
         if isinstance(service_key.value, FunctionType | MethodType):
