@@ -19,6 +19,7 @@ from typing import (
     ClassVar,
     Generic,
     TypeVar,
+    Union,
     cast,
     get_args,
     get_origin,
@@ -69,6 +70,7 @@ from diwire.exceptions import (
     DIWireScopedSingletonWithoutScopeError,
     DIWireScopeMismatchError,
     DIWireServiceNotRegisteredError,
+    DIWireUnionTypeError,
 )
 from diwire.registry import Registration
 from diwire.service_key import Component, ServiceKey
@@ -221,6 +223,9 @@ def _get_return_annotation(func: Callable[..., Any]) -> type | None:
             args = get_args(return_type)
             if args:
                 return args[0]  # Return the yield type
+        # Handle union types - return the full union type, not just the origin
+        if _is_union_type(return_type):
+            return return_type  # type: ignore[return-value]
         # Handle other generic types - just return the origin if it's a class
         if isinstance(origin, type):
             return origin
@@ -308,6 +313,14 @@ def _is_typevar(arg: Any) -> bool:
 def _is_any_type(arg: Any) -> bool:
     """Return True when arg represents Any."""
     return arg is Any
+
+
+def _is_union_type(value: Any) -> bool:
+    """Check if value is a union type (str | int or Union[str, int])."""
+    origin = get_origin(value)
+    # Python 3.10+ uses types.UnionType for `X | Y` syntax
+    # typing.Union is used for Union[X, Y] syntax
+    return origin is types.UnionType or origin is Union
 
 
 def _type_arg_matches_constraint(arg: Any, constraint: Any) -> bool:
@@ -2890,6 +2903,9 @@ class Container:
 
         if service_key.value in self._autoregister_ignores:
             raise DIWireIgnoredServiceError(service_key)
+
+        if _is_union_type(service_key.value):
+            raise DIWireUnionTypeError(service_key)
 
         if not isinstance(service_key.value, type):
             raise DIWireNotAClassError(service_key)
