@@ -21,6 +21,7 @@ uv run python examples/ex08_fastapi/ex01_basic.py
 | [ex01_registration.py](ex01_basics/ex01_registration.py)                   | Three registration methods: class, factory, and instance |
 | [ex02_lifetimes.py](ex01_basics/ex02_lifetimes.py)                         | TRANSIENT vs SINGLETON lifetimes                         |
 | [ex03_constructor_injection.py](ex01_basics/ex03_constructor_injection.py) | Automatic dependency resolution via type hints           |
+| [ex05_open_generics.py](ex01_basics/ex05_open_generics.py)                 | Open generic factory registration                        |
 
 ### ex02_scopes/ - Scoped Dependencies
 

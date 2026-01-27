@@ -46,7 +46,7 @@ from diwire.defaults import (
     DEFAULT_AUTOREGISTER_LIFETIME,
     DEFAULT_AUTOREGISTER_REGISTRATION_FACTORIES,
 )
-from diwire.dependencies import DependenciesExtractor
+from diwire.dependencies import DependenciesExtractor, ParameterInfo
 from diwire.exceptions import (
     DIWireAsyncCleanupWithoutEventLoopError,
     DIWireAsyncDependencyInSyncContextError,
@@ -60,15 +60,18 @@ from diwire.exceptions import (
     DIWireGeneratorFactoryUnsupportedLifetimeError,
     DIWireGeneratorFactoryWithoutScopeError,
     DIWireIgnoredServiceError,
+    DIWireInvalidGenericTypeArgumentError,
     DIWireMissingDependenciesError,
     DIWireNotAClassError,
+    DIWireOpenGenericRegistrationError,
+    DIWireOpenGenericResolutionError,
     DIWireProvidesRequiresClassError,
     DIWireScopedSingletonWithoutScopeError,
     DIWireScopeMismatchError,
     DIWireServiceNotRegisteredError,
 )
 from diwire.registry import Registration
-from diwire.service_key import ServiceKey
+from diwire.service_key import Component, ServiceKey
 from diwire.types import Factory, FromDI, Lifetime
 
 T = TypeVar("T", bound=Any)
@@ -257,6 +260,15 @@ class ResolvedDependencies:
     missing: list[ServiceKey] = field(default_factory=list)
 
 
+@dataclass(frozen=True, slots=True)
+class _OpenGenericRegistration:
+    """Open generic registration template."""
+
+    service_key: ServiceKey
+    registration: Registration
+    typevars: tuple[Any, ...]
+
+
 def _has_fromdi_annotation(param: inspect.Parameter) -> bool:
     """Check if a parameter has FromDI in its annotation.
 
@@ -286,6 +298,38 @@ def _build_signature_without_fromdi(func: Callable[..., Any]) -> inspect.Signatu
     original_sig = signature(func)
     new_params = [p for p in original_sig.parameters.values() if not _has_fromdi_annotation(p)]
     return original_sig.replace(parameters=new_params)
+
+
+def _is_typevar(arg: Any) -> bool:
+    """Return True when arg is a TypeVar instance."""
+    return isinstance(arg, TypeVar)
+
+
+def _is_any_type(arg: Any) -> bool:
+    """Return True when arg represents Any."""
+    return arg is Any
+
+
+def _type_arg_matches_constraint(arg: Any, constraint: Any) -> bool:
+    """Check whether a type argument satisfies a bound/constraint."""
+    if _is_any_type(arg) or _is_any_type(constraint):
+        return True
+    if isinstance(arg, type) and isinstance(constraint, type):
+        try:
+            return issubclass(arg, constraint)
+        except TypeError:
+            return False
+    return arg == constraint
+
+
+def _get_generic_origin_and_args(value: Any) -> tuple[type | None, tuple[Any, ...]]:
+    """Return (origin, args) for generic aliases, or (None, ()) otherwise."""
+    origin = get_origin(value)
+    if origin is None or origin is Annotated:
+        return None, ()
+    if not isinstance(origin, type):
+        return None, ()
+    return origin, get_args(value)
 
 
 class Injected(Generic[T]):
@@ -654,11 +698,13 @@ class Container:
         "_dependencies_extractor",
         "_has_scoped_registrations",
         "_is_compiled",
+        "_open_generic_registry",
         "_register_if_missing",
         "_registry",
         "_scope_exit_stacks",
         "_scoped_compiled_providers",
         "_scoped_instances",
+        "_scoped_open_generic_registry",
         "_scoped_registry",
         "_scoped_singleton_locks",
         "_scoped_singleton_locks_lock",
@@ -699,6 +745,14 @@ class Container:
         ] = {}
         self._registry: dict[ServiceKey, Registration] = {}
         self._scoped_registry: dict[tuple[ServiceKey, str], Registration] = {}
+        self._open_generic_registry: dict[
+            tuple[type, Component | None],
+            _OpenGenericRegistration,
+        ] = {}
+        self._scoped_open_generic_registry: dict[
+            tuple[type, Component | None, str],
+            _OpenGenericRegistration,
+        ] = {}
         # Scope exit stacks keyed by tuple for consistency
         self._scope_exit_stacks: dict[tuple[tuple[str | None, int], ...], ExitStack] = {}
         self._async_scope_exit_stacks: dict[tuple[tuple[str | None, int], ...], AsyncExitStack] = {}
@@ -862,6 +916,17 @@ class Container:
             )
             return key
 
+        # Case 2b: Open generic decorator - @container.register(MyGeneric[T], ...)
+        if factory is None and instance is None:
+            origin, args = _get_generic_origin_and_args(key)
+            if origin is not None and any(_is_typevar(arg) for arg in args):
+                return self._make_decorator(
+                    lifetime=lifetime,
+                    scope=scope,
+                    is_async=is_async,
+                    provides=key,
+                )
+
         # Case 3: Bare decorator on a function - @container.register
         # Check that key is a proper function/method, not a generic alias like Annotated[T, ...]
         is_factory_function = (
@@ -984,6 +1049,43 @@ class Container:
 
         return decorator
 
+    def _get_open_generic_info_for_registration(
+        self,
+        service_key: ServiceKey,
+    ) -> tuple[type, tuple[Any, ...]] | None:
+        origin, args = _get_generic_origin_and_args(service_key.value)
+        if origin is None or not args:
+            return None
+        if not any(_is_typevar(arg) for arg in args):
+            return None
+        if not all(_is_typevar(arg) for arg in args):
+            raise DIWireOpenGenericRegistrationError(
+                service_key,
+                "Open generic registrations must use only TypeVar parameters.",
+            )
+        return origin, tuple(args)
+
+    def _register_open_generic(
+        self,
+        *,
+        origin: type,
+        service_key: ServiceKey,
+        registration: Registration,
+        typevars: tuple[Any, ...],
+    ) -> None:
+        entry = _OpenGenericRegistration(
+            service_key=service_key,
+            registration=registration,
+            typevars=typevars,
+        )
+        if registration.scope is not None:
+            self._scoped_open_generic_registry[
+                (origin, service_key.component, registration.scope)
+            ] = entry
+            self._has_scoped_registrations = True
+        else:
+            self._open_generic_registry[(origin, service_key.component)] = entry
+
     def _do_register(
         self,
         key: Any,
@@ -1017,6 +1119,41 @@ class Container:
             detected_is_async = is_async
         elif factory is not None:
             detected_is_async = _is_async_factory(factory)
+
+        open_generic_info = self._get_open_generic_info_for_registration(service_key)
+        if open_generic_info is not None:
+            if provides is not None:
+                raise DIWireOpenGenericRegistrationError(
+                    service_key,
+                    "Open generic 'provides' registrations are not supported.",
+                )
+            if instance is not None:
+                raise DIWireOpenGenericRegistrationError(
+                    service_key,
+                    "Open generic registrations do not support instances.",
+                )
+            origin, typevars = open_generic_info
+            registration = Registration(
+                service_key=service_key,
+                factory=factory,
+                instance=instance,
+                lifetime=lifetime,
+                scope=scope,
+                is_async=detected_is_async,
+                concrete_type=concrete_type,
+                typevar_map=None,
+            )
+            self._register_open_generic(
+                origin=origin,
+                service_key=service_key,
+                registration=registration,
+                typevars=typevars,
+            )
+            # Track scoped registrations
+            if lifetime == Lifetime.SCOPED_SINGLETON:
+                self._has_scoped_registrations = True
+            self._is_compiled = False
+            return
 
         registration = Registration(
             service_key=service_key,
@@ -1181,6 +1318,8 @@ class Container:
             try:
                 deps = self._dependencies_extractor.get_dependencies_with_defaults(service_key)
                 for param_info in deps.values():
+                    if param_info.typevar is not None:
+                        continue
                     dep_reg = self._registry.get(param_info.service_key)
                     if dep_reg is not None and dep_reg.is_async:
                         async_deps.add(param_info.service_key)
@@ -1200,6 +1339,8 @@ class Container:
         if registration.scope is not None:
             return None
         if registration.is_async:
+            return None
+        if registration.typevar_map is not None:
             return None
 
         # Handle pre-created instances
@@ -1252,6 +1393,8 @@ class Container:
         # Filter out ignored types with defaults
         filtered_deps: dict[str, ServiceKey] = {}
         for name, param_info in deps.items():
+            if param_info.typevar is not None:
+                return None
             if param_info.service_key.value in self._autoregister_ignores:
                 if param_info.has_default:
                     continue
@@ -1373,6 +1516,8 @@ class Container:
         # These need special handling for scope lifecycle
         if registration.instance is not None or registration.factory is not None:
             return None
+        if registration.typevar_map is not None:
+            return None
 
         # Use concrete_type if registered with provides parameter
         instantiation_type = registration.concrete_type or service_key.value
@@ -1395,6 +1540,8 @@ class Container:
         # Filter out ignored types with defaults
         filtered_deps: dict[str, ServiceKey] = {}
         for name, param_info in deps.items():
+            if param_info.typevar is not None:
+                return None
             if param_info.service_key.value in self._autoregister_ignores:
                 if param_info.has_default:
                     continue
@@ -1724,7 +1871,10 @@ class Container:
                         # Function/method factory - resolve ALL deps and call directly
                         # This allows factory functions to have all params auto-injected
                         factory_key = ServiceKey.from_value(registration.factory)
-                        resolved = self._get_resolved_dependencies(factory_key)
+                        resolved = self._get_resolved_dependencies(
+                            factory_key,
+                            typevar_map=registration.typevar_map,
+                        )
                         if resolved.missing:
                             raise DIWireMissingDependenciesError(factory_key, resolved.missing)
                         instance = registration.factory(**resolved.dependencies)
@@ -1762,6 +1912,7 @@ class Container:
 
                 resolved_dependencies = self._get_resolved_dependencies(
                     service_key=instantiation_key,
+                    typevar_map=registration.typevar_map,
                 )
                 if resolved_dependencies.missing:
                     raise DIWireMissingDependenciesError(service_key, resolved_dependencies.missing)
@@ -1996,7 +2147,10 @@ class Container:
                         # Function/method factory - resolve ALL deps and call directly
                         # This allows factory functions to have all params auto-injected
                         factory_key = ServiceKey.from_value(registration.factory)
-                        resolved = await self._aget_resolved_dependencies(factory_key)
+                        resolved = await self._aget_resolved_dependencies(
+                            factory_key,
+                            typevar_map=registration.typevar_map,
+                        )
                         if resolved.missing:
                             raise DIWireMissingDependenciesError(factory_key, resolved.missing)
                         result = registration.factory(**resolved.dependencies)
@@ -2054,6 +2208,7 @@ class Container:
                 # Resolve dependencies
                 resolved_dependencies = await self._aget_resolved_dependencies(
                     service_key=instantiation_key,
+                    typevar_map=registration.typevar_map,
                 )
                 if resolved_dependencies.missing:
                     raise DIWireMissingDependenciesError(service_key, resolved_dependencies.missing)
@@ -2074,7 +2229,12 @@ class Container:
         finally:
             stack.pop()
 
-    async def _aget_resolved_dependencies(self, service_key: ServiceKey) -> ResolvedDependencies:
+    async def _aget_resolved_dependencies(
+        self,
+        service_key: ServiceKey,
+        *,
+        typevar_map: dict[Any, Any] | None = None,
+    ) -> ResolvedDependencies:
         """Asynchronously resolve dependencies for a service."""
         resolved_dependencies = ResolvedDependencies()
 
@@ -2091,6 +2251,14 @@ class Container:
 
         for name, param_info in dependencies.items():
             dep_key = param_info.service_key
+            if self._handle_typevar_dependency(
+                service_key=service_key,
+                name=name,
+                param_info=param_info,
+                typevar_map=typevar_map,
+                resolved_dependencies=resolved_dependencies,
+            ):
+                continue
 
             # Skip ignored types that aren't explicitly registered
             if dep_key.value in self._autoregister_ignores:
@@ -2274,6 +2442,142 @@ class Container:
                     return scoped_reg
         return None
 
+    def _get_scoped_open_generic_registration(
+        self,
+        origin: type,
+        component: Component | None,
+        current_scope: ScopeId,
+    ) -> _OpenGenericRegistration | None:
+        """Get a scoped open generic registration for a matching scope, if any."""
+        for i in range(len(current_scope.segments), 0, -1):
+            name, _ = current_scope.segments[i - 1]
+            if name is not None:
+                scoped_reg = self._scoped_open_generic_registry.get((origin, component, name))
+                if scoped_reg is not None:
+                    return scoped_reg
+        return None
+
+    def _validate_typevar_map(
+        self,
+        service_key: ServiceKey,
+        typevar_map: dict[Any, Any],
+    ) -> None:
+        """Validate TypeVar bounds and constraints for a closed generic."""
+        for typevar, arg in typevar_map.items():
+            constraints = getattr(typevar, "__constraints__", ())
+            bound = getattr(typevar, "__bound__", None)
+            if constraints:
+                if not any(
+                    _type_arg_matches_constraint(arg, constraint) for constraint in constraints
+                ):
+                    raise DIWireInvalidGenericTypeArgumentError(
+                        service_key,
+                        typevar,
+                        arg,
+                        f"Expected one of {constraints!r}.",
+                    )
+                continue
+            if (
+                bound is not None
+                and not _is_any_type(bound)
+                and not _type_arg_matches_constraint(arg, bound)
+            ):
+                raise DIWireInvalidGenericTypeArgumentError(
+                    service_key,
+                    typevar,
+                    arg,
+                    f"Expected bound {bound!r}.",
+                )
+
+    def _get_typevar_argument(
+        self,
+        typevar: Any,
+        typevar_map: dict[Any, Any],
+    ) -> Any | None:
+        """Lookup the concrete argument for a TypeVar from a map."""
+        if typevar in typevar_map:
+            return typevar_map[typevar]
+        return None
+
+    def _handle_typevar_dependency(
+        self,
+        *,
+        service_key: ServiceKey,
+        name: str,
+        param_info: ParameterInfo,
+        typevar_map: dict[Any, Any] | None,
+        resolved_dependencies: ResolvedDependencies,
+    ) -> bool:
+        """Inject TypeVar-bound arguments if present; return True when handled."""
+        if param_info.typevar is None:
+            return False
+        if typevar_map is not None:
+            type_arg = self._get_typevar_argument(param_info.typevar, typevar_map)
+            if type_arg is not None:
+                resolved_dependencies.dependencies[name] = type_arg
+                return True
+        if param_info.has_default:
+            return True
+        raise DIWireOpenGenericResolutionError(
+            service_key,
+            f"Type argument for {getattr(param_info.typevar, '__name__', param_info.typevar)!r} "
+            "is missing.",
+        )
+
+    def _resolve_open_generic_registration(
+        self,
+        service_key: ServiceKey,
+        current_scope: ScopeId | None,
+    ) -> Registration | None:
+        origin, args = _get_generic_origin_and_args(service_key.value)
+        if origin is None or not args:
+            return None
+        if any(_is_typevar(arg) for arg in args):
+            raise DIWireOpenGenericResolutionError(
+                service_key,
+                "Type arguments must be concrete.",
+            )
+
+        open_registration: _OpenGenericRegistration | None = None
+        if current_scope is not None:
+            open_registration = self._get_scoped_open_generic_registration(
+                origin,
+                service_key.component,
+                current_scope,
+            )
+        if open_registration is None:
+            open_registration = self._open_generic_registry.get((origin, service_key.component))
+        if open_registration is None:
+            return None
+
+        if len(args) != len(open_registration.typevars):
+            raise DIWireOpenGenericResolutionError(
+                service_key,
+                f"Expected {len(open_registration.typevars)} type argument(s), got {len(args)}.",
+            )
+
+        typevar_map = dict(zip(open_registration.typevars, args, strict=True))
+        self._validate_typevar_map(service_key, typevar_map)
+
+        base = open_registration.registration
+        registration = Registration(
+            service_key=service_key,
+            factory=base.factory,
+            instance=base.instance,
+            lifetime=base.lifetime,
+            scope=base.scope,
+            is_async=base.is_async,
+            concrete_type=base.concrete_type,
+            typevar_map=typevar_map,
+        )
+        if base.scope is not None:
+            self._scoped_registry[(service_key, base.scope)] = registration
+            self._has_scoped_registrations = True
+        else:
+            self._registry[service_key] = registration
+
+        return registration
+
     def _get_registration(
         self,
         service_key: ServiceKey,
@@ -2292,6 +2596,10 @@ class Container:
 
         # Fall back to global registry
         registration = self._registry.get(service_key)
+        if registration is not None:
+            return registration
+
+        registration = self._resolve_open_generic_registration(service_key, current_scope)
         if registration is not None:
             return registration
 
@@ -2392,13 +2700,26 @@ class Container:
             lifetime=self._autoregister_default_lifetime,
         )
 
-    def _get_resolved_dependencies(self, service_key: ServiceKey) -> ResolvedDependencies:
+    def _get_resolved_dependencies(
+        self,
+        service_key: ServiceKey,
+        *,
+        typevar_map: dict[Any, Any] | None = None,
+    ) -> ResolvedDependencies:
         resolved_dependencies = ResolvedDependencies()
 
         dependencies = self._dependencies_extractor.get_dependencies_with_defaults(
             service_key=service_key,
         )
         for name, param_info in dependencies.items():
+            if self._handle_typevar_dependency(
+                service_key=service_key,
+                name=name,
+                param_info=param_info,
+                typevar_map=typevar_map,
+                resolved_dependencies=resolved_dependencies,
+            ):
+                continue
             # Skip ignored types that aren't explicitly registered
             if param_info.service_key.value in self._autoregister_ignores:
                 # Check both global and scoped registries before marking as missing

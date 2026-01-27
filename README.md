@@ -84,6 +84,57 @@ container.register(SystemClock, provides=Clock, lifetime=Lifetime.SINGLETON)
 clock = container.resolve(Clock)
 ```
 
+## Open generics
+
+Register open generic factories and resolve closed generics with type-safe validation. Type arguments can be
+injected by annotating parameters as `type[T]`, and TypeVar bounds/constraints are enforced at resolution time.
+
+```python
+from dataclasses import dataclass
+from typing import Generic, TypeVar
+
+from diwire import Container
+
+
+class Model:
+    pass
+
+
+T = TypeVar("T")
+M = TypeVar("M", bound=Model)
+
+
+@dataclass
+class AnyBox(Generic[T]):
+    value: str
+
+
+@dataclass
+class ModelBox(Generic[M]):
+    model: M
+
+
+container = Container()
+
+
+@container.register(AnyBox[T])
+def create_any_box(type_arg: type[T]) -> AnyBox[T]:
+    return AnyBox(value=type_arg.__name__)
+
+
+@container.register(ModelBox[M])
+def create_model_box(model_cls: type[M]) -> ModelBox[M]:
+    return ModelBox(model=model_cls())
+
+
+print(container.resolve(AnyBox[int]))
+print(container.resolve(ModelBox[Model]))
+```
+
+Limitations:
+- Open generic registrations currently support factory/decorator registration only.
+- `provides=` and `instance=` are not supported for open generics.
+
 ## Function injection
 
 Mark parameters with `FromDI()` to inject dependencies while keeping other parameters caller-provided.

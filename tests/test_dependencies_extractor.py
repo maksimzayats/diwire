@@ -1,7 +1,8 @@
 """Tests for DependenciesExtractor class."""
 
+import types
 from dataclasses import dataclass, field
-from typing import Annotated, Union
+from typing import Annotated, Generic, TypeVar, Union
 
 from diwire.dependencies import DependenciesExtractor
 from diwire.service_key import ServiceKey
@@ -15,6 +16,9 @@ class ServiceA:
 class ServiceB:
     def __init__(self, service_a: ServiceA) -> None:
         self.service_a = service_a
+
+
+T = TypeVar("T")
 
 
 class TestGetDependencies:
@@ -181,6 +185,23 @@ class TestGetDependencies:
             "name": ServiceKey.from_value(str),
         }
 
+    def test_get_dependencies_skips_typevar_params(
+        self,
+        dependencies_extractor: DependenciesExtractor,
+    ) -> None:
+        """TypeVar-bound type arguments are ignored."""
+
+        class TypeVarService(Generic[T]):
+            def __init__(self, kind: type[T], service_a: ServiceA) -> None:
+                self.kind = kind
+                self.service_a = service_a
+
+        deps = dependencies_extractor.get_dependencies(
+            ServiceKey.from_value(TypeVarService),
+        )
+
+        assert deps == {"service_a": ServiceKey.from_value(ServiceA)}
+
 
 class TestGetInjectedDependencies:
     def test_get_injected_deps_with_from_di_marker(
@@ -328,6 +349,18 @@ class TestExtractFromDIType:
         # metadata that doesn't include FromDI
         annotated = Annotated[ServiceA, "meta1", "meta2"]
         result = dependencies_extractor._extract_from_di_type(annotated)
+
+        assert result is None
+
+
+class TestExtractTypeVarAnnotation:
+    def test_extract_typevar_with_multiple_args_returns_none(
+        self,
+        dependencies_extractor: DependenciesExtractor,
+    ) -> None:
+        """Non-singleton type arguments should return None."""
+        hint = types.GenericAlias(type, (int, str))
+        result = dependencies_extractor._extract_typevar_from_annotation(hint)
 
         assert result is None
 

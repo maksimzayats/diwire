@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from diwire.service_key import ServiceKey
@@ -231,4 +231,36 @@ class DIWireDecoratorFactoryMissingReturnAnnotationError(DIWireError):
         super().__init__(
             f"Factory '{factory_name}' has no return annotation. "
             f"Either add a return type annotation or use provides=SomeType.",
+        )
+
+
+class DIWireOpenGenericRegistrationError(DIWireError):
+    """Open generic registration is invalid or unsupported."""
+
+    def __init__(self, service_key: ServiceKey, reason: str) -> None:
+        self.service_key = service_key
+        self.reason = reason
+        super().__init__(f"Invalid open generic registration for {service_key}: {reason}")
+
+
+class DIWireOpenGenericResolutionError(DIWireError):
+    """Cannot resolve an open or partially open generic."""
+
+    def __init__(self, service_key: ServiceKey, reason: str) -> None:
+        self.service_key = service_key
+        self.reason = reason
+        super().__init__(f"Cannot resolve generic {service_key}: {reason}")
+
+
+class DIWireInvalidGenericTypeArgumentError(DIWireError):
+    """Type argument does not satisfy TypeVar constraints or bounds."""
+
+    def __init__(self, service_key: ServiceKey, typevar: Any, arg: Any, reason: str) -> None:
+        self.service_key = service_key
+        self.typevar = typevar
+        self.arg = arg
+        self.reason = reason
+        typevar_name = getattr(typevar, "__name__", repr(typevar))
+        super().__init__(
+            f"Invalid type argument for {service_key}: {typevar_name}={arg!r}. {reason}",
         )
