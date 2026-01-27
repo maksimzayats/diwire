@@ -839,7 +839,21 @@ class Container:
         is_async: bool | None = ...,
     ) -> Callable[[T], T]: ...
 
-    # Overload 5: Direct call with explicit key - container.register(Interface, concrete_class=...)
+    # Overload 5: String key decorator - @container.register("key", lifetime=...)
+    # When a string is passed as key with optional keyword args (no factory/instance/concrete_class),
+    # returns a decorator
+    @overload
+    def register(
+        self,
+        key: str,
+        /,
+        *,
+        lifetime: Lifetime = ...,
+        scope: str | None = ...,
+        is_async: bool | None = ...,
+    ) -> Callable[[T], T]: ...
+
+    # Overload 6: Direct call with explicit key - container.register(Interface, concrete_class=...)
     @overload
     def register(
         self,
@@ -1030,7 +1044,19 @@ class Container:
             )
             return key
 
-        # Case 5: Direct call - container.register(Interface, concrete_class=Impl)
+        # Case 5: Non-type key as decorator - @container.register("string_key")
+        # This handles string keys or other hashable values used as service identifiers.
+        # When key is not a type, function, method descriptor, or generic alias,
+        # and no factory/instance/concrete_class is provided, return a decorator.
+        if factory is None and instance is None and concrete_class is None:
+            return self._make_decorator(
+                lifetime=lifetime,
+                scope=scope,
+                is_async=is_async,
+                interface_key=key,
+            )
+
+        # Case 6: Direct call - container.register(Interface, concrete_class=Impl)
         self._do_register(
             key=key,
             factory=factory,

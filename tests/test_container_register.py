@@ -1786,3 +1786,117 @@ class TestMethodDescriptorDecoratorOrder:
         instance1 = container.resolve(Service)
         instance2 = container.resolve(Service)
         assert instance1 is instance2
+
+
+class TestStringKeyRegistration:
+    """Tests for registering services with string keys."""
+
+    def test_string_key_factory_decorator(self, container: Container) -> None:
+        """@container.register("key") on factory function should work."""
+        from collections.abc import Callable
+        from typing import cast
+
+        class Service:
+            value: str
+
+            def __init__(self, value: str = "default") -> None:
+                self.value = value
+
+        decorator = cast(
+            "Callable[[Callable[..., object]], Callable[..., object]]",
+            container.register("my_service"),
+        )
+
+        def create_service() -> Service:
+            return Service(value="from factory")
+
+        decorator(create_service)
+
+        result = container.resolve("my_service")
+        assert isinstance(result, Service)
+        assert result.value == "from factory"
+
+    def test_string_key_class_decorator(self, container: Container) -> None:
+        """@container.register("key") on class should work."""
+        from collections.abc import Callable
+        from typing import cast
+
+        class ConfigService:
+            name: str = "config"
+
+        decorator = cast("Callable[[type], type]", container.register("config_service"))
+        decorator(ConfigService)
+
+        result = container.resolve("config_service")
+        assert isinstance(result, ConfigService)
+        assert result.name == "config"
+
+    def test_string_key_with_lifetime(self, container: Container) -> None:
+        """@container.register("key", lifetime=...) should work."""
+        from collections.abc import Callable
+        from typing import cast
+
+        call_count = 0
+
+        class Service:
+            pass
+
+        decorator = cast(
+            "Callable[[Callable[..., object]], Callable[..., object]]",
+            container.register("singleton_service", lifetime=Lifetime.SINGLETON),
+        )
+
+        def create_service() -> Service:
+            nonlocal call_count
+            call_count += 1
+            return Service()
+
+        decorator(create_service)
+
+        result1 = container.resolve("singleton_service")
+        result2 = container.resolve("singleton_service")
+        assert result1 is result2
+        assert call_count == 1
+
+    def test_multiple_string_keys_same_class(self, container: Container) -> None:
+        """Multiple string keys can point to same class."""
+        from collections.abc import Callable
+        from typing import cast
+
+        class SharedService:
+            pass
+
+        decorator1 = cast("Callable[[type], type]", container.register("key1"))
+        decorator2 = cast("Callable[[type], type]", container.register("key2"))
+        decorator2(SharedService)
+        decorator1(SharedService)
+
+        result1 = container.resolve("key1")
+        result2 = container.resolve("key2")
+        assert isinstance(result1, SharedService)
+        assert isinstance(result2, SharedService)
+
+    def test_string_key_direct_registration(self, container: Container) -> None:
+        """container.register("key", factory=...) direct call should work."""
+
+        class Service:
+            pass
+
+        container.register("direct_key", factory=lambda: Service())
+        result = container.resolve("direct_key")
+        assert isinstance(result, Service)
+
+    def test_string_key_instance_registration(self, container: Container) -> None:
+        """container.register("key", instance=...) direct call should work."""
+
+        class Service:
+            value: str
+
+            def __init__(self, value: str) -> None:
+                self.value = value
+
+        instance = Service(value="singleton")
+        container.register("instance_key", instance=instance)
+        result = container.resolve("instance_key")
+        assert result is instance
+        assert result.value == "singleton"
