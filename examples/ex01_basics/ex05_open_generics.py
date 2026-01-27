@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 from diwire import Container
 
@@ -34,23 +34,32 @@ class NonGenericModelBox:
 container = Container()
 
 
-@container.register(AnyBox[T])
+# Use TYPE_CHECKING guard to satisfy pyrefly while using TypeVars at runtime
+if TYPE_CHECKING:
+    any_box_key: Any = AnyBox[Any]
+    model_box_key: Any = ModelBox[Any]
+else:
+    any_box_key = AnyBox[T]
+    model_box_key = ModelBox[M]
+
+
+@cast("Any", container.register(any_box_key))
 def create_any_box(type_arg: type[T]) -> AnyBox[T]:
     return AnyBox(value=type_arg.__name__)
 
 
-@container.register(ModelBox[M])
+@cast("Any", container.register(model_box_key))
 def create_model_box(model_cls: type[M]) -> ModelBox[M]:
     return ModelBox(model=model_cls())
 
 
-@container.register(NonGenericModelBox)
+@cast("Any", container.register(NonGenericModelBox))
 def create_non_generic_model_box() -> NonGenericModelBox:
     return NonGenericModelBox(value="non-generic box")
 
 
-@container.register(AnyBox[float])
-@container.register("LazyStringKey")
+@cast("Any", container.register(AnyBox[float]))
+@cast("Any", container.register("LazyStringKey"))
 @dataclass
 class NonGenericModelBox2:
     value: str = "non-generic box 2"

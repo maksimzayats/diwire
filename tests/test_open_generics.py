@@ -261,7 +261,7 @@ def test_open_generic_default_typevar_dependency(container: Container) -> None:
 
     default_type_arg: Any = str
 
-    def create_box(type_arg: type[U] = default_type_arg) -> Box[T]:
+    def create_box(type_arg: type[U] = default_type_arg) -> Box[T]:  # type: ignore[assignment]
         return Box(value=type_arg.__name__)
 
     decorator(create_box)
@@ -442,7 +442,7 @@ def test_typevar_dependency_default_without_typevar_map(container: Container) ->
     default_kind: Any = str
 
     class TypevarDefault(Generic[T]):
-        def __init__(self, kind: type[T] = default_kind) -> None:
+        def __init__(self, kind: type[T] = default_kind) -> None:  # type: ignore[assignment]
             self.kind = kind
 
     container.register(TypevarDefault)

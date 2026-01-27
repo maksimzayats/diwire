@@ -7,7 +7,7 @@ import inspect
 import threading
 import uuid
 from dataclasses import dataclass, field
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 import pytest
 
@@ -2692,7 +2692,7 @@ class TestDeferredRegistrationWithTypeKey:
                 pass
 
             # Register with interface key and non-default params (deferred)
-            @container_context.register(IDatabase, lifetime=Lifetime.SINGLETON)
+            @cast("Any", container_context.register(IDatabase, lifetime=Lifetime.SINGLETON))
             class PostgresDBImpl(IDatabase):  # type: ignore[misc]
                 pass
 
@@ -2749,7 +2749,7 @@ class TestDeferredRegistrationWithTypeKey:
             token = container_context.set_current(container)
             try:
                 # Apply decorator - should delegate to container
-                @decorator
+                @cast("Any", decorator)
                 class MyImpl(MyInterface):  # type: ignore[misc]
                     pass
 
