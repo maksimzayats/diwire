@@ -131,10 +131,6 @@ print(container.resolve(AnyBox[int]))
 print(container.resolve(ModelBox[Model]))
 ```
 
-Limitations:
-- Open generic registrations currently support factory/decorator registration only.
-- `concrete_class=` and `instance=` are not supported for open generics.
-
 ## Function injection
 
 Mark parameters with `FromDI()` to inject dependencies while keeping other parameters caller-provided.
