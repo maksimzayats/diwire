@@ -319,6 +319,21 @@ def _type_arg_matches_constraint(arg: Any, constraint: Any) -> bool:
             return issubclass(arg, constraint)
         except TypeError:
             return False
+    # For generic aliases (e.g., list[int]), compare structurally
+    # since equality may fail in Python 3.10
+    arg_origin = get_origin(arg)
+    constraint_origin = get_origin(constraint)
+    if arg_origin is not None and constraint_origin is not None:
+        if arg_origin != constraint_origin:
+            return False
+        arg_args = get_args(arg)
+        constraint_args = get_args(constraint)
+        if len(arg_args) != len(constraint_args):
+            return False
+        return all(
+            _type_arg_matches_constraint(a, c)
+            for a, c in zip(arg_args, constraint_args, strict=True)
+        )
     return arg == constraint
 
 

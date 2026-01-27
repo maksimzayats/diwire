@@ -143,6 +143,22 @@ def test_type_arg_matches_constraint_typeerror() -> None:
     assert _type_arg_matches_constraint(int, Exploding) is False
 
 
+def test_type_arg_matches_constraint_generic_alias_different_origin() -> None:
+    """Test that generic aliases with different origins don't match."""
+    assert _type_arg_matches_constraint(list[int], dict[str, int]) is False
+
+
+def test_type_arg_matches_constraint_generic_alias_different_arity() -> None:
+    """Test that generic aliases with same origin but different arity don't match."""
+    assert _type_arg_matches_constraint(tuple[int], tuple[int, str]) is False
+
+
+def test_type_arg_matches_constraint_non_generic_fallback() -> None:
+    """Test fallback equality for non-generic, non-type values."""
+    assert _type_arg_matches_constraint("foo", "foo") is True
+    assert _type_arg_matches_constraint("foo", "bar") is False
+
+
 def test_open_generic_instance_registration_error(container: Container) -> None:
     @dataclass
     class Box(Generic[T]):
