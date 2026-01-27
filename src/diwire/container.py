@@ -929,6 +929,16 @@ class Container:
                     is_async=is_async,
                     interface_key=key,
                 )
+            # Case 2b: Concrete generic alias - @container.register(MyGeneric[int])
+            # This is a generic alias with all concrete type arguments (no TypeVars),
+            # used as an interface key for registering a concrete class or factory.
+            if origin is not None and args:
+                return self._make_decorator(
+                    lifetime=lifetime,
+                    scope=scope,
+                    is_async=is_async,
+                    interface_key=key,
+                )
 
         # Case 3+4 merged: Type as key (could be bare decorator, interface decorator, or factory)
         # Ambiguous case - we can't tell if this is:

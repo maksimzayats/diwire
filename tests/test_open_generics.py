@@ -449,3 +449,47 @@ def test_typevar_dependency_default_without_typevar_map(container: Container) ->
 
     result = container.resolve(TypevarDefault)
     assert result.kind is str
+
+
+def test_concrete_generic_alias_as_interface_key(container: Container) -> None:
+    """Test registering a class as implementation for a concrete generic alias."""
+
+    @dataclass
+    class Box(Generic[T]):
+        value: str
+
+    @dataclass
+    class ConcreteIntBox:
+        value: str = "concrete int box"
+
+    # Register ConcreteIntBox as the implementation for Box[int]
+    decorator = cast(
+        "Callable[[type], type]",
+        container.register(Box[int]),
+    )
+    decorator(ConcreteIntBox)
+
+    result = container.resolve(Box[int])
+    assert isinstance(result, ConcreteIntBox)
+    assert result.value == "concrete int box"
+
+
+def test_concrete_generic_alias_factory_registration(container: Container) -> None:
+    """Test registering a factory for a concrete generic alias."""
+
+    @dataclass
+    class Box(Generic[T]):
+        value: str
+
+    decorator = cast(
+        "Callable[[Callable[..., object]], Callable[..., object]]",
+        container.register(Box[str]),
+    )
+
+    def create_str_box() -> Box[str]:
+        return Box(value="custom string box")
+
+    decorator(create_str_box)
+
+    result = container.resolve(Box[str])
+    assert result.value == "custom string box"

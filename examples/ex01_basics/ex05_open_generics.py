@@ -49,7 +49,7 @@ def create_non_generic_model_box() -> NonGenericModelBox:
     return NonGenericModelBox(value="non-generic box")
 
 
-@container.register
+@container.register(AnyBox[float])
 @dataclass
 class NonGenericModelBox2:
     value: str = "non-generic box 2"
@@ -57,6 +57,7 @@ class NonGenericModelBox2:
 
 print(container.resolve(AnyBox[int]))
 print(container.resolve(AnyBox[str]))
+print(container.resolve(AnyBox[float]))  # should use NonGenericModelBox2
 print(container.resolve(ModelBox[User]))
 print(container.resolve(NonGenericModelBox))
 print(container.resolve(NonGenericModelBox2))
