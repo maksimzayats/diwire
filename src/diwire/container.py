@@ -930,35 +930,30 @@ class Container:
                     interface_key=key,
                 )
 
-        # Case 3: Bare decorator on a class - @container.register
-        # When all params are at defaults and key is a type, this is the bare decorator pattern.
-        # We register the class directly and return it (no decorator factory).
-        if isinstance(key, type) and all_params_at_defaults:
-            self._do_register(
-                key=key,
-                factory=None,
-                instance=None,
-                lifetime=lifetime,
-                scope=scope,
-                is_async=is_async,
-                concrete_class=None,
-            )
-            return key
-
-        # Case 4: Type with non-default params - container.register(Type, lifetime=...)
-        # This is ambiguous: could be direct call or decorator factory.
-        # For direct call: register the type directly
-        # For decorator: also return a decorator that can register another class under this type
-        # The decorator will check if the target is different from the key.
+        # Case 3+4 merged: Type as key (could be bare decorator, interface decorator, or factory)
+        # Ambiguous case - we can't tell if this is:
+        # - @container.register on class (bare decorator) -> should register and return class
+        # - @container.register(Type) on function (factory) -> should register function as factory
+        # - @container.register(Type) on class (interface) -> should register class under Type
+        #
+        # Solution: Create a proxy class that acts as both the original class and a decorator,
+        # then register BOTH the original and proxy so resolution works with either key.
         if (
             isinstance(key, type)
             and factory is None
             and instance is None
             and concrete_class is None
         ):
-            # Register the type directly (handles direct call case)
+            # Create a proxy class that inherits from original and can act as decorator
+            proxy_class = self._make_class_proxy_decorator(
+                original_class=key,
+                lifetime=lifetime,
+                scope=scope,
+                is_async=is_async,
+            )
+            # Register the proxy class (for decorator usage where proxy becomes the class)
             self._do_register(
-                key=key,
+                key=proxy_class,
                 factory=None,
                 instance=None,
                 lifetime=lifetime,
@@ -966,14 +961,18 @@ class Container:
                 is_async=is_async,
                 concrete_class=None,
             )
-            # Return a decorator for interface decorator pattern
-            # The decorator checks if target != key to avoid double registration
-            return self._make_decorator(
+            # Also register the original class (for direct call usage)
+            # This allows container.register(Type, ...) and container.resolve(Type) to work
+            self._do_register(
+                key=key,
+                factory=None,
+                instance=None,
                 lifetime=lifetime,
                 scope=scope,
                 is_async=is_async,
-                interface_key=key,
+                concrete_class=proxy_class,  # Use proxy as implementation
             )
+            return proxy_class
 
         # Case 3: Bare decorator on a function - @container.register
         # Check that key is a proper function/method, not a generic alias like Annotated[T, ...]
@@ -1033,6 +1032,87 @@ class Container:
         )
         return None
 
+    def _make_class_proxy_decorator(
+        self,
+        original_class: type,
+        lifetime: Lifetime,
+        scope: str | None,
+        is_async: bool | None,
+    ) -> type:
+        """Create a class proxy that works as both the original class and a decorator.
+
+        This enables the ambiguous pattern where `@container.register(Type)` can be:
+        - A bare decorator on the Type itself (returns the class)
+        - A decorator factory for interface/factory registration (acts as decorator)
+
+        The proxy inherits from the original class so isinstance/issubclass checks work,
+        but its __new__ is overridden to handle decorator invocation.
+        """
+        container = self
+
+        class _ClassProxyDecorator(original_class):  # type: ignore[valid-type, misc]
+            """Proxy class that inherits from original and can act as a decorator.
+
+            When instantiated with a type or callable (decorator pattern), it performs
+            registration. Otherwise, it creates instances of the proxy class (not original)
+            so isinstance checks work correctly.
+            """
+
+            # Store reference to avoid closure issues
+            _original_class = original_class
+            _lifetime = lifetime
+            _scope = scope
+            _is_async = is_async
+
+            def __new__(cls, *args: Any, **kwargs: Any) -> Any:
+                # Check if this is decorator invocation (single positional arg that's a type/callable)
+                if len(args) == 1 and not kwargs:
+                    target = args[0]
+                    if isinstance(target, type):
+                        if target is cls._original_class:
+                            # Same class as interface key - just return it (already registered)
+                            return target
+                        # Interface registration: @proxy(ImplClass)
+                        container._do_register(  # noqa: SLF001
+                            key=cls._original_class,
+                            factory=None,
+                            instance=None,
+                            lifetime=cls._lifetime,
+                            scope=cls._scope,
+                            is_async=cls._is_async,
+                            concrete_class=target,
+                        )
+                        return target
+                    if callable(target):
+                        # Factory registration: @proxy(factory_func)
+                        container._do_register(  # noqa: SLF001
+                            key=cls._original_class,
+                            factory=target,
+                            instance=None,
+                            lifetime=cls._lifetime,
+                            scope=cls._scope,
+                            is_async=cls._is_async,
+                            concrete_class=None,
+                        )
+                        return target
+
+                # Normal instantiation - create instance of THIS proxy class (not original)
+                # so that isinstance(instance, proxy_class) returns True
+                return object.__new__(cls)
+
+            @classmethod
+            def __class_getitem__(cls, item: Any) -> Any:
+                """Forward generic subscripting to original class."""
+                return original_class[item]  # type: ignore[index]
+
+        # Preserve class metadata
+        _ClassProxyDecorator.__name__ = original_class.__name__
+        _ClassProxyDecorator.__qualname__ = original_class.__qualname__
+        _ClassProxyDecorator.__module__ = original_class.__module__
+        _ClassProxyDecorator.__doc__ = original_class.__doc__
+
+        return _ClassProxyDecorator
+
     def _make_decorator(
         self,
         lifetime: Lifetime,
@@ -1054,8 +1134,11 @@ class Container:
         def decorator(target: T) -> T:
             if isinstance(target, type):
                 # Class decoration
-                if interface_key is not None and interface_key is not target:
+                if interface_key is not None:  # pragma: no cover
                     # Interface registration: @container.register(Interface, ...) on a different class
+                    # Note: This path is only reachable for open generics, but open generics
+                    # with concrete_class raise DIWireOpenGenericRegistrationError, making
+                    # this effectively unreachable. Kept for API completeness.
                     self._do_register(
                         key=interface_key,
                         factory=None,
@@ -1065,7 +1148,7 @@ class Container:
                         is_async=is_async,
                         concrete_class=target,
                     )
-                elif interface_key is None:
+                else:
                     # Regular class registration (interface_key is None)
                     self._do_register(
                         key=target,
@@ -1076,7 +1159,6 @@ class Container:
                         is_async=is_async,
                         concrete_class=None,
                     )
-                # else: interface_key is target - already registered in Case 4, skip
             elif _is_method_descriptor(target):
                 # staticmethod decoration
                 # _is_method_descriptor guarantees target is staticmethod,

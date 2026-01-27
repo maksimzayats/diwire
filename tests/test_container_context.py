@@ -2637,3 +2637,189 @@ class TestCrossThreadDefaultContainer:
             assert results["handler_result"]["service_id"] == "instance-method-test"
         finally:
             container_context.reset(token)
+
+
+# ============================================================================
+# Deferred Registration with Type Key Tests
+# ============================================================================
+
+
+class TestDeferredRegistrationWithTypeKey:
+    """Tests for deferred registration when using a type as key without container."""
+
+    def test_deferred_factory_with_type_key(self) -> None:
+        """Deferred factory registration with type key works when container is set later."""
+        initial_token = _current_container.set(None)
+        try:
+            if hasattr(_thread_local_fallback, "container"):
+                del _thread_local_fallback.container
+            container_context._default_container = None
+            container_context._deferred_registrations.clear()
+
+            # Register factory with type key and non-default params (deferred)
+            # Use ServiceA which is defined at module level
+            @container_context.register(ServiceA, lifetime=Lifetime.SINGLETON)  # type: ignore[misc, untyped-decorator]
+            def create_service() -> ServiceA:
+                return ServiceA(id="deferred-factory-value")
+
+            # Verify function was returned
+            assert callable(create_service)
+
+            container = Container(register_if_missing=False)
+            token = container_context.set_current(container)
+            try:
+                service = container.resolve(ServiceA)
+                assert service.id == "deferred-factory-value"
+            finally:
+                container_context.reset(token)
+        finally:
+            _current_container.reset(initial_token)
+            container_context._deferred_registrations.clear()
+
+    def test_deferred_interface_registration_with_type_key(self) -> None:
+        """Deferred interface registration with type key works when container is set later."""
+        initial_token = _current_container.set(None)
+        try:
+            if hasattr(_thread_local_fallback, "container"):
+                del _thread_local_fallback.container
+            container_context._default_container = None
+            container_context._deferred_registrations.clear()
+
+            class IDatabase:
+                pass
+
+            class PostgresDB(IDatabase):
+                pass
+
+            # Register with interface key and non-default params (deferred)
+            @container_context.register(IDatabase, lifetime=Lifetime.SINGLETON)
+            class PostgresDBImpl(IDatabase):  # type: ignore[misc]
+                pass
+
+            container = Container(register_if_missing=False)
+            token = container_context.set_current(container)
+            try:
+                db = container.resolve(IDatabase)
+                assert isinstance(db, PostgresDBImpl)
+            finally:
+                container_context.reset(token)
+        finally:
+            _current_container.reset(initial_token)
+            container_context._deferred_registrations.clear()
+
+    def test_type_key_with_container_set_delegates_to_container(self) -> None:
+        """When container is set, type key registration delegates to container."""
+        container = Container()
+        token = container_context.set_current(container)
+        try:
+            container_context._deferred_registrations.clear()
+
+            class IRepository:
+                pass
+
+            @container_context.register(IRepository)
+            class SqlRepository(IRepository):  # type: ignore[call-arg]
+                pass
+
+            # Should be registered directly, not deferred
+            assert not container_context._deferred_registrations
+
+            repo = container.resolve(IRepository)
+            assert isinstance(repo, SqlRepository)
+        finally:
+            container_context.reset(token)
+
+    def test_type_decorator_applied_after_container_set(self) -> None:
+        """Type decorator applies when container becomes available between creation and use."""
+        initial_token = _current_container.set(None)
+        try:
+            if hasattr(_thread_local_fallback, "container"):
+                del _thread_local_fallback.container
+            container_context._default_container = None
+            container_context._deferred_registrations.clear()
+
+            class MyInterface:
+                pass
+
+            # Create decorator without container
+            decorator = container_context.register(MyInterface, lifetime=Lifetime.SINGLETON)
+
+            # Set container
+            container = Container(register_if_missing=False)
+            token = container_context.set_current(container)
+            try:
+                # Apply decorator - should delegate to container
+                @decorator
+                class MyImpl(MyInterface):  # type: ignore[misc]
+                    pass
+
+                instance = container.resolve(MyInterface)
+                assert isinstance(instance, MyImpl)
+            finally:
+                container_context.reset(token)
+        finally:
+            _current_container.reset(initial_token)
+            container_context._deferred_registrations.clear()
+
+    def test_staticmethod_deferred_registration(self) -> None:
+        """Staticmethod decorator defers when no container is set."""
+        initial_token = _current_container.set(None)
+        try:
+            if hasattr(_thread_local_fallback, "container"):
+                del _thread_local_fallback.container
+            container_context._default_container = None
+            container_context._deferred_registrations.clear()
+
+            @staticmethod  # type: ignore[misc]
+            @container_context.register
+            def create_service() -> ServiceA:
+                return ServiceA(id="staticmethod-deferred")
+
+            # Should have deferred registration
+            assert len(container_context._deferred_registrations) == 1
+
+            container = Container(register_if_missing=False)
+            token = container_context.set_current(container)
+            try:
+                service = container.resolve(ServiceA)
+                assert service.id == "staticmethod-deferred"
+            finally:
+                container_context.reset(token)
+        finally:
+            _current_container.reset(initial_token)
+            container_context._deferred_registrations.clear()
+
+    def test_type_decorator_on_same_type_deferred(self) -> None:
+        """Type decorator applied to same type defers correctly."""
+        initial_token = _current_container.set(None)
+        try:
+            if hasattr(_thread_local_fallback, "container"):
+                del _thread_local_fallback.container
+            container_context._default_container = None
+            container_context._deferred_registrations.clear()
+
+            class MyConfig:
+                pass
+
+            # Get decorator with non-default params without container
+            decorator = container_context.register(MyConfig, lifetime=Lifetime.SINGLETON)
+
+            # Apply to the SAME class (edge case: target is interface_key)
+            result = decorator(MyConfig)  # type: ignore[misc]
+
+            # Should return the original class
+            assert result is MyConfig
+
+            # Should have deferred registration
+            assert len(container_context._deferred_registrations) == 1
+
+            container = Container(register_if_missing=False)
+            token = container_context.set_current(container)
+            try:
+                config = container.resolve(MyConfig)
+                assert isinstance(config, MyConfig)
+            finally:
+                container_context.reset(token)
+        finally:
+            _current_container.reset(initial_token)
+            container_context._deferred_registrations.clear()

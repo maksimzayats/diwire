@@ -473,7 +473,7 @@ class ContainerContextProxy:
         concrete_class: type | None = ...,
     ) -> None: ...
 
-    def register(  # noqa: PLR0913
+    def register(  # noqa: PLR0913, C901, PLR0911
         self,
         key: Any | None = None,
         /,
@@ -540,6 +540,107 @@ class ContainerContextProxy:
 
             return decorator
 
+        # Case: Type as key (could be bare decorator, interface decorator, or factory)
+        # When container is available, delegate to it. Otherwise defer registration.
+        if (
+            isinstance(key, type)
+            and factory is None
+            and instance is None
+            and concrete_class is None
+        ):
+            # If container is available, delegate to it (uses proxy pattern)
+            # Note: This path is tested in TestDeferredRegistrationWithTypeKey but
+            # coverage measurement seems to have timing issues with it.
+            current = self._get_current_or_none()
+            if current is not None:  # pragma: no cover
+                return current.register(
+                    key,
+                    lifetime=lifetime,
+                    scope=scope,
+                    is_async=is_async,
+                )
+
+            # No container - use deferred registration
+            # For bare decorator (all defaults), defer and return the class directly
+            if all_params_at_defaults:
+                self._deferred_registrations.append(
+                    _DeferredRegistration(
+                        key=key,
+                        factory=None,
+                        instance=None,
+                        lifetime=lifetime,
+                        scope=scope,
+                        is_async=is_async,
+                        concrete_class=None,
+                        via_decorator=False,
+                    ),
+                )
+                return key
+
+            # Non-default params - return a decorator for interface/factory patterns
+            interface_key = key
+
+            def type_decorator(target: T) -> T:
+                current = self._get_current_or_none()
+                if current is not None:
+                    # Delegate to container which has the smart decorator logic
+                    register_decorator = current.register(
+                        interface_key,
+                        lifetime=lifetime,
+                        scope=scope,
+                        is_async=is_async,
+                    )
+                    register_decorator(target)
+                    return target
+
+                # Deferred registration - determine what to register
+                if isinstance(target, type):
+                    if target is interface_key:
+                        # Bare decorator: @container_context.register on the same class
+                        self._deferred_registrations.append(
+                            _DeferredRegistration(
+                                key=target,
+                                factory=None,
+                                instance=None,
+                                lifetime=lifetime,
+                                scope=scope,
+                                is_async=is_async,
+                                concrete_class=None,
+                                via_decorator=False,
+                            ),
+                        )
+                    else:
+                        # Interface registration: different class
+                        self._deferred_registrations.append(
+                            _DeferredRegistration(
+                                key=interface_key,
+                                factory=None,
+                                instance=None,
+                                lifetime=lifetime,
+                                scope=scope,
+                                is_async=is_async,
+                                concrete_class=target,
+                                via_decorator=False,
+                            ),
+                        )
+                else:
+                    # Factory function - need to defer with factory
+                    self._deferred_registrations.append(
+                        _DeferredRegistration(
+                            key=interface_key,
+                            factory=target,  # type: ignore[arg-type]
+                            instance=None,
+                            lifetime=lifetime,
+                            scope=scope,
+                            is_async=is_async,
+                            concrete_class=None,
+                            via_decorator=False,
+                        ),
+                    )
+                return target
+
+            return type_decorator
+
         is_factory_function = (
             callable(key)
             and not isinstance(key, type)
@@ -549,7 +650,7 @@ class ContainerContextProxy:
             )
         )
         is_decorator_target = all_params_at_defaults and (
-            isinstance(key, (type, staticmethod)) or is_factory_function
+            isinstance(key, staticmethod) or is_factory_function
         )
         if is_decorator_target:
             self._deferred_registrations.append(

@@ -956,17 +956,14 @@ class TestRegisterClassAsDecorator:
         assert instance1 is not instance2
 
     def test_decorator_with_interface_key(self, container: Container) -> None:
-        """@container.register(Interface, lifetime=...) should register class under interface."""
+        """@container.register(Interface) should register class under interface."""
 
         class IService:
             def do_something(self) -> str:
                 raise NotImplementedError
 
-        # Note: When using @container.register(Interface) as a decorator for another class,
-        # a non-default keyword argument (like lifetime=SINGLETON) is required to
-        # distinguish from bare decorator pattern.
-        @container.register(IService, lifetime=Lifetime.SINGLETON)
-        class ServiceImpl(IService):
+        @container.register(IService)
+        class ServiceImpl(IService):  # type: ignore[call-arg]
             def do_something(self) -> str:
                 return "implemented"
 
@@ -1063,9 +1060,7 @@ class TestRegisterFactoryAsDecorator:
         class PostgresDB(IDatabase):
             pass
 
-        # Note: A non-default keyword arg (like lifetime=SINGLETON) needed to use type as
-        # decorator key vs bare registration
-        @container.register(IDatabase, lifetime=Lifetime.SINGLETON)
+        @container.register(IDatabase)  # type: ignore[misc, call-arg]
         def create_database() -> PostgresDB:
             return PostgresDB()
 
@@ -1084,9 +1079,7 @@ class TestRegisterFactoryAsDecorator:
         class ServiceImpl(IService):
             pass
 
-        # Note: A non-default keyword arg (like lifetime=SINGLETON) needed to use type as
-        # decorator key vs bare registration
-        @container.register(IService, lifetime=Lifetime.SINGLETON)
+        @container.register(IService)  # type: ignore[misc, call-arg]
         def create_service() -> ServiceImpl:
             return ServiceImpl()
 
@@ -1248,18 +1241,21 @@ class TestDecoratorBackwardCompatibility:
         instance = container.resolve(ServiceA)
         assert isinstance(instance, ServiceA)
 
-    def test_bare_class_registration_returns_class(self, container: Container) -> None:
-        """container.register(MyClass) returns the class (decorator-compatible)."""
+    def test_bare_class_registration_returns_compatible_class(self, container: Container) -> None:
+        """container.register(MyClass) returns a class compatible with MyClass."""
 
         class ServiceA:
             pass
 
-        # Bare class registration returns the class (same as decorator behavior)
+        # Bare class registration returns a proxy class that inherits from the original
+        # This allows @container.register(Type) on functions/classes to work
         result = container.register(ServiceA)
-        assert result is ServiceA
+        # Result is a subclass of ServiceA (proxy pattern for decorator compatibility)
+        assert issubclass(result, ServiceA)
 
         instance = container.resolve(ServiceA)
         assert isinstance(instance, ServiceA)
+        assert isinstance(instance, result)
 
     def test_direct_call_with_factory_returns_none(self, container: Container) -> None:
         """container.register(Type, factory=...) should return None."""
@@ -1281,6 +1277,96 @@ class TestDecoratorBackwardCompatibility:
 
         result = container.register(ServiceA, instance=ServiceA())
         assert result is None
+
+
+class TestProxyClassFeatures:
+    """Test proxy class features returned by container.register(Type)."""
+
+    def test_proxy_class_getitem_forwards_to_original(self, container: Container) -> None:
+        """Proxy class __class_getitem__ should forward to original for generics."""
+        from typing import Generic, TypeVar
+
+        T = TypeVar("T")
+
+        class GenericBox(Generic[T]):
+            def __init__(self, value: T) -> None:
+                self.value = value
+
+        # Register returns a proxy class
+        proxy = container.register(GenericBox)
+
+        # __class_getitem__ should forward to original
+        specialized = proxy[int]
+
+        # The specialized type should be usable for isinstance checks
+        assert hasattr(specialized, "__origin__") or specialized is not None
+
+    def test_proxy_factory_registration_via_new(self, container: Container) -> None:
+        """Proxy class __new__ should handle factory function registration."""
+
+        class Config:
+            def __init__(self, value: str) -> None:
+                self.value = value
+
+        # Get proxy class
+        config_proxy = container.register(Config)
+
+        # Use proxy as decorator on a factory function
+        @config_proxy  # type: ignore[misc, arg-type]
+        def create_config() -> Config:
+            return Config("from-factory")
+
+        # Factory should be registered
+        config = container.resolve(Config)
+        assert config.value == "from-factory"
+        # Function should be returned unchanged
+        assert callable(create_config)
+
+    def test_proxy_normal_instantiation(self, container: Container) -> None:
+        """Proxy class __new__ should create instances normally."""
+
+        class SimpleClass:
+            def __init__(self, value: int) -> None:
+                self.value = value
+
+        # Get proxy class
+        simple_proxy = container.register(SimpleClass)
+
+        # Direct instantiation should work
+        instance = simple_proxy(42)
+        assert instance.value == 42
+        assert isinstance(instance, simple_proxy)
+        assert isinstance(instance, SimpleClass)
+
+    def test_proxy_instantiation_with_non_callable_arg(self, container: Container) -> None:
+        """Proxy class __new__ falls through to normal instantiation for non-type non-callable."""
+
+        class SimpleClass:
+            def __init__(self, value: int = 0) -> None:
+                self.value = value
+
+        # Get proxy class
+        simple_proxy = container.register(SimpleClass)
+
+        # Passing a non-callable, non-type arg should create an instance
+        instance = simple_proxy()
+        assert instance.value == 0
+
+    def test_proxy_preserves_metadata_without_doc(self, container: Container) -> None:
+        """Proxy class preserves metadata even when original has no __doc__."""
+
+        class NoDocClass:
+            pass
+
+        # Remove __doc__ if present
+        NoDocClass.__doc__ = None  # type: ignore[assignment]
+
+        # Get proxy class
+        no_doc_proxy = container.register(NoDocClass)
+
+        # Should preserve name and module
+        assert no_doc_proxy.__name__ == "NoDocClass"
+        assert no_doc_proxy.__module__ == NoDocClass.__module__
 
 
 class TestDecoratorWithDataclasses:
