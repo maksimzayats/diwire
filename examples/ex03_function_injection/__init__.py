@@ -1,1 +1,1 @@
-"""Function injection examples using FromDI and decorators."""
+"""Function injection examples using Injected and decorators."""

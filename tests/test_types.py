@@ -1,9 +1,9 @@
-"""Tests for types module (Lifetime, FromDI, Factory)."""
+"""Tests for types module (Lifetime, Injected, Factory)."""
 
 from enum import Enum
 from typing import Annotated, get_args, get_origin
 
-from diwire.types import FromDI, Lifetime
+from diwire.types import Injected, Lifetime
 
 
 class TestLifetime:
@@ -32,32 +32,32 @@ class TestLifetime:
         assert Lifetime.SCOPED_SINGLETON in members
 
 
-class TestFromDI:
-    def test_from_di_instantiation(self) -> None:
-        """FromDI can be instantiated."""
-        marker = FromDI()
-        assert isinstance(marker, FromDI)
+class TestInjected:
+    def test_injected_instantiation(self) -> None:
+        """Injected can be instantiated."""
+        marker = Injected()
+        assert isinstance(marker, Injected)
 
-    def test_from_di_multiple_instances(self) -> None:
-        """Multiple FromDI instances are independent."""
-        marker1 = FromDI()
-        marker2 = FromDI()
+    def test_injected_multiple_instances(self) -> None:
+        """Multiple Injected instances are independent."""
+        marker1 = Injected()
+        marker2 = Injected()
 
         # They are different objects
         assert marker1 is not marker2
 
-    def test_from_di_usable_in_annotated(self) -> None:
-        """FromDI can be used in Annotated."""
+    def test_injected_usable_in_annotated(self) -> None:
+        """Injected can be used in Annotated."""
 
         class ServiceA:
             pass
 
-        annotated = Annotated[ServiceA, FromDI()]
+        annotated = Annotated[ServiceA, Injected()]
 
         assert get_origin(annotated) is Annotated
         args = get_args(annotated)
         assert args[0] is ServiceA
-        assert isinstance(args[1], FromDI)
+        assert isinstance(args[1], Injected)
 
 
 class TestFactoryProtocol:

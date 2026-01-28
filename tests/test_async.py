@@ -16,11 +16,11 @@ from typing import Annotated
 import pytest
 
 from diwire.container import (
-    AsyncInjected,
-    AsyncScopedInjected,
+    AsyncInjectedFunction,
+    AsyncScopedInjectedFunction,
     Container,
-    Injected,
-    ScopedInjected,
+    InjectedFunction,
+    ScopedInjectedFunction,
     _current_scope,
 )
 from diwire.exceptions import (
@@ -29,7 +29,7 @@ from diwire.exceptions import (
     DIWireAsyncGeneratorFactoryWithoutScopeError,
     DIWireCircularDependencyError,
 )
-from diwire.types import FromDI, Lifetime
+from diwire.types import Injected, Lifetime
 
 # =============================================================================
 # Test Data Classes
@@ -491,11 +491,11 @@ class TestAsyncInjected:
     ) -> None:
         """aresolve() on async function returns AsyncInjected."""
 
-        async def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         injected = await container.aresolve(handler)
-        assert isinstance(injected, AsyncInjected)
+        assert isinstance(injected, AsyncInjectedFunction)
 
     async def test_async_injected_resolves_transient_deps(
         self,
@@ -503,7 +503,7 @@ class TestAsyncInjected:
     ) -> None:
         """AsyncInjected resolves transient deps fresh each call."""
 
-        async def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         injected = await container.aresolve(handler)
@@ -521,7 +521,7 @@ class TestAsyncInjected:
     ) -> None:
         """AsyncInjected resolves singleton deps to same instance."""
 
-        async def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         injected = await container_singleton.aresolve(handler)
@@ -534,7 +534,7 @@ class TestAsyncInjected:
     async def test_async_injected_preserves_metadata(self, container: Container) -> None:
         """AsyncInjected preserves function metadata."""
 
-        async def my_handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        async def my_handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             """Handler docstring."""
             return service
 
@@ -548,11 +548,11 @@ class TestAsyncInjected:
         self,
         container: Container,
     ) -> None:
-        """AsyncInjected signature excludes FromDI parameters."""
+        """AsyncInjectedFunction signature excludes Injected parameters."""
 
         async def handler(
             value: int,
-            service: Annotated[ServiceA, FromDI()],
+            service: Annotated[ServiceA, Injected()],
         ) -> int:
             return value
 
@@ -566,7 +566,7 @@ class TestAsyncInjected:
     async def test_async_injected_repr(self, container: Container) -> None:
         """AsyncInjected has informative repr."""
 
-        async def my_handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        async def my_handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         injected = await container.aresolve(my_handler)
@@ -590,11 +590,11 @@ class TestAsyncScopedInjected:
     ) -> None:
         """aresolve() with scope parameter returns AsyncScopedInjected."""
 
-        async def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         injected = await container.aresolve(handler, scope="request")
-        assert isinstance(injected, AsyncScopedInjected)
+        assert isinstance(injected, AsyncScopedInjectedFunction)
 
     async def test_async_scoped_injected_fresh_scope_per_call(
         self,
@@ -603,7 +603,7 @@ class TestAsyncScopedInjected:
         """AsyncScopedInjected creates a fresh scope per call."""
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        async def handler(session: Annotated[Session, FromDI()]) -> Session:
+        async def handler(session: Annotated[Session, Injected()]) -> Session:
             return session
 
         injected = await container.aresolve(handler, scope="request")
@@ -622,8 +622,8 @@ class TestAsyncScopedInjected:
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
         async def handler(
-            x: Annotated[ServiceXForScope, FromDI()],
-            y: Annotated[ServiceYForScope, FromDI()],
+            x: Annotated[ServiceXForScope, Injected()],
+            y: Annotated[ServiceYForScope, Injected()],
         ) -> tuple[ServiceXForScope, ServiceYForScope]:
             return x, y
 
@@ -637,7 +637,7 @@ class TestAsyncScopedInjected:
     async def test_async_scoped_injected_repr(self, container: Container) -> None:
         """AsyncScopedInjected has informative repr."""
 
-        async def my_handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        async def my_handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         injected = await container.aresolve(my_handler, scope="request")
@@ -800,14 +800,14 @@ class TestAsyncResolveOnSyncFunction:
     ) -> None:
         """aresolve() on sync function returns Injected (not AsyncInjected)."""
 
-        def sync_handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        def sync_handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         injected = await container.aresolve(sync_handler)
 
         # Sync function should return Injected, not AsyncInjected
-        assert isinstance(injected, Injected)
-        assert not isinstance(injected, AsyncInjected)  # type: ignore[unreachable]
+        assert isinstance(injected, InjectedFunction)
+        assert not isinstance(injected, AsyncInjectedFunction)  # type: ignore[unreachable]
 
     async def test_aresolve_sync_function_with_scope_returns_scoped_injected(
         self,
@@ -815,13 +815,13 @@ class TestAsyncResolveOnSyncFunction:
     ) -> None:
         """aresolve() on sync function with scope returns ScopedInjected."""
 
-        def sync_handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        def sync_handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         injected = await container.aresolve(sync_handler, scope="request")
 
-        assert isinstance(injected, ScopedInjected)
-        assert not isinstance(injected, AsyncScopedInjected)  # type: ignore[unreachable]
+        assert isinstance(injected, ScopedInjectedFunction)
+        assert not isinstance(injected, AsyncScopedInjectedFunction)  # type: ignore[unreachable]
 
 
 # =============================================================================
@@ -838,11 +838,11 @@ class TestSyncResolveReturnsAsyncInjected:
     ) -> None:
         """resolve() on async function returns AsyncInjected."""
 
-        async def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         injected = container.resolve(handler)
-        assert isinstance(injected, AsyncInjected)
+        assert isinstance(injected, AsyncInjectedFunction)
 
     def test_resolve_returns_async_scoped_injected_with_scope(
         self,
@@ -850,11 +850,11 @@ class TestSyncResolveReturnsAsyncInjected:
     ) -> None:
         """resolve() on async function with scope returns AsyncScopedInjected."""
 
-        async def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         injected = container.resolve(handler, scope="request")
-        assert isinstance(injected, AsyncScopedInjected)
+        assert isinstance(injected, AsyncScopedInjectedFunction)
 
     async def test_resolve_async_function_with_async_factory(
         self,
@@ -865,13 +865,13 @@ class TestSyncResolveReturnsAsyncInjected:
         async def create_service() -> ServiceA:
             return ServiceA(id="from-async-factory")
 
-        async def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         container.register(ServiceA, factory=create_service)
         injected = container.resolve(handler)
 
-        assert isinstance(injected, AsyncInjected)
+        assert isinstance(injected, AsyncInjectedFunction)
         result = await injected()
         assert result.id == "from-async-factory"
 
@@ -883,14 +883,14 @@ class TestSyncResolveReturnsAsyncInjected:
 
         async def handler(
             request: str,
-            session: Annotated[Session, FromDI()],
+            session: Annotated[Session, Injected()],
         ) -> dict[str, str]:
             return {"session_id": session.id}
 
         container.register(Session, factory=get_session)
         resolved_handler = container.resolve(handler)
 
-        assert isinstance(resolved_handler, AsyncInjected)
+        assert isinstance(resolved_handler, AsyncInjectedFunction)
         result = await resolved_handler("dummy-request")
         assert result == {"session_id": "session-123"}
 
@@ -900,13 +900,13 @@ class TestSyncResolveReturnsAsyncInjected:
     ) -> None:
         """resolve() on sync function still returns Injected (not AsyncInjected)."""
 
-        def sync_handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        def sync_handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         injected = container.resolve(sync_handler)
 
-        assert isinstance(injected, Injected)
-        assert not isinstance(injected, AsyncInjected)  # type: ignore[unreachable]
+        assert isinstance(injected, InjectedFunction)
+        assert not isinstance(injected, AsyncInjectedFunction)  # type: ignore[unreachable]
 
     def test_resolve_sync_function_with_scope_still_returns_scoped_injected(
         self,
@@ -914,13 +914,13 @@ class TestSyncResolveReturnsAsyncInjected:
     ) -> None:
         """resolve() on sync function with scope still returns ScopedInjected."""
 
-        def sync_handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        def sync_handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         injected = container.resolve(sync_handler, scope="request")
 
-        assert isinstance(injected, ScopedInjected)
-        assert not isinstance(injected, AsyncScopedInjected)  # type: ignore[unreachable]
+        assert isinstance(injected, ScopedInjectedFunction)
+        assert not isinstance(injected, AsyncScopedInjectedFunction)  # type: ignore[unreachable]
 
 
 # =============================================================================
@@ -1099,7 +1099,7 @@ class TestNameErrorHandlingInFunctionResolution:
         """resolve() on function falls back to Injected when NameError occurs."""
         from unittest.mock import patch
 
-        def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         # Patch get_injected_dependencies to raise NameError
@@ -1111,8 +1111,8 @@ class TestNameErrorHandlingInFunctionResolution:
             injected = container.resolve(handler)
 
         # Should return Injected (not ScopedInjected) since effective_scope = None
-        assert isinstance(injected, Injected)
-        assert not isinstance(injected, ScopedInjected)  # type: ignore[unreachable]
+        assert isinstance(injected, InjectedFunction)
+        assert not isinstance(injected, ScopedInjectedFunction)  # type: ignore[unreachable]
 
     def test_resolve_async_function_with_nameerror_falls_back_to_async_injected(
         self,
@@ -1121,7 +1121,7 @@ class TestNameErrorHandlingInFunctionResolution:
         """resolve() on async function falls back to AsyncInjected when NameError occurs."""
         from unittest.mock import patch
 
-        async def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         # Patch get_injected_dependencies to raise NameError
@@ -1133,8 +1133,8 @@ class TestNameErrorHandlingInFunctionResolution:
             injected = container.resolve(handler)
 
         # Should return AsyncInjected (not AsyncScopedInjected) since effective_scope = None
-        assert isinstance(injected, AsyncInjected)
-        assert not isinstance(injected, AsyncScopedInjected)  # type: ignore[unreachable]
+        assert isinstance(injected, AsyncInjectedFunction)
+        assert not isinstance(injected, AsyncScopedInjectedFunction)  # type: ignore[unreachable]
 
     async def test_aresolve_function_with_nameerror_falls_back_to_no_scope(
         self,
@@ -1143,7 +1143,7 @@ class TestNameErrorHandlingInFunctionResolution:
         """aresolve() on function falls back to Injected when NameError occurs."""
         from unittest.mock import patch
 
-        def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         # Patch get_injected_dependencies to raise NameError
@@ -1155,8 +1155,8 @@ class TestNameErrorHandlingInFunctionResolution:
             injected = await container.aresolve(handler)
 
         # Should return Injected (not ScopedInjected) since effective_scope = None
-        assert isinstance(injected, Injected)
-        assert not isinstance(injected, ScopedInjected)  # type: ignore[unreachable]
+        assert isinstance(injected, InjectedFunction)
+        assert not isinstance(injected, ScopedInjectedFunction)  # type: ignore[unreachable]
 
     async def test_aresolve_async_function_with_nameerror_falls_back_to_async_injected(
         self,
@@ -1165,7 +1165,7 @@ class TestNameErrorHandlingInFunctionResolution:
         """aresolve() on async function falls back to AsyncInjected when NameError occurs."""
         from unittest.mock import patch
 
-        async def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         # Patch get_injected_dependencies to raise NameError
@@ -1177,8 +1177,8 @@ class TestNameErrorHandlingInFunctionResolution:
             injected = await container.aresolve(handler)
 
         # Should return AsyncInjected (not AsyncScopedInjected) since effective_scope = None
-        assert isinstance(injected, AsyncInjected)
-        assert not isinstance(injected, AsyncScopedInjected)  # type: ignore[unreachable]
+        assert isinstance(injected, AsyncInjectedFunction)
+        assert not isinstance(injected, AsyncScopedInjectedFunction)  # type: ignore[unreachable]
 
 
 # =============================================================================

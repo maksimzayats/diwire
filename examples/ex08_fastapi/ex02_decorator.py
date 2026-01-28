@@ -20,7 +20,7 @@ from typing import Annotated
 from fastapi import FastAPI
 from fastapi.params import Query
 
-from diwire import Container, FromDI
+from diwire import Container, Injected
 
 app = FastAPI()
 container = Container()
@@ -78,7 +78,7 @@ container.register(Service, factory=get_service, scope="request")
 @container.resolve(scope="request")
 async def greet(
     name: Annotated[str, Query()],
-    service: Annotated[Service, FromDI()],
+    service: Annotated[Service, Injected()],
 ) -> dict[str, str]:
     """Endpoint that uses the layered dependencies."""
     print(f"Handler: processing request for {name}")

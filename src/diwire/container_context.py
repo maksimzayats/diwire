@@ -17,8 +17,8 @@ from diwire.types import Factory, Lifetime
 if TYPE_CHECKING:
     from diwire.container import Container
 
-# Import signature builder to exclude FromDI parameters from signature
-from diwire.container import _build_signature_without_fromdi
+# Import signature builder to exclude Injected parameters from signature
+from diwire.container import _build_signature_without_injected
 
 T = TypeVar("T")
 _C = TypeVar("_C", bound=type)
@@ -87,9 +87,9 @@ class _ContextInjected:
         self.__name__: str = getattr(func, "__name__", repr(func))
         self.__wrapped__: Callable[..., Any] = func
 
-        # Build signature at decoration time by detecting FromDI in annotations
+        # Build signature at decoration time by detecting Injected in annotations
         # This allows frameworks like FastAPI to correctly identify parameters
-        self.__signature__ = _build_signature_without_fromdi(func)
+        self.__signature__ = _build_signature_without_injected(func)
 
     def _get_injected(self) -> Any:
         """Get the Injected wrapper from the current container."""
@@ -129,9 +129,9 @@ class _ContextScopedInjected:
         self.__name__: str = getattr(func, "__name__", repr(func))
         self.__wrapped__: Callable[..., Any] = func
 
-        # Build signature at decoration time by detecting FromDI in annotations
+        # Build signature at decoration time by detecting Injected in annotations
         # This allows frameworks like FastAPI to correctly identify parameters
-        self.__signature__ = _build_signature_without_fromdi(func)
+        self.__signature__ = _build_signature_without_injected(func)
 
     def _get_scoped_injected(self) -> Any:
         """Get the ScopedInjected wrapper from the current container."""
@@ -169,9 +169,9 @@ class _AsyncContextInjected:
         self.__name__: str = getattr(func, "__name__", repr(func))
         self.__wrapped__: Callable[..., Coroutine[Any, Any, Any]] = func
 
-        # Build signature at decoration time by detecting FromDI in annotations
+        # Build signature at decoration time by detecting Injected in annotations
         # This allows frameworks like FastAPI to correctly identify parameters
-        self.__signature__ = _build_signature_without_fromdi(func)
+        self.__signature__ = _build_signature_without_injected(func)
 
     def _get_async_injected(self) -> Any:
         """Get the AsyncInjected wrapper from the current container."""
@@ -211,9 +211,9 @@ class _AsyncContextScopedInjected:
         self.__name__: str = getattr(func, "__name__", repr(func))
         self.__wrapped__: Callable[..., Coroutine[Any, Any, Any]] = func
 
-        # Build signature at decoration time by detecting FromDI in annotations
+        # Build signature at decoration time by detecting Injected in annotations
         # This allows frameworks like FastAPI to correctly identify parameters
-        self.__signature__ = _build_signature_without_fromdi(func)
+        self.__signature__ = _build_signature_without_injected(func)
 
     def _get_async_scoped_injected(self) -> Any:
         """Get the AsyncScopedInjected wrapper from the current container."""
@@ -397,7 +397,7 @@ class ContainerContextProxy:
         Examples:
             # Decorator usage (container looked up at call time):
             @container_context.resolve(scope="request")
-            async def handler(service: Annotated[Service, FromDI()]) -> dict:
+            async def handler(service: Annotated[Service, Injected()]) -> dict:
                 ...
 
             # Direct resolution:

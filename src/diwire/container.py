@@ -74,7 +74,7 @@ from diwire.exceptions import (
 )
 from diwire.registry import Registration
 from diwire.service_key import Component, ServiceKey
-from diwire.types import Factory, FromDI, Lifetime
+from diwire.types import Factory, Injected, Lifetime
 
 T = TypeVar("T", bound=Any)
 _C = TypeVar("_C", bound=type)  # For class decorator
@@ -274,12 +274,12 @@ class _OpenGenericRegistration:
     typevars: tuple[Any, ...]
 
 
-def _has_fromdi_annotation(param: inspect.Parameter) -> bool:
-    """Check if a parameter has FromDI in its annotation.
+def _has_injected_annotation(param: inspect.Parameter) -> bool:
+    """Check if a parameter has Injected in its annotation.
 
     Handles both:
     - String annotations (from `from __future__ import annotations` / PEP 563)
-    - Resolved Annotated types with FromDI metadata
+    - Resolved Annotated types with Injected metadata
     """
     annotation = param.annotation
     if annotation is inspect.Parameter.empty:
@@ -287,21 +287,21 @@ def _has_fromdi_annotation(param: inspect.Parameter) -> bool:
 
     # String annotation check (PEP 563)
     if isinstance(annotation, str):
-        return "FromDI" in annotation
+        return "Injected" in annotation
 
-    # Check for Annotated type with FromDI metadata
+    # Check for Annotated type with Injected metadata
     # For Annotated[T, ...], args[0] is T and args[1:] are the metadata
     if get_origin(annotation) is Annotated:
         args = get_args(annotation)
-        return any(isinstance(arg, FromDI) for arg in args[1:])
+        return any(isinstance(arg, Injected) for arg in args[1:])
 
     return False
 
 
-def _build_signature_without_fromdi(func: Callable[..., Any]) -> inspect.Signature:
-    """Build a signature excluding parameters marked with FromDI."""
+def _build_signature_without_injected(func: Callable[..., Any]) -> inspect.Signature:
+    """Build a signature excluding parameters marked with Injected."""
     original_sig = signature(func)
-    new_params = [p for p in original_sig.parameters.values() if not _has_fromdi_annotation(p)]
+    new_params = [p for p in original_sig.parameters.values() if not _has_injected_annotation(p)]
     return original_sig.replace(parameters=new_params)
 
 
@@ -361,7 +361,7 @@ def _get_generic_origin_and_args(value: Any) -> tuple[type | None, tuple[Any, ..
     return origin, get_args(value)
 
 
-class Injected(Generic[T]):
+class InjectedFunction(Generic[T]):
     """A callable wrapper that resolves dependencies on each call.
 
     This ensures transient dependencies are created fresh on every invocation,
@@ -389,9 +389,9 @@ class Injected(Generic[T]):
         self.__name__: str = getattr(func, "__name__", repr(func))
         self.__wrapped__: Callable[..., T] = func
 
-        # Build signature at decoration time by detecting FromDI in annotations
+        # Build signature at decoration time by detecting Injected in annotations
         # This works even with string annotations from PEP 563
-        self.__signature__ = _build_signature_without_fromdi(func)
+        self.__signature__ = _build_signature_without_injected(func)
 
     def _ensure_initialized(self) -> None:
         """Lazily extract dependencies on first call."""
@@ -403,7 +403,7 @@ class Injected(Generic[T]):
         self._injected_params = set(injected_deps.keys())
 
     def __call__(self, *args: Any, **kwargs: Any) -> T:
-        """Call the wrapped function, resolving FromDI dependencies fresh each time."""
+        """Call the wrapped function, resolving Injected dependencies fresh each time."""
         self._ensure_initialized()
         resolved = self._resolve_injected_dependencies()
         # Merge resolved dependencies with explicit kwargs (explicit kwargs take precedence)
@@ -411,14 +411,14 @@ class Injected(Generic[T]):
         return self._func(*args, **merged_kwargs)
 
     def _resolve_injected_dependencies(self) -> dict[str, Any]:
-        """Resolve dependencies marked with FromDI."""
+        """Resolve dependencies marked with Injected."""
         injected_deps = self._dependencies_extractor.get_injected_dependencies(
             service_key=self._service_key,
         )
         return {name: self._container.resolve(dep) for name, dep in injected_deps.items()}
 
     def __repr__(self) -> str:
-        return f"Injected({self._func!r})"
+        return f"InjectedFunction({self._func!r})"
 
     def __get__(self, obj: Any, objtype: type | None = None) -> Any:
         """Descriptor protocol to bind this callable to an instance when used as a method."""
@@ -496,10 +496,10 @@ class ScopedContainer:
         self._exited = True
 
 
-class ScopedInjected(Generic[T]):
+class ScopedInjectedFunction(Generic[T]):
     """A callable wrapper that creates a new scope for each call.
 
-    Similar to Injected, but ensures SCOPED_SINGLETON dependencies are shared
+    Similar to InjectedFunction, but ensures SCOPED_SINGLETON dependencies are shared
     within a single call invocation.
 
     Uses lazy initialization to support `from __future__ import annotations`,
@@ -526,9 +526,9 @@ class ScopedInjected(Generic[T]):
         self.__name__: str = getattr(func, "__name__", repr(func))
         self.__wrapped__: Callable[..., T] = func
 
-        # Build signature at decoration time by detecting FromDI in annotations
+        # Build signature at decoration time by detecting Injected in annotations
         # This works even with string annotations from PEP 563
-        self.__signature__ = _build_signature_without_fromdi(func)
+        self.__signature__ = _build_signature_without_injected(func)
 
     def _ensure_initialized(self) -> None:
         """Lazily extract dependencies on first call."""
@@ -547,14 +547,14 @@ class ScopedInjected(Generic[T]):
             return self._func(*args, **{**resolved, **kwargs})
 
     def _resolve_injected_dependencies(self) -> dict[str, Any]:
-        """Resolve dependencies marked with FromDI."""
+        """Resolve dependencies marked with Injected."""
         injected_deps = self._dependencies_extractor.get_injected_dependencies(
             service_key=self._service_key,
         )
         return {name: self._container.resolve(dep) for name, dep in injected_deps.items()}
 
     def __repr__(self) -> str:
-        return f"ScopedInjected({self._func!r}, scope={self._scope_name!r})"
+        return f"ScopedInjectedFunction({self._func!r}, scope={self._scope_name!r})"
 
     def __get__(self, obj: Any, objtype: type | None = None) -> Any:
         """Descriptor protocol to bind this callable to an instance when used as a method."""
@@ -563,7 +563,7 @@ class ScopedInjected(Generic[T]):
         return types.MethodType(self, obj)
 
 
-class AsyncInjected(Generic[T]):
+class AsyncInjectedFunction(Generic[T]):
     """A callable wrapper that resolves dependencies on each call for async functions.
 
     This ensures transient dependencies are created fresh on every invocation,
@@ -591,9 +591,9 @@ class AsyncInjected(Generic[T]):
         self.__name__: str = getattr(func, "__name__", repr(func))
         self.__wrapped__: Callable[..., Coroutine[Any, Any, T]] = func
 
-        # Build signature at decoration time by detecting FromDI in annotations
+        # Build signature at decoration time by detecting Injected in annotations
         # This works even with string annotations from PEP 563
-        self.__signature__ = _build_signature_without_fromdi(func)
+        self.__signature__ = _build_signature_without_injected(func)
 
     def _ensure_initialized(self) -> None:
         """Lazily extract dependencies on first call."""
@@ -605,7 +605,7 @@ class AsyncInjected(Generic[T]):
         self._injected_params = set(injected_deps.keys())
 
     async def __call__(self, *args: Any, **kwargs: Any) -> T:
-        """Call the wrapped async function, resolving FromDI dependencies fresh each time."""
+        """Call the wrapped async function, resolving Injected dependencies fresh each time."""
         self._ensure_initialized()
         resolved = await self._resolve_injected_dependencies()
         # Merge resolved dependencies with explicit kwargs (explicit kwargs take precedence)
@@ -613,7 +613,7 @@ class AsyncInjected(Generic[T]):
         return await self._func(*args, **merged_kwargs)
 
     async def _resolve_injected_dependencies(self) -> dict[str, Any]:
-        """Asynchronously resolve dependencies marked with FromDI."""
+        """Asynchronously resolve dependencies marked with Injected."""
         injected_deps = self._dependencies_extractor.get_injected_dependencies(
             service_key=self._service_key,
         )
@@ -625,7 +625,7 @@ class AsyncInjected(Generic[T]):
         return dict(zip(coros.keys(), results, strict=True))
 
     def __repr__(self) -> str:
-        return f"AsyncInjected({self._func!r})"
+        return f"AsyncInjectedFunction({self._func!r})"
 
     def __get__(self, obj: Any, objtype: type | None = None) -> Any:
         """Descriptor protocol to bind this callable to an instance when used as a method."""
@@ -634,10 +634,10 @@ class AsyncInjected(Generic[T]):
         return types.MethodType(self, obj)
 
 
-class AsyncScopedInjected(Generic[T]):
+class AsyncScopedInjectedFunction(Generic[T]):
     """A callable wrapper that creates a new async scope for each call.
 
-    Similar to AsyncInjected, but ensures SCOPED_SINGLETON dependencies are shared
+    Similar to AsyncInjectedFunction, but ensures SCOPED_SINGLETON dependencies are shared
     within a single call invocation.
 
     Uses lazy initialization to support `from __future__ import annotations`,
@@ -664,9 +664,9 @@ class AsyncScopedInjected(Generic[T]):
         self.__name__: str = getattr(func, "__name__", repr(func))
         self.__wrapped__: Callable[..., Coroutine[Any, Any, T]] = func
 
-        # Build signature at decoration time by detecting FromDI in annotations
+        # Build signature at decoration time by detecting Injected in annotations
         # This works even with string annotations from PEP 563
-        self.__signature__ = _build_signature_without_fromdi(func)
+        self.__signature__ = _build_signature_without_injected(func)
 
     def _ensure_initialized(self) -> None:
         """Lazily extract dependencies on first call."""
@@ -685,7 +685,7 @@ class AsyncScopedInjected(Generic[T]):
             return await self._func(*args, **{**resolved, **kwargs})
 
     async def _resolve_injected_dependencies(self) -> dict[str, Any]:
-        """Asynchronously resolve dependencies marked with FromDI."""
+        """Asynchronously resolve dependencies marked with Injected."""
         injected_deps = self._dependencies_extractor.get_injected_dependencies(
             service_key=self._service_key,
         )
@@ -697,7 +697,7 @@ class AsyncScopedInjected(Generic[T]):
         return dict(zip(coros.keys(), results, strict=True))
 
     def __repr__(self) -> str:
-        return f"AsyncScopedInjected({self._func!r}, scope={self._scope_name!r})"
+        return f"AsyncScopedInjectedFunction({self._func!r}, scope={self._scope_name!r})"
 
     def __get__(self, obj: Any, objtype: type | None = None) -> Any:
         """Descriptor protocol to bind this callable to an instance when used as a method."""
@@ -1573,7 +1573,7 @@ class Container:
                     return None
             elif isinstance(registration.factory, FunctionType | MethodType):
                 # Functions/methods need resolution - skip compilation for now
-                # They may have FromDI parameters that need injection
+                # They may have Injected parameters that need injection
                 return None
             else:
                 # Factory is a built-in callable (e.g., ContextVar.get) - wrap directly
@@ -1820,7 +1820,7 @@ class Container:
         key: Callable[..., Coroutine[Any, Any, T]],
         *,
         scope: None = None,
-    ) -> AsyncInjected[T]: ...
+    ) -> AsyncInjectedFunction[T]: ...
 
     @overload
     def resolve(
@@ -1828,13 +1828,13 @@ class Container:
         key: Callable[..., Coroutine[Any, Any, T]],
         *,
         scope: str,
-    ) -> AsyncScopedInjected[T]: ...
+    ) -> AsyncScopedInjectedFunction[T]: ...
 
     @overload
-    def resolve(self, key: Callable[..., T], *, scope: None = None) -> Injected[T]: ...
+    def resolve(self, key: Callable[..., T], *, scope: None = None) -> InjectedFunction[T]: ...
 
     @overload
-    def resolve(self, key: Callable[..., T], *, scope: str) -> ScopedInjected[T]: ...
+    def resolve(self, key: Callable[..., T], *, scope: str) -> ScopedInjectedFunction[T]: ...
 
     @overload
     def resolve(self, key: ServiceKey, *, scope: str | None = None) -> Any: ...
@@ -1859,7 +1859,7 @@ class Container:
 
             # Decorator usage:
             @container.resolve(scope="request")
-            async def handler(service: Annotated[Service, FromDI()]) -> dict:
+            async def handler(service: Annotated[Service, Injected()]) -> dict:
                 ...
 
         """
@@ -1916,14 +1916,14 @@ class Container:
 
             if effective_scope is not None:
                 if is_async_func:
-                    return AsyncScopedInjected(
+                    return AsyncScopedInjectedFunction(
                         func=service_key.value,
                         container=self,
                         dependencies_extractor=self._dependencies_extractor,
                         service_key=service_key,
                         scope_name=effective_scope,
                     )
-                return ScopedInjected(
+                return ScopedInjectedFunction(
                     func=service_key.value,
                     container=self,
                     dependencies_extractor=self._dependencies_extractor,
@@ -1931,13 +1931,13 @@ class Container:
                     scope_name=effective_scope,
                 )
             if is_async_func:
-                return AsyncInjected(
+                return AsyncInjectedFunction(
                     func=service_key.value,
                     container=self,
                     dependencies_extractor=self._dependencies_extractor,
                     service_key=service_key,
                 )
-            return Injected(
+            return InjectedFunction(
                 func=service_key.value,
                 container=self,
                 dependencies_extractor=self._dependencies_extractor,
@@ -2161,7 +2161,7 @@ class Container:
         key: Callable[..., Coroutine[Any, Any, T]],
         *,
         scope: None = None,
-    ) -> AsyncInjected[T]: ...
+    ) -> AsyncInjectedFunction[T]: ...
 
     @overload
     async def aresolve(
@@ -2169,7 +2169,7 @@ class Container:
         key: Callable[..., Coroutine[Any, Any, T]],
         *,
         scope: str,
-    ) -> AsyncScopedInjected[T]: ...
+    ) -> AsyncScopedInjectedFunction[T]: ...
 
     @overload
     async def aresolve(self, key: ServiceKey, *, scope: str | None = None) -> Any: ...
@@ -2234,14 +2234,14 @@ class Container:
 
             if effective_scope is not None:
                 if is_async_func:
-                    return AsyncScopedInjected(
+                    return AsyncScopedInjectedFunction(
                         func=service_key.value,
                         container=self,
                         dependencies_extractor=self._dependencies_extractor,
                         service_key=service_key,
                         scope_name=effective_scope,
                     )
-                return ScopedInjected(
+                return ScopedInjectedFunction(
                     func=service_key.value,
                     container=self,
                     dependencies_extractor=self._dependencies_extractor,
@@ -2249,13 +2249,13 @@ class Container:
                     scope_name=effective_scope,
                 )
             if is_async_func:
-                return AsyncInjected(
+                return AsyncInjectedFunction(
                     func=service_key.value,
                     container=self,
                     dependencies_extractor=self._dependencies_extractor,
                     service_key=service_key,
                 )
-            return Injected(
+            return InjectedFunction(
                 func=service_key.value,
                 container=self,
                 dependencies_extractor=self._dependencies_extractor,

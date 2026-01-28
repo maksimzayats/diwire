@@ -9,7 +9,7 @@ Demonstrates:
 from dataclasses import dataclass, field
 from typing import Annotated
 
-from diwire import Container, FromDI, Lifetime
+from diwire import Container, Injected, Lifetime
 
 
 @dataclass
@@ -25,7 +25,7 @@ class Counter:
 
 
 def process_item(
-    counter: Annotated[Counter, FromDI()],
+    counter: Annotated[Counter, Injected()],
     item_id: int,
 ) -> str:
     """Process an item, using a counter service."""

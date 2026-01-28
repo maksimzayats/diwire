@@ -36,9 +36,9 @@ uv run python examples/ex08_fastapi/ex01_basic.py
 
 | File                                                                         | Description                                             |
 |------------------------------------------------------------------------------|---------------------------------------------------------|
-| [ex01_from_di.py](ex03_function_injection/ex01_from_di.py)                   | `Annotated[T, FromDI()]` marker for function parameters |
-| [ex02_injected_wrapper.py](ex03_function_injection/ex02_injected_wrapper.py) | `Injected` wrapper for standalone functions             |
-| [ex03_scoped_injected.py](ex03_function_injection/ex03_scoped_injected.py)   | `ScopedInjected` for scoped function injection          |
+| [ex01_injected.py](ex03_function_injection/ex01_injected.py)                 | `Annotated[T, Injected()]` marker for function parameters |
+| [ex02_injected_wrapper.py](ex03_function_injection/ex02_injected_wrapper.py) | `InjectedFunction` wrapper for standalone functions             |
+| [ex03_scoped_injected.py](ex03_function_injection/ex03_scoped_injected.py)   | `ScopedInjectedFunction` for scoped function injection          |
 
 ### ex04_components/ - Named Components
 
@@ -61,8 +61,8 @@ uv run python examples/ex08_fastapi/ex01_basic.py
 |---------------------------------------------------------------------------------|--------------------------------------------------|
 | [ex01_basic_async_factory.py](ex06_async/ex01_basic_async_factory.py)           | Async factories with `aresolve()`                |
 | [ex02_async_generator_cleanup.py](ex06_async/ex02_async_generator_cleanup.py)   | Async generators for resource cleanup            |
-| [ex03_async_injected_functions.py](ex06_async/ex03_async_injected_functions.py) | `AsyncInjected` wrapper                          |
-| [ex04_async_scoped_injection.py](ex06_async/ex04_async_scoped_injection.py)     | `AsyncScopedInjected` for scoped async functions |
+| [ex03_async_injected_functions.py](ex06_async/ex03_async_injected_functions.py) | `AsyncInjectedFunction` wrapper                          |
+| [ex04_async_scoped_injection.py](ex06_async/ex04_async_scoped_injection.py)     | `AsyncScopedInjectedFunction` for scoped async functions |
 | [ex05_mixed_and_parallel.py](ex06_async/ex05_mixed_and_parallel.py)             | Mixing sync/async and parallel resolution        |
 | [ex06_error_handling.py](ex06_async/ex06_error_handling.py)                     | Error handling in async contexts                 |
 | [ex07_fastapi_style.py](ex06_async/ex07_fastapi_style.py)                       | FastAPI-style async patterns                     |

@@ -596,7 +596,7 @@ class TestRegisterAsyncFactory:
 
 
 class TestFactoryFunctionAutoInjectsDependencies:
-    """Tests for factory functions auto-injecting all dependencies without FromDI."""
+    """Tests for factory functions auto-injecting all dependencies without Injected."""
 
     def test_factory_function_auto_injects_dependencies(self, container: Container) -> None:
         """Function factory should have all typed params auto-injected."""

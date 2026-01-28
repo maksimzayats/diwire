@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Annotated
 
-from diwire import Container, FromDI, Lifetime
+from diwire import Container, Injected, Lifetime
 
 
 class Scope(str, Enum):
@@ -52,8 +52,8 @@ class AuditService:
 def handle_request(
     user_id: int,
     *,
-    user_service: Annotated[UserService, FromDI()],
-    audit_service: Annotated[AuditService, FromDI()],
+    user_service: Annotated[UserService, Injected()],
+    audit_service: Annotated[AuditService, Injected()],
 ) -> dict[str, str]:
     """Handle a request - both services should share the same session."""
     return {

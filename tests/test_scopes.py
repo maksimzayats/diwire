@@ -12,8 +12,8 @@ import pytest
 
 from diwire.container import (
     Container,
-    Injected,
-    ScopedInjected,
+    InjectedFunction,
+    ScopedInjectedFunction,
     ScopeId,
     _current_scope,
 )
@@ -27,7 +27,7 @@ from diwire.exceptions import (
 )
 from diwire.registry import Registration
 from diwire.service_key import ServiceKey
-from diwire.types import FromDI, Lifetime
+from diwire.types import Injected, Lifetime
 
 
 @dataclass
@@ -191,19 +191,19 @@ class TestScopedInjected:
     def test_resolve_with_scope_returns_scoped_injected(self, container: Container) -> None:
         """resolve() with scope parameter returns ScopedInjected."""
 
-        def handler(service: Annotated[Service, FromDI()]) -> Service:
+        def handler(service: Annotated[Service, Injected()]) -> Service:
             return service
 
         result = container.resolve(handler, scope="request")
-        assert isinstance(result, ScopedInjected)
+        assert isinstance(result, ScopedInjectedFunction)
 
     def test_scoped_injected_shares_instance_within_call(self, container: Container) -> None:
         """ScopedInjected shares scoped instances within a single call."""
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
         def handler(
-            service_a: Annotated[ServiceA, FromDI()],
-            service_b: Annotated[ServiceB, FromDI()],
+            service_a: Annotated[ServiceA, Injected()],
+            service_b: Annotated[ServiceB, Injected()],
         ) -> tuple[ServiceA, ServiceB]:
             return service_a, service_b
 
@@ -222,7 +222,7 @@ class TestScopedInjected:
     def test_scoped_injected_preserves_function_name(self, container: Container) -> None:
         """ScopedInjected preserves the wrapped function's name."""
 
-        def my_handler(service: Annotated[Service, FromDI()]) -> None:
+        def my_handler(service: Annotated[Service, Injected()]) -> None:
             pass
 
         result = container.resolve(my_handler, scope="request")
@@ -231,7 +231,7 @@ class TestScopedInjected:
     def test_scoped_injected_repr(self, container: Container) -> None:
         """ScopedInjected has informative repr."""
 
-        def handler(service: Annotated[Service, FromDI()]) -> None:
+        def handler(service: Annotated[Service, Injected()]) -> None:
             pass
 
         result = container.resolve(handler, scope="request")
@@ -241,7 +241,7 @@ class TestScopedInjected:
     def test_scoped_injected_allows_explicit_kwargs(self, container: Container) -> None:
         """ScopedInjected allows explicit kwargs to override injected ones."""
 
-        def handler(value: int, service: Annotated[Service, FromDI()]) -> tuple[int, Service]:
+        def handler(value: int, service: Annotated[Service, Injected()]) -> tuple[int, Service]:
             return value, service
 
         request_handler = container.resolve(handler, scope="request")
@@ -411,48 +411,48 @@ class TestAutoScopeDetection:
         )
 
         def handler(
-            service_a: Annotated[ServiceA, FromDI()],
-            service_b: Annotated[ServiceB, FromDI()],
+            service_a: Annotated[ServiceA, Injected()],
+            service_b: Annotated[ServiceB, Injected()],
         ) -> tuple[ServiceA, ServiceB]:
             return service_a, service_b
 
         # No explicit scope - should auto-detect from Session dependency
         request_handler = container.resolve(handler)
 
-        # Should be ScopedInjected because Session has scope="request"
-        assert isinstance(request_handler, ScopedInjected)
+        # Should be ScopedInjectedFunction because Session has scope="request"
+        assert isinstance(request_handler, ScopedInjectedFunction)
 
     def test_explicit_scope_overrides_auto_detection(self, container: Container) -> None:
         """Explicit scope parameter overrides auto-detection."""
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        def handler(service: Annotated[Service, FromDI()]) -> Service:
+        def handler(service: Annotated[Service, Injected()]) -> Service:
             return service
 
         # Explicit scope
         result = container.resolve(handler, scope="custom")
-        assert isinstance(result, ScopedInjected)
+        assert isinstance(result, ScopedInjectedFunction)
 
     def test_no_scope_returns_injected(self, container: Container) -> None:
         """Without scoped dependencies, resolve returns regular Injected."""
         container.register(Session, lifetime=Lifetime.TRANSIENT)
 
-        def handler(service: Annotated[Service, FromDI()]) -> Service:
+        def handler(service: Annotated[Service, Injected()]) -> Service:
             return service
 
         result = container.resolve(handler)
-        assert isinstance(result, Injected)
-        assert not isinstance(result, ScopedInjected)
+        assert isinstance(result, InjectedFunction)
+        assert not isinstance(result, ScopedInjectedFunction)
 
     def test_auto_detect_scope_from_scoped_registry(self, container: Container) -> None:
         """resolve() auto-detects scope from scoped_registry."""
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        def handler(session: Annotated[Session, FromDI()]) -> Session:
+        def handler(session: Annotated[Session, Injected()]) -> Session:
             return session
 
         injected = container.resolve(handler)
-        assert isinstance(injected, ScopedInjected)
+        assert isinstance(injected, ScopedInjectedFunction)
 
     def test_ambiguous_scope_detection_returns_none(self, container: Container) -> None:
         """Ambiguous scopes (different values) don't auto-detect."""
@@ -464,13 +464,13 @@ class TestAutoScopeDetection:
             scope="session",
         )
 
-        def handler(session: Annotated[Session, FromDI()]) -> Session:
+        def handler(session: Annotated[Session, Injected()]) -> Session:
             return session
 
         injected = container.resolve(handler)
         # Should not auto-detect scope due to ambiguity
-        assert isinstance(injected, Injected)
-        assert not isinstance(injected, ScopedInjected)
+        assert isinstance(injected, InjectedFunction)
+        assert not isinstance(injected, ScopedInjectedFunction)
 
 
 class TestScopeHierarchyMatching:

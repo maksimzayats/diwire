@@ -8,7 +8,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import Annotated
 
-from diwire import Container, FromDI, Lifetime
+from diwire import Container, Injected, Lifetime
 
 # =============================================================================
 # Domain Models
@@ -150,13 +150,13 @@ async def create_db_session():
 
 
 # =============================================================================
-# Request Handlers (with FromDI injection)
+# Request Handlers (with Injected injection)
 # =============================================================================
 
 
 async def get_user_handler(
-    user_service: Annotated[UserService, FromDI()],
-    session: Annotated[DatabaseSession, FromDI()],
+    user_service: Annotated[UserService, Injected()],
+    session: Annotated[DatabaseSession, Injected()],
     user_id: int,
 ) -> dict:
     """Handler to get a single user."""
@@ -168,8 +168,8 @@ async def get_user_handler(
 
 
 async def get_user_orders_handler(
-    order_service: Annotated[OrderService, FromDI()],
-    session: Annotated[DatabaseSession, FromDI()],
+    order_service: Annotated[OrderService, Injected()],
+    session: Annotated[DatabaseSession, Injected()],
     user_id: int,
 ) -> dict:
     """Handler to get user with their orders."""

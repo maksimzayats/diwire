@@ -8,7 +8,7 @@ dependency injection on instance methods.
 from dataclasses import dataclass, field
 from typing import Annotated
 
-from diwire import Container, FromDI, Lifetime, container_context
+from diwire import Container, Injected, Lifetime, container_context
 
 
 @dataclass
@@ -56,8 +56,8 @@ class UserController:
     @container_context.resolve()
     def list_users(
         self,
-        db: Annotated[Database, FromDI()],
-        logger: Annotated[Logger, FromDI()],
+        db: Annotated[Database, Injected()],
+        logger: Annotated[Logger, Injected()],
     ) -> list[dict[str, str]]:
         """List all users - instance method with injected dependencies."""
         logger.info(f"{self.prefix}/users - Fetching all users")  # noqa: G004
@@ -67,9 +67,9 @@ class UserController:
     def get_user_cached(
         self,
         user_id: str,
-        db: Annotated[Database, FromDI()],
-        cache: Annotated[Cache, FromDI()],
-        logger: Annotated[Logger, FromDI()],
+        db: Annotated[Database, Injected()],
+        cache: Annotated[Cache, Injected()],
+        logger: Annotated[Logger, Injected()],
     ) -> dict[str, str] | None:
         """Get user with caching - shows mixing caller args with injected deps."""
         cache_key = f"user:{user_id}"

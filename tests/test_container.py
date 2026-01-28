@@ -9,11 +9,11 @@ import pytest
 
 from diwire.compiled_providers import ScopedSingletonArgsProvider
 from diwire.container import (
-    AsyncInjected,
-    AsyncScopedInjected,
+    AsyncInjectedFunction,
+    AsyncScopedInjectedFunction,
     Container,
-    Injected,
-    ScopedInjected,
+    InjectedFunction,
+    ScopedInjectedFunction,
     ScopeId,
     _current_scope,
     _is_async_factory,
@@ -29,7 +29,7 @@ from diwire.exceptions import (
 )
 from diwire.registry import Registration
 from diwire.service_key import ServiceKey
-from diwire.types import FromDI, Lifetime
+from diwire.types import Injected, Lifetime
 
 
 # Module-level classes for circular dependency tests
@@ -108,11 +108,11 @@ def test_resolve_function_returns_injected(container: Container) -> None:
     class ServiceA:
         pass
 
-    def my_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+    def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
         return service
 
     injected = container.resolve(my_func)
-    assert isinstance(injected, Injected)
+    assert isinstance(injected, InjectedFunction)
 
 
 def test_injected_resolves_transient_deps_on_each_call(container: Container) -> None:
@@ -121,7 +121,7 @@ def test_injected_resolves_transient_deps_on_each_call(container: Container) -> 
     class ServiceA:
         pass
 
-    def my_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+    def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
         return service
 
     injected = container.resolve(my_func)
@@ -140,7 +140,7 @@ def test_injected_resolves_singleton_deps_once(container_singleton: Container) -
     class ServiceA:
         pass
 
-    def my_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+    def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
         return service
 
     injected = container_singleton.resolve(my_func)
@@ -158,7 +158,7 @@ def test_injected_allows_explicit_kwargs_override(container: Container) -> None:
     class ServiceA:
         pass
 
-    def my_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+    def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
         return service
 
     injected = container.resolve(my_func)
@@ -173,7 +173,7 @@ def test_injected_preserves_function_name(container: Container) -> None:
     class ServiceA:
         pass
 
-    def my_named_function(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+    def my_named_function(service: Annotated[ServiceA, Injected()]) -> ServiceA:
         return service
 
     injected = container.resolve(my_named_function)
@@ -183,19 +183,19 @@ def test_injected_preserves_function_name(container: Container) -> None:
 
 
 def test_injected_signature_excludes_injected_params(container: Container) -> None:
-    """Signature should only show non-injected (non-FromDI) parameters."""
+    """Signature should only show non-injected (non-Injected) parameters."""
 
     class ServiceA:
         pass
 
-    def my_func(value: int, service: Annotated[ServiceA, FromDI()]) -> int:
+    def my_func(value: int, service: Annotated[ServiceA, Injected()]) -> int:
         return value
 
     injected = container.resolve(my_func)
     sig = signature(injected)
 
-    # 'service' is marked with FromDI, should be removed from signature
-    # 'value' is not marked with FromDI, should remain
+    # 'service' is marked with Injected, should be removed from signature
+    # 'value' is not marked with Injected, should remain
     param_names = list(sig.parameters.keys())
     assert param_names == ["value"]
     assert "service" not in param_names
@@ -207,7 +207,7 @@ def test_resolve_dataclass_injects_from_di_field(container: Container) -> None:
 
     @dataclass
     class ServiceB:
-        service_a: Annotated[ServiceA, FromDI()]
+        service_a: Annotated[ServiceA, Injected()]
 
     service_b = container.resolve(ServiceB)
     assert isinstance(service_b.service_a, ServiceA)
@@ -350,13 +350,13 @@ class TestAsyncResolveFunction:
         class ServiceA:
             pass
 
-        def my_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         injected = await container.aresolve(my_func)
 
         # Should be Injected, not AsyncInjected
-        assert isinstance(injected, Injected)
+        assert isinstance(injected, InjectedFunction)
         # Verify it's callable and works
         result = injected()
         assert isinstance(result, ServiceA)
@@ -482,18 +482,18 @@ class TestDescriptorProtocol:
         self,
         container: Container,
     ) -> None:
-        """Injected descriptor returns self when accessed on class."""
+        """InjectedFunction descriptor returns self when accessed on class."""
 
         class ServiceA:
             pass
 
-        def my_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         service_key = ServiceKey.from_value(my_func)
         deps_extractor = DependenciesExtractor()
 
-        injected = Injected(
+        injected_func = InjectedFunction(
             func=my_func,
             container=container,
             dependencies_extractor=deps_extractor,
@@ -501,25 +501,25 @@ class TestDescriptorProtocol:
         )
 
         # When obj is None, __get__ should return self
-        result = injected.__get__(None, type(injected))
-        assert result is injected
+        result = injected_func.__get__(None, type(injected_func))
+        assert result is injected_func
 
     def test_scoped_injected_get_returns_self_when_obj_none(
         self,
         container: Container,
     ) -> None:
-        """ScopedInjected descriptor returns self when accessed on class."""
+        """ScopedInjectedFunction descriptor returns self when accessed on class."""
 
         class ServiceA:
             pass
 
-        def my_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         service_key = ServiceKey.from_value(my_func)
         deps_extractor = DependenciesExtractor()
 
-        scoped_injected = ScopedInjected(
+        scoped_injected = ScopedInjectedFunction(
             func=my_func,
             container=container,
             dependencies_extractor=deps_extractor,
@@ -535,18 +535,18 @@ class TestDescriptorProtocol:
         self,
         container: Container,
     ) -> None:
-        """AsyncInjected descriptor returns self when accessed on class."""
+        """AsyncInjectedFunction descriptor returns self when accessed on class."""
 
         class ServiceA:
             pass
 
-        async def my_async_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        async def my_async_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         service_key = ServiceKey.from_value(my_async_func)
         deps_extractor = DependenciesExtractor()
 
-        async_injected = AsyncInjected(
+        async_injected = AsyncInjectedFunction(
             func=my_async_func,
             container=container,
             dependencies_extractor=deps_extractor,
@@ -561,18 +561,18 @@ class TestDescriptorProtocol:
         self,
         container: Container,
     ) -> None:
-        """AsyncScopedInjected descriptor returns self when accessed on class."""
+        """AsyncScopedInjectedFunction descriptor returns self when accessed on class."""
 
         class ServiceA:
             pass
 
-        async def my_async_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        async def my_async_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         service_key = ServiceKey.from_value(my_async_func)
         deps_extractor = DependenciesExtractor()
 
-        async_scoped_injected = AsyncScopedInjected(
+        async_scoped_injected = AsyncScopedInjectedFunction(
             func=my_async_func,
             container=container,
             dependencies_extractor=deps_extractor,
@@ -734,7 +734,7 @@ class TestForwardReferenceHandling:
         result = container.resolve(handler)
 
         # Should return an Injected (not ScopedInjected) because scope detection failed
-        assert isinstance(result, Injected)
+        assert isinstance(result, InjectedFunction)
 
     @pytest.mark.asyncio
     async def test_aresolve_forward_reference_name_error(self) -> None:
@@ -749,7 +749,7 @@ class TestForwardReferenceHandling:
         result = await container.aresolve(handler)
 
         # Should return an Injected (not ScopedInjected)
-        assert isinstance(result, Injected)
+        assert isinstance(result, InjectedFunction)
 
 
 class TestAsyncResolutionEdgeCases:
@@ -1039,14 +1039,14 @@ class TestAsyncResolutionEdgeCases:
         # This tests that the method doesn't crash on DIWireError
 
         # This is an indirect test - we create a function that depends on ServiceB
-        def handler(b: Annotated[ServiceB, FromDI()]) -> ServiceB:
+        def handler(b: Annotated[ServiceB, Injected()]) -> ServiceB:
             return b
 
         # resolve should work without crashing on nested scope detection
         injected = container.resolve(handler, scope="request")
 
         # Verify it's a ScopedInjected (scope was detected from ServiceB registration)
-        assert isinstance(injected, ScopedInjected)
+        assert isinstance(injected, ScopedInjectedFunction)
 
 
 class TestMissingCoverageSync:
@@ -1387,11 +1387,11 @@ class TestCoverageEdgeCases:
         # Use module-level classes to avoid forward reference issues
         # _AsyncCircularA depends on _AsyncCircularB and vice versa
 
-        # Use async factories with FromDI annotation to enable injection
-        async def create_a(b: Annotated[_AsyncCircularB, FromDI()]) -> _AsyncCircularA:
+        # Use async factories with Injected annotation to enable injection
+        async def create_a(b: Annotated[_AsyncCircularB, Injected()]) -> _AsyncCircularA:
             return _AsyncCircularA(b)
 
-        async def create_b(a: Annotated[_AsyncCircularA, FromDI()]) -> _AsyncCircularB:
+        async def create_b(a: Annotated[_AsyncCircularA, Injected()]) -> _AsyncCircularB:
             return _AsyncCircularB(a)
 
         container.register(_AsyncCircularA, factory=create_a)
@@ -1491,14 +1491,14 @@ class TestCoverageEdgeCases:
         container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
         # Create a function that depends on ServiceB
-        def handler(b: Annotated[ServiceB, FromDI()]) -> ServiceB:
+        def handler(b: Annotated[ServiceB, Injected()]) -> ServiceB:
             return b
 
         # resolve should work without crashing - DIWireError during nested dep extraction is caught
         injected = container.resolve(handler, scope="request")
 
         # Should be ScopedInjected because scope was explicitly provided
-        assert isinstance(injected, ScopedInjected)
+        assert isinstance(injected, ScopedInjectedFunction)
 
     def test_resolve_dependencies_error_with_default(self) -> None:
         """_resolve_dependencies handles error when param has default."""
@@ -1553,7 +1553,7 @@ class TestDependencyExtractionErrorHandling:
         container.register(ServiceWithBadNestedDep)
 
         # Create a handler that depends on the service with bad nested deps
-        def handler(service: Annotated[ServiceWithBadNestedDep, FromDI()]) -> None:
+        def handler(service: Annotated[ServiceWithBadNestedDep, Injected()]) -> None:
             pass
 
         # resolve() should not raise during scope detection
@@ -1561,4 +1561,4 @@ class TestDependencyExtractionErrorHandling:
         result = container.resolve(handler)
 
         # Should return Injected (no scope detected due to extraction error)
-        assert isinstance(result, Injected)
+        assert isinstance(result, InjectedFunction)

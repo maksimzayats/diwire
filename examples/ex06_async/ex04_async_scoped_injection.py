@@ -8,7 +8,7 @@ are properly isolated and cleaned up per call.
 import asyncio
 from typing import Annotated
 
-from diwire import Container, FromDI, Lifetime
+from diwire import Container, Injected, Lifetime
 
 
 class RequestContext:
@@ -52,8 +52,8 @@ async def create_transaction(context: RequestContext):
 
 # Request handler - gets scoped dependencies
 async def handle_request(
-    context: Annotated[RequestContext, FromDI()],
-    transaction: Annotated[DatabaseTransaction, FromDI()],
+    context: Annotated[RequestContext, Injected()],
+    transaction: Annotated[DatabaseTransaction, Injected()],
     data: dict,
 ) -> dict:
     """Handler that uses scoped dependencies.

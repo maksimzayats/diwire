@@ -45,7 +45,7 @@ async def test_ex02_async_generator_cleanup(capsys: pytest.CaptureFixture[str]) 
 
 
 async def test_ex03_async_injected_functions(capsys: pytest.CaptureFixture[str]) -> None:
-    """Test async function injection with FromDI."""
+    """Test async function injection with Injected."""
     from examples.ex06_async.ex03_async_injected_functions import main
 
     await main()
@@ -57,7 +57,7 @@ async def test_ex03_async_injected_functions(capsys: pytest.CaptureFixture[str])
         "[LOG] Fetching user 42",
         "[LOG] Found user: User 42",
         "Sent email to",
-        "(FromDI parameters are hidden from the signature)",
+        "(Injected parameters are hidden from the signature)",
     )
 
 
