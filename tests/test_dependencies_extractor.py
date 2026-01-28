@@ -6,7 +6,7 @@ from typing import Annotated, Generic, TypeVar, Union
 
 from diwire.dependencies import DependenciesExtractor
 from diwire.service_key import ServiceKey
-from diwire.types import FromDI
+from diwire.types import Injected
 
 
 class ServiceA:
@@ -204,13 +204,13 @@ class TestGetDependencies:
 
 
 class TestGetInjectedDependencies:
-    def test_get_injected_deps_with_from_di_marker(
+    def test_get_injected_deps_with_injected_marker(
         self,
         dependencies_extractor: DependenciesExtractor,
     ) -> None:
-        """Get only dependencies marked with FromDI."""
+        """Get only dependencies marked with Injected."""
 
-        def my_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         deps = dependencies_extractor.get_injected_dependencies(
@@ -219,11 +219,11 @@ class TestGetInjectedDependencies:
 
         assert deps == {"service": ServiceKey.from_value(ServiceA)}
 
-    def test_get_injected_deps_without_from_di(
+    def test_get_injected_deps_without_injected(
         self,
         dependencies_extractor: DependenciesExtractor,
     ) -> None:
-        """Non-FromDI params are excluded."""
+        """Non-Injected params are excluded."""
 
         def my_func(value: int) -> int:
             return value
@@ -238,11 +238,11 @@ class TestGetInjectedDependencies:
         self,
         dependencies_extractor: DependenciesExtractor,
     ) -> None:
-        """Mix of FromDI and regular params."""
+        """Mix of Injected and regular params."""
 
         def my_func(
             value: int,
-            service: Annotated[ServiceA, FromDI()],
+            service: Annotated[ServiceA, Injected()],
         ) -> ServiceA:
             return service
 
@@ -253,18 +253,18 @@ class TestGetInjectedDependencies:
         assert deps == {"service": ServiceKey.from_value(ServiceA)}
         assert "value" not in deps
 
-    def test_get_injected_deps_multiple_from_di(
+    def test_get_injected_deps_multiple_injected(
         self,
         dependencies_extractor: DependenciesExtractor,
     ) -> None:
-        """Multiple FromDI parameters."""
+        """Multiple Injected parameters."""
 
         class ServiceC:
             pass
 
         def my_func(
-            a: Annotated[ServiceA, FromDI()],
-            b: Annotated[ServiceC, FromDI()],
+            a: Annotated[ServiceA, Injected()],
+            b: Annotated[ServiceC, Injected()],
         ) -> None:
             pass
 
@@ -277,14 +277,14 @@ class TestGetInjectedDependencies:
             "b": ServiceKey.from_value(ServiceC),
         }
 
-    def test_get_injected_deps_from_di_not_first_metadata(
+    def test_get_injected_deps_injected_not_first_metadata(
         self,
         dependencies_extractor: DependenciesExtractor,
     ) -> None:
-        """FromDI not first in metadata still works."""
+        """Injected not first in metadata still works."""
 
         def my_func(
-            service: Annotated[ServiceA, "other_metadata", FromDI()],
+            service: Annotated[ServiceA, "other_metadata", Injected()],
         ) -> ServiceA:
             return service
 
@@ -300,7 +300,7 @@ class TestGetInjectedDependencies:
     ) -> None:
         """Return type is excluded."""
 
-        def my_func(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         deps = dependencies_extractor.get_injected_dependencies(
@@ -310,33 +310,33 @@ class TestGetInjectedDependencies:
         assert "return" not in deps
 
 
-class TestExtractFromDIType:
+class TestExtractInjectedType:
     def test_extract_non_annotated_returns_none(
         self,
         dependencies_extractor: DependenciesExtractor,
     ) -> None:
         """Non-Annotated type returns None."""
-        result = dependencies_extractor._extract_from_di_type(ServiceA)
+        result = dependencies_extractor._extract_injected_type(ServiceA)
 
         assert result is None
 
-    def test_extract_annotated_without_from_di_returns_none(
+    def test_extract_annotated_without_injected_returns_none(
         self,
         dependencies_extractor: DependenciesExtractor,
     ) -> None:
-        """Annotated without FromDI returns None."""
+        """Annotated without Injected returns None."""
         annotated = Annotated[ServiceA, "some_metadata"]
-        result = dependencies_extractor._extract_from_di_type(annotated)
+        result = dependencies_extractor._extract_injected_type(annotated)
 
         assert result is None
 
-    def test_extract_annotated_with_from_di_returns_type(
+    def test_extract_annotated_with_injected_returns_type(
         self,
         dependencies_extractor: DependenciesExtractor,
     ) -> None:
-        """Annotated with FromDI returns inner type."""
-        annotated = Annotated[ServiceA, FromDI()]
-        result = dependencies_extractor._extract_from_di_type(annotated)
+        """Annotated with Injected returns inner type."""
+        annotated = Annotated[ServiceA, Injected()]
+        result = dependencies_extractor._extract_injected_type(annotated)
 
         assert result is ServiceA
 
@@ -346,9 +346,9 @@ class TestExtractFromDIType:
     ) -> None:
         """Annotated with no useful metadata returns None."""
         # Can't create Annotated with less than 2 args, but we can test
-        # metadata that doesn't include FromDI
+        # metadata that doesn't include Injected
         annotated = Annotated[ServiceA, "meta1", "meta2"]
-        result = dependencies_extractor._extract_from_di_type(annotated)
+        result = dependencies_extractor._extract_injected_type(annotated)
 
         assert result is None
 

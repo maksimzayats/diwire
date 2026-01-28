@@ -33,13 +33,13 @@ Factory: TypeAlias = type[FactoryClassProtocol] | FactoryFunction
 """A type alias for either a factory class or a factory function."""
 
 
-class FromDI:
+class Injected:
     """Marker to indicate a parameter should be injected from the DI container.
 
     Usage:
-        def my_function(service: Annotated[ServiceA, FromDI()], value: int) -> None:
+        def my_function(service: Annotated[ServiceA, Injected()], value: int) -> None:
             ...
 
-    For type checkers, Annotated[T, FromDI()] is equivalent to T.
-    At runtime, parameters marked with FromDI will be automatically injected.
+    For type checkers, Annotated[T, Injected()] is equivalent to T.
+    At runtime, parameters marked with Injected will be automatically injected.
     """

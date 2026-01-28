@@ -7,7 +7,7 @@ import pytest
 
 from diwire.dependencies import DependenciesExtractor
 from diwire.service_key import ServiceKey
-from diwire.types import FromDI
+from diwire.types import Injected
 
 
 @pytest.fixture(scope="module")
@@ -115,21 +115,21 @@ class TestDependenciesEdgeCases:
         # This tests the edge case where Annotated has fewer than MIN_ANNOTATED_ARGS
         # In practice, Annotated requires at least 2 args, but we test the guard
 
-        # Test with a proper Annotated that has FromDI
+        # Test with a proper Annotated that has Injected
         class ServiceA:
             pass
 
-        annotated_with_fromdi = Annotated[ServiceA, FromDI()]
-        result = dependencies_extractor._extract_from_di_type(annotated_with_fromdi)
+        annotated_with_fromdi = Annotated[ServiceA, Injected()]
+        result = dependencies_extractor._extract_injected_type(annotated_with_fromdi)
         assert result is ServiceA
 
-        # Test with Annotated without FromDI
+        # Test with Annotated without Injected
         annotated_without_fromdi = Annotated[ServiceA, "some metadata"]
-        result = dependencies_extractor._extract_from_di_type(annotated_without_fromdi)
+        result = dependencies_extractor._extract_injected_type(annotated_without_fromdi)
         assert result is None
 
         # Test with non-Annotated type
-        result = dependencies_extractor._extract_from_di_type(ServiceA)
+        result = dependencies_extractor._extract_injected_type(ServiceA)
         assert result is None
 
     def test_get_injected_dependencies_nameerror_fallback_to_no_extras(
@@ -141,7 +141,7 @@ class TestDependenciesEdgeCases:
         class ServiceA:
             pass
 
-        def func_with_injected(dep: Annotated[ServiceA, FromDI()]) -> None:
+        def func_with_injected(dep: Annotated[ServiceA, Injected()]) -> None:
             pass
 
         service_key = ServiceKey.from_value(func_with_injected)
@@ -170,7 +170,7 @@ class TestDependenciesEdgeCases:
 
         # Should have called get_type_hints twice (first with extras, then without)
         assert call_count == 2
-        # Without include_extras=True, FromDI metadata is not extracted, so result is empty
+        # Without include_extras=True, Injected metadata is not extracted, so result is empty
         assert result == {}
 
     def test_get_injected_dependencies_typeerror_fallback_to_no_extras(
@@ -182,7 +182,7 @@ class TestDependenciesEdgeCases:
         class ServiceA:
             pass
 
-        def func_with_injected(dep: Annotated[ServiceA, FromDI()]) -> None:
+        def func_with_injected(dep: Annotated[ServiceA, Injected()]) -> None:
             pass
 
         service_key = ServiceKey.from_value(func_with_injected)
@@ -204,7 +204,7 @@ class TestDependenciesEdgeCases:
             result = fresh_extractor.get_injected_dependencies(service_key)
 
         assert call_count == 2
-        # Without include_extras, the Annotated metadata is stripped, so no FromDI found
+        # Without include_extras, the Annotated metadata is stripped, so no Injected found
         assert result == {}
 
     def test_get_injected_dependencies_both_calls_fail_returns_empty(
@@ -216,7 +216,7 @@ class TestDependenciesEdgeCases:
         class ServiceA:
             pass
 
-        def func_with_injected(dep: Annotated[ServiceA, FromDI()]) -> None:
+        def func_with_injected(dep: Annotated[ServiceA, Injected()]) -> None:
             pass
 
         service_key = ServiceKey.from_value(func_with_injected)

@@ -6,7 +6,7 @@ from typing import Annotated, Any, TypeVar, get_args, get_origin, get_type_hints
 
 from diwire.exceptions import DIWireDependencyExtractionError
 from diwire.service_key import ServiceKey
-from diwire.types import FromDI
+from diwire.types import Injected
 
 MIN_ANNOTATED_ARGS = 2
 
@@ -109,7 +109,7 @@ class DependenciesExtractor:
         }
 
     def get_injected_dependencies(self, service_key: ServiceKey) -> dict[str, ServiceKey]:
-        """Get only dependencies marked with FromDI (for functions)."""
+        """Get only dependencies marked with Injected (for functions)."""
         cached = self._injected_deps_cache.get(service_key)
         if cached is not None:
             return cached
@@ -127,14 +127,14 @@ class DependenciesExtractor:
         for name, hint in type_hints.items():
             if name == "return":
                 continue
-            actual_type = self._extract_from_di_type(hint)
+            actual_type = self._extract_injected_type(hint)
             if actual_type is not None:
                 result[name] = ServiceKey.from_value(actual_type)
         self._injected_deps_cache[service_key] = result
         return result
 
-    def _extract_from_di_type(self, hint: Any) -> Any | None:
-        """Extract the inner type if hint is Annotated[T, FromDI()], otherwise return None."""
+    def _extract_injected_type(self, hint: Any) -> Any | None:
+        """Extract the inner type if hint is Annotated[T, Injected()], otherwise return None."""
         if get_origin(hint) is not Annotated:
             return None
 
@@ -142,10 +142,10 @@ class DependenciesExtractor:
         if len(args) < MIN_ANNOTATED_ARGS:
             return None  # pragma: no cover - Annotated requires at least 2 args
 
-        # Check if any metadata is a FromDI marker
+        # Check if any metadata is an Injected marker
         for metadata in args[1:]:
-            if isinstance(metadata, FromDI):
-                return args[0]  # Return the actual type T from Annotated[T, FromDI()]
+            if isinstance(metadata, Injected):
+                return args[0]  # Return the actual type T from Annotated[T, Injected()]
 
         return None
 

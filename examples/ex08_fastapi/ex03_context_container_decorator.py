@@ -26,7 +26,7 @@ from typing import Annotated
 from fastapi import FastAPI, Request
 from fastapi.params import Query
 
-from diwire import Container, FromDI, container_context
+from diwire import Container, Injected, container_context
 
 app = FastAPI()
 request_context: ContextVar[Request] = ContextVar("request_context")
@@ -73,7 +73,7 @@ class Handler:
     async def handle(
         self,
         name: Annotated[str, Query()],
-        service: Annotated[Service, FromDI()],
+        service: Annotated[Service, Injected()],
     ) -> dict[str, str | int]:
         print(f"Handler.handle: processing request for {name}")
         return {"message": service.greet(name), "request_id": service.get_request_id()}
@@ -92,7 +92,7 @@ def setup_container() -> None:
 @container_context.resolve(scope="request")
 async def greet(
     name: Annotated[str, Query()],
-    service: Annotated[Service, FromDI()],
+    service: Annotated[Service, Injected()],
 ) -> dict[str, str | int]:
     """Endpoint using container_context for dependency resolution."""
     print(f"greet: processing request for {name}")

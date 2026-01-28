@@ -1,7 +1,7 @@
 """Tests for PEP 563 (from __future__ import annotations) compatibility.
 
 PEP 563 makes all annotations strings by default, which requires special handling
-for detecting FromDI markers at decoration time when types may not be defined yet.
+for detecting Injected markers at decoration time when types may not be defined yet.
 """
 
 from __future__ import annotations
@@ -10,26 +10,26 @@ from inspect import signature
 from typing import Annotated
 
 from diwire.container import (
-    AsyncInjected,
-    AsyncScopedInjected,
+    AsyncInjectedFunction,
+    AsyncScopedInjectedFunction,
     Container,
-    Injected,
-    ScopedInjected,
+    InjectedFunction,
+    ScopedInjectedFunction,
 )
-from diwire.types import FromDI, Lifetime
+from diwire.types import Injected, Lifetime
 
 
 class TestPEP563SignatureFiltering:
     """Test that signature filtering works with string annotations."""
 
-    def test_signature_filters_fromdi_with_string_annotations(self) -> None:
-        """Signature should exclude FromDI params even with string annotations."""
+    def test_signature_filters_injected_with_string_annotations(self) -> None:
+        """Signature should exclude Injected params even with string annotations."""
         container = Container()
 
-        # With PEP 563, this annotation becomes the string "Annotated[ServiceA, FromDI()]"
+        # With PEP 563, this annotation becomes the string "Annotated[ServiceA, Injected()]"
         def my_func(
             value: int,
-            service: Annotated[ServiceA, FromDI()],
+            service: Annotated[ServiceA, Injected()],
         ) -> int:
             return value
 
@@ -40,15 +40,15 @@ class TestPEP563SignatureFiltering:
         param_names = list(sig.parameters.keys())
         assert param_names == ["value"]
 
-    def test_signature_filters_multiple_fromdi_params(self) -> None:
-        """Multiple FromDI params should all be filtered from signature."""
+    def test_signature_filters_multiple_injected_params(self) -> None:
+        """Multiple Injected params should all be filtered from signature."""
         container = Container()
 
         def my_func(
             value: int,
-            service_a: Annotated[ServiceA, FromDI()],
+            service_a: Annotated[ServiceA, Injected()],
             name: str,
-            service_b: Annotated[ServiceB, FromDI()],
+            service_b: Annotated[ServiceB, Injected()],
         ) -> int:
             return value
 
@@ -59,12 +59,12 @@ class TestPEP563SignatureFiltering:
         assert param_names == ["value", "name"]
 
     def test_signature_empty_when_all_params_injected(self) -> None:
-        """Signature should be empty when all params are FromDI."""
+        """Signature should be empty when all params are Injected."""
         container = Container()
 
         def my_func(
-            service_a: Annotated[ServiceA, FromDI()],
-            service_b: Annotated[ServiceB, FromDI()],
+            service_a: Annotated[ServiceA, Injected()],
+            service_b: Annotated[ServiceB, Injected()],
         ) -> tuple[ServiceA, ServiceB]:
             return (service_a, service_b)
 
@@ -78,14 +78,14 @@ class TestPEP563ForwardReferences:
     """Test that forward references work when type is defined after decorator."""
 
     def test_sync_injected_with_forward_reference(self) -> None:
-        """Injected wrapper works when type is defined after the decorated function."""
+        """InjectedFunction wrapper works when type is defined after the decorated function."""
         container = Container()
 
         # Decorate function BEFORE ForwardService is defined
         @container.resolve()
         def handler(
             value: int,
-            service: Annotated[ForwardService, FromDI()],
+            service: Annotated[ForwardService, Injected()],
         ) -> str:
             return f"{value}: {service.name}"
 
@@ -99,23 +99,23 @@ class TestPEP563ForwardReferences:
         assert "ForwardService" in result
 
     def test_async_injected_with_forward_reference(self) -> None:
-        """AsyncInjected wrapper works with forward references."""
+        """AsyncInjectedFunction wrapper works with forward references."""
         container = Container()
 
         @container.resolve()
         async def handler(
             value: int,
-            service: Annotated[ForwardService, FromDI()],
+            service: Annotated[ForwardService, Injected()],
         ) -> str:
             return f"{value}: {service.name}"
 
         # Signature should be correct at decoration time
         sig = signature(handler)
         assert list(sig.parameters.keys()) == ["value"]
-        assert isinstance(handler, AsyncInjected)
+        assert isinstance(handler, AsyncInjectedFunction)
 
     def test_scoped_injected_with_forward_reference(self) -> None:
-        """ScopedInjected works with explicit scope and forward references."""
+        """ScopedInjectedFunction works with explicit scope and forward references."""
         container = Container()
         container.register(
             ForwardService,
@@ -126,16 +126,16 @@ class TestPEP563ForwardReferences:
         @container.resolve(scope="request")
         def handler(
             value: int,
-            service: Annotated[ForwardService, FromDI()],
+            service: Annotated[ForwardService, Injected()],
         ) -> str:
             return f"{value}: {service.name}"
 
         sig = signature(handler)
         assert list(sig.parameters.keys()) == ["value"]
-        assert isinstance(handler, ScopedInjected)
+        assert isinstance(handler, ScopedInjectedFunction)
 
     def test_async_scoped_injected_with_forward_reference(self) -> None:
-        """AsyncScopedInjected works with explicit scope and forward references."""
+        """AsyncScopedInjectedFunction works with explicit scope and forward references."""
         container = Container()
         container.register(
             ForwardService,
@@ -146,13 +146,13 @@ class TestPEP563ForwardReferences:
         @container.resolve(scope="request")
         async def handler(
             value: int,
-            service: Annotated[ForwardService, FromDI()],
+            service: Annotated[ForwardService, Injected()],
         ) -> str:
             return f"{value}: {service.name}"
 
         sig = signature(handler)
         assert list(sig.parameters.keys()) == ["value"]
-        assert isinstance(handler, AsyncScopedInjected)
+        assert isinstance(handler, AsyncScopedInjectedFunction)
 
 
 class TestPEP563ScopeDetection:
@@ -172,10 +172,10 @@ class TestPEP563ScopeDetection:
         # With explicit scope, this should work even though ForwardService
         # wasn't defined when the decorator ran
         @container.resolve(scope="request")
-        def handler(service: Annotated[ForwardService, FromDI()]) -> str:
+        def handler(service: Annotated[ForwardService, Injected()]) -> str:
             return service.name
 
-        assert isinstance(handler, ScopedInjected)
+        assert isinstance(handler, ScopedInjectedFunction)
 
     def test_scope_detection_fallback_on_name_error(self) -> None:
         """When scope detection fails due to NameError, should fall back gracefully."""
@@ -184,12 +184,12 @@ class TestPEP563ScopeDetection:
         # Without explicit scope and with forward reference,
         # scope detection may fail but should fall back to no scope
         @container.resolve()
-        def handler(service: Annotated[ForwardService, FromDI()]) -> str:
+        def handler(service: Annotated[ForwardService, Injected()]) -> str:
             return service.name
 
-        # Should be regular Injected (not ScopedInjected) since scope
+        # Should be regular InjectedFunction (not ScopedInjectedFunction) since scope
         # detection couldn't resolve the type
-        assert isinstance(handler, Injected)
+        assert isinstance(handler, InjectedFunction)
 
 
 class TestPEP563Resolution:
@@ -202,7 +202,7 @@ class TestPEP563Resolution:
         @container.resolve()
         def handler(
             value: int,
-            service: Annotated[ServiceA, FromDI()],
+            service: Annotated[ServiceA, Injected()],
         ) -> tuple[int, ServiceA]:
             return (value, service)
 
@@ -218,7 +218,7 @@ class TestPEP563Resolution:
         @container.resolve()
         async def handler(
             value: int,
-            service: Annotated[ServiceA, FromDI()],
+            service: Annotated[ServiceA, Injected()],
         ) -> tuple[int, ServiceA]:
             return (value, service)
 
@@ -234,7 +234,7 @@ class TestPEP563Resolution:
 
         @container.resolve(scope="request")
         def handler(
-            service: Annotated[ServiceA, FromDI()],
+            service: Annotated[ServiceA, Injected()],
         ) -> ServiceA:
             return service
 
@@ -248,7 +248,7 @@ class TestPEP563Resolution:
 
         @container.resolve(scope="request")
         async def handler(
-            service: Annotated[ServiceA, FromDI()],
+            service: Annotated[ServiceA, Injected()],
         ) -> ServiceA:
             return service
 
@@ -259,13 +259,13 @@ class TestPEP563Resolution:
 class TestPEP563EdgeCases:
     """Edge cases for PEP 563 compatibility."""
 
-    def test_mixed_fromdi_and_regular_annotations(self) -> None:
-        """Mix of FromDI and regular Annotated types."""
+    def test_mixed_injected_and_regular_annotations(self) -> None:
+        """Mix of Injected and regular Annotated types."""
         container = Container()
 
         def handler(
             value: Annotated[int, "some metadata"],
-            service: Annotated[ServiceA, FromDI()],
+            service: Annotated[ServiceA, Injected()],
             name: Annotated[str, "more metadata"],
         ) -> int:
             return value
@@ -273,16 +273,16 @@ class TestPEP563EdgeCases:
         injected = container.resolve(handler)
         sig = signature(injected)
 
-        # Only 'service' should be filtered (has FromDI)
+        # Only 'service' should be filtered (has Injected)
         param_names = list(sig.parameters.keys())
         assert param_names == ["value", "name"]
 
     def test_nested_annotated_types(self) -> None:
-        """FromDI detection works with various annotation formats."""
+        """Injected detection works with various annotation formats."""
         container = Container()
 
         def handler(
-            service: Annotated[ServiceA, FromDI()],
+            service: Annotated[ServiceA, Injected()],
         ) -> ServiceA:
             return service
 
@@ -298,7 +298,7 @@ class TestPEP563EdgeCases:
         custom_service = ServiceA()
 
         @container.resolve()
-        def handler(service: Annotated[ServiceA, FromDI()]) -> ServiceA:
+        def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
         # Override with explicit kwarg
@@ -313,7 +313,7 @@ class TestPEP563EdgeCases:
         def handler(
             a: int,
             b: str,
-            service: Annotated[ServiceA, FromDI()],
+            service: Annotated[ServiceA, Injected()],
         ) -> tuple[int, str, ServiceA]:
             return (a, b, service)
 

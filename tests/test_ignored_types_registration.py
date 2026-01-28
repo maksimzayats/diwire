@@ -6,7 +6,7 @@ import pytest
 
 from diwire import Component, Container, Lifetime
 from diwire.exceptions import DIWireMissingDependenciesError
-from diwire.types import FromDI
+from diwire.types import Injected
 
 
 class TestPrimitiveTypesExplicitRegistration:
@@ -501,14 +501,14 @@ class TestCompiledContainer:
 
 
 class TestInjectedFunctions:
-    """Test FromDI with registered ignored types."""
+    """Test Injected with registered ignored types."""
 
     def test_injected_with_registered_primitive_sync(self, container: Container) -> None:
         """Sync: Injected function receives registered primitive."""
         container.register(str, instance="injected_value")
 
         @container.resolve()
-        def get_value(value: Annotated[str, FromDI()]) -> str:
+        def get_value(value: Annotated[str, Injected()]) -> str:
             return value
 
         result = get_value()

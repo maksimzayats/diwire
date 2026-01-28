@@ -31,7 +31,7 @@ diwire is a type-driven dependency injection container with zero runtime depende
 - `container_context.py` - Global context proxy for lazy container resolution via ContextVar
 - `dependencies.py` - Type hint extraction with caching
 - `exceptions.py` - 15+ custom exception types with detailed error messages
-- `types.py` - `Lifetime` enum, `FromDI` marker, `Factory` type alias
+- `types.py` - `Lifetime` enum, `Injected` marker, `Factory` type alias
 
 **Resolution flow**: Service request → check caches → get/auto-register → extract dependencies → resolve recursively → instantiate → cache by lifetime
 
@@ -63,7 +63,6 @@ Tests in `tests/` use fixtures from `conftest.py`:
 Main exports from `diwire`:
 - `Container` - DI container
 - `Lifetime` - TRANSIENT, SINGLETON, SCOPED_SINGLETON
-- `FromDI` - Mark function parameters for injection
+- `Injected` - Mark function parameters for injection
 - `Component` - Named component registration
-- `Injected`, `ScopedInjected`, `AsyncInjected`, `AsyncScopedInjected` - Function wrappers
 - `container_context` - Global context for lazy resolution

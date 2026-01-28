@@ -12,9 +12,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-def test_ex01_from_di(capsys: pytest.CaptureFixture[str]) -> None:
-    """Test FromDI marker for function injection."""
-    from examples.ex03_function_injection.ex01_from_di import main
+def test_ex01_injected(capsys: pytest.CaptureFixture[str]) -> None:
+    """Test Injected marker for function injection."""
+    from examples.ex03_function_injection.ex01_injected import main
 
     main()
     captured = capsys.readouterr()

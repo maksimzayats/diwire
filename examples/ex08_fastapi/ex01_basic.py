@@ -18,7 +18,7 @@ from typing import Annotated
 
 from fastapi import FastAPI, Request
 
-from diwire import Container, FromDI
+from diwire import Container, Injected
 
 app = FastAPI()
 container = Container()
@@ -44,7 +44,7 @@ async def get_service():
         print("Closing service")
 
 
-async def handler(request: Request, service: Annotated[Service, FromDI()]) -> dict:
+async def handler(request: Request, service: Annotated[Service, Injected()]) -> dict:
     """Handle the request using the injected service."""
     print(f"Service {service.id} handling request")
     return {"message": service.greet(), "request_id": id(request)}

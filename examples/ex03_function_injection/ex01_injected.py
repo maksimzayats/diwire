@@ -1,13 +1,13 @@
-"""FromDI Marker for Function Injection.
+"""Injected Marker for Function Injection.
 
 Demonstrates how to mark function parameters for dependency injection
-using Annotated[T, FromDI()].
+using Annotated[T, Injected()].
 """
 
 from dataclasses import dataclass
 from typing import Annotated
 
-from diwire import Container, FromDI
+from diwire import Container, Injected
 
 
 @dataclass
@@ -29,14 +29,14 @@ class Logger:
 
 
 def send_welcome_email(
-    email_service: Annotated[EmailService, FromDI()],
-    logger: Annotated[Logger, FromDI()],
+    email_service: Annotated[EmailService, Injected()],
+    logger: Annotated[Logger, Injected()],
     user_email: str,
     user_name: str,
 ) -> str:
     """Send a welcome email to a new user.
 
-    Parameters marked with FromDI() are injected by the container.
+    Parameters marked with Injected() are injected by the container.
     Regular parameters (user_email, user_name) must be provided by caller.
     """
     logger.log(f"Sending welcome email to {user_name}")
@@ -50,7 +50,7 @@ def main() -> None:
     container.register(EmailService, instance=EmailService(smtp_host="mail.company.com"))
     container.register(Logger)
 
-    # Resolve the function - returns an Injected wrapper
+    # Resolve the function - returns an InjectedFunction wrapper
     send_email = container.resolve(send_welcome_email)
 
     print(f"Resolved function type: {type(send_email)}")

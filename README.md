@@ -133,13 +133,13 @@ print(container.resolve(ModelBox[Model]))
 
 ## Function injection
 
-Mark parameters with `FromDI()` to inject dependencies while keeping other parameters caller-provided.
+Mark parameters with `Injected()` to inject dependencies while keeping other parameters caller-provided.
 
 ```python
 from dataclasses import dataclass
 from typing import Annotated
 
-from diwire import Container, FromDI
+from diwire import Container, Injected
 
 
 @dataclass
@@ -153,7 +153,7 @@ class EmailService:
 def send_email(
     to: str,
     *,
-    mailer: Annotated[EmailService, FromDI()],
+    mailer: Annotated[EmailService, Injected()],
 ) -> str:
     return mailer.send(to, "Hello!")
 
@@ -280,7 +280,7 @@ For larger apps, `container_context` provides a context-local global container.
 from dataclasses import dataclass
 from typing import Annotated
 
-from diwire import Container, FromDI, container_context
+from diwire import Container, Injected, container_context
 
 
 @container_context.register()
@@ -290,7 +290,7 @@ class Service:
 
 
 @container_context.resolve()
-def greet(service: Annotated[Service, FromDI()]) -> str:
+def greet(service: Annotated[Service, Injected()]) -> str:
     return f"hello {service.name}"
 
 
@@ -305,7 +305,7 @@ print(greet())
 
 - `Container`: `register`, `resolve`, `aresolve`, `start_scope`, `compile`
 - `Lifetime`: `TRANSIENT`, `SINGLETON`, `SCOPED_SINGLETON`
-- `FromDI`: `Annotated[T, FromDI()]` parameter marker
+- `Injected`: `Annotated[T, Injected()]` parameter marker
 - `container_context`: context-local global container
 - `Component` and `ServiceKey`: named registrations
 

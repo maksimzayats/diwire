@@ -1,12 +1,12 @@
 from diwire.container import Container
 from diwire.container_context import container_context
 from diwire.service_key import Component
-from diwire.types import FromDI, Lifetime
+from diwire.types import Injected, Lifetime
 
 __all__ = [
     "Component",
     "Container",
-    "FromDI",
+    "Injected",
     "Lifetime",
     "container_context",
 ]

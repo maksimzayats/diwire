@@ -1,14 +1,14 @@
-"""Async function injection with FromDI.
+"""Async function injection with Injected.
 
-Demonstrates how to use FromDI with async functions.
-The resolved function becomes an AsyncInjected wrapper that
+Demonstrates how to use Injected with async functions.
+The resolved function becomes an AsyncInjectedFunction wrapper that
 automatically resolves dependencies on each call.
 """
 
 import asyncio
 from typing import Annotated
 
-from diwire import Container, FromDI, Lifetime
+from diwire import Container, Injected, Lifetime
 
 
 # Services
@@ -32,8 +32,8 @@ class Logger:
 
 # Async handler function with injected dependencies
 async def get_user_handler(
-    user_repo: Annotated[UserRepository, FromDI()],
-    logger: Annotated[Logger, FromDI()],
+    user_repo: Annotated[UserRepository, Injected()],
+    logger: Annotated[Logger, Injected()],
     user_id: int,  # Regular parameter - not injected
 ) -> dict:
     """Async handler with mixed injected and regular parameters."""
@@ -44,8 +44,8 @@ async def get_user_handler(
 
 
 async def send_welcome_email(
-    user_repo: Annotated[UserRepository, FromDI()],
-    email_service: Annotated[EmailService, FromDI()],
+    user_repo: Annotated[UserRepository, Injected()],
+    email_service: Annotated[EmailService, Injected()],
     user_id: int,
 ) -> bool:
     """Another async handler demonstrating multiple async deps."""
@@ -64,7 +64,7 @@ async def main() -> None:
     container.register(EmailService, lifetime=Lifetime.SINGLETON)
     container.register(Logger, lifetime=Lifetime.SINGLETON)
 
-    # Resolve async function - returns AsyncInjected wrapper
+    # Resolve async function - returns AsyncInjectedFunction wrapper
     get_user = await container.aresolve(get_user_handler)
     print(f"Resolved handler type: {type(get_user)}")
 
@@ -79,12 +79,12 @@ async def main() -> None:
     success = await send_email(user_id=42)
     print(f"  Success: {success}")
 
-    # The injected function's signature excludes FromDI params
+    # The injected function's signature excludes Injected params
     import inspect
 
     sig = inspect.signature(get_user)
     print(f"\nInjected function signature: {sig}")
-    print("  (FromDI parameters are hidden from the signature)")
+    print("  (Injected parameters are hidden from the signature)")
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Annotated
 
-from diwire import Container, FromDI, Lifetime
+from diwire import Container, Injected, Lifetime
 
 
 class Scope(str, Enum):
@@ -68,9 +68,9 @@ class OrderRepository:
 
 
 def create_user_with_order(
-    user_repo: Annotated[UserRepository, FromDI()],
-    order_repo: Annotated[OrderRepository, FromDI()],
-    session: Annotated[Session, FromDI()],
+    user_repo: Annotated[UserRepository, Injected()],
+    order_repo: Annotated[OrderRepository, Injected()],
+    session: Annotated[Session, Injected()],
     username: str,
     product: str,
 ) -> dict[str, str]:

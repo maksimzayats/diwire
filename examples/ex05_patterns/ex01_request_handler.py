@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Annotated
 
-from diwire import Container, FromDI, Lifetime
+from diwire import Container, Injected, Lifetime
 
 
 class Scope(str, Enum):
@@ -68,9 +68,9 @@ class AuditLogger:
 
 
 def handle_get_user(
-    auth: Annotated[AuthService, FromDI()],
-    user_service: Annotated[UserService, FromDI()],
-    audit: Annotated[AuditLogger, FromDI()],
+    auth: Annotated[AuthService, Injected()],
+    user_service: Annotated[UserService, Injected()],
+    audit: Annotated[AuditLogger, Injected()],
     token: str,
 ) -> dict[str, str | int | None]:
     """Handle GET /user request."""
