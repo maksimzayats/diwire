@@ -36,7 +36,7 @@ def test_ex02_scoped_singleton(capsys: pytest.CaptureFixture[str]) -> None:
 
     assert_output_contains(
         captured.out,
-        "SCOPED_SINGLETON behavior:",
+        "SCOPED behavior:",
         "Request Scope 1:",
         "session1:",
         "session2:",

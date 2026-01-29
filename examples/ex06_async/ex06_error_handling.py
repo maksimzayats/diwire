@@ -92,7 +92,7 @@ async def demonstrate_proper_usage() -> None:
     container.register(
         "Session",
         factory=session_factory,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope="request",
     )
 

@@ -193,7 +193,7 @@ def session_factory() -> Generator[Session, None, None]:
 
 
 container = Container()
-container.register(Session, factory=session_factory, lifetime=Lifetime.SCOPED_SINGLETON, scope="request")
+container.register(Session, factory=session_factory, lifetime=Lifetime.SCOPED, scope="request")
 
 with container.enter_scope("request") as scope:
     session = scope.resolve(Session)
@@ -265,7 +265,7 @@ async def main() -> None:
     container.register(
         AsyncClient,
         factory=client_factory,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope="request",
     )
 
@@ -308,7 +308,7 @@ print(greet())
 ## API at a glance
 
 - `Container`: `register`, `resolve`, `aresolve`, `enter_scope`, `compile`
-- `Lifetime`: `TRANSIENT`, `SINGLETON`, `SCOPED_SINGLETON`
+- `Lifetime`: `TRANSIENT`, `SINGLETON`, `SCOPED`
 - `Injected`: `Annotated[T, Injected()]` parameter marker
 - `container_context`: context-local global container
 - `Component` and `ServiceKey`: named registrations

@@ -69,7 +69,7 @@ from diwire.exceptions import (
     DIWireNotAClassError,
     DIWireOpenGenericRegistrationError,
     DIWireOpenGenericResolutionError,
-    DIWireScopedSingletonWithoutScopeError,
+    DIWireScopedWithoutScopeError,
     DIWireScopeMismatchError,
     DIWireServiceNotRegisteredError,
     DIWireUnionTypeError,
@@ -538,7 +538,7 @@ class ScopedContainer:
 class ScopedInjectedFunction(Generic[T]):
     """A callable wrapper that creates a new scope for each call.
 
-    Similar to InjectedFunction, but ensures SCOPED_SINGLETON dependencies are shared
+    Similar to InjectedFunction, but ensures SCOPED dependencies are shared
     within a single call invocation.
 
     Uses lazy initialization to support `from __future__ import annotations`,
@@ -676,7 +676,7 @@ class AsyncInjectedFunction(Generic[T]):
 class AsyncScopedInjectedFunction(Generic[T]):
     """A callable wrapper that creates a new async scope for each call.
 
-    Similar to AsyncInjectedFunction, but ensures SCOPED_SINGLETON dependencies are shared
+    Similar to AsyncInjectedFunction, but ensures SCOPED dependencies are shared
     within a single call invocation.
 
     Uses lazy initialization to support `from __future__ import annotations`,
@@ -974,7 +974,7 @@ class Container:
             lifetime: The lifetime of the service. This default applies only to explicit
                 registrations via `register`; auto-registration uses
                 `autoregister_default_lifetime` from container configuration.
-            scope: Optional scope name for SCOPED_SINGLETON services.
+            scope: Optional scope name for SCOPED services.
             is_async: Whether the factory is async. If None, auto-detected from factory.
             concrete_class: Optional concrete implementation class. When specified, `key`
                 is used as the interface and `concrete_class` is the implementation.
@@ -985,7 +985,7 @@ class Container:
             - When used as a direct call: returns None
 
         Raises:
-            DIWireScopedSingletonWithoutScopeError: If lifetime is SCOPED_SINGLETON but
+            DIWireScopedWithoutScopeError: If lifetime is SCOPED but
                 no scope is provided.
             DIWireConcreteClassRequiresClassError: If `concrete_class` is not a class type.
             DIWireDecoratorFactoryMissingReturnAnnotationError: If used as a factory decorator
@@ -1253,7 +1253,7 @@ class Container:
 
         Args:
             lifetime: The lifetime of the service.
-            scope: Optional scope name for SCOPED_SINGLETON services.
+            scope: Optional scope name for SCOPED services.
             is_async: Whether the factory is async.
             interface_key: If provided, the decorated class/factory will be registered
                 under this key (interface registration pattern).
@@ -1390,8 +1390,8 @@ class Container:
             service_key = ServiceKey.from_value(key)
             concrete_type = key if isinstance(key, type) else None
 
-        if lifetime == Lifetime.SCOPED_SINGLETON and scope is None:
-            raise DIWireScopedSingletonWithoutScopeError(service_key)
+        if lifetime == Lifetime.SCOPED and scope is None:
+            raise DIWireScopedWithoutScopeError(service_key)
 
         # Auto-detect if factory is async when not explicitly specified
         detected_is_async = False
@@ -1430,7 +1430,7 @@ class Container:
                 typevars=typevars,
             )
             # Track scoped registrations
-            if lifetime == Lifetime.SCOPED_SINGLETON:
+            if lifetime == Lifetime.SCOPED:
                 self._has_scoped_registrations = True
             self._is_compiled = False
             return
@@ -1463,14 +1463,14 @@ class Container:
             self._registry[service_key] = registration
 
         # Track scoped singleton registrations
-        if lifetime == Lifetime.SCOPED_SINGLETON:
+        if lifetime == Lifetime.SCOPED:
             self._has_scoped_registrations = True
 
         # Invalidate compiled state when registrations change
         self._is_compiled = False
 
     def enter_scope(self, scope_name: str | None = None) -> ScopedContainer:
-        """Start a new scope for resolving SCOPED_SINGLETON dependencies.
+        """Start a new scope for resolving SCOPED dependencies.
 
         The scope is activated immediately upon creation, allowing imperative usage:
             scope = container.enter_scope("request")
@@ -2118,7 +2118,7 @@ class Container:
 
             scoped_lock: threading.Lock | None = None  # type: ignore[no-redef]
             if (
-                registration.lifetime == Lifetime.SCOPED_SINGLETON
+                registration.lifetime == Lifetime.SCOPED
                 and cache_key is not None  # type: ignore[redundant-expr]
                 and registration.instance is None
             ):
@@ -2188,9 +2188,7 @@ class Container:
 
                     if registration.lifetime == Lifetime.SINGLETON:
                         self._singletons[service_key] = instance
-                    elif (
-                        registration.lifetime == Lifetime.SCOPED_SINGLETON and cache_key is not None
-                    ):
+                    elif registration.lifetime == Lifetime.SCOPED and cache_key is not None:
                         self._scoped_instances[cache_key] = instance
 
                     return instance
@@ -2214,7 +2212,7 @@ class Container:
 
                 if registration.lifetime == Lifetime.SINGLETON:
                     self._singletons[service_key] = instance
-                elif registration.lifetime == Lifetime.SCOPED_SINGLETON and cache_key is not None:
+                elif registration.lifetime == Lifetime.SCOPED and cache_key is not None:
                     self._scoped_instances[cache_key] = instance
 
                 return instance
@@ -2392,7 +2390,7 @@ class Container:
 
             scoped_lock: asyncio.Lock | None = None
             if (
-                registration.lifetime == Lifetime.SCOPED_SINGLETON
+                registration.lifetime == Lifetime.SCOPED
                 and cache_key is not None
                 and registration.instance is None
             ):
@@ -2485,9 +2483,7 @@ class Container:
 
                     if registration.lifetime == Lifetime.SINGLETON:
                         self._singletons[service_key] = instance  # type: ignore[possibly-undefined]
-                    elif (
-                        registration.lifetime == Lifetime.SCOPED_SINGLETON and cache_key is not None
-                    ):
+                    elif registration.lifetime == Lifetime.SCOPED and cache_key is not None:
                         self._scoped_instances[cache_key] = instance  # type: ignore[possibly-undefined]
 
                     return instance  # type: ignore[possibly-undefined]
@@ -2512,7 +2508,7 @@ class Container:
 
                 if registration.lifetime == Lifetime.SINGLETON:
                     self._singletons[service_key] = instance
-                elif registration.lifetime == Lifetime.SCOPED_SINGLETON and cache_key is not None:
+                elif registration.lifetime == Lifetime.SCOPED and cache_key is not None:
                     self._scoped_instances[cache_key] = instance
 
                 return instance

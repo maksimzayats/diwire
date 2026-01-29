@@ -21,7 +21,7 @@ from diwire.exceptions import (
     DIWireAsyncCleanupWithoutEventLoopError,
     DIWireGeneratorFactoryWithoutScopeError,
     DIWireMissingDependenciesError,
-    DIWireScopedSingletonWithoutScopeError,
+    DIWireScopedWithoutScopeError,
     DIWireScopeMismatchError,
     DIWireServiceNotRegisteredError,
 )
@@ -58,21 +58,21 @@ class ServiceB:
     session: Session
 
 
-class TestLifetimeScopedSingleton:
-    """Tests for Lifetime.SCOPED_SINGLETON behavior."""
+class TestLifetimeScoped:
+    """Tests for Lifetime.SCOPED behavior."""
 
-    def test_scoped_singleton_value(self) -> None:
-        """SCOPED_SINGLETON has correct value."""
-        assert Lifetime.SCOPED_SINGLETON.value == "scoped_singleton"
+    def test_scoped_value(self) -> None:
+        """SCOPED has correct value."""
+        assert Lifetime.SCOPED.value == "scoped"
 
-    def test_scoped_singleton_without_scope_raises_error(self, container: Container) -> None:
-        """SCOPED_SINGLETON without scope raises error at registration time."""
-        with pytest.raises(DIWireScopedSingletonWithoutScopeError):
-            container.register(Session, lifetime=Lifetime.SCOPED_SINGLETON)
+    def test_scoped_without_scope_raises_error(self, container: Container) -> None:
+        """SCOPED without scope raises error at registration time."""
+        with pytest.raises(DIWireScopedWithoutScopeError):
+            container.register(Session, lifetime=Lifetime.SCOPED)
 
-    def test_scoped_singleton_within_scope_shares_instance(self, container: Container) -> None:
-        """SCOPED_SINGLETON within scope shares the same instance."""
-        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+    def test_scoped_within_scope_shares_instance(self, container: Container) -> None:
+        """SCOPED within scope shares the same instance."""
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("test"):
             session1 = container.resolve(Session)
@@ -80,13 +80,13 @@ class TestLifetimeScopedSingleton:
 
         assert session1.id == session2.id
 
-    def test_scoped_singleton_different_scopes_different_instances(
+    def test_scoped_different_scopes_different_instances(
         self,
         container: Container,
     ) -> None:
-        """Different scopes get different SCOPED_SINGLETON instances."""
-        container.register(Session, scope="scope1", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(Session, scope="scope2", lifetime=Lifetime.SCOPED_SINGLETON)
+        """Different scopes get different SCOPED instances."""
+        container.register(Session, scope="scope1", lifetime=Lifetime.SCOPED)
+        container.register(Session, scope="scope2", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("scope1"):
             session1 = container.resolve(Session)
@@ -124,7 +124,7 @@ class TestStartScope:
 
     def test_enter_scope_cleans_up_scoped_instances(self, container: Container) -> None:
         """Scoped instances are cleaned up when scope exits."""
-        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("test"):
             container.resolve(Session)
@@ -148,7 +148,7 @@ class TestScopedContainer:
 
     def test_scoped_container_resolve(self, container: Container) -> None:
         """ScopedContainer.resolve delegates to container."""
-        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("test") as scoped:
             session = scoped.resolve(Session)
@@ -199,7 +199,7 @@ class TestScopedInjected:
 
     def test_scoped_injected_shares_instance_within_call(self, container: Container) -> None:
         """ScopedInjected shares scoped instances within a single call."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         def handler(
             service_a: Annotated[ServiceA, Injected()],
@@ -260,7 +260,7 @@ class TestScopeValidation:
         """Resolving scoped service outside its scope raises DIWireServiceNotRegisteredError."""
         # With scoped registrations, the registration is only found when scope matches
         container = Container(register_if_missing=False)
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with pytest.raises(DIWireServiceNotRegisteredError), container.enter_scope("other_scope"):
             container.resolve(Session)
@@ -268,7 +268,7 @@ class TestScopeValidation:
     def test_scoped_service_not_found_without_scope(self) -> None:
         """Resolving scoped service with no active scope raises DIWireServiceNotRegisteredError."""
         container = Container(register_if_missing=False)
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with pytest.raises(DIWireServiceNotRegisteredError):
             container.resolve(Session)
@@ -280,7 +280,7 @@ class TestScopeValidation:
         service_key = ServiceKey.from_value(Session)
         container._registry[service_key] = Registration(
             service_key=service_key,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="request",
         )
         # Set flag since we're bypassing register() which normally sets this
@@ -296,7 +296,7 @@ class TestScopeValidation:
 
     def test_matching_scope_succeeds(self, container: Container) -> None:
         """Resolving in matching scope succeeds."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("request"):
             session = container.resolve(Session)
@@ -304,7 +304,7 @@ class TestScopeValidation:
 
     def test_child_scope_can_access_parent_scope_registration(self, container: Container) -> None:
         """Child scopes can resolve services registered for parent scope."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("request") as parent, parent.enter_scope("child"):
             # Current scope is "request/child" which starts with "request"
@@ -317,8 +317,8 @@ class TestScopedRegistration:
 
     def test_multiple_scoped_registrations(self, container: Container) -> None:
         """Same service can have different registrations for different scopes."""
-        container.register(Session, scope="scope_a", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(Session, scope="scope_b", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="scope_a", lifetime=Lifetime.SCOPED)
+        container.register(Session, scope="scope_b", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("scope_a"):
             session_a = container.resolve(Session)
@@ -332,7 +332,7 @@ class TestScopedRegistration:
     def test_scoped_registration_independent_of_global(self, container: Container) -> None:
         """Scoped and global registrations work independently."""
         # Scoped registration only
-        container.register(Session, scope="special", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="special", lifetime=Lifetime.SCOPED)
 
         # Inside special scope - uses scoped registration
         with container.enter_scope("special"):
@@ -348,8 +348,8 @@ class TestScopedRegistration:
 
     def test_most_specific_scope_wins(self, container: Container) -> None:
         """Most specific matching scope registration is used."""
-        container.register(Session, scope="parent", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(Session, scope="child", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="parent", lifetime=Lifetime.SCOPED)
+        container.register(Session, scope="child", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("parent") as parent:
             session_parent = container.resolve(Session)
@@ -367,7 +367,7 @@ class TestScopedInstanceCaching:
 
     def test_scoped_instances_cached_at_registration_scope(self, container: Container) -> None:
         """Scoped instances are cached at the registration's scope level."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("request") as parent:
             session_parent = container.resolve(Session)
@@ -383,7 +383,7 @@ class TestScopedInstanceCaching:
 
     def test_scoped_instances_isolated_between_scopes(self, container: Container) -> None:
         """Different scope instances don't share scoped singletons."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         sessions = []
         for i in range(3):
@@ -406,7 +406,7 @@ class TestAutoScopeDetection:
         service_key = ServiceKey.from_value(Session)
         container._registry[service_key] = Registration(
             service_key=service_key,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="request",
         )
 
@@ -424,7 +424,7 @@ class TestAutoScopeDetection:
 
     def test_explicit_scope_overrides_auto_detection(self, container: Container) -> None:
         """Explicit scope parameter overrides auto-detection."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         def handler(service: Annotated[Service, Injected()]) -> Service:
             return service
@@ -446,7 +446,7 @@ class TestAutoScopeDetection:
 
     def test_auto_detect_scope_from_scoped_registry(self, container: Container) -> None:
         """resolve() auto-detects scope from scoped_registry."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         def handler(session: Annotated[Session, Injected()]) -> Session:
             return session
@@ -457,10 +457,10 @@ class TestAutoScopeDetection:
     def test_ambiguous_scope_detection_returns_none(self, container: Container) -> None:
         """Ambiguous scopes (different values) don't auto-detect."""
         # Register same service in multiple scopes
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
         container._scoped_registry[(ServiceKey.from_value(Session), "session")] = Registration(
             service_key=ServiceKey.from_value(Session),
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="session",
         )
 
@@ -478,7 +478,7 @@ class TestScopeHierarchyMatching:
 
     def test_exact_scope_match(self, container: Container) -> None:
         """Exact scope name matches."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("request"):
             session = container.resolve(Session)
@@ -486,7 +486,7 @@ class TestScopeHierarchyMatching:
 
     def test_parent_scope_matches_child(self, container: Container) -> None:
         """Parent scope registration matches in child scopes."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("request") as parent, parent.enter_scope("handler"):
             # "request/handler" contains "request" as parent
@@ -495,7 +495,7 @@ class TestScopeHierarchyMatching:
 
     def test_segment_scope_matches(self, container: Container) -> None:
         """Scope registered as segment matches in hierarchy."""
-        container.register(Session, scope="handler", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="handler", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("request") as request, request.enter_scope("handler"):
             # "request/handler" contains "handler" as segment
@@ -505,7 +505,7 @@ class TestScopeHierarchyMatching:
     def test_non_matching_scope_not_found(self) -> None:
         """Non-matching scope raises DIWireServiceNotRegisteredError."""
         container = Container(register_if_missing=False)
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with pytest.raises(DIWireServiceNotRegisteredError), container.enter_scope("other"):
             container.resolve(Session)
@@ -521,9 +521,9 @@ class TestScopedInstanceRegistration:
             Session,
             instance=specific_session,
             scope="special",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
-        container.register(Session, scope="default", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="default", lifetime=Lifetime.SCOPED)
 
         # In "special" scope - should return the registered instance
         with container.enter_scope("special"):
@@ -542,7 +542,7 @@ class TestScopedInstanceRegistration:
             Session,
             instance=specific_session,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         service_key = ServiceKey.from_value(Session)
@@ -570,13 +570,13 @@ class TestScopedInstanceRegistration:
             Session,
             instance=session_a,
             scope="scope_a",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(
             Session,
             instance=session_b,
             scope="scope_b",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with container.enter_scope("scope_a"):
@@ -596,13 +596,13 @@ class TestScopedInstanceRegistration:
             Session,
             instance=outer_session,
             scope="outer",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(
             Session,
             instance=inner_session,
             scope="inner",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with container.enter_scope("outer") as outer:
@@ -625,13 +625,13 @@ class TestScopedInstanceRegistration:
             Session,
             instance=request_session,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(
             Session,
             instance=admin_session,
             scope="admin",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with container.enter_scope("request"):
@@ -652,7 +652,7 @@ class TestScopeCleanup:
 
     def test_nested_scope_cleanup(self, container: Container) -> None:
         """Nested scopes clean up their instances independently."""
-        container.register(Session, scope="child", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="child", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("parent") as parent:
             with parent.enter_scope("child"):
@@ -675,7 +675,7 @@ class TestScopeCleanup:
 
     def test_scope_cleanup_on_exception(self, container: Container) -> None:
         """Scopes clean up even when exceptions occur."""
-        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
         try:
             with container.enter_scope("test"):
@@ -707,7 +707,7 @@ class TestCaptiveDependency:
         class SingletonService:
             session: Session  # This will be captured!
 
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
         container.register(SingletonService, lifetime=Lifetime.SINGLETON)
 
         # First request scope
@@ -732,7 +732,7 @@ class TestCaptiveDependency:
         class TransientService:
             session: Session
 
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
         container.register(TransientService, lifetime=Lifetime.TRANSIENT)
 
         with container.enter_scope("request"):
@@ -749,7 +749,7 @@ class TestScopeEdgeCases:
 
     def test_scope_name_with_slash_character(self, container: Container) -> None:
         """Scope names containing '/' may cause hierarchy parsing issues."""
-        container.register(Session, scope="my/scope", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="my/scope", lifetime=Lifetime.SCOPED)
 
         # This might break the hierarchy parsing since "/" is used as separator
         with container.enter_scope("my/scope"):
@@ -758,7 +758,7 @@ class TestScopeEdgeCases:
 
     def test_empty_scope_name(self, container: Container) -> None:
         """Empty string as scope name."""
-        container.register(Session, scope="", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope(""):
             session = container.resolve(Session)
@@ -766,7 +766,7 @@ class TestScopeEdgeCases:
 
     def test_reenter_same_scope_name(self, container: Container) -> None:
         """Re-entering a scope with the same name creates fresh instances."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("request"):
             session1 = container.resolve(Session)
@@ -799,7 +799,7 @@ class TestScopeEdgeCases:
             Session,
             factory=SessionFactory,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with container.enter_scope("request"):
@@ -814,13 +814,13 @@ class TestScopeEdgeCases:
             Session,
             instance=Session(id="first"),
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(
             Session,
             instance=Session(id="second"),
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with container.enter_scope("test"):
@@ -832,7 +832,7 @@ class TestScopeEdgeCases:
         container: Container,
     ) -> None:
         """Resolving via stale ScopedContainer after scope exits."""
-        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("test") as scoped:
             session_inside = scoped.resolve(Session)
@@ -844,7 +844,7 @@ class TestScopeEdgeCases:
 
     def test_concurrent_scope_same_name_different_instances(self, container: Container) -> None:
         """Concurrent scopes with same name should be isolated."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
         results: dict[str, str] = {}
         errors: list[Exception] = []
 
@@ -882,7 +882,7 @@ class TestGlobalVsScopedRegistration:
             Session,
             instance=Session(id="scoped"),
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         # Outside scope - should get global
@@ -901,7 +901,7 @@ class TestGlobalVsScopedRegistration:
             Session,
             instance=Session(id="special-scoped"),
             scope="special",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         # Outside special scope - uses global transient
@@ -936,7 +936,7 @@ class TestScopeWithDependencyChains:
             level2: Level2
             session: Session  # Also depends on Session directly
 
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("request"):
             level1 = container.resolve(Level1)
@@ -954,7 +954,7 @@ class TestScopeWithDependencyChains:
         class SingletonDep:
             transient: TransientDep
 
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
         container.register(TransientDep, lifetime=Lifetime.TRANSIENT)
         container.register(SingletonDep, lifetime=Lifetime.SINGLETON)
 
@@ -973,7 +973,7 @@ class TestScopeContextVariableIsolation:
 
     def test_scope_context_isolated_between_threads(self, container: Container) -> None:
         """Each thread should have its own scope context."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
         scope_values: dict[str, Any] = {}
         errors: list[Exception] = []
 
@@ -1010,7 +1010,7 @@ class TestScopeContextVariableIsolation:
 
     def test_async_scope_isolation(self, container: Container) -> None:
         """Async tasks should have isolated scope contexts."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
         results: dict[str, str] = {}
 
         async def async_worker(worker_id: str) -> None:
@@ -1154,10 +1154,10 @@ class TestTransitiveScopeDependencies:
 
     def test_scoped_depends_on_scoped_same_scope(self, container: Container) -> None:
         """A->B->C all scoped:request shares same instances within scope."""
-        container.register(ScopedLevel1, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(ScopedLevel2, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(ScopedLevel3, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ScopedLevel1, scope="request", lifetime=Lifetime.SCOPED)
+        container.register(ScopedLevel2, scope="request", lifetime=Lifetime.SCOPED)
+        container.register(ScopedLevel3, scope="request", lifetime=Lifetime.SCOPED)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("request"):
             level1_a = container.resolve(ScopedLevel1)
@@ -1172,9 +1172,9 @@ class TestTransitiveScopeDependencies:
 
     def test_scoped_depends_on_scoped_different_scope(self, container: Container) -> None:
         """A (outer) -> B (inner) resolved in correct scopes."""
-        container.register(ScopedLevel2, scope="outer", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(ScopedLevel3, scope="inner", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(Session, scope="inner", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ScopedLevel2, scope="outer", lifetime=Lifetime.SCOPED)
+        container.register(ScopedLevel3, scope="inner", lifetime=Lifetime.SCOPED)
+        container.register(Session, scope="inner", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("outer") as outer:
             with outer.enter_scope("inner"):
@@ -1184,12 +1184,12 @@ class TestTransitiveScopeDependencies:
 
     def test_long_transitive_chain_all_scoped(self, container: Container) -> None:
         """5+ scoped services in chain: bottom service is shared."""
-        container.register(ChainA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(ChainB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(ChainC, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(ChainD, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(ChainE, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ChainA, scope="request", lifetime=Lifetime.SCOPED)
+        container.register(ChainB, scope="request", lifetime=Lifetime.SCOPED)
+        container.register(ChainC, scope="request", lifetime=Lifetime.SCOPED)
+        container.register(ChainD, scope="request", lifetime=Lifetime.SCOPED)
+        container.register(ChainE, scope="request", lifetime=Lifetime.SCOPED)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("request"):
             chain_a = container.resolve(ChainA)
@@ -1203,7 +1203,7 @@ class TestTransitiveScopeDependencies:
         container = Container(register_if_missing=False)
 
         container.register(OuterService, lifetime=Lifetime.TRANSIENT)
-        container.register(InnerService, scope="special", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(InnerService, scope="special", lifetime=Lifetime.SCOPED)
 
         # Outside scope, should fail because InnerService requires "special" scope
         # The error type depends on how the container handles it:
@@ -1247,7 +1247,7 @@ class TestFactoryEdgeCasesWithScopes:
             Session,
             factory=FailingFactory,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with container.enter_scope("request"):
@@ -1271,13 +1271,13 @@ class TestFactoryEdgeCasesWithScopes:
             Session,
             instance=parent_session,
             scope="parent",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(
             Session,
             factory=FailingChildFactory,
             scope="child",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with container.enter_scope("parent") as parent:
@@ -1315,7 +1315,7 @@ class TestFactoryEdgeCasesWithScopes:
             Service,
             factory=ServiceWithConfigFactory,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with container.enter_scope("request"):
@@ -1336,7 +1336,7 @@ class TestFactoryEdgeCasesWithScopes:
             Session,
             factory=TrackingFactory,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         sessions = []
@@ -1363,7 +1363,7 @@ class TestFactoryEdgeCasesWithScopes:
             Session,
             factory=session_factory,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with container.enter_scope("request"):
@@ -1406,13 +1406,13 @@ class TestFactoryEdgeCasesWithScopes:
             Session,
             factory=parent_factory,
             scope="parent",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(
             Session,
             factory=child_factory,
             scope="child",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with container.enter_scope("parent") as parent:
@@ -1440,7 +1440,7 @@ class TestScopeErrorRecovery:
 
     def test_partial_scope_cleanup_when_nested_fails(self, container: Container) -> None:
         """Nested scope fails: parent preserved."""
-        container.register(Session, scope="parent", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="parent", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("parent") as parent:
             parent_session = container.resolve(Session)
@@ -1461,7 +1461,7 @@ class TestScopeErrorRecovery:
 
         # We can't easily make clear_scope raise without modifying the container
         # So we test that normal exception handling still cleans up context
-        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
         try:
             with container.enter_scope("test"):
@@ -1474,7 +1474,7 @@ class TestScopeErrorRecovery:
 
     def test_resolve_from_manually_cleared_scope(self, container: Container) -> None:
         """Manual clear_scope then resolve: creates new instance (cache cleared)."""
-        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("test") as scoped:
             session1 = container.resolve(Session)
@@ -1489,7 +1489,7 @@ class TestScopeErrorRecovery:
 
     def test_double_exit_scope_idempotent(self, container: Container) -> None:
         """__exit__ called twice: clear_scope on already-cleared scope is safe."""
-        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
         # Use the context manager normally
         with container.enter_scope("test") as scoped:
@@ -1517,7 +1517,7 @@ class TestConcurrentScopeEdgeCases:
 
     def test_same_scope_name_concurrent_threads_isolated(self, container: Container) -> None:
         """Multiple threads, same scope name: complete isolation."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
         results: dict[str, str] = {}
         errors: list[Exception] = []
 
@@ -1545,8 +1545,8 @@ class TestConcurrentScopeEdgeCases:
 
     def test_scope_hierarchy_consistency_concurrent(self, container: Container) -> None:
         """Concurrent nested scope creation: hierarchy intact."""
-        container.register(Session, scope="parent", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(Service, scope="child", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="parent", lifetime=Lifetime.SCOPED)
+        container.register(Service, scope="child", lifetime=Lifetime.SCOPED)
         results: dict[str, tuple[str, str]] = {}
         errors: list[Exception] = []
 
@@ -1580,7 +1580,7 @@ class TestConcurrentScopeEdgeCases:
         Expected race condition errors (KeyError, RuntimeError) are acceptable.
         The test verifies the container remains functional after concurrent stress.
         """
-        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
         resolved: list[Session] = []
         unexpected_errors: list[Exception] = []
         expected_race_errors = (KeyError, RuntimeError)
@@ -1628,7 +1628,7 @@ class TestConcurrentScopeEdgeCases:
 
     def test_concurrent_async_scope_creation_same_name(self, container: Container) -> None:
         """Async tasks, same scope name: unique scope IDs."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
         scope_ids: dict[str, str] = {}
 
         async def async_worker(worker_id: str) -> None:
@@ -1655,12 +1655,12 @@ class TestConcurrentScopeEdgeCases:
 class TestScopeResolutionEdgeCases:
     """Tests for scope resolution edge cases."""
 
-    def test_scoped_singleton_registered_globally(self, container: Container) -> None:
-        """SCOPED_SINGLETON in global registry works in scope."""
+    def test_scoped_registered_globally(self, container: Container) -> None:
+        """SCOPED in global registry works in scope."""
         service_key = ServiceKey.from_value(Session)
         container._registry[service_key] = Registration(
             service_key=service_key,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="request",
         )
         # Set flag since we're bypassing register() which normally sets this
@@ -1678,7 +1678,7 @@ class TestScopeResolutionEdgeCases:
             service_key=service_key,
             factory=None,
             instance=None,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="test",
         )
         # Set flag since we're bypassing register() which normally sets this
@@ -1691,7 +1691,7 @@ class TestScopeResolutionEdgeCases:
 
     def test_very_deep_nested_scope_hierarchy(self, container: Container) -> None:
         """10+ levels of nesting works correctly."""
-        container.register(Session, scope="level10", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="level10", lifetime=Lifetime.SCOPED)
 
         # Create 10 levels of nested scopes
         current_scope = container.enter_scope("level1")
@@ -1721,7 +1721,7 @@ class TestScopeResolutionEdgeCases:
     def test_scope_segment_partial_match_rejected(self) -> None:
         """Scope 'req' vs registered 'request': no match."""
         container = Container(register_if_missing=False)
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         # "req" should not match "request"
         with pytest.raises((DIWireScopeMismatchError, DIWireServiceNotRegisteredError)):  # type: ignore[call-overload]
@@ -1731,7 +1731,7 @@ class TestScopeResolutionEdgeCases:
     def test_resolve_service_nonexistent_scope(self) -> None:
         """Service for scope X, in scope Y raises DIWireServiceNotRegisteredError."""
         container = Container(register_if_missing=False)
-        container.register(Session, scope="scope_x", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="scope_x", lifetime=Lifetime.SCOPED)
 
         with pytest.raises(DIWireServiceNotRegisteredError):
             with container.enter_scope("scope_y"):
@@ -1753,7 +1753,7 @@ class TestComprehensiveCaptiveDependency:
         class SingletonHolder:
             session: Session
 
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
         container.register(SingletonHolder, lifetime=Lifetime.SINGLETON)
 
         # First scope captures the session
@@ -1775,7 +1775,7 @@ class TestComprehensiveCaptiveDependency:
         class TransientHolder:
             session: Session
 
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
         container.register(TransientHolder, lifetime=Lifetime.TRANSIENT)
 
         with container.enter_scope("request"):
@@ -1790,8 +1790,8 @@ class TestComprehensiveCaptiveDependency:
 
     def test_scoped_to_scoped_different_scopes_captive(self, container: Container) -> None:
         """Scoped(A) depends on Scoped(B) in different scopes: documents captive."""
-        container.register(OuterScopedService, scope="outer", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(InnerScopedService, scope="inner", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(OuterScopedService, scope="outer", lifetime=Lifetime.SCOPED)
+        container.register(InnerScopedService, scope="inner", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("outer") as outer:
             with outer.enter_scope("inner"):
@@ -1804,7 +1804,7 @@ class TestComprehensiveCaptiveDependency:
 
     def test_mixed_lifetime_chain_crossing_boundary(self, container: Container) -> None:
         """Singleton->Transient->Scoped: works and documents behavior."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
         container.register(TransientMiddle, lifetime=Lifetime.TRANSIENT)
         container.register(SingletonTop, lifetime=Lifetime.SINGLETON)
 
@@ -1843,7 +1843,7 @@ class TestAsyncScopeContextManager:
             Session,
             factory=async_session_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         async with container.enter_scope("test"):
@@ -1867,7 +1867,7 @@ class TestAsyncScopeContextManager:
             Session,
             factory=resource_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with pytest.raises(ValueError, match="test error"):
@@ -1879,7 +1879,7 @@ class TestAsyncScopeContextManager:
 
     async def test_scoped_container_aresolve_works(self, container: Container) -> None:
         """ScopedContainer.aresolve() delegates correctly."""
-        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
         async with container.enter_scope("test") as scoped:
             session = await scoped.aresolve(Session)
@@ -1890,7 +1890,7 @@ class TestAsyncScopeContextManager:
         container: Container,
     ) -> None:
         """ScopedContainer.aresolve() after exit raises error."""
-        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
         async with container.enter_scope("test") as scoped:
             pass
@@ -1923,7 +1923,7 @@ class TestScopedSingletonConcurrency:
             Session,
             factory=session_factory,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         async with container.enter_scope("request"):
@@ -1943,7 +1943,7 @@ class TestMemoryAndReferenceEdgeCases:
 
     def test_many_scopes_created_disposed_no_leak(self, container: Container) -> None:
         """1000 scopes created/disposed: _scoped_instances empty."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         for _ in range(1000):
             with container.enter_scope("request"):
@@ -1954,7 +1954,7 @@ class TestMemoryAndReferenceEdgeCases:
 
     def test_scope_disposal_releases_cached_instances(self, container: Container) -> None:
         """Scoped instances are removed from cache after scope exit."""
-        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
         def has_test_scope(
             key: tuple[tuple[tuple[str | None, int], ...], object],
@@ -1974,7 +1974,7 @@ class TestMemoryAndReferenceEdgeCases:
 
     def test_no_reference_retention_after_clear(self, container: Container) -> None:
         """After clear_scope: no refs in container for that scope."""
-        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("test"):
             container.resolve(Session)
@@ -1992,7 +1992,7 @@ class TestMemoryAndReferenceEdgeCases:
             data: bytes = field(default_factory=lambda: b"x" * 10_000_000)  # 10MB
             id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
-        container.register(LargeObject, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(LargeObject, scope="test", lifetime=Lifetime.SCOPED)
 
         def has_test_scope(
             key: tuple[tuple[tuple[str | None, int], ...], object],
@@ -2037,7 +2037,7 @@ class TestAsyncScopedSingletonLockCleanup:
             Session,
             factory=session_factory,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         # Use sync context manager to enter scope
@@ -2077,7 +2077,7 @@ class TestAsyncScopedSingletonLockCleanup:
             Session,
             factory=session_factory,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         async with container.enter_scope("request"):
@@ -2112,7 +2112,7 @@ class TestScopedSingletonDoubleCheckLocking:
             Session,
             instance=specific_session,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with container.enter_scope("test"):
@@ -2139,7 +2139,7 @@ class TestScopedSingletonDoubleCheckLocking:
             Session,
             instance=specific_session,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         async with container.enter_scope("test"):
@@ -2176,7 +2176,7 @@ class TestScopedSingletonDoubleCheckLocking:
             Session,
             factory=slow_session_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         async with container.enter_scope("test"):
@@ -2357,7 +2357,7 @@ class TestSyncScopeAsyncCleanup:
             Session,
             factory=async_session_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         # Use sync scope but resolve async generator with aresolve
@@ -2387,7 +2387,7 @@ class TestSyncScopeAsyncCleanup:
             Session,
             factory=async_session_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         # Create and run in a manual event loop, then close it before scope exits
@@ -2424,7 +2424,7 @@ class TestSyncScopeAsyncCleanup:
             Session,
             factory=resource_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         async def run_test() -> None:
@@ -2450,7 +2450,7 @@ class TestSyncScopeAsyncCleanup:
             Session,
             factory=sync_session_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         # Should not raise any error even though no async exit stack exists
@@ -2496,19 +2496,19 @@ class TestSyncScopeAsyncCleanup:
             ResourceA,
             factory=resource_a_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(
             ResourceB,
             factory=resource_b_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(
             ResourceC,
             factory=resource_c_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         async def run_test() -> None:
@@ -2540,7 +2540,7 @@ class TestSyncScopeAsyncCleanup:
             Session,
             factory=async_session_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         # Test that the error is raised when no event loop is running
@@ -2586,7 +2586,7 @@ class TestImperativeScopeManagement:
 
     def test_imperative_scope_sync_resolve(self, container: Container) -> None:
         """Imperative scope works with sync resolve."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         container.enter_scope("request")
         session1 = container.resolve(Session)
@@ -2597,7 +2597,7 @@ class TestImperativeScopeManagement:
 
     def test_imperative_scope_async_resolve(self, container: Container) -> None:
         """Imperative scope works with async resolve."""
-        container.register(Session, scope="app", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="app", lifetime=Lifetime.SCOPED)
 
         async def run_test() -> None:
             container.enter_scope("app")
@@ -2611,7 +2611,7 @@ class TestImperativeScopeManagement:
 
     def test_backward_compatibility_with_context_manager(self, container: Container) -> None:
         """Context manager usage still works (with is now no-op for entry)."""
-        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("test") as scope:
             session = container.resolve(Session)
@@ -2623,8 +2623,8 @@ class TestImperativeScopeManagement:
 
     def test_nested_imperative_scopes(self, container: Container) -> None:
         """Nested imperative scopes work correctly."""
-        container.register(Session, scope="parent", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(Service, scope="child", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="parent", lifetime=Lifetime.SCOPED)
+        container.register(Service, scope="child", lifetime=Lifetime.SCOPED)
 
         parent_scope = container.enter_scope("parent")
         current = _current_scope.get()
@@ -2650,8 +2650,8 @@ class TestImperativeScopeManagement:
         """container.close() closes all scopes in LIFO order."""
         close_order: list[str] = []
 
-        container.register(Session, scope="first", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(Service, scope="second", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="first", lifetime=Lifetime.SCOPED)
+        container.register(Service, scope="second", lifetime=Lifetime.SCOPED)
 
         scope1 = container.enter_scope("first")
         scope2 = container.enter_scope("second")
@@ -2668,7 +2668,7 @@ class TestImperativeScopeManagement:
 
     def test_individual_scope_close(self, container: Container) -> None:
         """ScopedContainer.close() closes a specific scope."""
-        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
         scope = container.enter_scope("test")
         container.resolve(Session)
@@ -2696,7 +2696,7 @@ class TestImperativeScopeManagement:
             Session,
             factory=session_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         async def run_test() -> None:
@@ -2774,8 +2774,8 @@ class TestImperativeScopeManagement:
 
     def test_mixed_imperative_and_context_manager(self, container: Container) -> None:
         """Imperative and context manager usage can be mixed."""
-        container.register(Session, scope="outer", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(Service, scope="inner", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="outer", lifetime=Lifetime.SCOPED)
+        container.register(Service, scope="inner", lifetime=Lifetime.SCOPED)
 
         outer_scope = container.enter_scope("outer")
 
@@ -2847,7 +2847,7 @@ class TestImperativeScopeResourceCleanup:
             Session,
             factory=session_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         scope = container.enter_scope("test")
@@ -2873,7 +2873,7 @@ class TestImperativeScopeResourceCleanup:
             Session,
             factory=session_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         async def run_test() -> None:
@@ -2902,7 +2902,7 @@ class TestImperativeScopeResourceCleanup:
             Session,
             factory=session_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         container.enter_scope("test")
@@ -2928,7 +2928,7 @@ class TestImperativeScopeResourceCleanup:
             Session,
             factory=session_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         async def run_test() -> None:
@@ -2944,7 +2944,7 @@ class TestImperativeScopeResourceCleanup:
 
     def test_scoped_instances_cleared_on_close(self, container: Container) -> None:
         """_scoped_instances is empty after close()."""
-        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
         container.enter_scope("test")
         container.resolve(Session)
@@ -2961,7 +2961,7 @@ class TestImperativeScopeConcurrency:
 
     def test_concurrent_scope_operations(self, container: Container) -> None:
         """Concurrent scope operations are thread-safe."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         results: list[str] = []
         errors: list[Exception] = []
@@ -2985,7 +2985,7 @@ class TestImperativeScopeConcurrency:
 
     def test_async_concurrent_scopes(self, container: Container) -> None:
         """Async concurrent scope operations work correctly."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         async def run_test() -> None:
             results: list[str] = []
@@ -3008,7 +3008,7 @@ class TestImperativeScopedSingletons:
 
     def test_instance_sharing_within_scope(self, container: Container) -> None:
         """Scoped singletons share instances within a scope."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         container.enter_scope("request")
         session1 = container.resolve(Session)
@@ -3019,7 +3019,7 @@ class TestImperativeScopedSingletons:
 
     def test_instance_isolation_between_scopes(self, container: Container) -> None:
         """Different scopes have different scoped singleton instances."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         # First scope
         scope1 = container.enter_scope("request")
@@ -3028,7 +3028,7 @@ class TestImperativeScopedSingletons:
 
         # Create a new container since the first one is now closed
         container2 = Container()
-        container2.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container2.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         # Second scope
         scope2 = container2.enter_scope("request")

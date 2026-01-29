@@ -70,7 +70,7 @@ def test_ex04_decorator_registration(capsys: pytest.CaptureFixture[str]) -> None
         "Cache: {'initialized': 'true'}",
         "Settings: MyApp v1.0.0",
         "UserRepository has db: True",
-        "=== Scoped Singleton Demo ===",
+        "=== Scoped Demo ===",
         "Same request context: True",
         "=== Context Registration Demo ===",
         "[CTX] Hello from context logger!",

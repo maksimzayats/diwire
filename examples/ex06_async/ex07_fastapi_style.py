@@ -198,7 +198,7 @@ def create_container() -> Container:
     container.register(
         DatabaseSession,
         factory=create_db_session,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope="request",
     )
 

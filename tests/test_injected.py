@@ -514,7 +514,7 @@ class TestInjectedMethodDecoration:
 
         container.register(
             ScopedService,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="request",
         )
 
@@ -571,7 +571,7 @@ class TestInjectedMethodDecoration:
 
         container.register(
             AsyncScopedService,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="async-request",
         )
 
@@ -780,7 +780,7 @@ class TestInjectedMethodDecoration:
         class ScopedDep:
             pass
 
-        container.register(ScopedDep, lifetime=Lifetime.SCOPED_SINGLETON, scope="request")
+        container.register(ScopedDep, lifetime=Lifetime.SCOPED, scope="request")
 
         class RequestHandler:
             def __init__(self, path: str) -> None:

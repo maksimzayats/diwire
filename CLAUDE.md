@@ -62,7 +62,7 @@ Tests in `tests/` use fixtures from `conftest.py`:
 
 Main exports from `diwire`:
 - `Container` - DI container
-- `Lifetime` - TRANSIENT, SINGLETON, SCOPED_SINGLETON
+- `Lifetime` - TRANSIENT, SINGLETON, SCOPED
 - `Injected` - Mark function parameters for injection
 - `Component` - Named component registration
 - `container_context` - Global context for lazy resolution

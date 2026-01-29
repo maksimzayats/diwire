@@ -12,7 +12,7 @@ class Lifetime(str, Enum):
     SINGLETON = "singleton"
     """A single instance is created and shared for the lifetime of the container."""
 
-    SCOPED_SINGLETON = "scoped_singleton"
+    SCOPED = "scoped"
     """Instance is shared within a scope, different instances across scopes."""
 
 

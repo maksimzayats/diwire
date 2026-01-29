@@ -5,7 +5,7 @@ Demonstrates using @container.register as a decorator for:
 2. Factory function registration with type inference
 3. Interface/Protocol registration via @container.register(Interface)
 4. Factory functions with auto-injected dependencies
-5. Scoped singleton decorator usage
+5. Scoped decorator usage
 6. Async factory function registration
 7. Static method factories
 8. Async generator factories with cleanup
@@ -102,8 +102,8 @@ def create_user_repository(db: IDatabase, logger: Logger) -> UserRepository:
     return UserRepository(db=db, logger=logger)
 
 
-# Pattern 7: Scoped singleton with decorator
-@container.register(lifetime=Lifetime.SCOPED_SINGLETON, scope="request")
+# Pattern 7: Scoped with decorator
+@container.register(lifetime=Lifetime.SCOPED, scope="request")
 class RequestContext:
     """A request-scoped context object."""
 
@@ -172,7 +172,7 @@ class DatabaseConnection:
 
 
 # Note: Factory defined outside class to avoid forward reference issues
-@container.register(lifetime=Lifetime.SCOPED_SINGLETON, scope="request")
+@container.register(lifetime=Lifetime.SCOPED, scope="request")
 async def create_db_connection() -> AsyncGenerator[DatabaseConnection, None]:
     """Async generator factory with automatic cleanup."""
     conn = DatabaseConnection()
@@ -210,8 +210,8 @@ def main() -> None:
     print(f"UserRepository has db: {repo.db is not None}")
     print(f"UserRepository has logger: {repo.logger is not None}\n")
 
-    # Resolve scoped singleton within a scope
-    print("=== Scoped Singleton Demo ===")
+    # Resolve scoped within a scope
+    print("=== Scoped Demo ===")
     with container.enter_scope("request") as scope:
         ctx1 = scope.resolve(RequestContext)
         ctx2 = scope.resolve(RequestContext)

@@ -51,7 +51,7 @@ async def main() -> None:
     container.register(
         DatabaseSession,
         factory=create_session,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope="request",
     )
 

@@ -15,9 +15,9 @@ class TestLifetime:
         """SINGLETON has value 'singleton'."""
         assert Lifetime.SINGLETON.value == "singleton"
 
-    def test_lifetime_scoped_singleton_value(self) -> None:
-        """SCOPED_SINGLETON has value 'scoped_singleton'."""
-        assert Lifetime.SCOPED_SINGLETON.value == "scoped_singleton"
+    def test_lifetime_scoped_value(self) -> None:
+        """SCOPED has value 'scoped'."""
+        assert Lifetime.SCOPED.value == "scoped"
 
     def test_lifetime_is_enum(self) -> None:
         """Lifetime is an Enum."""
@@ -29,7 +29,7 @@ class TestLifetime:
         assert len(members) == 3
         assert Lifetime.TRANSIENT in members
         assert Lifetime.SINGLETON in members
-        assert Lifetime.SCOPED_SINGLETON in members
+        assert Lifetime.SCOPED in members
 
 
 class TestInjected:

@@ -35,12 +35,12 @@ def main() -> None:
 
     container.register(
         RequestContext,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
     )
     container.register(
         HandlerContext,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope=Scope.HANDLER,
     )
 

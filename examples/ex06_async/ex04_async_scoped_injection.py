@@ -75,13 +75,13 @@ async def main() -> None:
     # Register scoped dependencies
     container.register(
         RequestContext,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope="request",
     )
     container.register(
         DatabaseTransaction,
         factory=create_transaction,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope="request",
     )
 

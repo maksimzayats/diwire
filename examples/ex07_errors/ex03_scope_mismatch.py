@@ -22,10 +22,10 @@ class RequestSession:
 def main() -> None:
     container = Container()
 
-    # Register session as SCOPED_SINGLETON for REQUEST scope
+    # Register session as SCOPED for REQUEST scope
     container.register(
         RequestSession,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
     )
 

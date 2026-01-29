@@ -198,7 +198,7 @@ class TestConcreteClassWithLifetime:
         container.register(
             IService,
             concrete_class=ScopedService,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="request",
         )
 

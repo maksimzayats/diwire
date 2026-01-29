@@ -584,7 +584,7 @@ class TestRegisterAsyncFactory:
             ServiceA,
             factory=async_gen_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         async with container.enter_scope("test"):
@@ -648,7 +648,7 @@ class TestFactoryFunctionAutoInjectsDependencies:
             Service,
             factory=service_factory,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         async with container.enter_scope("request"):
@@ -758,7 +758,7 @@ class TestFactoryFunctionAutoInjectsDependencies:
             Service,
             factory=service_factory,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with container.enter_scope("request"):
@@ -972,9 +972,9 @@ class TestRegisterClassAsDecorator:
         assert instance.do_something() == "implemented"
 
     def test_decorator_with_scope(self, container: Container) -> None:
-        """@container.register(lifetime=SCOPED_SINGLETON, scope=...) should work."""
+        """@container.register(lifetime=SCOPED, scope=...) should work."""
 
-        @container.register(lifetime=Lifetime.SCOPED_SINGLETON, scope="request")
+        @container.register(lifetime=Lifetime.SCOPED, scope="request")
         class RequestService:
             pass
 
@@ -983,13 +983,13 @@ class TestRegisterClassAsDecorator:
             instance2 = container.resolve(RequestService)
             assert instance1 is instance2
 
-    def test_decorator_scoped_singleton_without_scope_raises(self, container: Container) -> None:
-        """SCOPED_SINGLETON without scope should raise error."""
-        from diwire.exceptions import DIWireScopedSingletonWithoutScopeError
+    def test_decorator_scoped_without_scope_raises(self, container: Container) -> None:
+        """SCOPED without scope should raise error."""
+        from diwire.exceptions import DIWireScopedWithoutScopeError
 
-        with pytest.raises(DIWireScopedSingletonWithoutScopeError):
+        with pytest.raises(DIWireScopedWithoutScopeError):
 
-            @container.register(lifetime=Lifetime.SCOPED_SINGLETON)
+            @container.register(lifetime=Lifetime.SCOPED)
             class InvalidService:
                 pass
 
@@ -1532,7 +1532,7 @@ class TestAsyncGeneratorFactoryDecorator:
         class AsyncResource:
             pass
 
-        @container.register(lifetime=Lifetime.SCOPED_SINGLETON, scope="request")
+        @container.register(lifetime=Lifetime.SCOPED, scope="request")
         async def create_async_resource() -> AsyncGenerator[AsyncResource, None]:
             try:
                 yield AsyncResource()
@@ -1559,7 +1559,7 @@ class TestSyncGeneratorFactoryDecorator:
         class SyncResource:
             pass
 
-        @container.register(lifetime=Lifetime.SCOPED_SINGLETON, scope="request")
+        @container.register(lifetime=Lifetime.SCOPED, scope="request")
         def create_sync_resource() -> Generator[SyncResource, None, None]:
             try:
                 yield SyncResource()
@@ -1692,7 +1692,7 @@ class TestStaticMethodDecorator:
 
         class Factories:
             @staticmethod
-            @container.register(lifetime=Lifetime.SCOPED_SINGLETON, scope="request")
+            @container.register(lifetime=Lifetime.SCOPED, scope="request")
             async def create_resource() -> AsyncGenerator[Resource, None]:
                 try:
                     yield Resource()

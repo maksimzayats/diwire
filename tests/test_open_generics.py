@@ -362,7 +362,7 @@ def test_open_generic_scoped_singleton(container: Container) -> None:
         "Callable[[Callable[..., object]], Callable[..., object]]",
         container.register(
             scoped_key,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="request",
         ),
     )
@@ -426,7 +426,7 @@ def test_compile_skips_scoped_typevar_map_registrations(container: Container) ->
         service_key=service_key,
         factory=None,
         instance=None,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope="request",
         is_async=False,
         concrete_type=None,
@@ -445,7 +445,7 @@ def test_compile_skips_scoped_typevar_dependency(container: Container) -> None:
 
     container.register(
         ScopedTypevar,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope="request",
     )
     container.compile()

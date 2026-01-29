@@ -107,14 +107,14 @@ class DIWireScopeMismatchError(DIWireError):
         )
 
 
-class DIWireScopedSingletonWithoutScopeError(DIWireError):
-    """SCOPED_SINGLETON registered without a scope."""
+class DIWireScopedWithoutScopeError(DIWireError):
+    """SCOPED registered without a scope."""
 
     def __init__(self, service_key: ServiceKey) -> None:
         self.service_key = service_key
         super().__init__(
-            f"Service {service_key} is registered as SCOPED_SINGLETON but no scope was provided. "
-            f"SCOPED_SINGLETON requires a scope parameter.",
+            f"Service {service_key} is registered as SCOPED but no scope was provided. "
+            f"SCOPED requires a scope parameter.",
         )
 
 

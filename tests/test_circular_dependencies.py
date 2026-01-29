@@ -175,12 +175,12 @@ class TestScopedCircularDependencies:
         container.register(
             ScopedCircularA,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(
             ScopedCircularB,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with pytest.raises(DIWireCircularDependencyError) as exc_info:
@@ -195,7 +195,7 @@ class TestScopedCircularDependencies:
         container.register(
             ScopedToSingletonA,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(ScopedToSingletonB, lifetime=Lifetime.SINGLETON)
 
@@ -211,7 +211,7 @@ class TestScopedCircularDependencies:
         container.register(
             ScopedToTransientA,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(ScopedToTransientB, lifetime=Lifetime.TRANSIENT)
 
@@ -227,12 +227,12 @@ class TestScopedCircularDependencies:
         container.register(
             ScopedCircularA,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(
             ScopedCircularB,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         assert _current_scope.get() is None
@@ -280,12 +280,12 @@ class TestAsyncCircularDependencies:
         container.register(
             AsyncCircularX,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(
             AsyncCircularY,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with pytest.raises(DIWireCircularDependencyError) as exc_info:
@@ -302,12 +302,12 @@ class TestAsyncCircularDependencies:
         container.register(
             AsyncCircularX,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(
             AsyncCircularY,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         assert _current_scope.get() is None

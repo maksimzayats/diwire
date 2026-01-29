@@ -360,7 +360,7 @@ class TestGeneratorFactoryExceptions:
 
         # Generator factories require a scope - trying to resolve will fail
         # because either there's no scope (DIWireGeneratorFactoryWithoutScopeError)
-        # or the lifetime is not SCOPED_SINGLETON (DIWireGeneratorFactoryUnsupportedLifetimeError)
+        # or the lifetime is not SCOPED (DIWireGeneratorFactoryUnsupportedLifetimeError)
         with pytest.raises(  # type: ignore[call-overload]
             (
                 DIWireGeneratorFactoryUnsupportedLifetimeError,

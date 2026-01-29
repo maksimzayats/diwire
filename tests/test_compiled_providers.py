@@ -102,7 +102,7 @@ class TestScopedSingletonProvider:
     def test_scoped_singleton_same_instance_in_scope(self) -> None:
         """Scoped singleton should return same instance within scope."""
         container = Container()
-        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
         container.compile()
 
         with container.enter_scope("request"):
@@ -114,7 +114,7 @@ class TestScopedSingletonProvider:
     def test_scoped_singleton_different_instances_different_scopes(self) -> None:
         """Scoped singleton should return different instances in different scopes."""
         container = Container()
-        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
         container.compile()
 
         with container.enter_scope("request"):
@@ -131,7 +131,7 @@ class TestScopedSingletonProvider:
         # Note: The current implementation creates instances even outside scope
         # using the ScopedSingletonProvider.__call__ fallback
         container = Container()
-        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
         container.compile()
 
         # This tests the fallback path when scoped_cache is None
@@ -155,7 +155,7 @@ class TestScopedSingletonArgsProvider:
     def test_scoped_singleton_with_dependency_same_scope(self) -> None:
         """Scoped singleton with dependencies returns same instance in scope."""
         container = Container()
-        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED)
         container.compile()
 
         with container.enter_scope("request"):
@@ -171,7 +171,7 @@ class TestScopedSingletonArgsProvider:
     def test_scoped_singleton_with_deps_different_scopes(self) -> None:
         """Scoped singleton with deps gets different instances per scope."""
         container = Container()
-        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED)
         container.compile()
 
         with container.enter_scope("request"):
@@ -187,7 +187,7 @@ class TestScopedSingletonArgsProvider:
         """Test scoped singleton args provider fallback when outside scope."""
         container = Container()
         container.register(ServiceA, lifetime=Lifetime.TRANSIENT)
-        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED)
         container.compile()
 
         service_key_b = ServiceKey.from_value(ServiceB)
@@ -483,7 +483,7 @@ class TestCompiledProviderIntegration:
         container = Container()
         container.register(ServiceA, lifetime=Lifetime.SINGLETON)
         container.register(ServiceB, lifetime=Lifetime.TRANSIENT)
-        container.register(ServiceC, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceC, scope="request", lifetime=Lifetime.SCOPED)
         container.compile()
 
         # Singleton behavior
@@ -556,7 +556,7 @@ class TestCompilationMissingCoverage:
         container.register(
             ServiceWithStr,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.compile()
 
@@ -580,7 +580,7 @@ class TestCompilationMissingCoverage:
         container.register(
             ServiceBLocal,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.compile()
 
@@ -613,7 +613,7 @@ class TestCompilationMissingCoverage:
         service_key = ServiceKey.from_value(ScopedService)
 
         # Register the service for scope "scope_a"
-        container.register(ScopedService, lifetime=Lifetime.SCOPED_SINGLETON, scope="scope_a")
+        container.register(ScopedService, lifetime=Lifetime.SCOPED, scope="scope_a")
         container.compile()  # Creates compiled scoped provider for (service_key, "scope_a")
 
         # Manually create a scoped registration that will be found by _get_scoped_registration
@@ -621,7 +621,7 @@ class TestCompilationMissingCoverage:
         # This simulates an edge case where the registration scope differs from cache key lookup
         scoped_reg = Registration(
             service_key=service_key,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="scope_a",
         )
         # Put it in the scoped registry under "scope_b" so it's found when in scope_b
@@ -668,7 +668,7 @@ class TestCompilationMissingCoverage:
         container.register(
             ServiceWithBadDep,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         # Compilation should not raise - it returns None for this registration

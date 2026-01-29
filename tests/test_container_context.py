@@ -192,7 +192,7 @@ class TestProxyMethodDelegation:
     def test_enter_scope_delegates_to_container(self) -> None:
         """enter_scope() delegates to the current container."""
         container = Container()
-        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
 
         token = container_context.set_current(container)
         try:
@@ -400,7 +400,7 @@ class TestDecoratorPatternSync:
     def test_decorated_function_with_scoped_singleton(self) -> None:
         """Decorated function with scope creates scope per call."""
         container = Container()
-        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
 
         token = container_context.set_current(container)
         try:
@@ -473,7 +473,7 @@ class TestDecoratorPatternAsync:
     async def test_async_decorated_function_with_scope(self) -> None:
         """Async decorated function with scope creates scope per call."""
         container = Container()
-        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
 
         token = container_context.set_current(container)
         try:
@@ -785,7 +785,7 @@ class TestDirectTypeResolution:
     def test_resolve_type_with_scope(self) -> None:
         """container_context.resolve(Type, scope="...") works."""
         container = Container()
-        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
 
         token = container_context.set_current(container)
         try:
@@ -1136,7 +1136,7 @@ class TestFastAPILikeIntegration:
 
             # Set up container
             container = Container()
-            container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+            container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
             token = container_context.set_current(container)
             try:
                 result1 = endpoint1()
@@ -1271,8 +1271,8 @@ class TestEdgeCases:
     def test_nested_scopes_work_correctly(self) -> None:
         """Nested scopes through container_context work."""
         container = Container()
-        container.register(ServiceA, scope="outer", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(ServiceB, scope="inner", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceA, scope="outer", lifetime=Lifetime.SCOPED)
+        container.register(ServiceB, scope="inner", lifetime=Lifetime.SCOPED)
 
         token = container_context.set_current(container)
         try:
@@ -1947,10 +1947,10 @@ class TestLifetimeVariations:
         finally:
             container_context.reset(token)
 
-    def test_scoped_singleton_same_scope(self) -> None:
-        """SCOPED_SINGLETON returns same instance within same scope."""
+    def test_scoped_same_scope(self) -> None:
+        """SCOPED returns same instance within same scope."""
         container = Container()
-        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
 
         token = container_context.set_current(container)
         try:
