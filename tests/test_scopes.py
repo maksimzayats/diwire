@@ -3010,6 +3010,157 @@ class TestImperativeScopeManagement:
         container.close_scope("request")
         assert cleanup_called
 
+    def test_close_scope_failure_keeps_scope_in_active_scopes(self, container: Container) -> None:
+        """If scope.close() fails, the scope remains in _active_scopes."""
+        from unittest.mock import patch
+
+        scope = container.enter_scope("test")
+        assert len(container._active_scopes) == 1
+
+        with patch.object(scope, "close", side_effect=RuntimeError("close failed")):
+            with pytest.raises(RuntimeError, match="close failed"):
+                container.close()
+
+        # Scope should remain in _active_scopes after failure
+        assert len(container._active_scopes) == 1
+        assert container._active_scopes[0] is scope
+
+        # Cleanup: properly close the scope to reset _current_scope
+        scope.close()
+
+    def test_aclose_scope_failure_keeps_scope_in_active_scopes(self, container: Container) -> None:
+        """If scope.aclose() fails, the scope remains in _active_scopes."""
+        from unittest.mock import AsyncMock, patch
+
+        async def run_test() -> None:
+            scope = container.enter_scope("test")
+            assert len(container._active_scopes) == 1
+
+            mock_aclose = AsyncMock(side_effect=RuntimeError("aclose failed"))
+            with patch.object(scope, "aclose", mock_aclose):
+                with pytest.raises(RuntimeError, match="aclose failed"):
+                    await container.aclose()
+
+            # Scope should remain in _active_scopes after failure
+            assert len(container._active_scopes) == 1
+            assert container._active_scopes[0] is scope
+
+            # Cleanup: properly close the scope to reset _current_scope
+            await scope.aclose()
+
+        asyncio.run(run_test())
+
+    def test_aclose_drains_remaining_scopes_when_already_closed(self, container: Container) -> None:
+        """aclose() drains remaining scopes even if container is already closed."""
+
+        async def run_test() -> None:
+            scope1 = container.enter_scope("first")
+            scope2 = container.enter_scope("second")
+
+            # Mark container as closed without draining scopes
+            container._closed = True
+            assert len(container._active_scopes) == 2
+
+            # aclose() should still drain remaining scopes
+            await container.aclose()
+
+            assert len(container._active_scopes) == 0
+            assert scope1._exited
+            assert scope2._exited
+
+        asyncio.run(run_test())
+
+    def test_close_handles_concurrent_scope_removal(self, container: Container) -> None:
+        """close() handles race condition where scope is removed between peek and pop."""
+        scope = container.enter_scope("test")
+
+        # Simulate race condition: clear _active_scopes after close() but before pop
+        original_close = scope.close
+
+        def close_and_clear() -> None:
+            original_close()
+            container._active_scopes.clear()
+
+        scope.close = close_and_clear  # type: ignore[method-assign]
+
+        # Should not raise even though scope was removed between close and pop
+        container.close()
+        assert len(container._active_scopes) == 0
+
+    def test_aclose_handles_concurrent_scope_removal(self, container: Container) -> None:
+        """aclose() handles race condition where scope is removed between peek and pop."""
+
+        async def run_test() -> None:
+            scope = container.enter_scope("test")
+
+            # Simulate race: clear _active_scopes after aclose() but before pop
+            original_aclose = scope.aclose
+
+            async def aclose_and_clear() -> None:
+                await original_aclose()
+                container._active_scopes.clear()
+
+            scope.aclose = aclose_and_clear  # type: ignore[method-assign]
+
+            # Should not raise even though scope was removed between close and pop
+            await container.aclose()
+            assert len(container._active_scopes) == 0
+
+        asyncio.run(run_test())
+
+    def test_close_pops_scope_when_unregister_skipped(self, container: Container) -> None:
+        """close() pops scope when _unregister_active_scope doesn't remove it."""
+        scope = container.enter_scope("test")
+        assert len(container._active_scopes) == 1
+
+        # Override _close_sync to skip _unregister_active_scope
+        # This simulates scenario where Container.close() needs to pop
+        original_close_sync = scope._close_sync
+
+        def close_without_unregister() -> None:
+            if scope._exited:
+                return
+            import contextlib
+
+            with contextlib.suppress(ValueError, RuntimeError):
+                _current_scope.reset(scope._token)
+            scope._container.clear_scope(scope._scope_id)
+            # Deliberately skip _unregister_active_scope
+            scope._exited = True
+
+        scope._close_sync = close_without_unregister  # type: ignore[method-assign]
+        container.close()
+
+        # Container.close() should have popped the scope
+        assert len(container._active_scopes) == 0
+
+    def test_aclose_pops_scope_when_unregister_skipped(self, container: Container) -> None:
+        """aclose() pops scope when _unregister_active_scope doesn't remove it."""
+
+        async def run_test() -> None:
+            scope = container.enter_scope("test")
+            assert len(container._active_scopes) == 1
+
+            # Override _close_async to skip _unregister_active_scope
+            async def aclose_without_unregister() -> None:
+                if scope._exited:
+                    return
+                import contextlib
+
+                with contextlib.suppress(ValueError, RuntimeError):
+                    _current_scope.reset(scope._token)
+                await scope._container.aclear_scope(scope._scope_id)
+                # Deliberately skip _unregister_active_scope
+                scope._exited = True
+
+            scope._close_async = aclose_without_unregister  # type: ignore[method-assign]
+            await container.aclose()
+
+            # Container.aclose() should have popped the scope
+            assert len(container._active_scopes) == 0
+
+        asyncio.run(run_test())
+
 
 class TestContainerClosedError:
     """Tests for DIWireContainerClosedError after container.close()."""

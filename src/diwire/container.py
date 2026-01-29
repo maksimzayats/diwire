@@ -2745,6 +2745,9 @@ class Container:
 
         Scopes are closed in LIFO order (newest first).
         This method is idempotent - calling it multiple times is safe.
+
+        If a scope's close() fails, that scope remains in _active_scopes
+        and the exception is re-raised.
         """
         with self._active_scopes_lock:
             if self._closed:
@@ -2754,8 +2757,11 @@ class Container:
             with self._active_scopes_lock:
                 if not self._active_scopes:
                     break
-                scope = self._active_scopes.pop()
+                scope = self._active_scopes[-1]
             scope.close()
+            with self._active_scopes_lock:
+                if self._active_scopes and self._active_scopes[-1] is scope:
+                    self._active_scopes.pop()
 
     async def aclose(self) -> None:
         """Asynchronously close all active scopes and mark the container as closed.
@@ -2768,17 +2774,22 @@ class Container:
 
         Scopes are closed in LIFO order (newest first).
         This method is idempotent - calling it multiple times is safe.
+
+        This method will drain remaining scopes even if the container is
+        already marked as closed. If a scope's aclose() fails, that scope
+        remains in _active_scopes and the exception is re-raised.
         """
         with self._active_scopes_lock:
-            if self._closed:
-                return
             self._closed = True
         while True:
             with self._active_scopes_lock:
                 if not self._active_scopes:
                     break
-                scope = self._active_scopes.pop()
+                scope = self._active_scopes[-1]
             await scope.aclose()
+            with self._active_scopes_lock:
+                if self._active_scopes and self._active_scopes[-1] is scope:
+                    self._active_scopes.pop()
 
     def close_scope(self, scope_name: str) -> None:
         """Close all active scopes that contain the given scope name.
