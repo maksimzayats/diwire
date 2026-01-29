@@ -2566,3 +2566,474 @@ class TestSyncScopeAsyncCleanup:
                 scope.__exit__(None, None, None)
 
         run_outside_async()
+
+
+class TestImperativeScopeManagement:
+    """Tests for imperative scope management (start_scope without with blocks)."""
+
+    def test_start_scope_activates_immediately(self, container: Container) -> None:
+        """start_scope() activates the scope immediately."""
+        assert _current_scope.get() is None
+
+        scope = container.start_scope("test")
+        # Scope should be active immediately
+        current = _current_scope.get()
+        assert current is not None
+        assert current.contains_scope("test")
+
+        scope.close()
+        assert _current_scope.get() is None
+
+    def test_imperative_scope_sync_resolve(self, container: Container) -> None:
+        """Imperative scope works with sync resolve."""
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        container.start_scope("request")
+        session1 = container.resolve(Session)
+        session2 = container.resolve(Session)
+
+        assert session1.id == session2.id
+        container.close()
+
+    def test_imperative_scope_async_resolve(self, container: Container) -> None:
+        """Imperative scope works with async resolve."""
+        container.register(Session, scope="app", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        async def run_test() -> None:
+            container.start_scope("app")
+            session1 = await container.aresolve(Session)
+            session2 = await container.aresolve(Session)
+
+            assert session1.id == session2.id
+            await container.aclose()
+
+        asyncio.run(run_test())
+
+    def test_backward_compatibility_with_context_manager(self, container: Container) -> None:
+        """Context manager usage still works (with is now no-op for entry)."""
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        with container.start_scope("test") as scope:
+            session = container.resolve(Session)
+            assert isinstance(session, Session)
+            assert _current_scope.get() is not None
+
+        # Context manager exit should close the scope
+        assert _current_scope.get() is None
+
+    def test_nested_imperative_scopes(self, container: Container) -> None:
+        """Nested imperative scopes work correctly."""
+        container.register(Session, scope="parent", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Service, scope="child", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        parent_scope = container.start_scope("parent")
+        current = _current_scope.get()
+        assert current is not None
+        assert current.contains_scope("parent")
+
+        child_scope = container.start_scope("child")
+        current = _current_scope.get()
+        assert current is not None
+        assert current.contains_scope("parent")
+        assert current.contains_scope("child")
+
+        child_scope.close()
+        current = _current_scope.get()
+        assert current is not None
+        assert current.contains_scope("parent")
+        assert not current.contains_scope("child")
+
+        parent_scope.close()
+        assert _current_scope.get() is None
+
+    def test_container_close_closes_all_scopes_lifo(self, container: Container) -> None:
+        """container.close() closes all scopes in LIFO order."""
+        close_order: list[str] = []
+
+        container.register(Session, scope="first", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Service, scope="second", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        scope1 = container.start_scope("first")
+        scope2 = container.start_scope("second")
+
+        # Both scopes should be active
+        assert not scope1._exited
+        assert not scope2._exited
+
+        container.close()
+
+        # Both scopes should be closed
+        assert scope1._exited
+        assert scope2._exited  # type: ignore[unreachable]
+
+    def test_individual_scope_close(self, container: Container) -> None:
+        """ScopedContainer.close() closes a specific scope."""
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        scope = container.start_scope("test")
+        container.resolve(Session)
+
+        assert not scope._exited
+        assert len(container._scoped_instances) > 0
+
+        scope.close()
+
+        assert scope._exited
+        assert len(container._scoped_instances) == 0  # type: ignore[unreachable]
+
+    def test_individual_scope_aclose(self, container: Container) -> None:
+        """ScopedContainer.aclose() closes a specific scope asynchronously."""
+        cleanup_called = False
+
+        async def session_factory() -> AsyncGenerator[Session, None]:
+            nonlocal cleanup_called
+            try:
+                yield Session(id="async-session")
+            finally:
+                cleanup_called = True
+
+        container.register(
+            Session,
+            factory=session_factory,
+            scope="test",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        async def run_test() -> None:
+            scope = container.start_scope("test")
+            session = await container.aresolve(Session)
+            assert session.id == "async-session"
+
+            assert not scope._exited
+            await scope.aclose()
+            assert scope._exited
+
+        asyncio.run(run_test())
+        assert cleanup_called
+
+    def test_idempotent_scope_close(self, container: Container) -> None:
+        """Calling close() multiple times on a scope is safe."""
+        scope = container.start_scope("test")
+
+        scope.close()
+        assert scope._exited
+
+        # Should not raise
+        scope.close()
+        scope.close()
+        assert scope._exited
+
+    def test_idempotent_container_close(self, container: Container) -> None:
+        """Calling close() multiple times on a container is safe."""
+        container.start_scope("test")
+
+        container.close()
+        assert container._closed
+
+        # Should not raise
+        container.close()
+        container.close()
+        assert container._closed
+
+    def test_idempotent_scope_aclose(self, container: Container) -> None:
+        """Calling aclose() multiple times on a scope is safe."""
+
+        async def run_test() -> None:
+            scope = container.start_scope("test")
+
+            await scope.aclose()
+            assert scope._exited
+
+            # Should not raise
+            await scope.aclose()
+            await scope.aclose()
+            assert scope._exited
+
+        asyncio.run(run_test())
+
+    def test_idempotent_container_aclose(self, container: Container) -> None:
+        """Calling aclose() multiple times on a container is safe."""
+
+        async def run_test() -> None:
+            container.start_scope("test")
+
+            await container.aclose()
+            assert container._closed
+
+            # Should not raise
+            await container.aclose()
+            await container.aclose()
+            assert container._closed
+
+        asyncio.run(run_test())
+
+    def test_close_without_scopes(self, container: Container) -> None:
+        """container.close() with no active scopes is safe."""
+        container.close()
+        assert container._closed
+
+    def test_mixed_imperative_and_context_manager(self, container: Container) -> None:
+        """Imperative and context manager usage can be mixed."""
+        container.register(Session, scope="outer", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Service, scope="inner", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        outer_scope = container.start_scope("outer")
+
+        with container.start_scope("inner"):
+            current = _current_scope.get()
+            assert current is not None
+            assert current.contains_scope("outer")
+            assert current.contains_scope("inner")
+
+        # Inner scope is closed by context manager
+        current = _current_scope.get()
+        assert current is not None
+        assert current.contains_scope("outer")
+        assert not current.contains_scope("inner")
+
+        outer_scope.close()
+        assert _current_scope.get() is None
+
+
+class TestContainerClosedError:
+    """Tests for DIWireContainerClosedError after container.close()."""
+
+    def test_resolve_after_close_raises_error(self, container: Container) -> None:
+        """resolve() after close() raises DIWireContainerClosedError."""
+        from diwire.exceptions import DIWireContainerClosedError
+
+        container.close()
+
+        with pytest.raises(DIWireContainerClosedError, match="closed container"):
+            container.resolve(Session)
+
+    def test_aresolve_after_close_raises_error(self, container: Container) -> None:
+        """aresolve() after close() raises DIWireContainerClosedError."""
+        from diwire.exceptions import DIWireContainerClosedError
+
+        container.close()
+
+        async def run_test() -> None:
+            with pytest.raises(DIWireContainerClosedError, match="closed container"):
+                await container.aresolve(Session)
+
+        asyncio.run(run_test())
+
+    def test_start_scope_after_close_raises_error(self, container: Container) -> None:
+        """start_scope() after close() raises DIWireContainerClosedError."""
+        from diwire.exceptions import DIWireContainerClosedError
+
+        container.close()
+
+        with pytest.raises(DIWireContainerClosedError, match="closed container"):
+            container.start_scope("test")
+
+
+class TestImperativeScopeResourceCleanup:
+    """Tests for resource cleanup with imperative scope management."""
+
+    def test_generator_cleanup_on_scope_close(self, container: Container) -> None:
+        """Generator factories are cleaned up on scope.close()."""
+        cleanup_called = False
+
+        def session_factory() -> Generator[Session, None, None]:
+            nonlocal cleanup_called
+            try:
+                yield Session(id="gen-session")
+            finally:
+                cleanup_called = True
+
+        container.register(
+            Session,
+            factory=session_factory,
+            scope="test",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        scope = container.start_scope("test")
+        session = container.resolve(Session)
+        assert session.id == "gen-session"
+        assert not cleanup_called
+
+        scope.close()
+        assert cleanup_called
+
+    def test_async_generator_cleanup_on_scope_aclose(self, container: Container) -> None:
+        """Async generator factories are cleaned up on scope.aclose()."""
+        cleanup_called = False
+
+        async def session_factory() -> AsyncGenerator[Session, None]:
+            nonlocal cleanup_called
+            try:
+                yield Session(id="async-gen-session")
+            finally:
+                cleanup_called = True
+
+        container.register(
+            Session,
+            factory=session_factory,
+            scope="test",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        async def run_test() -> None:
+            scope = container.start_scope("test")
+            session = await container.aresolve(Session)
+            assert session.id == "async-gen-session"
+            assert not cleanup_called
+
+            await scope.aclose()
+            assert cleanup_called
+
+        asyncio.run(run_test())
+
+    def test_generator_cleanup_on_container_close(self, container: Container) -> None:
+        """Generator factories are cleaned up on container.close()."""
+        cleanup_called = False
+
+        def session_factory() -> Generator[Session, None, None]:
+            nonlocal cleanup_called
+            try:
+                yield Session(id="gen-session")
+            finally:
+                cleanup_called = True
+
+        container.register(
+            Session,
+            factory=session_factory,
+            scope="test",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        container.start_scope("test")
+        session = container.resolve(Session)
+        assert session.id == "gen-session"
+        assert not cleanup_called
+
+        container.close()
+        assert cleanup_called
+
+    def test_async_generator_cleanup_on_container_aclose(self, container: Container) -> None:
+        """Async generator factories are cleaned up on container.aclose()."""
+        cleanup_called = False
+
+        async def session_factory() -> AsyncGenerator[Session, None]:
+            nonlocal cleanup_called
+            try:
+                yield Session(id="async-gen-session")
+            finally:
+                cleanup_called = True
+
+        container.register(
+            Session,
+            factory=session_factory,
+            scope="test",
+            lifetime=Lifetime.SCOPED_SINGLETON,
+        )
+
+        async def run_test() -> None:
+            container.start_scope("test")
+            session = await container.aresolve(Session)
+            assert session.id == "async-gen-session"
+            assert not cleanup_called
+
+            await container.aclose()
+            assert cleanup_called
+
+        asyncio.run(run_test())
+
+    def test_scoped_instances_cleared_on_close(self, container: Container) -> None:
+        """_scoped_instances is empty after close()."""
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        container.start_scope("test")
+        container.resolve(Session)
+
+        assert len(container._scoped_instances) > 0
+
+        container.close()
+
+        assert len(container._scoped_instances) == 0
+
+
+class TestImperativeScopeConcurrency:
+    """Tests for thread safety of imperative scope management."""
+
+    def test_concurrent_scope_operations(self, container: Container) -> None:
+        """Concurrent scope operations are thread-safe."""
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        results: list[str] = []
+        errors: list[Exception] = []
+
+        def worker(worker_id: int) -> None:
+            try:
+                scope = container.start_scope("request")
+                session = container.resolve(Session)
+                results.append(f"{worker_id}:{session.id}")
+                scope.close()
+            except Exception as e:
+                errors.append(e)
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(worker, i) for i in range(10)]
+            for future in futures:
+                future.result()
+
+        assert len(errors) == 0
+        assert len(results) == 10
+
+    def test_async_concurrent_scopes(self, container: Container) -> None:
+        """Async concurrent scope operations work correctly."""
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        async def run_test() -> None:
+            results: list[str] = []
+
+            async def worker(worker_id: int) -> None:
+                scope = container.start_scope("request")
+                session = await container.aresolve(Session)
+                results.append(f"{worker_id}:{session.id}")
+                await scope.aclose()
+
+            await asyncio.gather(*[worker(i) for i in range(10)])
+
+            assert len(results) == 10
+
+        asyncio.run(run_test())
+
+
+class TestImperativeScopedSingletons:
+    """Tests for scoped singleton behavior with imperative scope management."""
+
+    def test_instance_sharing_within_scope(self, container: Container) -> None:
+        """Scoped singletons share instances within a scope."""
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        container.start_scope("request")
+        session1 = container.resolve(Session)
+        session2 = container.resolve(Session)
+
+        assert session1.id == session2.id
+        container.close()
+
+    def test_instance_isolation_between_scopes(self, container: Container) -> None:
+        """Different scopes have different scoped singleton instances."""
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        # First scope
+        scope1 = container.start_scope("request")
+        session1 = container.resolve(Session)
+        scope1.close()
+
+        # Create a new container since the first one is now closed
+        container2 = Container()
+        container2.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+
+        # Second scope
+        scope2 = container2.start_scope("request")
+        session2 = container2.resolve(Session)
+        scope2.close()
+
+        # Different scopes should have different instances
+        assert session1.id != session2.id

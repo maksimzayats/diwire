@@ -274,3 +274,10 @@ class DIWireInvalidGenericTypeArgumentError(DIWireError):
         super().__init__(
             f"Invalid type argument for {service_key}: {typevar_name}={arg!r}. {reason}",
         )
+
+
+class DIWireContainerClosedError(DIWireError):
+    """Operation attempted on a closed container."""
+
+    def __init__(self) -> None:
+        super().__init__("Cannot perform operation on a closed container.")
