@@ -1506,6 +1506,35 @@ class TestScopeErrorRecovery:
         # Still no error and scope context is None
         assert _current_scope.get() is None
 
+    def test_close_sync_continues_when_reset_fails(self, container: Container) -> None:
+        """_close_sync completes cleanup even if ContextVar reset fails."""
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
+
+        with container.enter_scope("test") as scoped:
+            container.resolve(Session)
+            # Manually reset the token to simulate different context
+            # This makes the token invalid for reset in _close_sync
+            _current_scope.reset(scoped._token)
+
+        # Despite reset failure, cleanup should complete
+        assert len(container._scoped_instances) == 0
+        assert scoped._exited is True
+        assert scoped not in container._active_scopes
+
+    async def test_close_async_continues_when_reset_fails(self, container: Container) -> None:
+        """_close_async completes cleanup even if ContextVar reset fails."""
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
+
+        async with container.enter_scope("test") as scoped:
+            await container.aresolve(Session)
+            # Manually reset the token to simulate different context
+            _current_scope.reset(scoped._token)
+
+        # Despite reset failure, cleanup should complete
+        assert len(container._scoped_instances) == 0
+        assert scoped._exited is True
+        assert scoped not in container._active_scopes
+
 
 # ============================================================================
 # Concurrent Scope Edge Cases

@@ -488,7 +488,8 @@ class ScopedContainer:
         """Close the scope synchronously."""
         if self._exited:
             return
-        _current_scope.reset(self._token)
+        with contextlib.suppress(ValueError, RuntimeError):
+            _current_scope.reset(self._token)
         self._container.clear_scope(self._scope_id)
         self._container._unregister_active_scope(self)  # noqa: SLF001
         self._exited = True
@@ -497,7 +498,8 @@ class ScopedContainer:
         """Close the scope asynchronously."""
         if self._exited:
             return
-        _current_scope.reset(self._token)
+        with contextlib.suppress(ValueError, RuntimeError):
+            _current_scope.reset(self._token)
         await self._container.aclear_scope(self._scope_id)
         self._container._unregister_active_scope(self)  # noqa: SLF001
         self._exited = True
