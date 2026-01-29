@@ -200,7 +200,7 @@ def _get_return_annotation(func: Callable[..., Any]) -> type | None:
     Handles unwrapping of Optional, Union, AsyncGenerator, Generator, etc.
     """
     try:
-        hints = get_type_hints(func)
+        hints = get_type_hints(func, include_extras=True)
     except (NameError, TypeError, AttributeError):
         # NameError: unresolved forward references
         # TypeError: invalid type annotations
@@ -218,6 +218,9 @@ def _get_return_annotation(func: Callable[..., Any]) -> type | None:
     # Unwrap async generator and generator types
     origin = get_origin(return_type)
     if origin is not None:
+        # Handle Annotated[T, ...] - return full type to preserve metadata
+        if origin is Annotated:
+            return return_type  # type: ignore[return-value]
         # Handle Generator[YieldType, SendType, ReturnType] and AsyncGenerator[YieldType, SendType]
         if origin in (Generator, AsyncGenerator):
             args = get_args(return_type)
@@ -920,7 +923,9 @@ class Container:
             key: The service key (interface/type) to register under. When None, returns
                 a decorator. When used with @container.register(Interface) on a class,
                 the decorated class becomes the implementation.
-            factory: Optional factory to create instances.
+            factory: Optional factory to create instances. Generator factories
+                (Generator[T, None, None] or AsyncGenerator[T, None]) are supported for
+                resource cleanup - the container calls close()/aclose() when the scope exits.
             instance: Optional pre-created instance.
             lifetime: The lifetime of the service. This default applies only to explicit
                 registrations via `register`; auto-registration uses
@@ -941,6 +946,21 @@ class Container:
             DIWireConcreteClassRequiresClassError: If `concrete_class` is not a class type.
             DIWireDecoratorFactoryMissingReturnAnnotationError: If used as a factory decorator
                 but the function has no return annotation and no explicit key.
+
+        Note:
+            When using generator factories for cleanup, wrap cleanup code in try/finally:
+
+            .. code-block:: python
+
+                def my_factory() -> Generator[Resource, None, None]:
+                    resource = acquire_resource()
+                    try:
+                        yield resource
+                    finally:
+                        resource.close()  # MUST be in finally block
+
+            Without try/finally, cleanup code after yield will not execute when the
+            scope exits, as close()/aclose() raises GeneratorExit at the yield point.
 
         """
         # Check if all optional params are at defaults (for bare decorator detection)
