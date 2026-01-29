@@ -400,12 +400,12 @@ class TestRegisterWithInstance:
 
     def test_reregister_instance_in_nested_scope(self, container: Container) -> None:
         """Re-registering instance in nested scope should work correctly."""
-        with container.start_scope("outer") as outer:
+        with container.enter_scope("outer") as outer:
             c1 = outer.resolve(Container)
             c1.register(int, instance=1)
             assert c1.resolve(int) == 1
 
-            with outer.start_scope("inner") as inner:
+            with outer.enter_scope("inner") as inner:
                 c2 = inner.resolve(Container)
                 c2.register(int, instance=2)
                 assert c2.resolve(int) == 2
@@ -587,7 +587,7 @@ class TestRegisterAsyncFactory:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        async with container.start_scope("test"):
+        async with container.enter_scope("test"):
             instance = await container.aresolve(ServiceA)
             assert isinstance(instance, ServiceA)
             assert cleanup_called == []
@@ -651,7 +651,7 @@ class TestFactoryFunctionAutoInjectsDependencies:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        async with container.start_scope("request"):
+        async with container.enter_scope("request"):
             instance = await container.aresolve(Service)
             assert isinstance(instance, Service)
             assert received_request[0] is expected_request
@@ -761,7 +761,7 @@ class TestFactoryFunctionAutoInjectsDependencies:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             instance = container.resolve(Service)
             assert isinstance(instance, Service)
             assert received_request[0] is expected_request
@@ -978,7 +978,7 @@ class TestRegisterClassAsDecorator:
         class RequestService:
             pass
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             instance1 = container.resolve(RequestService)
             instance2 = container.resolve(RequestService)
             assert instance1 is instance2
@@ -1539,7 +1539,7 @@ class TestAsyncGeneratorFactoryDecorator:
             finally:
                 cleanup_called.append(True)
 
-        async with container.start_scope("request"):
+        async with container.enter_scope("request"):
             instance = await container.aresolve(AsyncResource)
             assert isinstance(instance, AsyncResource)
             assert cleanup_called == []
@@ -1566,7 +1566,7 @@ class TestSyncGeneratorFactoryDecorator:
             finally:
                 cleanup_called.append(True)
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             instance = container.resolve(SyncResource)
             assert isinstance(instance, SyncResource)
             assert cleanup_called == []
@@ -1699,7 +1699,7 @@ class TestStaticMethodDecorator:
                 finally:
                     cleanup_called.append(True)
 
-        async with container.start_scope("request"):
+        async with container.enter_scope("request"):
             instance = await container.aresolve(Resource)
             assert isinstance(instance, Resource)
             assert cleanup_called == []

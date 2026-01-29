@@ -105,7 +105,7 @@ class TestScopedSingletonProvider:
         container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
         container.compile()
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             instance1 = container.resolve(ServiceA)
             instance2 = container.resolve(ServiceA)
 
@@ -117,10 +117,10 @@ class TestScopedSingletonProvider:
         container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
         container.compile()
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             instance1 = container.resolve(ServiceA)
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             instance2 = container.resolve(ServiceA)
 
         assert instance1 is not instance2
@@ -158,7 +158,7 @@ class TestScopedSingletonArgsProvider:
         container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
         container.compile()
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             # Resolve ServiceB multiple times - should be same instance
             service_b1 = container.resolve(ServiceB)
             service_b2 = container.resolve(ServiceB)
@@ -174,10 +174,10 @@ class TestScopedSingletonArgsProvider:
         container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
         container.compile()
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             service_b1 = container.resolve(ServiceB)
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             service_b2 = container.resolve(ServiceB)
 
         assert service_b1 is not service_b2
@@ -499,7 +499,7 @@ class TestCompiledProviderIntegration:
         assert transient_b1.service_a is transient_b2.service_a
 
         # Scoped behavior
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             scoped_c1 = container.resolve(ServiceC)
             scoped_c2 = container.resolve(ServiceC)
             assert scoped_c1 is scoped_c2
@@ -631,7 +631,7 @@ class TestCompilationMissingCoverage:
         # but scoped_registration.scope is "scope_a"
         # So cache_scope = current_scope.get_cache_key_for_scope("scope_a") returns None
         # because scope_b doesn't contain scope_a
-        with container.start_scope("scope_b"):
+        with container.enter_scope("scope_b"):
             # The scoped_provider exists for (service_key, "scope_a") from compilation
             # But cache_scope is None -> falls through branch 1107->1120
             # Then normal resolution finds the registration and raises scope mismatch
@@ -648,7 +648,7 @@ class TestCompilationMissingCoverage:
         container.register(ServiceLocal, scope="request", lifetime=Lifetime.TRANSIENT)
         container.compile()
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             # Each resolution should return a new instance (not cached)
             instance1 = container.resolve(ServiceLocal)
             instance2 = container.resolve(ServiceLocal)

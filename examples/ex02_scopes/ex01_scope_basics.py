@@ -1,6 +1,6 @@
 """Scope Basics in DIWire.
 
-Demonstrates how to use scopes with start_scope() context manager.
+Demonstrates how to use scopes with enter_scope() context manager.
 Scopes allow grouping related service resolutions together.
 """
 
@@ -29,10 +29,10 @@ def main() -> None:
     container = Container()
     container.register(RequestContext)
 
-    # Using start_scope() with an Enum value
+    # Using enter_scope() with an Enum value
     print("Scope usage with context manager:\n")
 
-    with container.start_scope(Scope.REQUEST) as scope:
+    with container.enter_scope(Scope.REQUEST) as scope:
         # Resolve services within the scope
         ctx1 = scope.resolve(RequestContext)
         ctx2 = scope.resolve(RequestContext)
@@ -45,11 +45,11 @@ def main() -> None:
     # Each scope is independent
     print("\nMultiple independent scopes:")
 
-    with container.start_scope(Scope.REQUEST) as scope1:
+    with container.enter_scope(Scope.REQUEST) as scope1:
         ctx_a = scope1.resolve(RequestContext)
         print(f"  Scope 1 context: {ctx_a}")
 
-    with container.start_scope(Scope.REQUEST) as scope2:
+    with container.enter_scope(Scope.REQUEST) as scope2:
         ctx_b = scope2.resolve(RequestContext)
         print(f"  Scope 2 context: {ctx_b}")
 

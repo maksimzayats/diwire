@@ -33,7 +33,7 @@ def main() -> None:
     print("Scenario: Using a scope reference after it has exited\n")
 
     scope_ref = None
-    with container.start_scope(Scope.REQUEST) as scope:
+    with container.enter_scope(Scope.REQUEST) as scope:
         # Save reference to scope
         scope_ref = scope
         session = scope.resolve(RequestSession)
@@ -51,7 +51,7 @@ def main() -> None:
 
     # Correct usage - always use scopes within their context manager
     print("\nCorrect usage - resolve within active scope context:")
-    with container.start_scope(Scope.REQUEST) as scope:
+    with container.enter_scope(Scope.REQUEST) as scope:
         session = scope.resolve(RequestSession)
         print(f"  Successfully resolved: {session}")
 

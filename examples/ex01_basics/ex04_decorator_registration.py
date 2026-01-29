@@ -212,7 +212,7 @@ def main() -> None:
 
     # Resolve scoped singleton within a scope
     print("=== Scoped Singleton Demo ===")
-    with container.start_scope("request") as scope:
+    with container.enter_scope("request") as scope:
         ctx1 = scope.resolve(RequestContext)
         ctx2 = scope.resolve(RequestContext)
         print(f"Same request context: {ctx1 is ctx2}")
@@ -254,7 +254,7 @@ async def async_main() -> None:
 
     # Resolve async generator factory within scope
     print("\n=== Async Generator Factory with Cleanup ===")
-    async with container.start_scope("request") as scope:
+    async with container.enter_scope("request") as scope:
         conn = await scope.aresolve(DatabaseConnection)
         print(f"Connection active: {conn.connected}")
     print(f"Connection after scope exit: {conn.connected}")

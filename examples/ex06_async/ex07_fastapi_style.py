@@ -213,7 +213,7 @@ def create_container() -> Container:
 async def handle_request(container: Container, handler, **kwargs) -> dict:
     """Simulate handling an HTTP request."""
     # Each request gets its own scope
-    async with container.start_scope("request"):
+    async with container.enter_scope("request"):
         # Resolve the handler (gets AsyncScopedInjected due to scoped deps)
         injected_handler = await container.aresolve(handler)
         return await injected_handler(**kwargs)

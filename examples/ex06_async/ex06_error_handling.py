@@ -71,7 +71,7 @@ async def demonstrate_async_gen_without_scope() -> None:
         print(f"Caught: {type(e).__name__}")
         print(f"Message: {e}")
         print(
-            "\nSolution: Register with scope='request' and use 'async with container.start_scope()'",
+            "\nSolution: Register with scope='request' and use 'async with container.enter_scope()'",
         )
 
 
@@ -97,7 +97,7 @@ async def demonstrate_proper_usage() -> None:
     )
 
     print("\n2. Resolving async generator with scope:")
-    async with container.start_scope("request"):
+    async with container.enter_scope("request"):
         session = await container.aresolve("Session")
         print(f"   Got: {session}")
     print("   (Cleanup runs automatically on scope exit)")

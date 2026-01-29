@@ -58,7 +58,7 @@ async def main() -> None:
     print("Starting request scope...")
 
     # Use async context manager for proper cleanup
-    async with container.start_scope("request"):
+    async with container.enter_scope("request"):
         session = await container.aresolve(DatabaseSession)
         print(f"  Got session: {session.session_id}")
 

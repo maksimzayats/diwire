@@ -74,7 +74,7 @@ class TestLifetimeScopedSingleton:
         """SCOPED_SINGLETON within scope shares the same instance."""
         container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("test"):
+        with container.enter_scope("test"):
             session1 = container.resolve(Session)
             session2 = container.resolve(Session)
 
@@ -88,32 +88,32 @@ class TestLifetimeScopedSingleton:
         container.register(Session, scope="scope1", lifetime=Lifetime.SCOPED_SINGLETON)
         container.register(Session, scope="scope2", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("scope1"):
+        with container.enter_scope("scope1"):
             session1 = container.resolve(Session)
 
-        with container.start_scope("scope2"):
+        with container.enter_scope("scope2"):
             session2 = container.resolve(Session)
 
         assert session1.id != session2.id
 
 
 class TestStartScope:
-    """Tests for container.start_scope()."""
+    """Tests for container.enter_scope()."""
 
-    def test_start_scope_sets_current_scope(self, container: Container) -> None:
-        """start_scope sets the current scope context variable."""
+    def test_enter_scope_sets_current_scope(self, container: Container) -> None:
+        """enter_scope sets the current scope context variable."""
         assert _current_scope.get() is None
 
-        with container.start_scope("test_scope"):
+        with container.enter_scope("test_scope"):
             scope = _current_scope.get()
             assert scope is not None
             assert scope.contains_scope("test_scope")
 
         assert _current_scope.get() is None
 
-    def test_start_scope_with_auto_generated_name(self, container: Container) -> None:
-        """start_scope generates unique ID if no name provided."""
-        with container.start_scope() as scoped:
+    def test_enter_scope_with_auto_generated_name(self, container: Container) -> None:
+        """enter_scope generates unique ID if no name provided."""
+        with container.enter_scope() as scoped:
             scope_id = _current_scope.get()
             assert scope_id is not None
             # Should have segments with None name and integer ID
@@ -122,11 +122,11 @@ class TestStartScope:
             assert name is None
             assert isinstance(instance_id, int)
 
-    def test_start_scope_cleans_up_scoped_instances(self, container: Container) -> None:
+    def test_enter_scope_cleans_up_scoped_instances(self, container: Container) -> None:
         """Scoped instances are cleaned up when scope exits."""
         container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("test"):
+        with container.enter_scope("test"):
             container.resolve(Session)
 
             # Check that a scope with "test" exists in _scoped_instances
@@ -150,18 +150,18 @@ class TestScopedContainer:
         """ScopedContainer.resolve delegates to container."""
         container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("test") as scoped:
+        with container.enter_scope("test") as scoped:
             session = scoped.resolve(Session)
             assert isinstance(session, Session)
 
     def test_scoped_container_nested_scopes(self, container: Container) -> None:
         """Nested scopes create hierarchical scope IDs."""
-        with container.start_scope("parent") as parent:
+        with container.enter_scope("parent") as parent:
             parent_scope = _current_scope.get()
             assert parent_scope is not None
             assert parent_scope.contains_scope("parent")
 
-            with parent.start_scope("child") as child:
+            with parent.enter_scope("child") as child:
                 child_scope = _current_scope.get()
                 assert child_scope is not None
                 # Child scope should contain parent scope and "child" segment
@@ -174,8 +174,8 @@ class TestScopedContainer:
 
     def test_deeply_nested_scopes(self, container: Container) -> None:
         """Deeply nested scopes maintain hierarchy."""
-        with container.start_scope("a") as a, a.start_scope("b") as b:
-            with b.start_scope("c") as c:
+        with container.enter_scope("a") as a, a.enter_scope("b") as b:
+            with b.enter_scope("c") as c:
                 scope = _current_scope.get()
                 assert scope is not None
                 # Check hierarchy: segments contain a, b, c
@@ -262,7 +262,7 @@ class TestScopeValidation:
         container = Container(register_if_missing=False)
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with pytest.raises(DIWireServiceNotRegisteredError), container.start_scope("other_scope"):
+        with pytest.raises(DIWireServiceNotRegisteredError), container.enter_scope("other_scope"):
             container.resolve(Session)
 
     def test_scoped_service_not_found_without_scope(self) -> None:
@@ -286,7 +286,7 @@ class TestScopeValidation:
         # Set flag since we're bypassing register() which normally sets this
         container._has_scoped_registrations = True
 
-        with pytest.raises(DIWireScopeMismatchError) as exc_info, container.start_scope("wrong"):
+        with pytest.raises(DIWireScopeMismatchError) as exc_info, container.enter_scope("wrong"):
             container.resolve(Session)
 
         error = exc_info.value
@@ -298,7 +298,7 @@ class TestScopeValidation:
         """Resolving in matching scope succeeds."""
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             session = container.resolve(Session)
             assert isinstance(session, Session)
 
@@ -306,7 +306,7 @@ class TestScopeValidation:
         """Child scopes can resolve services registered for parent scope."""
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("request") as parent, parent.start_scope("child"):
+        with container.enter_scope("request") as parent, parent.enter_scope("child"):
             # Current scope is "request/child" which starts with "request"
             session = container.resolve(Session)
             assert isinstance(session, Session)
@@ -320,10 +320,10 @@ class TestScopedRegistration:
         container.register(Session, scope="scope_a", lifetime=Lifetime.SCOPED_SINGLETON)
         container.register(Session, scope="scope_b", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("scope_a"):
+        with container.enter_scope("scope_a"):
             session_a = container.resolve(Session)
 
-        with container.start_scope("scope_b"):
+        with container.enter_scope("scope_b"):
             session_b = container.resolve(Session)
 
         # Different scopes, different instances
@@ -335,14 +335,14 @@ class TestScopedRegistration:
         container.register(Session, scope="special", lifetime=Lifetime.SCOPED_SINGLETON)
 
         # Inside special scope - uses scoped registration
-        with container.start_scope("special"):
+        with container.enter_scope("special"):
             session1 = container.resolve(Session)
             session2 = container.resolve(Session)
             # Same instance within scope
             assert session1.id == session2.id
 
         # Different scope instance
-        with container.start_scope("special"):
+        with container.enter_scope("special"):
             session3 = container.resolve(Session)
             assert session3.id != session1.id
 
@@ -351,10 +351,10 @@ class TestScopedRegistration:
         container.register(Session, scope="parent", lifetime=Lifetime.SCOPED_SINGLETON)
         container.register(Session, scope="child", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("parent") as parent:
+        with container.enter_scope("parent") as parent:
             session_parent = container.resolve(Session)
 
-            with parent.start_scope("child"):
+            with parent.enter_scope("child"):
                 # "child" is more specific than "parent"
                 session_child = container.resolve(Session)
 
@@ -369,10 +369,10 @@ class TestScopedInstanceCaching:
         """Scoped instances are cached at the registration's scope level."""
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("request") as parent:
+        with container.enter_scope("request") as parent:
             session_parent = container.resolve(Session)
 
-            with parent.start_scope("child"):
+            with parent.enter_scope("child"):
                 # Should get same instance because cached at "request" level
                 session_child = container.resolve(Session)
 
@@ -387,7 +387,7 @@ class TestScopedInstanceCaching:
 
         sessions = []
         for i in range(3):
-            with container.start_scope("request"):
+            with container.enter_scope("request"):
                 sessions.append(container.resolve(Session))
 
         # All different instances
@@ -480,7 +480,7 @@ class TestScopeHierarchyMatching:
         """Exact scope name matches."""
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             session = container.resolve(Session)
             assert isinstance(session, Session)
 
@@ -488,7 +488,7 @@ class TestScopeHierarchyMatching:
         """Parent scope registration matches in child scopes."""
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("request") as parent, parent.start_scope("handler"):
+        with container.enter_scope("request") as parent, parent.enter_scope("handler"):
             # "request/handler" contains "request" as parent
             session = container.resolve(Session)
             assert isinstance(session, Session)
@@ -497,7 +497,7 @@ class TestScopeHierarchyMatching:
         """Scope registered as segment matches in hierarchy."""
         container.register(Session, scope="handler", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("request") as request, request.start_scope("handler"):
+        with container.enter_scope("request") as request, request.enter_scope("handler"):
             # "request/handler" contains "handler" as segment
             session = container.resolve(Session)
             assert isinstance(session, Session)
@@ -507,7 +507,7 @@ class TestScopeHierarchyMatching:
         container = Container(register_if_missing=False)
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with pytest.raises(DIWireServiceNotRegisteredError), container.start_scope("other"):
+        with pytest.raises(DIWireServiceNotRegisteredError), container.enter_scope("other"):
             container.resolve(Session)
 
 
@@ -526,12 +526,12 @@ class TestScopedInstanceRegistration:
         container.register(Session, scope="default", lifetime=Lifetime.SCOPED_SINGLETON)
 
         # In "special" scope - should return the registered instance
-        with container.start_scope("special"):
+        with container.enter_scope("special"):
             session = container.resolve(Session)
             assert session.id == "specific-1234"
 
         # In "default" scope - should create a new instance (not the specific one)
-        with container.start_scope("default"):
+        with container.enter_scope("default"):
             session = container.resolve(Session)
             assert session.id != "specific-1234"
 
@@ -547,7 +547,7 @@ class TestScopedInstanceRegistration:
 
         service_key = ServiceKey.from_value(Session)
 
-        with container.start_scope("test"):
+        with container.enter_scope("test"):
             container.resolve(Session)
             # Should be in scoped instances, not global singletons
             assert service_key not in container._singletons
@@ -579,11 +579,11 @@ class TestScopedInstanceRegistration:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        with container.start_scope("scope_a"):
+        with container.enter_scope("scope_a"):
             resolved_a = container.resolve(Session)
             assert resolved_a.id == "scope-a-session"
 
-        with container.start_scope("scope_b"):
+        with container.enter_scope("scope_b"):
             resolved_b = container.resolve(Session)
             assert resolved_b.id == "scope-b-session"
 
@@ -605,11 +605,11 @@ class TestScopedInstanceRegistration:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        with container.start_scope("outer") as outer:
+        with container.enter_scope("outer") as outer:
             # In outer scope - should return outer instance
             assert container.resolve(Session).id == "outer-session"
 
-            with outer.start_scope("inner"):
+            with outer.enter_scope("inner"):
                 # In inner scope - should return inner instance
                 assert container.resolve(Session).id == "inner-session"
 
@@ -634,13 +634,13 @@ class TestScopedInstanceRegistration:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             service_a = container.resolve(ServiceA)
             service_b = container.resolve(ServiceB)
             assert service_a.session.id == "request-session"
             assert service_b.session.id == "request-session"
 
-        with container.start_scope("admin"):
+        with container.enter_scope("admin"):
             service_a = container.resolve(ServiceA)
             service_b = container.resolve(ServiceB)
             assert service_a.session.id == "admin-session"
@@ -654,8 +654,8 @@ class TestScopeCleanup:
         """Nested scopes clean up their instances independently."""
         container.register(Session, scope="child", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("parent") as parent:
-            with parent.start_scope("child"):
+        with container.enter_scope("parent") as parent:
+            with parent.enter_scope("child"):
                 container.resolve(Session)
 
                 # Check for scope containing "child"
@@ -678,7 +678,7 @@ class TestScopeCleanup:
         container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
 
         try:
-            with container.start_scope("test"):
+            with container.enter_scope("test"):
                 container.resolve(Session)
                 raise ValueError("Test exception")
         except ValueError:
@@ -711,12 +711,12 @@ class TestCaptiveDependency:
         container.register(SingletonService, lifetime=Lifetime.SINGLETON)
 
         # First request scope
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             singleton1 = container.resolve(SingletonService)
             captured_session_id = singleton1.session.id
 
         # Second request scope - the singleton still has the old session!
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             singleton2 = container.resolve(SingletonService)
             # This demonstrates the captive dependency problem
             assert singleton2.session.id == captured_session_id
@@ -735,7 +735,7 @@ class TestCaptiveDependency:
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
         container.register(TransientService, lifetime=Lifetime.TRANSIENT)
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             t1 = container.resolve(TransientService)
             t2 = container.resolve(TransientService)
             # Different transient instances
@@ -752,7 +752,7 @@ class TestScopeEdgeCases:
         container.register(Session, scope="my/scope", lifetime=Lifetime.SCOPED_SINGLETON)
 
         # This might break the hierarchy parsing since "/" is used as separator
-        with container.start_scope("my/scope"):
+        with container.enter_scope("my/scope"):
             session = container.resolve(Session)
             assert isinstance(session, Session)
 
@@ -760,7 +760,7 @@ class TestScopeEdgeCases:
         """Empty string as scope name."""
         container.register(Session, scope="", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope(""):
+        with container.enter_scope(""):
             session = container.resolve(Session)
             assert isinstance(session, Session)
 
@@ -768,21 +768,21 @@ class TestScopeEdgeCases:
         """Re-entering a scope with the same name creates fresh instances."""
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             session1 = container.resolve(Session)
 
         # Re-enter with same name - should be a fresh scope
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             session2 = container.resolve(Session)
 
         assert session1.id != session2.id
 
     def test_resolve_container_within_scope(self, container: Container) -> None:
         """Resolving Container within different scopes returns same instance."""
-        with container.start_scope("scope1"):
+        with container.enter_scope("scope1"):
             c1 = container.resolve(Container)
 
-        with container.start_scope("scope2"):
+        with container.enter_scope("scope2"):
             c2 = container.resolve(Container)
 
         assert c1 is c2
@@ -802,7 +802,7 @@ class TestScopeEdgeCases:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             session1 = container.resolve(Session)
             session2 = container.resolve(Session)
             assert session1.id == "factory-created"
@@ -823,7 +823,7 @@ class TestScopeEdgeCases:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        with container.start_scope("test"):
+        with container.enter_scope("test"):
             session = container.resolve(Session)
             assert session.id == "second"
 
@@ -834,7 +834,7 @@ class TestScopeEdgeCases:
         """Resolving via stale ScopedContainer after scope exits."""
         container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("test") as scoped:
+        with container.enter_scope("test") as scoped:
             session_inside = scoped.resolve(Session)
 
         # The scope has exited, but we still have reference to scoped container
@@ -850,7 +850,7 @@ class TestScopeEdgeCases:
 
         def worker(worker_id: str) -> None:
             try:
-                with container.start_scope("request"):
+                with container.enter_scope("request"):
                     session = container.resolve(Session)
                     results[worker_id] = session.id
             except Exception as e:
@@ -889,7 +889,7 @@ class TestGlobalVsScopedRegistration:
         session_outside = container.resolve(Session)
         assert session_outside.id == "global"
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             session_inside = container.resolve(Session)
             # Scoped registration should take precedence
             assert session_inside.id == "scoped"
@@ -910,7 +910,7 @@ class TestGlobalVsScopedRegistration:
         assert s1 is not s2  # Transient creates new instances
 
         # Inside special scope - uses scoped instance
-        with container.start_scope("special"):
+        with container.enter_scope("special"):
             s3 = container.resolve(Session)
             s4 = container.resolve(Session)
             assert s3.id == "special-scoped"
@@ -938,7 +938,7 @@ class TestScopeWithDependencyChains:
 
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             level1 = container.resolve(Level1)
             # Session should be shared across all levels
             assert level1.session.id == level1.level2.level3.session.id
@@ -958,11 +958,11 @@ class TestScopeWithDependencyChains:
         container.register(TransientDep, lifetime=Lifetime.TRANSIENT)
         container.register(SingletonDep, lifetime=Lifetime.SINGLETON)
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             singleton1 = container.resolve(SingletonDep)
             captured_session_id = singleton1.transient.session.id
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             singleton2 = container.resolve(SingletonDep)
             # Singleton captured the transient which captured the scoped session
             assert singleton2.transient.session.id == captured_session_id
@@ -982,7 +982,7 @@ class TestScopeContextVariableIsolation:
                 # Check scope is None initially
                 scope_values[f"{worker_id}_before"] = _current_scope.get()
 
-                with container.start_scope(f"scope-{worker_id}"):
+                with container.enter_scope(f"scope-{worker_id}"):
                     scope_values[f"{worker_id}_inside"] = _current_scope.get()
                     import time
 
@@ -1014,7 +1014,7 @@ class TestScopeContextVariableIsolation:
         results: dict[str, str] = {}
 
         async def async_worker(worker_id: str) -> None:
-            with container.start_scope("request"):
+            with container.enter_scope("request"):
                 session = container.resolve(Session)
                 results[worker_id] = session.id
                 await asyncio.sleep(0.01)  # Allow interleaving
@@ -1159,7 +1159,7 @@ class TestTransitiveScopeDependencies:
         container.register(ScopedLevel3, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             level1_a = container.resolve(ScopedLevel1)
             level1_b = container.resolve(ScopedLevel1)
             level3_direct = container.resolve(ScopedLevel3)
@@ -1176,8 +1176,8 @@ class TestTransitiveScopeDependencies:
         container.register(ScopedLevel3, scope="inner", lifetime=Lifetime.SCOPED_SINGLETON)
         container.register(Session, scope="inner", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("outer") as outer:
-            with outer.start_scope("inner"):
+        with container.enter_scope("outer") as outer:
+            with outer.enter_scope("inner"):
                 level2 = container.resolve(ScopedLevel2)
                 assert isinstance(level2, ScopedLevel2)
                 assert isinstance(level2.level3.session, Session)
@@ -1191,7 +1191,7 @@ class TestTransitiveScopeDependencies:
         container.register(ChainE, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             chain_a = container.resolve(ChainA)
             session_direct = container.resolve(Session)
 
@@ -1250,7 +1250,7 @@ class TestFactoryEdgeCasesWithScopes:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             # First call should fail
             with pytest.raises(ValueError, match="First call fails"):
                 container.resolve(Session)
@@ -1280,13 +1280,13 @@ class TestFactoryEdgeCasesWithScopes:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        with container.start_scope("parent") as parent:
+        with container.enter_scope("parent") as parent:
             # Parent scope works
             session_in_parent = container.resolve(Session)
             assert session_in_parent.id == "parent-session"
 
             try:
-                with parent.start_scope("child"):
+                with parent.enter_scope("child"):
                     container.resolve(Session)
             except ValueError:
                 pass
@@ -1318,7 +1318,7 @@ class TestFactoryEdgeCasesWithScopes:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             service = container.resolve(Service)
             assert service.session.id == "config-value"
 
@@ -1341,7 +1341,7 @@ class TestFactoryEdgeCasesWithScopes:
 
         sessions = []
         for _ in range(3):
-            with container.start_scope("request"):
+            with container.enter_scope("request"):
                 sessions.append(container.resolve(Session))
 
         # Each scope should have called factory once
@@ -1366,7 +1366,7 @@ class TestFactoryEdgeCasesWithScopes:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             session1 = container.resolve(Session)
             session2 = container.resolve(Session)
             assert session1 is session2
@@ -1415,12 +1415,12 @@ class TestFactoryEdgeCasesWithScopes:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        with container.start_scope("parent") as parent:
+        with container.enter_scope("parent") as parent:
             parent_session = container.resolve(Session)
             assert parent_session.id == "parent"
             assert cleanup_events == []
 
-            with parent.start_scope("child"):
+            with parent.enter_scope("child"):
                 child_session = container.resolve(Session)
                 assert child_session.id == "child"
                 assert cleanup_events == []
@@ -1442,11 +1442,11 @@ class TestScopeErrorRecovery:
         """Nested scope fails: parent preserved."""
         container.register(Session, scope="parent", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("parent") as parent:
+        with container.enter_scope("parent") as parent:
             parent_session = container.resolve(Session)
 
             try:
-                with parent.start_scope("child"):
+                with parent.enter_scope("child"):
                     raise ValueError("Child scope error")
             except ValueError:
                 pass
@@ -1464,7 +1464,7 @@ class TestScopeErrorRecovery:
         container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
 
         try:
-            with container.start_scope("test"):
+            with container.enter_scope("test"):
                 container.resolve(Session)
                 raise RuntimeError("Error during scope")
         except RuntimeError:
@@ -1476,7 +1476,7 @@ class TestScopeErrorRecovery:
         """Manual clear_scope then resolve: creates new instance (cache cleared)."""
         container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("test") as scoped:
+        with container.enter_scope("test") as scoped:
             session1 = container.resolve(Session)
             scope_id = _current_scope.get()
 
@@ -1492,7 +1492,7 @@ class TestScopeErrorRecovery:
         container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
 
         # Use the context manager normally
-        with container.start_scope("test") as scoped:
+        with container.enter_scope("test") as scoped:
             container.resolve(Session)
             scope_id = scoped._scope_id
 
@@ -1523,7 +1523,7 @@ class TestConcurrentScopeEdgeCases:
 
         def worker(worker_id: str) -> None:
             try:
-                with container.start_scope("request"):
+                with container.enter_scope("request"):
                     session = container.resolve(Session)
                     results[worker_id] = session.id
                     # Simulate some work
@@ -1552,9 +1552,9 @@ class TestConcurrentScopeEdgeCases:
 
         def worker(worker_id: str) -> None:
             try:
-                with container.start_scope("parent") as parent:
+                with container.enter_scope("parent") as parent:
                     session = container.resolve(Session)
-                    with parent.start_scope("child"):
+                    with parent.enter_scope("child"):
                         service = container.resolve(Service)
                         results[worker_id] = (session.id, service.session.id)
             except Exception as e:
@@ -1588,7 +1588,7 @@ class TestConcurrentScopeEdgeCases:
         def resolver() -> None:
             for _ in range(100):
                 try:
-                    with container.start_scope("test"):
+                    with container.enter_scope("test"):
                         resolved.append(container.resolve(Session))
                 except expected_race_errors:  # noqa: PERF203
                     pass  # Expected race condition outcome
@@ -1622,7 +1622,7 @@ class TestConcurrentScopeEdgeCases:
         assert not unexpected_errors, f"Unexpected errors: {unexpected_errors}"
 
         # Verify container still functional
-        with container.start_scope("test"):
+        with container.enter_scope("test"):
             post_stress = container.resolve(Session)
             assert isinstance(post_stress, Session)
 
@@ -1632,7 +1632,7 @@ class TestConcurrentScopeEdgeCases:
         scope_ids: dict[str, str] = {}
 
         async def async_worker(worker_id: str) -> None:
-            with container.start_scope("request"):
+            with container.enter_scope("request"):
                 scope_id = _current_scope.get()
                 scope_ids[worker_id] = scope_id  # type: ignore[assignment]
                 await asyncio.sleep(0.01)
@@ -1666,7 +1666,7 @@ class TestScopeResolutionEdgeCases:
         # Set flag since we're bypassing register() which normally sets this
         container._has_scoped_registrations = True
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             session1 = container.resolve(Session)
             session2 = container.resolve(Session)
             assert session1 is session2
@@ -1684,7 +1684,7 @@ class TestScopeResolutionEdgeCases:
         # Set flag since we're bypassing register() which normally sets this
         container._has_scoped_registrations = True
 
-        with container.start_scope("test"):
+        with container.enter_scope("test"):
             # Container falls back to auto-instantiation when no factory/instance
             session = container.resolve(Session)
             assert isinstance(session, Session)
@@ -1694,12 +1694,12 @@ class TestScopeResolutionEdgeCases:
         container.register(Session, scope="level10", lifetime=Lifetime.SCOPED_SINGLETON)
 
         # Create 10 levels of nested scopes
-        current_scope = container.start_scope("level1")
+        current_scope = container.enter_scope("level1")
         scopes = [current_scope]
         current_scope.__enter__()
 
         for i in range(2, 11):
-            next_scope = current_scope.start_scope(f"level{i}")
+            next_scope = current_scope.enter_scope(f"level{i}")
             next_scope.__enter__()
             scopes.append(next_scope)
             current_scope = next_scope
@@ -1725,7 +1725,7 @@ class TestScopeResolutionEdgeCases:
 
         # "req" should not match "request"
         with pytest.raises((DIWireScopeMismatchError, DIWireServiceNotRegisteredError)):  # type: ignore[call-overload]
-            with container.start_scope("req"):
+            with container.enter_scope("req"):
                 container.resolve(Session)
 
     def test_resolve_service_nonexistent_scope(self) -> None:
@@ -1734,7 +1734,7 @@ class TestScopeResolutionEdgeCases:
         container.register(Session, scope="scope_x", lifetime=Lifetime.SCOPED_SINGLETON)
 
         with pytest.raises(DIWireServiceNotRegisteredError):
-            with container.start_scope("scope_y"):
+            with container.enter_scope("scope_y"):
                 container.resolve(Session)
 
 
@@ -1757,12 +1757,12 @@ class TestComprehensiveCaptiveDependency:
         container.register(SingletonHolder, lifetime=Lifetime.SINGLETON)
 
         # First scope captures the session
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             holder1 = container.resolve(SingletonHolder)
             captured_id = holder1.session.id
 
         # Second scope - singleton still holds first session
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             holder2 = container.resolve(SingletonHolder)
             # Captive dependency persists
             assert holder2.session.id == captured_id
@@ -1778,7 +1778,7 @@ class TestComprehensiveCaptiveDependency:
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
         container.register(TransientHolder, lifetime=Lifetime.TRANSIENT)
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             t1 = container.resolve(TransientHolder)
             t2 = container.resolve(TransientHolder)
             t3 = container.resolve(TransientHolder)
@@ -1793,8 +1793,8 @@ class TestComprehensiveCaptiveDependency:
         container.register(OuterScopedService, scope="outer", lifetime=Lifetime.SCOPED_SINGLETON)
         container.register(InnerScopedService, scope="inner", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("outer") as outer:
-            with outer.start_scope("inner"):
+        with container.enter_scope("outer") as outer:
+            with outer.enter_scope("inner"):
                 outer_scoped = container.resolve(OuterScopedService)
                 inner_id = outer_scoped.inner.id
 
@@ -1808,12 +1808,12 @@ class TestComprehensiveCaptiveDependency:
         container.register(TransientMiddle, lifetime=Lifetime.TRANSIENT)
         container.register(SingletonTop, lifetime=Lifetime.SINGLETON)
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             singleton = container.resolve(SingletonTop)
             captured_session_id = singleton.transient.session.id
 
         # Singleton captured transient which captured scoped
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             singleton2 = container.resolve(SingletonTop)
             assert singleton2.transient.session.id == captured_session_id
 
@@ -1846,7 +1846,7 @@ class TestAsyncScopeContextManager:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        async with container.start_scope("test"):
+        async with container.enter_scope("test"):
             session = await container.aresolve(Session)
             assert session.id == "async-session"
             assert cleanup_events == []
@@ -1871,7 +1871,7 @@ class TestAsyncScopeContextManager:
         )
 
         with pytest.raises(ValueError, match="test error"):
-            async with container.start_scope("test"):
+            async with container.enter_scope("test"):
                 await container.aresolve(Session)
                 raise ValueError("test error")
 
@@ -1881,7 +1881,7 @@ class TestAsyncScopeContextManager:
         """ScopedContainer.aresolve() delegates correctly."""
         container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        async with container.start_scope("test") as scoped:
+        async with container.enter_scope("test") as scoped:
             session = await scoped.aresolve(Session)
             assert isinstance(session, Session)
 
@@ -1892,7 +1892,7 @@ class TestAsyncScopeContextManager:
         """ScopedContainer.aresolve() after exit raises error."""
         container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        async with container.start_scope("test") as scoped:
+        async with container.enter_scope("test") as scoped:
             pass
 
         with pytest.raises(DIWireScopeMismatchError):
@@ -1926,7 +1926,7 @@ class TestScopedSingletonConcurrency:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        async with container.start_scope("request"):
+        async with container.enter_scope("request"):
             task1 = asyncio.create_task(container.aresolve(Session))
             await factory_started.wait()
             task2 = asyncio.create_task(container.aresolve(Session))
@@ -1946,7 +1946,7 @@ class TestMemoryAndReferenceEdgeCases:
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
         for _ in range(1000):
-            with container.start_scope("request"):
+            with container.enter_scope("request"):
                 container.resolve(Session)
 
         # All scopes should be cleaned up
@@ -1962,7 +1962,7 @@ class TestMemoryAndReferenceEdgeCases:
             scope_segments, _ = key
             return any(name == "test" for name, _ in scope_segments)
 
-        with container.start_scope("test"):
+        with container.enter_scope("test"):
             container.resolve(Session)
             # Verify the instance is cached while scope is active
             test_scopes = [k for k in container._scoped_instances if has_test_scope(k)]
@@ -1976,7 +1976,7 @@ class TestMemoryAndReferenceEdgeCases:
         """After clear_scope: no refs in container for that scope."""
         container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("test"):
+        with container.enter_scope("test"):
             container.resolve(Session)
             # Instance should be in cache during scope
             assert len(container._scoped_instances) == 1
@@ -2001,7 +2001,7 @@ class TestMemoryAndReferenceEdgeCases:
             return any(name == "test" for name, _ in scope_segments)
 
         for _ in range(5):
-            with container.start_scope("test"):
+            with container.enter_scope("test"):
                 container.resolve(LargeObject)
                 # Verify instance is cached during scope
                 test_scopes = [k for k in container._scoped_instances if has_test_scope(k)]
@@ -2041,7 +2041,7 @@ class TestAsyncScopedSingletonLockCleanup:
         )
 
         # Use sync context manager to enter scope
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             # Create async lock by running aresolve in a new event loop
             async def resolve_async() -> Session:
                 return await container.aresolve(Session)
@@ -2080,7 +2080,7 @@ class TestAsyncScopedSingletonLockCleanup:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        async with container.start_scope("request"):
+        async with container.enter_scope("request"):
             # Resolve via aresolve to ensure async lock is created
             await container.aresolve(Session)
             assert len(container._scoped_singleton_locks) > 0
@@ -2115,7 +2115,7 @@ class TestScopedSingletonDoubleCheckLocking:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        with container.start_scope("test"):
+        with container.enter_scope("test"):
             # First resolve will acquire lock and find instance in registration
             session1 = container.resolve(Session)
             assert session1.id == "pre-registered"
@@ -2142,7 +2142,7 @@ class TestScopedSingletonDoubleCheckLocking:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        async with container.start_scope("test"):
+        async with container.enter_scope("test"):
             # First resolve via aresolve will acquire async lock and find instance
             session1 = await container.aresolve(Session)
             assert session1.id == "async-pre-registered"
@@ -2179,7 +2179,7 @@ class TestScopedSingletonDoubleCheckLocking:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        async with container.start_scope("test"):
+        async with container.enter_scope("test"):
             # Start first resolution - this will hold the lock
             task1 = asyncio.create_task(container.aresolve(Session))
 
@@ -2231,7 +2231,7 @@ class TestScopedIgnoredTypes:
         container.register(str, instance="scoped_value", scope="request")
         container.register(ServiceWithStr)
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             service = container.resolve(ServiceWithStr)
             assert service.name == "scoped_value"
 
@@ -2240,7 +2240,7 @@ class TestScopedIgnoredTypes:
         container.register(str, instance="async_scoped_value", scope="request")
         container.register(ServiceWithStr)
 
-        async with container.start_scope("request"):
+        async with container.enter_scope("request"):
             service = await container.aresolve(ServiceWithStr)
             assert service.name == "async_scoped_value"
 
@@ -2252,7 +2252,7 @@ class TestScopedIgnoredTypes:
         container.register(str, instance="from_scope", scope="request")
         container.register(ServiceWithStrDefault)
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             service = container.resolve(ServiceWithStrDefault)
             # Scoped value should be used, not the default
             assert service.name == "from_scope"
@@ -2262,9 +2262,9 @@ class TestScopedIgnoredTypes:
         container.register(str, instance="parent_value", scope="parent")
         container.register(ServiceWithStr)
 
-        with container.start_scope("parent"):
+        with container.enter_scope("parent"):
             # Nested scope should still find the parent's scoped registration
-            with container.start_scope("child"):
+            with container.enter_scope("child"):
                 service = container.resolve(ServiceWithStr)
                 assert service.name == "parent_value"
 
@@ -2311,8 +2311,8 @@ class TestScopedIgnoredTypes:
         container.register(str, instance="async_parent_value", scope="parent")
         container.register(ServiceWithStr)
 
-        async with container.start_scope("parent"):
-            async with container.start_scope("child"):
+        async with container.enter_scope("parent"):
+            async with container.enter_scope("child"):
                 service = await container.aresolve(ServiceWithStr)
                 assert service.name == "async_parent_value"
 
@@ -2330,7 +2330,7 @@ class TestScopedIgnoredTypes:
         container.register(float, instance=3.14, scope="request")
         container.register(ServiceWithMultipleIgnored)
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             service = container.resolve(ServiceWithMultipleIgnored)
             assert service.name == "test_name"
             assert service.count == 42
@@ -2361,7 +2361,7 @@ class TestSyncScopeAsyncCleanup:
         )
 
         # Use sync scope but resolve async generator with aresolve
-        with container.start_scope("test"):
+        with container.enter_scope("test"):
             session = await container.aresolve(Session)
             assert session.id == "async-session"
             assert cleanup_events == []
@@ -2394,7 +2394,7 @@ class TestSyncScopeAsyncCleanup:
         loop = asyncio.new_event_loop()
 
         async def resolve_in_scope() -> None:
-            with container.start_scope("test"):
+            with container.enter_scope("test"):
                 session = await container.aresolve(Session)
                 assert session.id == "async-session"
                 # Note: scope will be cleared after exiting 'with' but before loop closes
@@ -2428,7 +2428,7 @@ class TestSyncScopeAsyncCleanup:
         )
 
         async def run_test() -> None:
-            with container.start_scope("test"):
+            with container.enter_scope("test"):
                 session = await container.aresolve(Session)
                 assert session.id == "resource"
                 events.append("used")
@@ -2454,7 +2454,7 @@ class TestSyncScopeAsyncCleanup:
         )
 
         # Should not raise any error even though no async exit stack exists
-        with container.start_scope("test"):
+        with container.enter_scope("test"):
             session = container.resolve(Session)
             assert session.id == "sync-session"
 
@@ -2512,7 +2512,7 @@ class TestSyncScopeAsyncCleanup:
         )
 
         async def run_test() -> None:
-            with container.start_scope("test"):
+            with container.enter_scope("test"):
                 a = await container.aresolve(ResourceA)
                 b = await container.aresolve(ResourceB)
                 c = await container.aresolve(ResourceC)
@@ -2549,7 +2549,7 @@ class TestSyncScopeAsyncCleanup:
             # Create a new event loop, resolve, close the loop, then exit scope
             loop = asyncio.new_event_loop()
 
-            scope = container.start_scope("test")
+            scope = container.enter_scope("test")
             scope.__enter__()
 
             async def resolve() -> Session:
@@ -2569,13 +2569,13 @@ class TestSyncScopeAsyncCleanup:
 
 
 class TestImperativeScopeManagement:
-    """Tests for imperative scope management (start_scope without with blocks)."""
+    """Tests for imperative scope management (enter_scope without with blocks)."""
 
-    def test_start_scope_activates_immediately(self, container: Container) -> None:
-        """start_scope() activates the scope immediately."""
+    def test_enter_scope_activates_immediately(self, container: Container) -> None:
+        """enter_scope() activates the scope immediately."""
         assert _current_scope.get() is None
 
-        scope = container.start_scope("test")
+        scope = container.enter_scope("test")
         # Scope should be active immediately
         current = _current_scope.get()
         assert current is not None
@@ -2588,7 +2588,7 @@ class TestImperativeScopeManagement:
         """Imperative scope works with sync resolve."""
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        container.start_scope("request")
+        container.enter_scope("request")
         session1 = container.resolve(Session)
         session2 = container.resolve(Session)
 
@@ -2600,7 +2600,7 @@ class TestImperativeScopeManagement:
         container.register(Session, scope="app", lifetime=Lifetime.SCOPED_SINGLETON)
 
         async def run_test() -> None:
-            container.start_scope("app")
+            container.enter_scope("app")
             session1 = await container.aresolve(Session)
             session2 = await container.aresolve(Session)
 
@@ -2613,7 +2613,7 @@ class TestImperativeScopeManagement:
         """Context manager usage still works (with is now no-op for entry)."""
         container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        with container.start_scope("test") as scope:
+        with container.enter_scope("test") as scope:
             session = container.resolve(Session)
             assert isinstance(session, Session)
             assert _current_scope.get() is not None
@@ -2626,12 +2626,12 @@ class TestImperativeScopeManagement:
         container.register(Session, scope="parent", lifetime=Lifetime.SCOPED_SINGLETON)
         container.register(Service, scope="child", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        parent_scope = container.start_scope("parent")
+        parent_scope = container.enter_scope("parent")
         current = _current_scope.get()
         assert current is not None
         assert current.contains_scope("parent")
 
-        child_scope = container.start_scope("child")
+        child_scope = container.enter_scope("child")
         current = _current_scope.get()
         assert current is not None
         assert current.contains_scope("parent")
@@ -2653,8 +2653,8 @@ class TestImperativeScopeManagement:
         container.register(Session, scope="first", lifetime=Lifetime.SCOPED_SINGLETON)
         container.register(Service, scope="second", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        scope1 = container.start_scope("first")
-        scope2 = container.start_scope("second")
+        scope1 = container.enter_scope("first")
+        scope2 = container.enter_scope("second")
 
         # Both scopes should be active
         assert not scope1._exited
@@ -2670,7 +2670,7 @@ class TestImperativeScopeManagement:
         """ScopedContainer.close() closes a specific scope."""
         container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        scope = container.start_scope("test")
+        scope = container.enter_scope("test")
         container.resolve(Session)
 
         assert not scope._exited
@@ -2700,7 +2700,7 @@ class TestImperativeScopeManagement:
         )
 
         async def run_test() -> None:
-            scope = container.start_scope("test")
+            scope = container.enter_scope("test")
             session = await container.aresolve(Session)
             assert session.id == "async-session"
 
@@ -2713,7 +2713,7 @@ class TestImperativeScopeManagement:
 
     def test_idempotent_scope_close(self, container: Container) -> None:
         """Calling close() multiple times on a scope is safe."""
-        scope = container.start_scope("test")
+        scope = container.enter_scope("test")
 
         scope.close()
         assert scope._exited
@@ -2725,7 +2725,7 @@ class TestImperativeScopeManagement:
 
     def test_idempotent_container_close(self, container: Container) -> None:
         """Calling close() multiple times on a container is safe."""
-        container.start_scope("test")
+        container.enter_scope("test")
 
         container.close()
         assert container._closed
@@ -2739,7 +2739,7 @@ class TestImperativeScopeManagement:
         """Calling aclose() multiple times on a scope is safe."""
 
         async def run_test() -> None:
-            scope = container.start_scope("test")
+            scope = container.enter_scope("test")
 
             await scope.aclose()
             assert scope._exited
@@ -2755,7 +2755,7 @@ class TestImperativeScopeManagement:
         """Calling aclose() multiple times on a container is safe."""
 
         async def run_test() -> None:
-            container.start_scope("test")
+            container.enter_scope("test")
 
             await container.aclose()
             assert container._closed
@@ -2777,9 +2777,9 @@ class TestImperativeScopeManagement:
         container.register(Session, scope="outer", lifetime=Lifetime.SCOPED_SINGLETON)
         container.register(Service, scope="inner", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        outer_scope = container.start_scope("outer")
+        outer_scope = container.enter_scope("outer")
 
-        with container.start_scope("inner"):
+        with container.enter_scope("inner"):
             current = _current_scope.get()
             assert current is not None
             assert current.contains_scope("outer")
@@ -2819,14 +2819,14 @@ class TestContainerClosedError:
 
         asyncio.run(run_test())
 
-    def test_start_scope_after_close_raises_error(self, container: Container) -> None:
-        """start_scope() after close() raises DIWireContainerClosedError."""
+    def test_enter_scope_after_close_raises_error(self, container: Container) -> None:
+        """enter_scope() after close() raises DIWireContainerClosedError."""
         from diwire.exceptions import DIWireContainerClosedError
 
         container.close()
 
         with pytest.raises(DIWireContainerClosedError, match="closed container"):
-            container.start_scope("test")
+            container.enter_scope("test")
 
 
 class TestImperativeScopeResourceCleanup:
@@ -2850,7 +2850,7 @@ class TestImperativeScopeResourceCleanup:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        scope = container.start_scope("test")
+        scope = container.enter_scope("test")
         session = container.resolve(Session)
         assert session.id == "gen-session"
         assert not cleanup_called
@@ -2877,7 +2877,7 @@ class TestImperativeScopeResourceCleanup:
         )
 
         async def run_test() -> None:
-            scope = container.start_scope("test")
+            scope = container.enter_scope("test")
             session = await container.aresolve(Session)
             assert session.id == "async-gen-session"
             assert not cleanup_called
@@ -2905,7 +2905,7 @@ class TestImperativeScopeResourceCleanup:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        container.start_scope("test")
+        container.enter_scope("test")
         session = container.resolve(Session)
         assert session.id == "gen-session"
         assert not cleanup_called
@@ -2932,7 +2932,7 @@ class TestImperativeScopeResourceCleanup:
         )
 
         async def run_test() -> None:
-            container.start_scope("test")
+            container.enter_scope("test")
             session = await container.aresolve(Session)
             assert session.id == "async-gen-session"
             assert not cleanup_called
@@ -2946,7 +2946,7 @@ class TestImperativeScopeResourceCleanup:
         """_scoped_instances is empty after close()."""
         container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        container.start_scope("test")
+        container.enter_scope("test")
         container.resolve(Session)
 
         assert len(container._scoped_instances) > 0
@@ -2968,7 +2968,7 @@ class TestImperativeScopeConcurrency:
 
         def worker(worker_id: int) -> None:
             try:
-                scope = container.start_scope("request")
+                scope = container.enter_scope("request")
                 session = container.resolve(Session)
                 results.append(f"{worker_id}:{session.id}")
                 scope.close()
@@ -2991,7 +2991,7 @@ class TestImperativeScopeConcurrency:
             results: list[str] = []
 
             async def worker(worker_id: int) -> None:
-                scope = container.start_scope("request")
+                scope = container.enter_scope("request")
                 session = await container.aresolve(Session)
                 results.append(f"{worker_id}:{session.id}")
                 await scope.aclose()
@@ -3010,7 +3010,7 @@ class TestImperativeScopedSingletons:
         """Scoped singletons share instances within a scope."""
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
-        container.start_scope("request")
+        container.enter_scope("request")
         session1 = container.resolve(Session)
         session2 = container.resolve(Session)
 
@@ -3022,7 +3022,7 @@ class TestImperativeScopedSingletons:
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
         # First scope
-        scope1 = container.start_scope("request")
+        scope1 = container.enter_scope("request")
         session1 = container.resolve(Session)
         scope1.close()
 
@@ -3031,7 +3031,7 @@ class TestImperativeScopedSingletons:
         container2.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
         # Second scope
-        scope2 = container2.start_scope("request")
+        scope2 = container2.enter_scope("request")
         session2 = container2.resolve(Session)
         scope2.close()
 

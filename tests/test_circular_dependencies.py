@@ -184,7 +184,7 @@ class TestScopedCircularDependencies:
         )
 
         with pytest.raises(DIWireCircularDependencyError) as exc_info:
-            with container.start_scope("request"):
+            with container.enter_scope("request"):
                 container.resolve(ScopedCircularA)
 
         assert "ScopedCircularA" in str(exc_info.value)
@@ -200,7 +200,7 @@ class TestScopedCircularDependencies:
         container.register(ScopedToSingletonB, lifetime=Lifetime.SINGLETON)
 
         with pytest.raises(DIWireCircularDependencyError) as exc_info:
-            with container.start_scope("request"):
+            with container.enter_scope("request"):
                 container.resolve(ScopedToSingletonA)
 
         assert "ScopedToSingletonA" in str(exc_info.value)
@@ -216,7 +216,7 @@ class TestScopedCircularDependencies:
         container.register(ScopedToTransientB, lifetime=Lifetime.TRANSIENT)
 
         with pytest.raises(DIWireCircularDependencyError) as exc_info:
-            with container.start_scope("request"):
+            with container.enter_scope("request"):
                 container.resolve(ScopedToTransientA)
 
         assert "ScopedToTransientA" in str(exc_info.value)
@@ -238,7 +238,7 @@ class TestScopedCircularDependencies:
         assert _current_scope.get() is None
 
         try:
-            with container.start_scope("request"):
+            with container.enter_scope("request"):
                 container.resolve(ScopedCircularA)
         except DIWireCircularDependencyError:
             pass
@@ -289,7 +289,7 @@ class TestAsyncCircularDependencies:
         )
 
         with pytest.raises(DIWireCircularDependencyError) as exc_info:
-            async with container.start_scope("request"):
+            async with container.enter_scope("request"):
                 await container.aresolve(AsyncCircularX)
 
         assert "AsyncCircularX" in str(exc_info.value)
@@ -313,7 +313,7 @@ class TestAsyncCircularDependencies:
         assert _current_scope.get() is None
 
         try:
-            async with container.start_scope("request"):
+            async with container.enter_scope("request"):
                 await container.aresolve(AsyncCircularX)
         except DIWireCircularDependencyError:
             pass

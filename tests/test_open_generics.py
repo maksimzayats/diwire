@@ -328,7 +328,7 @@ def test_open_generic_resolution_in_anonymous_scope(container: Container) -> Non
 
     decorator(create_box)
 
-    with container.start_scope():
+    with container.enter_scope():
         assert container.resolve(Box[int]).value == "int"
 
 
@@ -338,7 +338,7 @@ def test_scoped_open_generic_registration_skips_anonymous_scope(
     class Box(Generic[T]):
         pass
 
-    with container.start_scope() as scope:
+    with container.enter_scope() as scope:
         result = container._get_scoped_open_generic_registration(
             Box,
             None,
@@ -372,7 +372,7 @@ def test_open_generic_scoped_singleton(container: Container) -> None:
 
     decorator(create_box)
 
-    with container.start_scope("request"):
+    with container.enter_scope("request"):
         first = container.resolve(ScopedBox[int])
         second = container.resolve(ScopedBox[int])
         assert first is second

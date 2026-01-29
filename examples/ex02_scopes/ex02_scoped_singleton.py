@@ -47,7 +47,7 @@ def main() -> None:
     print("SCOPED_SINGLETON behavior:\n")
 
     # Within the same scope, Session is shared
-    with container.start_scope(Scope.REQUEST) as scope:
+    with container.enter_scope(Scope.REQUEST) as scope:
         session1 = scope.resolve(Session)
         session2 = scope.resolve(Session)
         repo = scope.resolve(Repository)
@@ -59,7 +59,7 @@ def main() -> None:
         print(f"  All same instance: {session1 is session2 is repo.session}")
 
     # Different scope = different Session instance
-    with container.start_scope(Scope.REQUEST) as scope:
+    with container.enter_scope(Scope.REQUEST) as scope:
         session3 = scope.resolve(Session)
         repo2 = scope.resolve(Repository)
 

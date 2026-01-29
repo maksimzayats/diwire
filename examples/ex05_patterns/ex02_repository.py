@@ -111,7 +111,7 @@ def main() -> None:
 
     # Manual scope management example
     print("Manual scope management:")
-    with container.start_scope(Scope.UNIT_OF_WORK) as scope:
+    with container.enter_scope(Scope.UNIT_OF_WORK) as scope:
         user_repo = scope.resolve(UserRepository)
         order_repo = scope.resolve(OrderRepository)
         session = scope.resolve(Session)

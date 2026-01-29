@@ -437,11 +437,11 @@ class ScopedContainer:
     """A context manager for scoped dependency resolution.
 
     Supports both sync and async context managers:
-    - `with container.start_scope()` for sync usage
-    - `async with container.start_scope()` for async usage with proper async cleanup
+    - `with container.enter_scope()` for sync usage
+    - `async with container.enter_scope()` for async usage with proper async cleanup
 
     Also supports imperative usage:
-    - `scope = container.start_scope()` to activate immediately
+    - `scope = container.enter_scope()` to activate immediately
     - `scope.close()` or `scope.aclose()` to close explicitly
     - `container.close()` or `container.aclose()` to close all active scopes
     """
@@ -480,9 +480,9 @@ class ScopedContainer:
             )
         return await self._container.aresolve(key)
 
-    def start_scope(self, scope_name: str | None = None) -> ScopedContainer:
+    def enter_scope(self, scope_name: str | None = None) -> ScopedContainer:
         """Start a nested scope."""
-        return self._container.start_scope(scope_name)
+        return self._container.enter_scope(scope_name)
 
     def _close_sync(self) -> None:
         """Close the scope synchronously."""
@@ -581,7 +581,7 @@ class ScopedInjectedFunction(Generic[T]):
     def __call__(self, *args: Any, **kwargs: Any) -> T:
         """Call the wrapped function, creating a new scope for this invocation."""
         self._ensure_initialized()
-        with self._container.start_scope(self._scope_name):
+        with self._container.enter_scope(self._scope_name):
             resolved = self._resolve_injected_dependencies()
             return self._func(*args, **{**resolved, **kwargs})
 
@@ -719,7 +719,7 @@ class AsyncScopedInjectedFunction(Generic[T]):
     async def __call__(self, *args: Any, **kwargs: Any) -> T:
         """Call the wrapped async function, creating a new scope for this invocation."""
         self._ensure_initialized()
-        async with self._container.start_scope(self._scope_name):
+        async with self._container.enter_scope(self._scope_name):
             resolved = await self._resolve_injected_dependencies()
             return await self._func(*args, **{**resolved, **kwargs})
 
@@ -1469,16 +1469,16 @@ class Container:
         # Invalidate compiled state when registrations change
         self._is_compiled = False
 
-    def start_scope(self, scope_name: str | None = None) -> ScopedContainer:
+    def enter_scope(self, scope_name: str | None = None) -> ScopedContainer:
         """Start a new scope for resolving SCOPED_SINGLETON dependencies.
 
         The scope is activated immediately upon creation, allowing imperative usage:
-            scope = container.start_scope("request")
+            scope = container.enter_scope("request")
             # ... use the scope ...
             scope.close()  # or container.close() to close all scopes
 
         Context manager usage is also supported:
-            with container.start_scope("request") as scope:
+            with container.enter_scope("request") as scope:
                 # ... use the scope ...
 
         Args:

@@ -681,7 +681,7 @@ class ContainerContextProxy:
         )
         return None
 
-    def start_scope(self, scope_name: str | None = None) -> Any:
+    def enter_scope(self, scope_name: str | None = None) -> Any:
         """Start a new scope on the current container.
 
         Args:
@@ -691,7 +691,7 @@ class ContainerContextProxy:
             A ScopedContainer context manager.
 
         """
-        return self.get_current().start_scope(scope_name)
+        return self.get_current().enter_scope(scope_name)
 
     def compile(self) -> None:
         """Compile the current container for optimized resolution."""

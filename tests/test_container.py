@@ -802,7 +802,7 @@ class TestAsyncResolutionEdgeCases:
         container._registry[service_key] = registration
 
         # Resolve within a different scope - should raise scope mismatch
-        with container.start_scope("wrong_scope"):
+        with container.enter_scope("wrong_scope"):
             with pytest.raises(DIWireScopeMismatchError):
                 await container.aresolve(ServiceA)
 
@@ -822,7 +822,7 @@ class TestAsyncResolutionEdgeCases:
             lifetime=Lifetime.SCOPED_SINGLETON,
         )
 
-        async with container.start_scope("request"):
+        async with container.enter_scope("request"):
             result = await container.aresolve(ServiceA)
             assert result is specific_instance
 
@@ -845,7 +845,7 @@ class TestAsyncResolutionEdgeCases:
             scope="request",
         )
 
-        async with container.start_scope("request"):
+        async with container.enter_scope("request"):
             with pytest.raises(DIWireGeneratorFactoryUnsupportedLifetimeError):
                 await container.aresolve(ServiceA)
 
@@ -873,7 +873,7 @@ class TestAsyncResolutionEdgeCases:
             scope="request",
         )
 
-        async with container.start_scope("request"):
+        async with container.enter_scope("request"):
             result = await container.aresolve(ServiceA)
             assert isinstance(result, ServiceA)
 
@@ -985,7 +985,7 @@ class TestAsyncResolutionEdgeCases:
         )
 
         # Use sync context manager but call aresolve
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             result = container.resolve(ServiceA)
             assert isinstance(result, ServiceA)
 
@@ -1071,7 +1071,7 @@ class TestMissingCoverageSync:
             scope="request",
         )
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             with pytest.raises(DIWireGeneratorFactoryUnsupportedLifetimeError):
                 container.resolve(ServiceA)
 
@@ -1096,7 +1096,7 @@ class TestMissingCoverageSync:
             None,
         )
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             with pytest.raises(DIWireGeneratorFactoryUnsupportedLifetimeError):
                 handler(generator_factory())
 
@@ -1122,7 +1122,7 @@ class TestMissingCoverageSync:
             None,
         )
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             with pytest.raises(DIWireGeneratorFactoryDidNotYieldError):
                 handler(generator_factory())
 
@@ -1151,7 +1151,7 @@ class TestMissingCoverageSync:
             None,
         )
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             instance = handler(generator_factory())
             assert isinstance(instance, ServiceA)
             assert cleanup == []
@@ -1333,7 +1333,7 @@ class TestCoverageEdgeCases:
         service_key_b = ServiceKey.from_value(ServiceB)
         assert (service_key_b, "request") not in container._scoped_compiled_providers
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             resolved = container.resolve(ServiceB)
             assert resolved.a is scoped_instance
 
@@ -1353,7 +1353,7 @@ class TestCoverageEdgeCases:
         assert (service_key, "request") in container._scoped_compiled_providers
 
         # Enter the matching scope - compiled provider path will be used
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             instance1 = container.resolve(ServiceA)
             instance2 = container.resolve(ServiceA)
 
@@ -1418,7 +1418,7 @@ class TestCoverageEdgeCases:
             scope="request",
         )
 
-        async with container.start_scope("request"):
+        async with container.enter_scope("request"):
             # Inside scope, cache_scope is not None, so we hit line 1407
             with pytest.raises(DIWireGeneratorFactoryUnsupportedLifetimeError):
                 await container.aresolve(ServiceA)

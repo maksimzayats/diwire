@@ -53,7 +53,7 @@ def main() -> None:
     )
 
     print("Generator factory scope behavior:\n")
-    with container.start_scope(Scope.REQUEST):
+    with container.enter_scope(Scope.REQUEST):
         session1 = container.resolve(Session)
         session2 = container.resolve(Session)
         print(f"session1: {session1}")

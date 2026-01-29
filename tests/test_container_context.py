@@ -189,14 +189,14 @@ class TestProxyMethodDelegation:
         finally:
             container_context.reset(token)
 
-    def test_start_scope_delegates_to_container(self) -> None:
-        """start_scope() delegates to the current container."""
+    def test_enter_scope_delegates_to_container(self) -> None:
+        """enter_scope() delegates to the current container."""
         container = Container()
         container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
 
         token = container_context.set_current(container)
         try:
-            with container_context.start_scope("request"):
+            with container_context.enter_scope("request"):
                 service = container.resolve(ServiceA)
                 assert isinstance(service, ServiceA)
         finally:
@@ -789,7 +789,7 @@ class TestDirectTypeResolution:
 
         token = container_context.set_current(container)
         try:
-            with container_context.start_scope("request"):
+            with container_context.enter_scope("request"):
                 service = container_context.resolve(ServiceA, scope="request")
                 assert isinstance(service, ServiceA)
         finally:
@@ -1276,11 +1276,11 @@ class TestEdgeCases:
 
         token = container_context.set_current(container)
         try:
-            with container_context.start_scope("outer") as outer:
+            with container_context.enter_scope("outer") as outer:
                 service_a = container_context.resolve(ServiceA)
                 assert isinstance(service_a, ServiceA)
 
-                with outer.start_scope("inner"):
+                with outer.enter_scope("inner"):
                     service_b = container_context.resolve(ServiceB)
                     assert isinstance(service_b, ServiceB)
 
@@ -1573,12 +1573,12 @@ class TestContainerOperationsWithoutContainer:
             _current_container.reset(initial_token)
             container_context._deferred_registrations.clear()
 
-    def test_start_scope_without_container_raises_error(self) -> None:
-        """start_scope() without container raises DIWireContainerNotSetError."""
+    def test_enter_scope_without_container_raises_error(self) -> None:
+        """enter_scope() without container raises DIWireContainerNotSetError."""
         initial_token = _current_container.set(None)
         try:
             with pytest.raises(DIWireContainerNotSetError):
-                container_context.start_scope("request")
+                container_context.enter_scope("request")
         finally:
             _current_container.reset(initial_token)
 
