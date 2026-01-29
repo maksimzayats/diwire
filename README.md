@@ -165,7 +165,9 @@ print(send(to="user@example.com"))
 
 ## Scopes and cleanup
 
-Use scopes to manage request/session lifetimes. Generator factories clean up automatically.
+Use scopes to manage request/session lifetimes. Generator factories clean up automatically when the scope exits.
+
+**Important:** Cleanup code in generator factories must be wrapped in `try/finally` blocks. When a scope exits, the container calls `close()` (sync) or `aclose()` (async) on generators, which raises `GeneratorExit` at the `yield` point. Without `try/finally`, code after `yield` will not execute. This is standard Python generator behavior, used by FastAPI's `Depends`, pytest fixtures, and other frameworks.
 
 ```python
 from collections.abc import Generator
@@ -186,6 +188,7 @@ def session_factory() -> Generator[Session, None, None]:
     try:
         yield session
     finally:
+        # Cleanup code MUST be in finally block to run on scope exit
         session.close()
 
 
@@ -253,6 +256,7 @@ async def client_factory() -> AsyncGenerator[AsyncClient, None]:
     try:
         yield client
     finally:
+        # Cleanup code MUST be in finally block to run on scope exit
         await client.close()
 
 
