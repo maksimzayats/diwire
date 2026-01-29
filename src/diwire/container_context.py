@@ -697,5 +697,22 @@ class ContainerContextProxy:
         """Compile the current container for optimized resolution."""
         return self.get_current().compile()
 
+    def close(self) -> None:
+        """Close the current container.
+
+        Closes all active scopes and marks the container as closed.
+        After calling this method, any attempt to resolve services or start
+        new scopes will raise DIWireContainerClosedError.
+        """
+        return self.get_current().close()
+
+    async def aclose(self) -> None:
+        """Asynchronously close the current container.
+
+        Use this method when scopes contain async generator factories that
+        need proper async cleanup.
+        """
+        return await self.get_current().aclose()
+
 
 container_context = ContainerContextProxy()

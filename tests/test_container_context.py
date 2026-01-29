@@ -2823,3 +2823,54 @@ class TestDeferredRegistrationWithTypeKey:
         finally:
             _current_container.reset(initial_token)
             container_context._deferred_registrations.clear()
+
+
+# ============================================================================
+# Close/AClose Method Tests
+# ============================================================================
+
+
+class TestContainerContextClose:
+    """Tests for close/aclose methods on ContainerContextProxy."""
+
+    def test_close_delegates_to_current_container(self) -> None:
+        """close() delegates to the current container's close method."""
+        proxy = ContainerContextProxy()
+        container = Container()
+        token = proxy.set_current(container)
+        try:
+            proxy.close()
+            assert container._closed
+        finally:
+            proxy.reset(token)
+
+    async def test_aclose_delegates_to_current_container(self) -> None:
+        """aclose() delegates to the current container's aclose method."""
+        proxy = ContainerContextProxy()
+        container = Container()
+        token = proxy.set_current(container)
+        try:
+            await proxy.aclose()
+            assert container._closed
+        finally:
+            proxy.reset(token)
+
+    def test_close_without_container_raises_error(self) -> None:
+        """close() raises DIWireContainerNotSetError when no container set."""
+        proxy = ContainerContextProxy()
+        token = _current_container.set(None)
+        try:
+            with pytest.raises(DIWireContainerNotSetError):
+                proxy.close()
+        finally:
+            _current_container.reset(token)
+
+    async def test_aclose_without_container_raises_error(self) -> None:
+        """aclose() raises DIWireContainerNotSetError when no container set."""
+        proxy = ContainerContextProxy()
+        token = _current_container.set(None)
+        try:
+            with pytest.raises(DIWireContainerNotSetError):
+                await proxy.aclose()
+        finally:
+            _current_container.reset(token)
