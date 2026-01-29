@@ -455,8 +455,20 @@ class ScopedContainer:
     def __post_init__(self) -> None:
         """Activate scope immediately on creation for imperative usage."""
         self._token = _current_scope.set(self._scope_id)
-        self._container._register_active_scope(self)  # noqa: SLF001
-        self._activated = True
+        registered = False
+        try:
+            with self._container._active_scopes_lock:  # noqa: SLF001
+                if self._container._closed:  # noqa: SLF001
+                    raise DIWireContainerClosedError
+                self._container._active_scopes.append(self)  # noqa: SLF001
+                registered = True
+            self._activated = True
+        except:
+            with contextlib.suppress(ValueError, RuntimeError):
+                _current_scope.reset(self._token)
+            if registered:
+                self._container._unregister_active_scope(self)  # noqa: SLF001
+            raise
 
     def resolve(self, key: Any) -> Any:
         """Resolve a service within this scope."""
@@ -2739,15 +2751,16 @@ class Container:
         Scopes are closed in LIFO order (newest first).
         This method is idempotent - calling it multiple times is safe.
         """
-        if self._closed:
-            return
+        with self._active_scopes_lock:
+            if self._closed:
+                return
+            self._closed = True
         while True:
             with self._active_scopes_lock:
                 if not self._active_scopes:
                     break
-                scope = self._active_scopes[-1]
+                scope = self._active_scopes.pop()
             scope.close()
-        self._closed = True
 
     async def aclose(self) -> None:
         """Asynchronously close all active scopes and mark the container as closed.
@@ -2761,15 +2774,16 @@ class Container:
         Scopes are closed in LIFO order (newest first).
         This method is idempotent - calling it multiple times is safe.
         """
-        if self._closed:
-            return
+        with self._active_scopes_lock:
+            if self._closed:
+                return
+            self._closed = True
         while True:
             with self._active_scopes_lock:
                 if not self._active_scopes:
                     break
-                scope = self._active_scopes[-1]
+                scope = self._active_scopes.pop()
             await scope.aclose()
-        self._closed = True
 
     def close_scope(self, scope_name: str) -> None:
         """Close all active scopes that contain the given scope name.
