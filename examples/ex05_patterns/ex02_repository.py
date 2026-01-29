@@ -84,10 +84,10 @@ def create_user_with_order(
 def main() -> None:
     container = Container()
 
-    # Session is SCOPED_SINGLETON - same session for entire unit of work
+    # Session is SCOPED - same session for entire unit of work
     container.register(
         Session,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope=Scope.UNIT_OF_WORK,
     )
     # Repositories are transient but share the scoped session
@@ -111,7 +111,7 @@ def main() -> None:
 
     # Manual scope management example
     print("Manual scope management:")
-    with container.start_scope(Scope.UNIT_OF_WORK) as scope:
+    with container.enter_scope(Scope.UNIT_OF_WORK) as scope:
         user_repo = scope.resolve(UserRepository)
         order_repo = scope.resolve(OrderRepository)
         session = scope.resolve(Session)

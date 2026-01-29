@@ -242,10 +242,10 @@ class TestAsyncGeneratorFactory:
             Session,
             factory=session_factory,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
-        async with container.start_scope("request"):
+        async with container.enter_scope("request"):
             session = await container.aresolve(Session)
             assert session.id == "async-generated"
             assert cleanup_events == []
@@ -271,10 +271,10 @@ class TestAsyncGeneratorFactory:
             ServiceA,
             factory=resource_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
-        async with container.start_scope("test"):
+        async with container.enter_scope("test"):
             service = await container.aresolve(ServiceA)
             assert service.id == "resource"
 
@@ -303,16 +303,16 @@ class TestAsyncGeneratorFactory:
             Session,
             factory=first_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(
             ServiceA,
             factory=second_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
-        async with container.start_scope("test"):
+        async with container.enter_scope("test"):
             await container.aresolve(Session)
             await container.aresolve(ServiceA)
 
@@ -336,11 +336,11 @@ class TestAsyncGeneratorFactory:
             ServiceA,
             factory=resource_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with pytest.raises(ValueError, match="test error"):
-            async with container.start_scope("test"):
+            async with container.enter_scope("test"):
                 await container.aresolve(ServiceA)
                 raise ValueError("test error")
 
@@ -376,11 +376,11 @@ class TestAsyncGeneratorFactory:
             ServiceA,
             factory=empty_factory,
             scope="test",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with pytest.raises(DIWireAsyncGeneratorFactoryDidNotYieldError) as exc_info:
-            async with container.start_scope("test"):
+            async with container.enter_scope("test"):
                 await container.aresolve(ServiceA)
 
         assert exc_info.value.service_key.value is ServiceA
@@ -395,10 +395,10 @@ class TestAsyncScope:
     """Tests for async scope context manager."""
 
     async def test_async_context_manager_sets_scope(self, container: Container) -> None:
-        """async with container.start_scope() sets the current scope."""
+        """async with container.enter_scope() sets the current scope."""
         assert _current_scope.get() is None
 
-        async with container.start_scope("test"):
+        async with container.enter_scope("test"):
             scope = _current_scope.get()
             assert scope is not None
             assert scope.contains_scope("test")
@@ -407,19 +407,19 @@ class TestAsyncScope:
 
     async def test_async_scoped_singleton_caching(self, container: Container) -> None:
         """Async scoped singletons are cached within the scope."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
-        async with container.start_scope("request"):
+        async with container.enter_scope("request"):
             session1 = await container.aresolve(Session)
             session2 = await container.aresolve(Session)
             assert session1 is session2
 
     async def test_async_nested_scopes(self, container: Container) -> None:
         """Nested async scopes work correctly."""
-        container.register(Session, scope="child", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="child", lifetime=Lifetime.SCOPED)
 
-        async with container.start_scope("parent") as parent:
-            async with parent.start_scope("child"):
+        async with container.enter_scope("parent") as parent:
+            async with parent.enter_scope("child"):
                 session = await container.aresolve(Session)
                 assert isinstance(session, Session)
 
@@ -601,7 +601,7 @@ class TestAsyncScopedInjected:
         container: Container,
     ) -> None:
         """AsyncScopedInjected creates a fresh scope per call."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         async def handler(session: Annotated[Session, Injected()]) -> Session:
             return session
@@ -619,7 +619,7 @@ class TestAsyncScopedInjected:
         container: Container,
     ) -> None:
         """AsyncScopedInjected shares scoped instances within a single call."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         async def handler(
             x: Annotated[ServiceXForScope, Injected()],
@@ -657,11 +657,11 @@ class TestAsyncConcurrency:
 
     async def test_async_task_isolation(self, container: Container) -> None:
         """Each async task has isolated scope context."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
         results: dict[str, str] = {}
 
         async def worker(worker_id: str) -> None:
-            async with container.start_scope("request"):
+            async with container.enter_scope("request"):
                 session = await container.aresolve(Session)
                 results[worker_id] = session.id
                 await asyncio.sleep(0.01)
@@ -674,11 +674,11 @@ class TestAsyncConcurrency:
 
     async def test_concurrent_scope_contexts(self, container: Container) -> None:
         """Concurrent async scopes don't interfere with each other."""
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
         scope_ids: dict[str, str] = {}
 
         async def worker(worker_id: str) -> None:
-            async with container.start_scope("request"):
+            async with container.enter_scope("request"):
                 scope_id = _current_scope.get()
                 scope_ids[worker_id] = scope_id  # type: ignore[assignment]
                 await asyncio.sleep(0.01)
@@ -764,9 +764,9 @@ class TestScopedContainerAsync:
 
     async def test_scoped_container_aresolve(self, container: Container) -> None:
         """ScopedContainer.aresolve() works correctly."""
-        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
-        async with container.start_scope("test") as scoped:
+        async with container.enter_scope("test") as scoped:
             session = await scoped.aresolve(Session)
             assert isinstance(session, Session)
 
@@ -775,9 +775,9 @@ class TestScopedContainerAsync:
         container: Container,
     ) -> None:
         """ScopedContainer.aresolve() after scope exit raises error."""
-        container.register(Session, scope="test", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
-        async with container.start_scope("test") as scoped:
+        async with container.enter_scope("test") as scoped:
             pass
 
         from diwire.exceptions import DIWireScopeMismatchError
@@ -986,10 +986,10 @@ class TestAsyncMissingCoverage:
             ServiceA,
             factory=empty_generator,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
-        async with container.start_scope("request"):
+        async with container.enter_scope("request"):
             with pytest.raises(DIWireGeneratorFactoryDidNotYieldError):
                 await container.aresolve(ServiceA)
 
@@ -1063,11 +1063,11 @@ class TestAresolveScopedOverride:
             ServiceA,
             instance=scoped_instance,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         # Inside a scope, aresolve should return the scoped override, NOT the cached singleton
-        async with container_singleton.start_scope("request"):
+        async with container_singleton.enter_scope("request"):
             resolved = await container_singleton.aresolve(ServiceA)
             assert resolved is scoped_instance, (
                 f"Expected scoped instance (id={scoped_instance.id}), "

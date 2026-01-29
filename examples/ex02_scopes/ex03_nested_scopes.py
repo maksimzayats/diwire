@@ -35,23 +35,23 @@ def main() -> None:
 
     container.register(
         RequestContext,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
     )
     container.register(
         HandlerContext,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope=Scope.HANDLER,
     )
 
     print("Nested scopes demonstration:\n")
 
-    with container.start_scope(Scope.REQUEST) as request_scope:
+    with container.enter_scope(Scope.REQUEST) as request_scope:
         request_ctx = request_scope.resolve(RequestContext)
         print(f"Request scope - RequestContext id: {request_ctx.request_id}")
 
         # Create nested handler scopes
-        with request_scope.start_scope(Scope.HANDLER) as handler_scope1:
+        with request_scope.enter_scope(Scope.HANDLER) as handler_scope1:
             handler_ctx1 = handler_scope1.resolve(HandlerContext)
             # Parent's RequestContext is accessible from child
             inherited_request_ctx = handler_scope1.resolve(RequestContext)
@@ -61,7 +61,7 @@ def main() -> None:
             print(f"    RequestContext id: {inherited_request_ctx.request_id}")
             print(f"    Same request context: {inherited_request_ctx is request_ctx}")
 
-        with request_scope.start_scope(Scope.HANDLER) as handler_scope2:
+        with request_scope.enter_scope(Scope.HANDLER) as handler_scope2:
             handler_ctx2 = handler_scope2.resolve(HandlerContext)
             inherited_request_ctx2 = handler_scope2.resolve(RequestContext)
 

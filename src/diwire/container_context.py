@@ -15,7 +15,7 @@ from diwire.exceptions import DIWireContainerNotSetError
 from diwire.types import Factory, Lifetime
 
 if TYPE_CHECKING:
-    from diwire.container import Container
+    from diwire.container import Container, ScopedContainer
 
 # Import signature builder to exclude Injected parameters from signature
 from diwire.container import _build_signature_without_injected
@@ -681,7 +681,7 @@ class ContainerContextProxy:
         )
         return None
 
-    def start_scope(self, scope_name: str | None = None) -> Any:
+    def enter_scope(self, scope_name: str | None = None) -> ScopedContainer:
         """Start a new scope on the current container.
 
         Args:
@@ -691,11 +691,52 @@ class ContainerContextProxy:
             A ScopedContainer context manager.
 
         """
-        return self.get_current().start_scope(scope_name)
+        return self.get_current().enter_scope(scope_name)
 
     def compile(self) -> None:
         """Compile the current container for optimized resolution."""
         return self.get_current().compile()
+
+    def close(self) -> None:
+        """Close the current container.
+
+        Closes all active scopes and marks the container as closed.
+        After calling this method, any attempt to resolve services or start
+        new scopes will raise DIWireContainerClosedError.
+        """
+        return self.get_current().close()
+
+    async def aclose(self) -> None:
+        """Asynchronously close the current container.
+
+        Use this method when scopes contain async generator factories that
+        need proper async cleanup.
+        """
+        return await self.get_current().aclose()
+
+    def close_scope(self, scope_name: str) -> None:
+        """Close all active scopes that contain the given scope name.
+
+        This closes the named scope and all its child scopes in LIFO order
+        (children first, then parents).
+
+        Args:
+            scope_name: The name of the scope to close.
+
+        """
+        return self.get_current().close_scope(scope_name)
+
+    async def aclose_scope(self, scope_name: str) -> None:
+        """Asynchronously close all active scopes that contain the given scope name.
+
+        This closes the named scope and all its child scopes in LIFO order
+        (children first, then parents).
+
+        Args:
+            scope_name: The name of the scope to close.
+
+        """
+        return await self.get_current().aclose_scope(scope_name)
 
 
 container_context = ContainerContextProxy()

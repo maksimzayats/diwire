@@ -175,16 +175,16 @@ class TestScopedCircularDependencies:
         container.register(
             ScopedCircularA,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(
             ScopedCircularB,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with pytest.raises(DIWireCircularDependencyError) as exc_info:
-            with container.start_scope("request"):
+            with container.enter_scope("request"):
                 container.resolve(ScopedCircularA)
 
         assert "ScopedCircularA" in str(exc_info.value)
@@ -195,12 +195,12 @@ class TestScopedCircularDependencies:
         container.register(
             ScopedToSingletonA,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(ScopedToSingletonB, lifetime=Lifetime.SINGLETON)
 
         with pytest.raises(DIWireCircularDependencyError) as exc_info:
-            with container.start_scope("request"):
+            with container.enter_scope("request"):
                 container.resolve(ScopedToSingletonA)
 
         assert "ScopedToSingletonA" in str(exc_info.value)
@@ -211,12 +211,12 @@ class TestScopedCircularDependencies:
         container.register(
             ScopedToTransientA,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(ScopedToTransientB, lifetime=Lifetime.TRANSIENT)
 
         with pytest.raises(DIWireCircularDependencyError) as exc_info:
-            with container.start_scope("request"):
+            with container.enter_scope("request"):
                 container.resolve(ScopedToTransientA)
 
         assert "ScopedToTransientA" in str(exc_info.value)
@@ -227,18 +227,18 @@ class TestScopedCircularDependencies:
         container.register(
             ScopedCircularA,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(
             ScopedCircularB,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         assert _current_scope.get() is None
 
         try:
-            with container.start_scope("request"):
+            with container.enter_scope("request"):
                 container.resolve(ScopedCircularA)
         except DIWireCircularDependencyError:
             pass
@@ -280,16 +280,16 @@ class TestAsyncCircularDependencies:
         container.register(
             AsyncCircularX,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(
             AsyncCircularY,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         with pytest.raises(DIWireCircularDependencyError) as exc_info:
-            async with container.start_scope("request"):
+            async with container.enter_scope("request"):
                 await container.aresolve(AsyncCircularX)
 
         assert "AsyncCircularX" in str(exc_info.value)
@@ -302,18 +302,18 @@ class TestAsyncCircularDependencies:
         container.register(
             AsyncCircularX,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
         container.register(
             AsyncCircularY,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         assert _current_scope.get() is None
 
         try:
-            async with container.start_scope("request"):
+            async with container.enter_scope("request"):
                 await container.aresolve(AsyncCircularX)
         except DIWireCircularDependencyError:
             pass

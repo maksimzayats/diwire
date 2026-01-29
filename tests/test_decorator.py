@@ -186,7 +186,7 @@ class TestDecoratorFunctionality:
         """Each call creates new scope (for scoped decorator)."""
         container.register(
             ServiceA,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="test",
         )
 
@@ -199,11 +199,11 @@ class TestDecoratorFunctionality:
         # Different scopes should produce different instances
         assert result1 is not result2
 
-    def test_decorator_scoped_singleton_shares_within_call(self, container: Container) -> None:
-        """SCOPED_SINGLETON shared within same call."""
+    def test_decorator_scoped_shares_within_call(self, container: Container) -> None:
+        """SCOPED shared within same call."""
         container.register(
             ServiceA,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="test",
         )
 
@@ -254,7 +254,7 @@ class TestDecoratorAsync:
         """Each await creates new scope."""
         container.register(
             ServiceA,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="test",
         )
 

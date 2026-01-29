@@ -198,11 +198,11 @@ class TestConcreteClassWithLifetime:
         container.register(
             IService,
             concrete_class=ScopedService,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="request",
         )
 
-        with container.start_scope("request") as scope:
+        with container.enter_scope("request") as scope:
             result1 = scope.resolve(IService)
             result2 = scope.resolve(IService)
 
@@ -210,7 +210,7 @@ class TestConcreteClassWithLifetime:
             assert result1 is result2
 
         # New scope creates new instance
-        with container.start_scope("request") as scope:
+        with container.enter_scope("request") as scope:
             result3 = scope.resolve(IService)
             assert result3 is not result1
 

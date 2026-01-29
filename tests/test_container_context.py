@@ -189,14 +189,14 @@ class TestProxyMethodDelegation:
         finally:
             container_context.reset(token)
 
-    def test_start_scope_delegates_to_container(self) -> None:
-        """start_scope() delegates to the current container."""
+    def test_enter_scope_delegates_to_container(self) -> None:
+        """enter_scope() delegates to the current container."""
         container = Container()
-        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
 
         token = container_context.set_current(container)
         try:
-            with container_context.start_scope("request"):
+            with container_context.enter_scope("request"):
                 service = container.resolve(ServiceA)
                 assert isinstance(service, ServiceA)
         finally:
@@ -400,7 +400,7 @@ class TestDecoratorPatternSync:
     def test_decorated_function_with_scoped_singleton(self) -> None:
         """Decorated function with scope creates scope per call."""
         container = Container()
-        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
 
         token = container_context.set_current(container)
         try:
@@ -473,7 +473,7 @@ class TestDecoratorPatternAsync:
     async def test_async_decorated_function_with_scope(self) -> None:
         """Async decorated function with scope creates scope per call."""
         container = Container()
-        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
 
         token = container_context.set_current(container)
         try:
@@ -785,11 +785,11 @@ class TestDirectTypeResolution:
     def test_resolve_type_with_scope(self) -> None:
         """container_context.resolve(Type, scope="...") works."""
         container = Container()
-        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
 
         token = container_context.set_current(container)
         try:
-            with container_context.start_scope("request"):
+            with container_context.enter_scope("request"):
                 service = container_context.resolve(ServiceA, scope="request")
                 assert isinstance(service, ServiceA)
         finally:
@@ -1136,7 +1136,7 @@ class TestFastAPILikeIntegration:
 
             # Set up container
             container = Container()
-            container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+            container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
             token = container_context.set_current(container)
             try:
                 result1 = endpoint1()
@@ -1271,16 +1271,16 @@ class TestEdgeCases:
     def test_nested_scopes_work_correctly(self) -> None:
         """Nested scopes through container_context work."""
         container = Container()
-        container.register(ServiceA, scope="outer", lifetime=Lifetime.SCOPED_SINGLETON)
-        container.register(ServiceB, scope="inner", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceA, scope="outer", lifetime=Lifetime.SCOPED)
+        container.register(ServiceB, scope="inner", lifetime=Lifetime.SCOPED)
 
         token = container_context.set_current(container)
         try:
-            with container_context.start_scope("outer") as outer:
+            with container_context.enter_scope("outer") as outer:
                 service_a = container_context.resolve(ServiceA)
                 assert isinstance(service_a, ServiceA)
 
-                with outer.start_scope("inner"):
+                with outer.enter_scope("inner"):
                     service_b = container_context.resolve(ServiceB)
                     assert isinstance(service_b, ServiceB)
 
@@ -1573,12 +1573,12 @@ class TestContainerOperationsWithoutContainer:
             _current_container.reset(initial_token)
             container_context._deferred_registrations.clear()
 
-    def test_start_scope_without_container_raises_error(self) -> None:
-        """start_scope() without container raises DIWireContainerNotSetError."""
+    def test_enter_scope_without_container_raises_error(self) -> None:
+        """enter_scope() without container raises DIWireContainerNotSetError."""
         initial_token = _current_container.set(None)
         try:
             with pytest.raises(DIWireContainerNotSetError):
-                container_context.start_scope("request")
+                container_context.enter_scope("request")
         finally:
             _current_container.reset(initial_token)
 
@@ -1947,10 +1947,10 @@ class TestLifetimeVariations:
         finally:
             container_context.reset(token)
 
-    def test_scoped_singleton_same_scope(self) -> None:
-        """SCOPED_SINGLETON returns same instance within same scope."""
+    def test_scoped_same_scope(self) -> None:
+        """SCOPED returns same instance within same scope."""
         container = Container()
-        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
 
         token = container_context.set_current(container)
         try:
@@ -2823,3 +2823,106 @@ class TestDeferredRegistrationWithTypeKey:
         finally:
             _current_container.reset(initial_token)
             container_context._deferred_registrations.clear()
+
+
+# ============================================================================
+# Close/AClose Method Tests
+# ============================================================================
+
+
+class TestContainerContextClose:
+    """Tests for close/aclose methods on ContainerContextProxy."""
+
+    def test_close_delegates_to_current_container(self) -> None:
+        """close() delegates to the current container's close method."""
+        proxy = ContainerContextProxy()
+        container = Container()
+        token = proxy.set_current(container)
+        try:
+            proxy.close()
+            assert container._closed
+        finally:
+            proxy.reset(token)
+
+    async def test_aclose_delegates_to_current_container(self) -> None:
+        """aclose() delegates to the current container's aclose method."""
+        proxy = ContainerContextProxy()
+        container = Container()
+        token = proxy.set_current(container)
+        try:
+            await proxy.aclose()
+            assert container._closed
+        finally:
+            proxy.reset(token)
+
+    def test_close_without_container_raises_error(self) -> None:
+        """close() raises DIWireContainerNotSetError when no container set."""
+        proxy = ContainerContextProxy()
+        token = _current_container.set(None)
+        try:
+            with pytest.raises(DIWireContainerNotSetError):
+                proxy.close()
+        finally:
+            _current_container.reset(token)
+
+    async def test_aclose_without_container_raises_error(self) -> None:
+        """aclose() raises DIWireContainerNotSetError when no container set."""
+        proxy = ContainerContextProxy()
+        token = _current_container.set(None)
+        try:
+            with pytest.raises(DIWireContainerNotSetError):
+                await proxy.aclose()
+        finally:
+            _current_container.reset(token)
+
+    def test_close_scope_delegates_to_current_container(self) -> None:
+        """close_scope() delegates to the current container's close_scope method."""
+        proxy = ContainerContextProxy()
+        container = Container()
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
+        token = proxy.set_current(container)
+        try:
+            scope = proxy.enter_scope("request")
+            proxy.resolve(ServiceA)
+            assert not scope._exited
+
+            proxy.close_scope("request")
+            assert scope._exited
+        finally:
+            proxy.reset(token)
+
+    async def test_aclose_scope_delegates_to_current_container(self) -> None:
+        """aclose_scope() delegates to the current container's aclose_scope method."""
+        proxy = ContainerContextProxy()
+        container = Container()
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
+        token = proxy.set_current(container)
+        try:
+            scope = proxy.enter_scope("request")
+            await proxy.aresolve(ServiceA)
+            assert not scope._exited
+
+            await proxy.aclose_scope("request")
+            assert scope._exited
+        finally:
+            proxy.reset(token)
+
+    def test_close_scope_without_container_raises_error(self) -> None:
+        """close_scope() raises DIWireContainerNotSetError when no container set."""
+        proxy = ContainerContextProxy()
+        token = _current_container.set(None)
+        try:
+            with pytest.raises(DIWireContainerNotSetError):
+                proxy.close_scope("request")
+        finally:
+            _current_container.reset(token)
+
+    async def test_aclose_scope_without_container_raises_error(self) -> None:
+        """aclose_scope() raises DIWireContainerNotSetError when no container set."""
+        proxy = ContainerContextProxy()
+        token = _current_container.set(None)
+        try:
+            with pytest.raises(DIWireContainerNotSetError):
+                await proxy.aclose_scope("request")
+        finally:
+            _current_container.reset(token)

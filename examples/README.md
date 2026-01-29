@@ -27,8 +27,8 @@ uv run python examples/ex08_fastapi/ex01_basic.py
 
 | File                                                                   | Description                                           |
 |------------------------------------------------------------------------|-------------------------------------------------------|
-| [ex01_scope_basics.py](ex02_scopes/ex01_scope_basics.py)               | Using `start_scope()` context manager                 |
-| [ex02_scoped_singleton.py](ex02_scopes/ex02_scoped_singleton.py)       | SCOPED_SINGLETON lifetime for request-local instances |
+| [ex01_scope_basics.py](ex02_scopes/ex01_scope_basics.py)               | Using `enter_scope()` context manager                 |
+| [ex02_scoped_singleton.py](ex02_scopes/ex02_scoped_singleton.py)       | SCOPED lifetime for request-local instances |
 | [ex03_nested_scopes.py](ex02_scopes/ex03_nested_scopes.py)             | Nested scope hierarchies                              |
 | [ex04_generator_factories.py](ex02_scopes/ex04_generator_factories.py) | Generator factories with cleanup on scope exit        |
 

@@ -1,6 +1,6 @@
-"""Scoped Singleton Lifetime in DIWire.
+"""Scoped Lifetime in DIWire.
 
-Demonstrates SCOPED_SINGLETON:
+Demonstrates SCOPED:
 - Same instance within a scope
 - Different instance across scopes
 """
@@ -36,18 +36,18 @@ class Repository:
 def main() -> None:
     container = Container()
 
-    # Register Session as SCOPED_SINGLETON for REQUEST scope
+    # Register Session as SCOPED for REQUEST scope
     container.register(
         Session,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
     )
     container.register(Repository)
 
-    print("SCOPED_SINGLETON behavior:\n")
+    print("SCOPED behavior:\n")
 
     # Within the same scope, Session is shared
-    with container.start_scope(Scope.REQUEST) as scope:
+    with container.enter_scope(Scope.REQUEST) as scope:
         session1 = scope.resolve(Session)
         session2 = scope.resolve(Session)
         repo = scope.resolve(Repository)
@@ -59,7 +59,7 @@ def main() -> None:
         print(f"  All same instance: {session1 is session2 is repo.session}")
 
     # Different scope = different Session instance
-    with container.start_scope(Scope.REQUEST) as scope:
+    with container.enter_scope(Scope.REQUEST) as scope:
         session3 = scope.resolve(Session)
         repo2 = scope.resolve(Repository)
 

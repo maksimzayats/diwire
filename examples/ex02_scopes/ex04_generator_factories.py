@@ -48,12 +48,12 @@ def main() -> None:
     container.register(
         Session,
         factory=session_factory,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
     )
 
     print("Generator factory scope behavior:\n")
-    with container.start_scope(Scope.REQUEST):
+    with container.enter_scope(Scope.REQUEST):
         session1 = container.resolve(Session)
         session2 = container.resolve(Session)
         print(f"session1: {session1}")

@@ -328,7 +328,7 @@ def test_open_generic_resolution_in_anonymous_scope(container: Container) -> Non
 
     decorator(create_box)
 
-    with container.start_scope():
+    with container.enter_scope():
         assert container.resolve(Box[int]).value == "int"
 
 
@@ -338,7 +338,7 @@ def test_scoped_open_generic_registration_skips_anonymous_scope(
     class Box(Generic[T]):
         pass
 
-    with container.start_scope() as scope:
+    with container.enter_scope() as scope:
         result = container._get_scoped_open_generic_registration(
             Box,
             None,
@@ -362,7 +362,7 @@ def test_open_generic_scoped_singleton(container: Container) -> None:
         "Callable[[Callable[..., object]], Callable[..., object]]",
         container.register(
             scoped_key,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="request",
         ),
     )
@@ -372,7 +372,7 @@ def test_open_generic_scoped_singleton(container: Container) -> None:
 
     decorator(create_box)
 
-    with container.start_scope("request"):
+    with container.enter_scope("request"):
         first = container.resolve(ScopedBox[int])
         second = container.resolve(ScopedBox[int])
         assert first is second
@@ -426,7 +426,7 @@ def test_compile_skips_scoped_typevar_map_registrations(container: Container) ->
         service_key=service_key,
         factory=None,
         instance=None,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope="request",
         is_async=False,
         concrete_type=None,
@@ -445,7 +445,7 @@ def test_compile_skips_scoped_typevar_dependency(container: Container) -> None:
 
     container.register(
         ScopedTypevar,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope="request",
     )
     container.compile()

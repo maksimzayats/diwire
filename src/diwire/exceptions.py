@@ -107,14 +107,14 @@ class DIWireScopeMismatchError(DIWireError):
         )
 
 
-class DIWireScopedSingletonWithoutScopeError(DIWireError):
-    """SCOPED_SINGLETON registered without a scope."""
+class DIWireScopedWithoutScopeError(DIWireError):
+    """SCOPED registered without a scope."""
 
     def __init__(self, service_key: ServiceKey) -> None:
         self.service_key = service_key
         super().__init__(
-            f"Service {service_key} is registered as SCOPED_SINGLETON but no scope was provided. "
-            f"SCOPED_SINGLETON requires a scope parameter.",
+            f"Service {service_key} is registered as SCOPED but no scope was provided. "
+            f"SCOPED requires a scope parameter.",
         )
 
 
@@ -125,7 +125,7 @@ class DIWireGeneratorFactoryWithoutScopeError(DIWireError):
         self.service_key = service_key
         super().__init__(
             f"Factory for service {service_key} returned a generator, but no active scope exists. "
-            "Resolve the service within a scope (start_scope) to ensure cleanup.",
+            "Resolve the service within a scope (enter_scope) to ensure cleanup.",
         )
 
 
@@ -169,7 +169,7 @@ class DIWireAsyncGeneratorFactoryWithoutScopeError(DIWireError):
         self.service_key = service_key
         super().__init__(
             f"Factory for service {service_key} is an async generator, but no active scope exists. "
-            "Resolve the service within an async scope (async with container.start_scope()) "
+            "Resolve the service within an async scope (async with container.enter_scope()) "
             "to ensure proper cleanup.",
         )
 
@@ -222,7 +222,7 @@ class DIWireAsyncCleanupWithoutEventLoopError(DIWireError):
         scope_desc = f"'{scope_name}'" if scope_name else "anonymous scope"
         super().__init__(
             f"Scope {scope_desc} has async resources that need cleanup, but no event loop is "
-            "running. Use 'async with container.start_scope()' instead of 'with' when resolving "
+            "running. Use 'async with container.enter_scope()' instead of 'with' when resolving "
             "async generators, or ensure an event loop is running when the scope exits.",
         )
 
@@ -274,3 +274,10 @@ class DIWireInvalidGenericTypeArgumentError(DIWireError):
         super().__init__(
             f"Invalid type argument for {service_key}: {typevar_name}={arg!r}. {reason}",
         )
+
+
+class DIWireContainerClosedError(DIWireError):
+    """Operation attempted on a closed container."""
+
+    def __init__(self) -> None:
+        super().__init__("Cannot perform operation on a closed container.")

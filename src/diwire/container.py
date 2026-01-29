@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import inspect
 import itertools
 import threading
@@ -56,6 +57,7 @@ from diwire.exceptions import (
     DIWireCircularDependencyError,
     DIWireComponentSpecifiedError,
     DIWireConcreteClassRequiresClassError,
+    DIWireContainerClosedError,
     DIWireDecoratorFactoryMissingReturnAnnotationError,
     DIWireError,
     DIWireGeneratorFactoryDidNotYieldError,
@@ -67,7 +69,7 @@ from diwire.exceptions import (
     DIWireNotAClassError,
     DIWireOpenGenericRegistrationError,
     DIWireOpenGenericResolutionError,
-    DIWireScopedSingletonWithoutScopeError,
+    DIWireScopedWithoutScopeError,
     DIWireScopeMismatchError,
     DIWireServiceNotRegisteredError,
     DIWireUnionTypeError,
@@ -435,14 +437,31 @@ class ScopedContainer:
     """A context manager for scoped dependency resolution.
 
     Supports both sync and async context managers:
-    - `with container.start_scope()` for sync usage
-    - `async with container.start_scope()` for async usage with proper async cleanup
+    - `with container.enter_scope()` for sync usage
+    - `async with container.enter_scope()` for async usage with proper async cleanup
+
+    Also supports imperative usage:
+    - `scope = container.enter_scope()` to activate immediately
+    - `scope.close()` or `scope.aclose()` to close explicitly
+    - `container.close()` or `container.aclose()` to close all active scopes
     """
 
     _container: Container
     _scope_id: ScopeId
     _token: Any = field(default=None, init=False)
     _exited: bool = field(default=False, init=False)
+    _activated: bool = field(default=False, init=False)
+
+    def __post_init__(self) -> None:
+        """Activate scope immediately on creation for imperative usage."""
+        self._token = _current_scope.set(self._scope_id)
+        try:
+            self._container._register_active_scope(self)  # noqa: SLF001
+            self._activated = True
+        except:
+            with contextlib.suppress(ValueError, RuntimeError):
+                _current_scope.reset(self._token)
+            raise
 
     def resolve(self, key: Any) -> Any:
         """Resolve a service within this scope."""
@@ -466,12 +485,40 @@ class ScopedContainer:
             )
         return await self._container.aresolve(key)
 
-    def start_scope(self, scope_name: str | None = None) -> ScopedContainer:
+    def enter_scope(self, scope_name: str | None = None) -> ScopedContainer:
         """Start a nested scope."""
-        return self._container.start_scope(scope_name)
+        return self._container.enter_scope(scope_name)
+
+    def _close_sync(self) -> None:
+        """Close the scope synchronously."""
+        if self._exited:
+            return
+        with contextlib.suppress(ValueError, RuntimeError):
+            _current_scope.reset(self._token)
+        self._container.clear_scope(self._scope_id)
+        self._container._unregister_active_scope(self)  # noqa: SLF001
+        self._exited = True
+
+    async def _close_async(self) -> None:
+        """Close the scope asynchronously."""
+        if self._exited:
+            return
+        with contextlib.suppress(ValueError, RuntimeError):
+            _current_scope.reset(self._token)
+        await self._container.aclear_scope(self._scope_id)
+        self._container._unregister_active_scope(self)  # noqa: SLF001
+        self._exited = True
+
+    def close(self) -> None:
+        """Explicitly close this scope (sync)."""
+        self._close_sync()
+
+    async def aclose(self) -> None:
+        """Explicitly close this scope (async)."""
+        await self._close_async()
 
     def __enter__(self) -> Self:
-        self._token = _current_scope.set(self._scope_id)
+        # Scope is already activated in __post_init__, just return self
         return self
 
     def __exit__(
@@ -480,12 +527,10 @@ class ScopedContainer:
         exc_val: BaseException | None,
         exc_tb: types.TracebackType | None,
     ) -> None:
-        _current_scope.reset(self._token)
-        self._container.clear_scope(self._scope_id)
-        self._exited = True
+        self._close_sync()
 
     async def __aenter__(self) -> Self:
-        self._token = _current_scope.set(self._scope_id)
+        # Scope is already activated in __post_init__, just return self
         return self
 
     async def __aexit__(
@@ -494,15 +539,13 @@ class ScopedContainer:
         exc_val: BaseException | None,
         exc_tb: types.TracebackType | None,
     ) -> None:
-        _current_scope.reset(self._token)
-        await self._container.aclear_scope(self._scope_id)
-        self._exited = True
+        await self._close_async()
 
 
 class ScopedInjectedFunction(Generic[T]):
     """A callable wrapper that creates a new scope for each call.
 
-    Similar to InjectedFunction, but ensures SCOPED_SINGLETON dependencies are shared
+    Similar to InjectedFunction, but ensures SCOPED dependencies are shared
     within a single call invocation.
 
     Uses lazy initialization to support `from __future__ import annotations`,
@@ -545,7 +588,7 @@ class ScopedInjectedFunction(Generic[T]):
     def __call__(self, *args: Any, **kwargs: Any) -> T:
         """Call the wrapped function, creating a new scope for this invocation."""
         self._ensure_initialized()
-        with self._container.start_scope(self._scope_name):
+        with self._container.enter_scope(self._scope_name):
             resolved = self._resolve_injected_dependencies()
             return self._func(*args, **{**resolved, **kwargs})
 
@@ -640,7 +683,7 @@ class AsyncInjectedFunction(Generic[T]):
 class AsyncScopedInjectedFunction(Generic[T]):
     """A callable wrapper that creates a new async scope for each call.
 
-    Similar to AsyncInjectedFunction, but ensures SCOPED_SINGLETON dependencies are shared
+    Similar to AsyncInjectedFunction, but ensures SCOPED dependencies are shared
     within a single call invocation.
 
     Uses lazy initialization to support `from __future__ import annotations`,
@@ -683,7 +726,7 @@ class AsyncScopedInjectedFunction(Generic[T]):
     async def __call__(self, *args: Any, **kwargs: Any) -> T:
         """Call the wrapped async function, creating a new scope for this invocation."""
         self._ensure_initialized()
-        async with self._container.start_scope(self._scope_name):
+        async with self._container.enter_scope(self._scope_name):
             resolved = await self._resolve_injected_dependencies()
             return await self._func(*args, **{**resolved, **kwargs})
 
@@ -719,6 +762,8 @@ class Container:
     _scope_counter: ClassVar[itertools.count[int]] = itertools.count()
 
     __slots__ = (
+        "_active_scopes",
+        "_active_scopes_lock",
         "_async_deps_cache",
         "_async_scope_exit_stacks",
         "_auto_compile",
@@ -726,6 +771,7 @@ class Container:
         "_autoregister_ignores",
         "_autoregister_registration_factories",
         "_cleanup_tasks",
+        "_closed",
         "_compiled_providers",
         "_dependencies_extractor",
         "_has_scoped_registrations",
@@ -831,6 +877,11 @@ class Container:
         self._sync_singleton_locks: dict[ServiceKey, threading.Lock] = {}
         self._sync_singleton_locks_lock = threading.Lock()
 
+        # Track active scopes for imperative close()
+        self._active_scopes: list[ScopedContainer] = []
+        self._active_scopes_lock = threading.Lock()
+        self._closed = False
+
         self.register(type(self), instance=self, lifetime=Lifetime.SINGLETON)
 
     # Overload 1: Bare class decorator - @container.register
@@ -930,7 +981,7 @@ class Container:
             lifetime: The lifetime of the service. This default applies only to explicit
                 registrations via `register`; auto-registration uses
                 `autoregister_default_lifetime` from container configuration.
-            scope: Optional scope name for SCOPED_SINGLETON services.
+            scope: Optional scope name for SCOPED services.
             is_async: Whether the factory is async. If None, auto-detected from factory.
             concrete_class: Optional concrete implementation class. When specified, `key`
                 is used as the interface and `concrete_class` is the implementation.
@@ -941,7 +992,7 @@ class Container:
             - When used as a direct call: returns None
 
         Raises:
-            DIWireScopedSingletonWithoutScopeError: If lifetime is SCOPED_SINGLETON but
+            DIWireScopedWithoutScopeError: If lifetime is SCOPED but
                 no scope is provided.
             DIWireConcreteClassRequiresClassError: If `concrete_class` is not a class type.
             DIWireDecoratorFactoryMissingReturnAnnotationError: If used as a factory decorator
@@ -1209,7 +1260,7 @@ class Container:
 
         Args:
             lifetime: The lifetime of the service.
-            scope: Optional scope name for SCOPED_SINGLETON services.
+            scope: Optional scope name for SCOPED services.
             is_async: Whether the factory is async.
             interface_key: If provided, the decorated class/factory will be registered
                 under this key (interface registration pattern).
@@ -1346,8 +1397,8 @@ class Container:
             service_key = ServiceKey.from_value(key)
             concrete_type = key if isinstance(key, type) else None
 
-        if lifetime == Lifetime.SCOPED_SINGLETON and scope is None:
-            raise DIWireScopedSingletonWithoutScopeError(service_key)
+        if lifetime == Lifetime.SCOPED and scope is None:
+            raise DIWireScopedWithoutScopeError(service_key)
 
         # Auto-detect if factory is async when not explicitly specified
         detected_is_async = False
@@ -1386,7 +1437,7 @@ class Container:
                 typevars=typevars,
             )
             # Track scoped registrations
-            if lifetime == Lifetime.SCOPED_SINGLETON:
+            if lifetime == Lifetime.SCOPED:
                 self._has_scoped_registrations = True
             self._is_compiled = False
             return
@@ -1419,20 +1470,29 @@ class Container:
             self._registry[service_key] = registration
 
         # Track scoped singleton registrations
-        if lifetime == Lifetime.SCOPED_SINGLETON:
+        if lifetime == Lifetime.SCOPED:
             self._has_scoped_registrations = True
 
         # Invalidate compiled state when registrations change
         self._is_compiled = False
 
-    def start_scope(self, scope_name: str | None = None) -> ScopedContainer:
-        """Start a new scope for resolving SCOPED_SINGLETON dependencies.
+    def enter_scope(self, scope_name: str | None = None) -> ScopedContainer:
+        """Start a new scope for resolving SCOPED dependencies.
+
+        The scope is activated immediately upon creation, allowing imperative usage:
+            scope = container.enter_scope("request")
+            # ... use the scope ...
+            scope.close()  # or container.close() to close all scopes
+
+        Context manager usage is also supported:
+            with container.enter_scope("request") as scope:
+                # ... use the scope ...
 
         Args:
             scope_name: Optional name for the scope. If not provided, an integer ID is generated.
 
         Returns:
-            A ScopedContainer context manager.
+            A ScopedContainer that is already activated.
 
         Note:
             Nested scopes inherit from parent scopes. A scope started within
@@ -1440,6 +1500,8 @@ class Container:
             parent scope.
 
         """
+        self._check_not_closed()
+
         # Generate unique instance ID for each scope (integer is faster than UUID)
         instance_id = next(self._scope_counter)
 
@@ -1883,6 +1945,8 @@ class Container:
                 ...
 
         """
+        self._check_not_closed()
+
         # DECORATOR PATTERN: resolve(scope="...") or resolve() returns decorator
         if key is None:
 
@@ -2061,7 +2125,7 @@ class Container:
 
             scoped_lock: threading.Lock | None = None  # type: ignore[no-redef]
             if (
-                registration.lifetime == Lifetime.SCOPED_SINGLETON
+                registration.lifetime == Lifetime.SCOPED
                 and cache_key is not None  # type: ignore[redundant-expr]
                 and registration.instance is None
             ):
@@ -2131,9 +2195,7 @@ class Container:
 
                     if registration.lifetime == Lifetime.SINGLETON:
                         self._singletons[service_key] = instance
-                    elif (
-                        registration.lifetime == Lifetime.SCOPED_SINGLETON and cache_key is not None
-                    ):
+                    elif registration.lifetime == Lifetime.SCOPED and cache_key is not None:
                         self._scoped_instances[cache_key] = instance
 
                     return instance
@@ -2157,7 +2219,7 @@ class Container:
 
                 if registration.lifetime == Lifetime.SINGLETON:
                     self._singletons[service_key] = instance
-                elif registration.lifetime == Lifetime.SCOPED_SINGLETON and cache_key is not None:
+                elif registration.lifetime == Lifetime.SCOPED and cache_key is not None:
                     self._scoped_instances[cache_key] = instance
 
                 return instance
@@ -2221,6 +2283,8 @@ class Container:
             injected = await container.aresolve(my_func, scope="request")
 
         """
+        self._check_not_closed()
+
         # FAST PATH for cached singletons (same as sync resolve)
         # Only use fast path when not in a scope (scoped registrations may override)
         if (
@@ -2333,7 +2397,7 @@ class Container:
 
             scoped_lock: asyncio.Lock | None = None
             if (
-                registration.lifetime == Lifetime.SCOPED_SINGLETON
+                registration.lifetime == Lifetime.SCOPED
                 and cache_key is not None
                 and registration.instance is None
             ):
@@ -2426,9 +2490,7 @@ class Container:
 
                     if registration.lifetime == Lifetime.SINGLETON:
                         self._singletons[service_key] = instance  # type: ignore[possibly-undefined]
-                    elif (
-                        registration.lifetime == Lifetime.SCOPED_SINGLETON and cache_key is not None
-                    ):
+                    elif registration.lifetime == Lifetime.SCOPED and cache_key is not None:
                         self._scoped_instances[cache_key] = instance  # type: ignore[possibly-undefined]
 
                     return instance  # type: ignore[possibly-undefined]
@@ -2453,7 +2515,7 @@ class Container:
 
                 if registration.lifetime == Lifetime.SINGLETON:
                     self._singletons[service_key] = instance
-                elif registration.lifetime == Lifetime.SCOPED_SINGLETON and cache_key is not None:
+                elif registration.lifetime == Lifetime.SCOPED and cache_key is not None:
                     self._scoped_instances[cache_key] = instance
 
                 return instance
@@ -2657,6 +2719,126 @@ class Container:
         async_scoped_lock_keys = [k for k in self._scoped_singleton_locks if k[0] == scope_key]
         for k in async_scoped_lock_keys:
             del self._scoped_singleton_locks[k]
+
+    def _register_active_scope(self, scope: ScopedContainer) -> None:
+        """Register a scope as active for imperative close()."""
+        with self._active_scopes_lock:
+            if self._closed:
+                raise DIWireContainerClosedError
+            self._active_scopes.append(scope)
+
+    def _unregister_active_scope(self, scope: ScopedContainer) -> None:
+        """Unregister a scope when it is closed."""
+        with self._active_scopes_lock, contextlib.suppress(ValueError):
+            self._active_scopes.remove(scope)
+
+    def _check_not_closed(self) -> None:
+        """Raise an error if the container is closed."""
+        if self._closed:
+            raise DIWireContainerClosedError
+
+    def close(self) -> None:
+        """Close all active scopes and mark the container as closed.
+
+        After calling this method, any attempt to resolve services or start
+        new scopes will raise DIWireContainerClosedError.
+
+        Scopes are closed in LIFO order (newest first).
+        This method is idempotent - calling it multiple times is safe.
+
+        If a scope's close() fails, that scope remains in _active_scopes
+        and the exception is re-raised.
+        """
+        with self._active_scopes_lock:
+            if self._closed:
+                return
+            self._closed = True
+        while True:
+            with self._active_scopes_lock:
+                if not self._active_scopes:
+                    break
+                scope = self._active_scopes[-1]
+            scope.close()
+            with self._active_scopes_lock:
+                if self._active_scopes and self._active_scopes[-1] is scope:
+                    self._active_scopes.pop()
+
+    async def aclose(self) -> None:
+        """Asynchronously close all active scopes and mark the container as closed.
+
+        Use this method when scopes contain async generator factories that
+        need proper async cleanup.
+
+        After calling this method, any attempt to resolve services or start
+        new scopes will raise DIWireContainerClosedError.
+
+        Scopes are closed in LIFO order (newest first).
+        This method is idempotent - calling it multiple times is safe.
+
+        This method will drain remaining scopes even if the container is
+        already marked as closed. If a scope's aclose() fails, that scope
+        remains in _active_scopes and the exception is re-raised.
+        """
+        with self._active_scopes_lock:
+            self._closed = True
+        while True:
+            with self._active_scopes_lock:
+                if not self._active_scopes:
+                    break
+                scope = self._active_scopes[-1]
+            await scope.aclose()
+            with self._active_scopes_lock:
+                if self._active_scopes and self._active_scopes[-1] is scope:
+                    self._active_scopes.pop()
+
+    def close_scope(self, scope_name: str) -> None:
+        """Close all active scopes that contain the given scope name.
+
+        This closes the named scope and all its child scopes in LIFO order
+        (children first, then parents).
+
+        Args:
+            scope_name: The name of the scope to close.
+
+        Example:
+            # Given hierarchy: app -> session -> request
+            container.close_scope("session")  # Closes both "request" and "session"
+
+        """
+        while True:
+            scope_to_close: ScopedContainer | None = None
+            with self._active_scopes_lock:
+                # Find scopes containing the scope_name, process from end (LIFO)
+                for i in range(len(self._active_scopes) - 1, -1, -1):
+                    scope = self._active_scopes[i]
+                    if scope._scope_id.contains_scope(scope_name):  # noqa: SLF001
+                        scope_to_close = scope
+                        break
+            if scope_to_close is None:
+                return
+            scope_to_close.close()
+
+    async def aclose_scope(self, scope_name: str) -> None:
+        """Asynchronously close all active scopes that contain the given scope name.
+
+        This closes the named scope and all its child scopes in LIFO order
+        (children first, then parents).
+
+        Args:
+            scope_name: The name of the scope to close.
+
+        """
+        while True:
+            scope_to_close: ScopedContainer | None = None
+            with self._active_scopes_lock:
+                for i in range(len(self._active_scopes) - 1, -1, -1):
+                    scope = self._active_scopes[i]
+                    if scope._scope_id.contains_scope(scope_name):  # noqa: SLF001
+                        scope_to_close = scope
+                        break
+            if scope_to_close is None:
+                return
+            await scope_to_close.aclose()
 
     def _get_scoped_registration(
         self,

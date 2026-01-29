@@ -514,7 +514,7 @@ class TestInjectedMethodDecoration:
 
         container.register(
             ScopedService,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="request",
         )
 
@@ -531,7 +531,7 @@ class TestInjectedMethodDecoration:
 
         handler = MyHandler("handler-1")
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             result = handler.handle()
             assert result[0] == "handler-1"
             assert isinstance(result[1], ScopedService)
@@ -571,7 +571,7 @@ class TestInjectedMethodDecoration:
 
         container.register(
             AsyncScopedService,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="async-request",
         )
 
@@ -588,7 +588,7 @@ class TestInjectedMethodDecoration:
 
         handler = AsyncHandler("/api/async")
 
-        async with container.start_scope("async-request"):
+        async with container.enter_scope("async-request"):
             result = await handler.process()
             assert result[0] == "/api/async"
             assert isinstance(result[1], AsyncScopedService)
@@ -780,7 +780,7 @@ class TestInjectedMethodDecoration:
         class ScopedDep:
             pass
 
-        container.register(ScopedDep, lifetime=Lifetime.SCOPED_SINGLETON, scope="request")
+        container.register(ScopedDep, lifetime=Lifetime.SCOPED, scope="request")
 
         class RequestHandler:
             def __init__(self, path: str) -> None:
@@ -799,7 +799,7 @@ class TestInjectedMethodDecoration:
 
         handler = RequestHandler("/api/users")
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             result = handler.response
             assert result[0] == "/api/users"
             assert isinstance(result[1], ScopedDep)

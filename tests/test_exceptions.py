@@ -338,7 +338,7 @@ class TestGeneratorFactoryExceptions:
         container.register(ServiceA, factory=empty_generator_factory, scope="request")
 
         with pytest.raises(DIWireGeneratorFactoryDidNotYieldError):
-            with container.start_scope("request"):
+            with container.enter_scope("request"):
                 container.resolve(ServiceA)
 
     def test_generator_factory_unsupported_lifetime_raised(self) -> None:
@@ -360,7 +360,7 @@ class TestGeneratorFactoryExceptions:
 
         # Generator factories require a scope - trying to resolve will fail
         # because either there's no scope (DIWireGeneratorFactoryWithoutScopeError)
-        # or the lifetime is not SCOPED_SINGLETON (DIWireGeneratorFactoryUnsupportedLifetimeError)
+        # or the lifetime is not SCOPED (DIWireGeneratorFactoryUnsupportedLifetimeError)
         with pytest.raises(  # type: ignore[call-overload]
             (
                 DIWireGeneratorFactoryUnsupportedLifetimeError,
@@ -383,7 +383,7 @@ class TestGeneratorFactoryExceptions:
         container.register(ServiceA, factory=empty_async_gen_factory, scope="request")
 
         with pytest.raises(DIWireAsyncGeneratorFactoryDidNotYieldError):
-            async with container.start_scope("request"):
+            async with container.enter_scope("request"):
                 await container.aresolve(ServiceA)
 
     async def test_async_generator_factory_unsupported_lifetime_raised(self) -> None:

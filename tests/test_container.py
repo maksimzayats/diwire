@@ -685,7 +685,7 @@ class TestCompilationEdgeCases:
         string_key = ServiceKey(value="string_scoped_key", component=None)
         registration = Registration(
             service_key=string_key,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="request",
         )
         container._scoped_registry[(string_key, "request")] = registration
@@ -707,7 +707,7 @@ class TestCompilationEdgeCases:
                 self.a = a
 
         container.register(ServiceA, lifetime=Lifetime.TRANSIENT)
-        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED)
 
         container.compile()
 
@@ -796,13 +796,13 @@ class TestAsyncResolutionEdgeCases:
         service_key = ServiceKey.from_value(ServiceA)
         registration = Registration(
             service_key=service_key,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="request",
         )
         container._registry[service_key] = registration
 
         # Resolve within a different scope - should raise scope mismatch
-        with container.start_scope("wrong_scope"):
+        with container.enter_scope("wrong_scope"):
             with pytest.raises(DIWireScopeMismatchError):
                 await container.aresolve(ServiceA)
 
@@ -819,10 +819,10 @@ class TestAsyncResolutionEdgeCases:
             ServiceA,
             instance=specific_instance,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
-        async with container.start_scope("request"):
+        async with container.enter_scope("request"):
             result = await container.aresolve(ServiceA)
             assert result is specific_instance
 
@@ -845,7 +845,7 @@ class TestAsyncResolutionEdgeCases:
             scope="request",
         )
 
-        async with container.start_scope("request"):
+        async with container.enter_scope("request"):
             with pytest.raises(DIWireGeneratorFactoryUnsupportedLifetimeError):
                 await container.aresolve(ServiceA)
 
@@ -869,11 +869,11 @@ class TestAsyncResolutionEdgeCases:
         container.register(
             ServiceA,
             factory=generator_factory,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="request",
         )
 
-        async with container.start_scope("request"):
+        async with container.enter_scope("request"):
             result = await container.aresolve(ServiceA)
             assert isinstance(result, ServiceA)
 
@@ -980,12 +980,12 @@ class TestAsyncResolutionEdgeCases:
         container.register(
             ServiceA,
             factory=generator_factory,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="request",
         )
 
         # Use sync context manager but call aresolve
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             result = container.resolve(ServiceA)
             assert isinstance(result, ServiceA)
 
@@ -1004,7 +1004,7 @@ class TestAsyncResolutionEdgeCases:
             ServiceA,
             instance=specific_instance,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
 
         # Create a scope context
@@ -1032,7 +1032,7 @@ class TestAsyncResolutionEdgeCases:
                 self.a = a
 
         # Register ServiceB with scope but don't register ServiceA
-        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED)
 
         # _find_scope_in_dependencies should handle the DIWireError gracefully
         # when checking nested deps of unregistered ServiceA
@@ -1071,7 +1071,7 @@ class TestMissingCoverageSync:
             scope="request",
         )
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             with pytest.raises(DIWireGeneratorFactoryUnsupportedLifetimeError):
                 container.resolve(ServiceA)
 
@@ -1085,7 +1085,7 @@ class TestMissingCoverageSync:
             pass
 
         container = Container()
-        container.register(ScopedMarker, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ScopedMarker, scope="request", lifetime=Lifetime.SCOPED)
 
         def generator_factory() -> Generator[ServiceA, None, None]:
             yield ServiceA()
@@ -1096,7 +1096,7 @@ class TestMissingCoverageSync:
             None,
         )
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             with pytest.raises(DIWireGeneratorFactoryUnsupportedLifetimeError):
                 handler(generator_factory())
 
@@ -1110,7 +1110,7 @@ class TestMissingCoverageSync:
             pass
 
         container = Container()
-        container.register(ScopedMarker, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ScopedMarker, scope="request", lifetime=Lifetime.SCOPED)
 
         def generator_factory() -> Generator[ServiceA, None, None]:
             return
@@ -1122,7 +1122,7 @@ class TestMissingCoverageSync:
             None,
         )
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             with pytest.raises(DIWireGeneratorFactoryDidNotYieldError):
                 handler(generator_factory())
 
@@ -1137,7 +1137,7 @@ class TestMissingCoverageSync:
 
         cleanup: list[str] = []
         container = Container()
-        container.register(ScopedMarker, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ScopedMarker, scope="request", lifetime=Lifetime.SCOPED)
 
         def generator_factory() -> Generator[ServiceA, None, None]:
             try:
@@ -1151,7 +1151,7 @@ class TestMissingCoverageSync:
             None,
         )
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             instance = handler(generator_factory())
             assert isinstance(instance, ServiceA)
             assert cleanup == []
@@ -1227,7 +1227,7 @@ class TestCoverageEdgeCases:
         service_key_b = ServiceKey.from_value(ServiceB)
         registration = Registration(
             service_key=service_key_b,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="request",
         )
 
@@ -1271,7 +1271,7 @@ class TestCoverageEdgeCases:
         class ServiceA:
             pass
 
-        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
         container.compile()
 
         # Scoped registrations are skipped in _compiled_providers
@@ -1295,7 +1295,7 @@ class TestCoverageEdgeCases:
         # Only register ServiceB (scoped), but NOT ServiceA
         # When compiling ServiceB, _compile_or_get_provider(ServiceA) will return None
         # because ServiceA is not in _compiled_providers, not in _registry, and auto_register is disabled
-        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED)
 
         container.compile()
 
@@ -1324,16 +1324,16 @@ class TestCoverageEdgeCases:
             ServiceA,
             instance=scoped_instance,
             scope="request",
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
-        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED)
 
         container.compile()
 
         service_key_b = ServiceKey.from_value(ServiceB)
         assert (service_key_b, "request") not in container._scoped_compiled_providers
 
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             resolved = container.resolve(ServiceB)
             assert resolved.a is scoped_instance
 
@@ -1345,7 +1345,7 @@ class TestCoverageEdgeCases:
             pass
 
         # Register scoped singleton
-        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
         container.compile()
 
         # Verify compiled scoped provider exists
@@ -1353,7 +1353,7 @@ class TestCoverageEdgeCases:
         assert (service_key, "request") in container._scoped_compiled_providers
 
         # Enter the matching scope - compiled provider path will be used
-        with container.start_scope("request"):
+        with container.enter_scope("request"):
             instance1 = container.resolve(ServiceA)
             instance2 = container.resolve(ServiceA)
 
@@ -1418,7 +1418,7 @@ class TestCoverageEdgeCases:
             scope="request",
         )
 
-        async with container.start_scope("request"):
+        async with container.enter_scope("request"):
             # Inside scope, cache_scope is not None, so we hit line 1407
             with pytest.raises(DIWireGeneratorFactoryUnsupportedLifetimeError):
                 await container.aresolve(ServiceA)
@@ -1461,7 +1461,7 @@ class TestCoverageEdgeCases:
             pass
 
         # Register a scoped singleton at "request" scope
-        container.register(Session, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         # Create a scope ID with an anonymous segment (name=None)
         # This simulates entering nested scopes where inner one is anonymous
@@ -1488,7 +1488,7 @@ class TestCoverageEdgeCases:
                 self.a = a
 
         # Register ServiceB with scope but don't register ServiceA
-        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED_SINGLETON)
+        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED)
 
         # Create a function that depends on ServiceB
         def handler(b: Annotated[ServiceB, Injected()]) -> ServiceB:

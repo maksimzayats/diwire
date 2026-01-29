@@ -65,10 +65,10 @@ def handle_request(
 def main() -> None:
     container = Container()
 
-    # RequestSession is SCOPED_SINGLETON - shared within a scope
+    # RequestSession is SCOPED - shared within a scope
     container.register(
         RequestSession,
-        lifetime=Lifetime.SCOPED_SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
     )
     container.register(UserService)

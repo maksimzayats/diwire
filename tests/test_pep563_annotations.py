@@ -119,7 +119,7 @@ class TestPEP563ForwardReferences:
         container = Container()
         container.register(
             ForwardService,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="request",
         )
 
@@ -139,7 +139,7 @@ class TestPEP563ForwardReferences:
         container = Container()
         container.register(
             ForwardService,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="request",
         )
 
@@ -165,7 +165,7 @@ class TestPEP563ScopeDetection:
         # Register a scoped service (type defined later)
         container.register(
             ForwardService,
-            lifetime=Lifetime.SCOPED_SINGLETON,
+            lifetime=Lifetime.SCOPED,
             scope="request",
         )
 
@@ -230,7 +230,7 @@ class TestPEP563Resolution:
     def test_scoped_resolution_with_pep563(self) -> None:
         """Scoped resolution works with string annotations."""
         container = Container()
-        container.register(ServiceA, lifetime=Lifetime.SCOPED_SINGLETON, scope="request")
+        container.register(ServiceA, lifetime=Lifetime.SCOPED, scope="request")
 
         @container.resolve(scope="request")
         def handler(
@@ -244,7 +244,7 @@ class TestPEP563Resolution:
     async def test_async_scoped_resolution_with_pep563(self) -> None:
         """Async scoped resolution works with string annotations."""
         container = Container()
-        container.register(ServiceA, lifetime=Lifetime.SCOPED_SINGLETON, scope="request")
+        container.register(ServiceA, lifetime=Lifetime.SCOPED, scope="request")
 
         @container.resolve(scope="request")
         async def handler(
