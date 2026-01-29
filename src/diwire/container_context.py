@@ -15,7 +15,7 @@ from diwire.exceptions import DIWireContainerNotSetError
 from diwire.types import Factory, Lifetime
 
 if TYPE_CHECKING:
-    from diwire.container import Container
+    from diwire.container import Container, ScopedContainer
 
 # Import signature builder to exclude Injected parameters from signature
 from diwire.container import _build_signature_without_injected
@@ -681,7 +681,7 @@ class ContainerContextProxy:
         )
         return None
 
-    def enter_scope(self, scope_name: str | None = None) -> Any:
+    def enter_scope(self, scope_name: str | None = None) -> ScopedContainer:
         """Start a new scope on the current container.
 
         Args:
