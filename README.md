@@ -198,6 +198,11 @@ container.register(Session, factory=session_factory, lifetime=Lifetime.SCOPED, s
 with container.enter_scope("request") as scope:
     session = scope.resolve(Session)
     assert session.closed is False
+
+# Or close scopes by name (closes child scopes automatically)
+container.enter_scope("app")
+container.enter_scope("request")
+container.close_scope("app")  # Closes both "request" and "app" in LIFO order
 ```
 
 ## Named components
@@ -307,7 +312,7 @@ print(greet())
 
 ## API at a glance
 
-- `Container`: `register`, `resolve`, `aresolve`, `enter_scope`, `compile`
+- `Container`: `register`, `resolve`, `aresolve`, `enter_scope`, `close_scope`, `aclose_scope`, `compile`
 - `Lifetime`: `TRANSIENT`, `SINGLETON`, `SCOPED`
 - `Injected`: `Annotated[T, Injected()]` parameter marker
 - `container_context`: context-local global container

@@ -2794,6 +2794,193 @@ class TestImperativeScopeManagement:
         outer_scope.close()
         assert _current_scope.get() is None
 
+    def test_close_scope_closes_named_scope(self, container: Container) -> None:
+        """close_scope() closes a scope by name."""
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
+
+        scope = container.enter_scope("request")
+        container.resolve(Session)
+
+        assert not scope._exited
+        container.close_scope("request")
+        assert scope._exited
+
+    def test_close_scope_closes_child_scopes(self, container: Container) -> None:
+        """close_scope() closes child scopes first (LIFO order)."""
+        container.register(Session, scope="app", lifetime=Lifetime.SCOPED)
+        container.register(Service, scope="session", lifetime=Lifetime.SCOPED)
+
+        # Create hierarchy: app -> session -> request
+        app_scope = container.enter_scope("app")
+        session_scope = container.enter_scope("session")
+        request_scope = container.enter_scope("request")
+
+        # All scopes should be active
+        assert not app_scope._exited
+        assert not session_scope._exited
+        assert not request_scope._exited
+
+        # Close "session" should close both "session" and "request" (child)
+        container.close_scope("session")
+
+        assert not app_scope._exited  # app should still be open
+        assert session_scope._exited  # session should be closed
+        assert request_scope._exited  # type: ignore[unreachable]  # request (child) closed
+
+        # Current scope should be app
+        current = _current_scope.get()
+        assert current is not None
+        assert current.contains_scope("app")
+        assert not current.contains_scope("session")
+
+        app_scope.close()
+
+    def test_close_scope_leaves_unrelated_scopes_open(self, container: Container) -> None:
+        """close_scope() does not affect scopes without the specified name."""
+        container.register(Session, scope="db", lifetime=Lifetime.SCOPED)
+
+        # Create two independent scopes
+        db_scope = container.enter_scope("db")
+        request_scope = container.enter_scope("request")
+
+        assert not db_scope._exited
+        assert not request_scope._exited
+
+        # Close "request" should not affect "db"
+        container.close_scope("request")
+
+        assert request_scope._exited
+        assert not db_scope._exited  # type: ignore[unreachable]
+
+        db_scope.close()
+
+    def test_close_scope_with_nonexistent_scope(self, container: Container) -> None:
+        """close_scope() with nonexistent scope name is a no-op."""
+        scope = container.enter_scope("test")
+        assert not scope._exited
+
+        # Should not raise and should not close any scopes
+        container.close_scope("nonexistent")
+
+        assert not scope._exited
+        scope.close()
+
+    def test_aclose_scope_closes_child_scopes(self, container: Container) -> None:
+        """aclose_scope() closes child scopes with async cleanup."""
+        cleanup_order: list[str] = []
+
+        async def session_factory() -> AsyncGenerator[Session, None]:
+            try:
+                yield Session(id="session")
+            finally:
+                cleanup_order.append("session")
+
+        async def request_factory() -> AsyncGenerator[Service, None]:
+            try:
+                yield Service(session=Session(id="request"))
+            finally:
+                cleanup_order.append("request")
+
+        container.register(
+            Session,
+            factory=session_factory,
+            scope="session",
+            lifetime=Lifetime.SCOPED,
+        )
+        container.register(
+            Service,
+            factory=request_factory,
+            scope="request",
+            lifetime=Lifetime.SCOPED,
+        )
+
+        async def run_test() -> None:
+            app_scope = container.enter_scope("app")
+            session_scope = container.enter_scope("session")
+            await container.aresolve(Session)
+            request_scope = container.enter_scope("request")
+            await container.aresolve(Service)
+
+            # Close session scope and its children
+            await container.aclose_scope("session")
+
+            # Request (child) should be cleaned up before session (parent)
+            assert cleanup_order == ["request", "session"]
+            assert not app_scope._exited
+            assert session_scope._exited
+            assert request_scope._exited
+
+            app_scope.close()
+
+        asyncio.run(run_test())
+
+    def test_close_scope_lifo_order(self, container: Container) -> None:
+        """close_scope() closes scopes in LIFO order (children first)."""
+        close_order: list[str] = []
+
+        def session_factory() -> Generator[Session, None, None]:
+            try:
+                yield Session(id="session")
+            finally:
+                close_order.append("session")
+
+        def request_factory() -> Generator[Service, None, None]:
+            try:
+                yield Service(session=Session(id="request"))
+            finally:
+                close_order.append("request")
+
+        container.register(
+            Session,
+            factory=session_factory,
+            scope="session",
+            lifetime=Lifetime.SCOPED,
+        )
+        container.register(
+            Service,
+            factory=request_factory,
+            scope="request",
+            lifetime=Lifetime.SCOPED,
+        )
+
+        session_scope = container.enter_scope("session")
+        container.resolve(Session)
+        request_scope = container.enter_scope("request")
+        container.resolve(Service)
+
+        container.close_scope("session")
+
+        # Request (child) should close before session (parent)
+        assert close_order == ["request", "session"]
+        assert session_scope._exited
+        assert request_scope._exited
+
+    def test_close_scope_with_resources(self, container: Container) -> None:
+        """close_scope() properly cleans up generator factory resources."""
+        cleanup_called = False
+
+        def session_factory() -> Generator[Session, None, None]:
+            nonlocal cleanup_called
+            try:
+                yield Session(id="gen-session")
+            finally:
+                cleanup_called = True
+
+        container.register(
+            Session,
+            factory=session_factory,
+            scope="request",
+            lifetime=Lifetime.SCOPED,
+        )
+
+        container.enter_scope("request")
+        session = container.resolve(Session)
+        assert session.id == "gen-session"
+        assert not cleanup_called
+
+        container.close_scope("request")
+        assert cleanup_called
+
 
 class TestContainerClosedError:
     """Tests for DIWireContainerClosedError after container.close()."""

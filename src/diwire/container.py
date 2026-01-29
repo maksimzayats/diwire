@@ -2769,6 +2769,55 @@ class Container:
             await scope.aclose()
         self._closed = True
 
+    def close_scope(self, scope_name: str) -> None:
+        """Close all active scopes that contain the given scope name.
+
+        This closes the named scope and all its child scopes in LIFO order
+        (children first, then parents).
+
+        Args:
+            scope_name: The name of the scope to close.
+
+        Example:
+            # Given hierarchy: app -> session -> request
+            container.close_scope("session")  # Closes both "request" and "session"
+
+        """
+        while True:
+            scope_to_close: ScopedContainer | None = None
+            with self._active_scopes_lock:
+                # Find scopes containing the scope_name, process from end (LIFO)
+                for i in range(len(self._active_scopes) - 1, -1, -1):
+                    scope = self._active_scopes[i]
+                    if scope._scope_id.contains_scope(scope_name):  # noqa: SLF001
+                        scope_to_close = scope
+                        break
+            if scope_to_close is None:
+                return
+            scope_to_close.close()
+
+    async def aclose_scope(self, scope_name: str) -> None:
+        """Asynchronously close all active scopes that contain the given scope name.
+
+        This closes the named scope and all its child scopes in LIFO order
+        (children first, then parents).
+
+        Args:
+            scope_name: The name of the scope to close.
+
+        """
+        while True:
+            scope_to_close: ScopedContainer | None = None
+            with self._active_scopes_lock:
+                for i in range(len(self._active_scopes) - 1, -1, -1):
+                    scope = self._active_scopes[i]
+                    if scope._scope_id.contains_scope(scope_name):  # noqa: SLF001
+                        scope_to_close = scope
+                        break
+            if scope_to_close is None:
+                return
+            await scope_to_close.aclose()
+
     def _get_scoped_registration(
         self,
         service_key: ServiceKey,

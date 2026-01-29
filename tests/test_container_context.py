@@ -2874,3 +2874,55 @@ class TestContainerContextClose:
                 await proxy.aclose()
         finally:
             _current_container.reset(token)
+
+    def test_close_scope_delegates_to_current_container(self) -> None:
+        """close_scope() delegates to the current container's close_scope method."""
+        proxy = ContainerContextProxy()
+        container = Container()
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
+        token = proxy.set_current(container)
+        try:
+            scope = proxy.enter_scope("request")
+            proxy.resolve(ServiceA)
+            assert not scope._exited
+
+            proxy.close_scope("request")
+            assert scope._exited
+        finally:
+            proxy.reset(token)
+
+    async def test_aclose_scope_delegates_to_current_container(self) -> None:
+        """aclose_scope() delegates to the current container's aclose_scope method."""
+        proxy = ContainerContextProxy()
+        container = Container()
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
+        token = proxy.set_current(container)
+        try:
+            scope = proxy.enter_scope("request")
+            await proxy.aresolve(ServiceA)
+            assert not scope._exited
+
+            await proxy.aclose_scope("request")
+            assert scope._exited
+        finally:
+            proxy.reset(token)
+
+    def test_close_scope_without_container_raises_error(self) -> None:
+        """close_scope() raises DIWireContainerNotSetError when no container set."""
+        proxy = ContainerContextProxy()
+        token = _current_container.set(None)
+        try:
+            with pytest.raises(DIWireContainerNotSetError):
+                proxy.close_scope("request")
+        finally:
+            _current_container.reset(token)
+
+    async def test_aclose_scope_without_container_raises_error(self) -> None:
+        """aclose_scope() raises DIWireContainerNotSetError when no container set."""
+        proxy = ContainerContextProxy()
+        token = _current_container.set(None)
+        try:
+            with pytest.raises(DIWireContainerNotSetError):
+                await proxy.aclose_scope("request")
+        finally:
+            _current_container.reset(token)

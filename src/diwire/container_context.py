@@ -714,5 +714,29 @@ class ContainerContextProxy:
         """
         return await self.get_current().aclose()
 
+    def close_scope(self, scope_name: str) -> None:
+        """Close all active scopes that contain the given scope name.
+
+        This closes the named scope and all its child scopes in LIFO order
+        (children first, then parents).
+
+        Args:
+            scope_name: The name of the scope to close.
+
+        """
+        return self.get_current().close_scope(scope_name)
+
+    async def aclose_scope(self, scope_name: str) -> None:
+        """Asynchronously close all active scopes that contain the given scope name.
+
+        This closes the named scope and all its child scopes in LIFO order
+        (children first, then parents).
+
+        Args:
+            scope_name: The name of the scope to close.
+
+        """
+        return await self.get_current().aclose_scope(scope_name)
+
 
 container_context = ContainerContextProxy()
