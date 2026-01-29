@@ -49,8 +49,7 @@ def main() -> None:
     # Within the same scope, Session is shared
     with container.enter_scope(Scope.REQUEST) as scope:
         session1 = scope.resolve(Session)
-        with scope.enter_scope("222") as scope2:
-            session2 = scope2.resolve(Session)
+        session2 = scope.resolve(Session)
         repo = scope.resolve(Repository)
 
         print("Request Scope 1:")
