@@ -455,19 +455,12 @@ class ScopedContainer:
     def __post_init__(self) -> None:
         """Activate scope immediately on creation for imperative usage."""
         self._token = _current_scope.set(self._scope_id)
-        registered = False
         try:
-            with self._container._active_scopes_lock:  # noqa: SLF001
-                if self._container._closed:  # noqa: SLF001
-                    raise DIWireContainerClosedError
-                self._container._active_scopes.append(self)  # noqa: SLF001
-                registered = True
+            self._container._register_active_scope(self)  # noqa: SLF001
             self._activated = True
         except:
             with contextlib.suppress(ValueError, RuntimeError):
                 _current_scope.reset(self._token)
-            if registered:
-                self._container._unregister_active_scope(self)  # noqa: SLF001
             raise
 
     def resolve(self, key: Any) -> Any:
@@ -2730,6 +2723,8 @@ class Container:
     def _register_active_scope(self, scope: ScopedContainer) -> None:
         """Register a scope as active for imperative close()."""
         with self._active_scopes_lock:
+            if self._closed:
+                raise DIWireContainerClosedError
             self._active_scopes.append(scope)
 
     def _unregister_active_scope(self, scope: ScopedContainer) -> None:

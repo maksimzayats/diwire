@@ -3044,6 +3044,21 @@ class TestContainerClosedError:
         with pytest.raises(DIWireContainerClosedError, match="closed container"):
             container.enter_scope("test")
 
+    def test_register_active_scope_on_closed_container_raises_error(
+        self,
+        container: Container,
+    ) -> None:
+        """Directly creating ScopedContainer on closed container raises error."""
+        from diwire.container import ScopedContainer, ScopeId
+        from diwire.exceptions import DIWireContainerClosedError
+
+        container.close()
+
+        scope_id = ScopeId(segments=((None, 1),))
+
+        with pytest.raises(DIWireContainerClosedError, match="closed container"):
+            ScopedContainer(container, scope_id)
+
 
 class TestImperativeScopeResourceCleanup:
     """Tests for resource cleanup with imperative scope management."""
