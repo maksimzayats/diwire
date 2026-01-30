@@ -55,6 +55,9 @@ dev = [
     "uvicorn>=0.40.0",
     # Testing
     "httpx>=0.27.0",
+    "pydantic>=2.12.5",
+    "attrs>=25.4.0",
+    "msgspec>=0.20.0",
 ]
 
 [build-system]

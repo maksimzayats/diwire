@@ -35,9 +35,8 @@ class DependenciesExtractor:
         if cached is not None:
             return cached
 
-        init_func = self._get_init_func(service_key)
         try:
-            type_hints = get_type_hints(init_func, include_extras=True)
+            type_hints = self._get_type_hints(service_key)
         except (TypeError, NameError) as e:
             raise DIWireDependencyExtractionError(service_key, e) from e
 
@@ -60,9 +59,8 @@ class DependenciesExtractor:
         if cached is not None:
             return cached
 
-        init_func = self._get_init_func(service_key)
         try:
-            type_hints = get_type_hints(init_func, include_extras=True)
+            type_hints = self._get_type_hints(service_key)
         except (TypeError, NameError) as e:
             raise DIWireDependencyExtractionError(service_key, e) from e
         defaults = self._get_parameter_defaults(service_key)
@@ -96,9 +94,13 @@ class DependenciesExtractor:
             return defaults
 
         # Handle regular classes and functions
-        init_func = self._get_init_func(service_key)
+        # Use inspect.signature(cls) for classes with __signature__ (e.g. pydantic)
+        if isinstance(value, type) and hasattr(value, "__signature__"):
+            sig_target = value
+        else:
+            sig_target = self._get_init_func(service_key)
         try:
-            sig = inspect.signature(init_func)
+            sig = inspect.signature(sig_target)
         except (ValueError, TypeError):
             return {}
 
@@ -167,6 +169,47 @@ class DependenciesExtractor:
             return None
         arg = args[0]
         return arg if isinstance(arg, TypeVar) else None
+
+    def _get_type_hints(self, service_key: ServiceKey) -> dict[str, Any]:
+        """Get type hints for a service, with fallback for generated __init__ (e.g. pydantic).
+
+        For non-class callables (functions/methods), returns get_type_hints(__init__).
+        For classes, checks if __init__ hints cover the class's __signature__ params. If not
+        (generated __init__), falls back to class-level annotations filtered by signature.
+        """
+        value = service_key.value
+        init_func = self._get_init_func(service_key)
+        init_hints = get_type_hints(init_func, include_extras=True)
+
+        if not isinstance(value, type):
+            return init_hints
+
+        # Only apply fallback for classes that define __signature__ (e.g. pydantic BaseModel).
+        # Regular classes and dataclasses don't set __signature__, so we use init_hints directly.
+        if not hasattr(value, "__signature__"):
+            return init_hints
+
+        # Get param names from the class's __signature__ (excluding variadic params)
+        try:
+            sig = value.__signature__  # type: ignore[attr-defined]
+        except (ValueError, TypeError):  # pragma: no cover - defensive guard
+            return init_hints  # pragma: no cover
+
+        sig_params = {
+            name
+            for name, p in sig.parameters.items()
+            if p.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+        }
+
+        # If init hints match signature params (both directions), use them.
+        # Otherwise fall through to class-level annotations.
+        init_hint_names = {n for n in init_hints if n != "return"}
+        if sig_params == init_hint_names:
+            return init_hints
+
+        # Fallback: use class-level annotations filtered to signature params
+        class_hints = get_type_hints(value, include_extras=True)
+        return {name: hint for name, hint in class_hints.items() if name in sig_params}
 
     def _get_init_func(self, service_key: ServiceKey) -> Any:
         if isinstance(service_key.value, FunctionType | MethodType):
