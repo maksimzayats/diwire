@@ -78,8 +78,6 @@ from diwire.registry import Registration
 from diwire.service_key import Component, ServiceKey
 from diwire.types import Factory, Injected, Lifetime
 
-__all__ = ["Container", "ScopedContainer"]
-
 T = TypeVar("T", bound=Any)
 _C = TypeVar("_C", bound=type)  # For class decorator
 

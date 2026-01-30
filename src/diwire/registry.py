@@ -3,8 +3,6 @@ from typing import Any
 
 from diwire.types import Factory, Lifetime
 
-__all__: list[str] = []
-
 
 @dataclass(kw_only=True, slots=True)
 class Registration:

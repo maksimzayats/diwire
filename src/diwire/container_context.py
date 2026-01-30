@@ -20,8 +20,6 @@ if TYPE_CHECKING:
 # Import signature builder to exclude Injected parameters from signature
 from diwire.container import _build_signature_without_injected
 
-__all__ = ["container_context"]
-
 T = TypeVar("T")
 _C = TypeVar("_C", bound=type)
 

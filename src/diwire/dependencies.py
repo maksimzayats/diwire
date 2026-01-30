@@ -8,8 +8,6 @@ from diwire.exceptions import DIWireDependencyExtractionError
 from diwire.service_key import ServiceKey
 from diwire.types import Injected
 
-__all__: list[str] = []
-
 MIN_ANNOTATED_ARGS = 2
 
 

@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from typing import Annotated, Any, ClassVar, get_args, get_origin
 
-__all__ = ["Component"]
-
 
 @dataclass(slots=True, frozen=True)
 class Component:

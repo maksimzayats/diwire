@@ -13,8 +13,6 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:
     from diwire.service_key import ServiceKey
 
-__all__: list[str] = []
-
 
 class CompiledProvider(Protocol):
     """Protocol for compiled providers."""
