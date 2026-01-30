@@ -294,6 +294,44 @@ class TestScopeValidation:
         assert error.current_scope is not None
         assert error.current_scope.startswith("wrong/")
 
+    def test_autoregister_raises_error_when_scoped_registration_exists(self) -> None:
+        """Auto-registration raises DIWireScopeMismatchError when a scoped registration exists."""
+        container = Container(register_if_missing=True)
+        container.register(Session, scope="app", lifetime=Lifetime.SCOPED)
+
+        with pytest.raises(DIWireScopeMismatchError) as exc_info:
+            container.resolve(Session)
+
+        error = exc_info.value
+        assert error.registered_scope == "app"
+        assert error.current_scope is None
+
+    def test_autoregister_raises_error_in_wrong_scope(self) -> None:
+        """Auto-registration raises DIWireScopeMismatchError when resolved in wrong scope."""
+        container = Container(register_if_missing=True)
+        container.register(Session, scope="app", lifetime=Lifetime.SCOPED)
+
+        with pytest.raises(DIWireScopeMismatchError) as exc_info, container.enter_scope("other"):
+            container.resolve(Session)
+
+        error = exc_info.value
+        assert error.registered_scope == "app"
+        assert error.current_scope is not None
+
+    def test_autoregister_still_works_for_unregistered_types(self) -> None:
+        """Types with no scoped registration are still auto-registered normally."""
+
+        @dataclass
+        class Unrelated:
+            pass
+
+        container = Container(register_if_missing=True)
+        container.register(Session, scope="app", lifetime=Lifetime.SCOPED)
+
+        # Unrelated has no scoped registration, so auto-registration should work
+        result = container.resolve(Unrelated)
+        assert isinstance(result, Unrelated)
+
     def test_matching_scope_succeeds(self, container: Container) -> None:
         """Resolving in matching scope succeeds."""
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED)

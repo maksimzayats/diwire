@@ -3025,9 +3025,26 @@ class Container:
         if not self._register_if_missing:
             raise DIWireServiceNotRegisteredError(service_key)
 
+        # Check if there's any scoped registration for this key before auto-registering
+        if self._has_scoped_registrations:
+            scoped_reg = self._find_any_scoped_registration(service_key)
+            if scoped_reg is not None:
+                raise DIWireScopeMismatchError(
+                    service_key,
+                    scoped_reg.scope,  # type: ignore[arg-type]
+                    current_scope.path if current_scope else None,
+                )
+
         registration = self._get_auto_registration(service_key=service_key)
         self._registry[service_key] = registration
         return registration
+
+    def _find_any_scoped_registration(self, service_key: ServiceKey) -> Registration | None:
+        """Find any scoped registration for the given service key, regardless of scope."""
+        for (sk, _scope_name), reg in self._scoped_registry.items():
+            if sk == service_key:
+                return reg
+        return None
 
     def _get_cache_scope(
         self,
