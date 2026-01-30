@@ -179,21 +179,31 @@ class DependenciesExtractor:
         """
         value = service_key.value
         init_func = self._get_init_func(service_key)
-        init_hints = get_type_hints(init_func, include_extras=True)
+
+        # For classes with __signature__ (e.g. pydantic), init hints may fail due to
+        # generated __init__ with unresolvable forward refs — that's expected, we fall through.
+        # For other callables, let the error propagate normally.
+        has_signature = isinstance(value, type) and hasattr(value, "__signature__")
+        try:
+            init_hints = get_type_hints(init_func, include_extras=True)
+        except (NameError, TypeError):
+            if not has_signature:
+                raise
+            init_hints = None
 
         if not isinstance(value, type):
-            return init_hints
+            return init_hints  # type: ignore[return-value]
 
         # Only apply fallback for classes that define __signature__ (e.g. pydantic BaseModel).
         # Regular classes and dataclasses don't set __signature__, so we use init_hints directly.
-        if not hasattr(value, "__signature__"):
-            return init_hints
+        if not has_signature:
+            return init_hints  # type: ignore[return-value]
 
         # Get param names from the class's __signature__ (excluding variadic params)
         try:
-            sig = value.__signature__  # type: ignore[attr-defined]
+            sig = value.__signature__  # type: ignore[attr-defined]  # pyright: ignore[reportAttributeAccessIssue]
         except (ValueError, TypeError):  # pragma: no cover - defensive guard
-            return init_hints  # pragma: no cover
+            return init_hints or {}  # pragma: no cover
 
         sig_params = {
             name
@@ -203,9 +213,10 @@ class DependenciesExtractor:
 
         # If init hints match signature params (both directions), use them.
         # Otherwise fall through to class-level annotations.
-        init_hint_names = {n for n in init_hints if n != "return"}
-        if sig_params == init_hint_names:
-            return init_hints
+        if init_hints is not None:
+            init_hint_names = {n for n in init_hints if n != "return"}
+            if sig_params == init_hint_names:
+                return init_hints
 
         # Fallback: use class-level annotations filtered to signature params
         class_hints = get_type_hints(value, include_extras=True)

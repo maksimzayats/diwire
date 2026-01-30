@@ -1,5 +1,6 @@
 """Tests for Pydantic integration."""
 
+import pydantic.dataclasses as pdc
 from pydantic import BaseModel
 
 from diwire.container import Container
@@ -127,4 +128,72 @@ class TestPydanticBaseModelResolution:
 
         assert isinstance(result, RegularDependent)
         assert isinstance(result.model, PydanticModelWithDep)
+        assert isinstance(result.model.dep, DepService)
+
+
+@pdc.dataclass(config={"arbitrary_types_allowed": True})
+class PydanticDCWithDep:
+    dep: DepService
+
+
+@pdc.dataclass(config={"arbitrary_types_allowed": True})
+class NestedPydanticDC:
+    model: PydanticDCWithDep
+
+
+@pdc.dataclass(config={"arbitrary_types_allowed": True})
+class PydanticDCWithDefault:
+    dep: DepService
+    name: str = "default"
+
+
+@pdc.dataclass
+class EmptyPydanticDC:
+    pass
+
+
+class TestPydanticDataclassResolution:
+    def test_resolve_pydantic_dataclass_with_dependency(self, container: Container) -> None:
+        """Pydantic dataclass with a dependency field resolves correctly."""
+        result = container.resolve(PydanticDCWithDep)
+
+        assert isinstance(result, PydanticDCWithDep)
+        assert isinstance(result.dep, DepService)
+
+    def test_resolve_empty_pydantic_dataclass(self, container: Container) -> None:
+        """Pydantic dataclass with no fields resolves correctly."""
+        result = container.resolve(EmptyPydanticDC)
+
+        assert isinstance(result, EmptyPydanticDC)
+
+    def test_resolve_pydantic_dataclass_with_default(self, container: Container) -> None:
+        """Pydantic dataclass with default values resolves correctly."""
+        result = container.resolve(PydanticDCWithDefault)
+
+        assert isinstance(result, PydanticDCWithDefault)
+        assert isinstance(result.dep, DepService)
+        assert result.name == "default"
+
+    def test_resolve_nested_pydantic_dataclasses(self, container: Container) -> None:
+        """Nested pydantic dataclass dependency chain resolves correctly."""
+        result = container.resolve(NestedPydanticDC)
+
+        assert isinstance(result, NestedPydanticDC)
+        assert isinstance(result.model, PydanticDCWithDep)
+        assert isinstance(result.model.dep, DepService)
+
+    def test_resolve_regular_class_depending_on_pydantic_dataclass(
+        self,
+        container: Container,
+    ) -> None:
+        """Regular class depending on pydantic dataclass resolves correctly."""
+
+        class RegularDependent:
+            def __init__(self, model: PydanticDCWithDep) -> None:
+                self.model = model
+
+        result = container.resolve(RegularDependent)
+
+        assert isinstance(result, RegularDependent)
+        assert isinstance(result.model, PydanticDCWithDep)
         assert isinstance(result.model.dep, DepService)
