@@ -357,8 +357,7 @@ Use `Component` to register multiple implementations of the same interface.
 ```python
 from dataclasses import dataclass
 from typing import Annotated, Protocol
-from diwire import Container
-from diwire.service_key import Component
+from diwire import Container, Component
 
 
 class Cache(Protocol):
