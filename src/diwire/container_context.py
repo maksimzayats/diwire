@@ -15,7 +15,8 @@ from diwire.exceptions import DIWireContainerNotSetError
 from diwire.types import Factory, Lifetime
 
 if TYPE_CHECKING:
-    from diwire.container import Container, ScopedContainer
+    from diwire.container import Container
+    from diwire.container_scopes import ScopedContainer
 
 # Import signature builder to exclude Injected parameters from signature
 from diwire.container_helpers import _build_signature_without_injected

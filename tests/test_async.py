@@ -15,14 +15,14 @@ from typing import Annotated
 
 import pytest
 
-from diwire.container import (
-    Container,
+from diwire.container import Container
+from diwire.container_injection import (
     _AsyncInjectedFunction,
     _AsyncScopedInjectedFunction,
-    _current_scope,
     _InjectedFunction,
     _ScopedInjectedFunction,
 )
+from diwire.container_scopes import _current_scope
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
     DIWireAsyncGeneratorFactoryDidNotYieldError,
@@ -1201,18 +1201,18 @@ class TestSingletonLockCreation:
         from diwire.service_key import ServiceKey
 
         # Clear any existing locks
-        container_singleton._singleton_locks.clear()
+        container_singleton._locks._singleton_locks.clear()
 
         service_key = ServiceKey.from_value(ServiceA)
 
         # Lock doesn't exist yet
-        assert service_key not in container_singleton._singleton_locks
+        assert service_key not in container_singleton._locks._singleton_locks
 
         # Get the lock - this should create it
-        lock = await container_singleton._get_singleton_lock(service_key)
+        lock = await container_singleton._locks.get_singleton_lock(service_key)
 
         # Lock should now exist and be an asyncio.Lock
-        assert service_key in container_singleton._singleton_locks
+        assert service_key in container_singleton._locks._singleton_locks
         assert isinstance(lock, asyncio.Lock)
 
     async def test_singleton_lock_reused_on_subsequent_access(
@@ -1223,12 +1223,12 @@ class TestSingletonLockCreation:
         from diwire.service_key import ServiceKey
 
         # Clear any existing locks
-        container_singleton._singleton_locks.clear()
+        container_singleton._locks._singleton_locks.clear()
 
         service_key = ServiceKey.from_value(ServiceA)
 
-        lock1 = await container_singleton._get_singleton_lock(service_key)
-        lock2 = await container_singleton._get_singleton_lock(service_key)
+        lock1 = await container_singleton._locks.get_singleton_lock(service_key)
+        lock2 = await container_singleton._locks.get_singleton_lock(service_key)
 
         assert lock1 is lock2
 
@@ -1240,13 +1240,13 @@ class TestSingletonLockCreation:
         from diwire.service_key import ServiceKey
 
         # Clear any existing locks
-        container_singleton._singleton_locks.clear()
+        container_singleton._locks._singleton_locks.clear()
 
         service_key = ServiceKey.from_value(ServiceA)
         locks: list[asyncio.Lock] = []
 
         async def get_lock() -> None:
-            lock = await container_singleton._get_singleton_lock(service_key)
+            lock = await container_singleton._locks.get_singleton_lock(service_key)
             locks.append(lock)
 
         # Launch concurrent calls
@@ -1264,12 +1264,12 @@ class TestSingletonLockCreation:
         from diwire.service_key import ServiceKey
 
         # Clear any existing locks
-        container_singleton._singleton_locks.clear()
+        container_singleton._locks._singleton_locks.clear()
 
         key_a = ServiceKey.from_value(ServiceA)
         key_b = ServiceKey.from_value(ServiceB)
 
-        lock_a = await container_singleton._get_singleton_lock(key_a)
-        lock_b = await container_singleton._get_singleton_lock(key_b)
+        lock_a = await container_singleton._locks.get_singleton_lock(key_a)
+        lock_b = await container_singleton._locks.get_singleton_lock(key_b)
 
         assert lock_a is not lock_b

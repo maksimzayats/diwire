@@ -9,8 +9,8 @@ from __future__ import annotations
 from inspect import signature
 from typing import Annotated
 
-from diwire.container import (
-    Container,
+from diwire.container import Container
+from diwire.container_injection import (
     _AsyncInjectedFunction,
     _AsyncScopedInjectedFunction,
     _InjectedFunction,

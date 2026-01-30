@@ -30,10 +30,8 @@ from diwire.compiled_providers import (
     TypeProvider,
 )
 from diwire.container_helpers import (
-    _build_signature_without_injected,
     _get_generic_origin_and_args,
     _get_return_annotation,
-    _has_injected_annotation,
     _is_any_type,
     _is_async_factory,
     _is_method_descriptor,
@@ -44,6 +42,15 @@ from diwire.container_helpers import (
     _type_arg_matches_constraint,
     _unwrap_method_descriptor,
 )
+from diwire.container_injection import (
+    _AsyncInjectedFunction,
+    _AsyncScopedInjectedFunction,
+    _InjectedFunction,
+    _ScopedInjectedFunction,
+)
+from diwire.container_locks import LockManager
+from diwire.container_resolution_stack import _get_resolution_stack
+from diwire.container_scopes import ScopedContainer, _current_scope, _ScopeId
 from diwire.defaults import (
     DEFAULT_AUTOREGISTER_IGNORES,
     DEFAULT_AUTOREGISTER_LIFETIME,
@@ -79,53 +86,8 @@ from diwire.registry import Registration
 from diwire.service_key import Component, ServiceKey
 from diwire.types import Factory, Lifetime
 
-# Re-export all moved names for backward compatibility
-__all__ = [
-    "ScopedContainer",
-    "_AsyncInjectedFunction",
-    "_AsyncScopedInjectedFunction",
-    "_InjectedFunction",
-    "_OpenGenericRegistration",
-    "_ResolvedDependencies",
-    "_ScopeId",
-    "_ScopedInjectedFunction",
-    "_build_signature_without_injected",
-    "_current_scope",
-    "_get_context_id",
-    "_get_generic_origin_and_args",
-    "_get_resolution_stack",
-    "_get_return_annotation",
-    "_has_injected_annotation",
-    "_is_any_type",
-    "_is_async_factory",
-    "_is_method_descriptor",
-    "_is_typevar",
-    "_is_union_type",
-    "_resolution_stack",
-    "_type_arg_matches_constraint",
-    "_unwrap_method_descriptor",
-]
-
 T = TypeVar("T", bound=Any)
 _C = TypeVar("_C", bound=type)  # For class decorator
-
-from diwire.container_injection import (  # noqa: E402
-    _AsyncInjectedFunction,
-    _AsyncScopedInjectedFunction,
-    _InjectedFunction,
-    _ScopedInjectedFunction,
-)
-from diwire.container_locks import LockManager  # noqa: E402
-from diwire.container_resolution_stack import (  # noqa: E402
-    _get_context_id,
-    _get_resolution_stack,
-    _resolution_stack,
-)
-from diwire.container_scopes import (  # noqa: E402
-    ScopedContainer,
-    _current_scope,
-    _ScopeId,
-)
 
 
 class Container:
@@ -233,35 +195,6 @@ class Container:
         self._closed = False
 
         self.register(type(self), instance=self, lifetime=Lifetime.SINGLETON)
-
-    # Backward-compatible lock delegation properties
-    @property
-    def _singleton_locks(self) -> dict[Any, asyncio.Lock]:
-        return self._locks._singleton_locks  # noqa: SLF001
-
-    @property
-    def _sync_singleton_locks(self) -> dict[Any, threading.Lock]:
-        return self._locks._sync_singleton_locks  # noqa: SLF001
-
-    @property
-    def _scoped_singleton_locks(self) -> dict[Any, asyncio.Lock]:
-        return self._locks._scoped_singleton_locks  # noqa: SLF001
-
-    @property
-    def _sync_scoped_singleton_locks(self) -> dict[Any, threading.Lock]:  # pragma: no cover
-        return self._locks._sync_scoped_singleton_locks  # noqa: SLF001
-
-    async def _get_singleton_lock(self, key: Any) -> asyncio.Lock:
-        return await self._locks.get_singleton_lock(key)
-
-    def _get_sync_singleton_lock(self, key: Any) -> threading.Lock:
-        return self._locks.get_sync_singleton_lock(key)
-
-    async def _get_scoped_singleton_lock(self, cache_key: Any) -> asyncio.Lock:  # pragma: no cover
-        return await self._locks.get_scoped_singleton_lock(cache_key)
-
-    def _get_sync_scoped_singleton_lock(self, cache_key: Any) -> threading.Lock:  # pragma: no cover
-        return self._locks.get_sync_scoped_singleton_lock(cache_key)
 
     # Overload 1: Bare class decorator - @container.register
     # Must come first to match the direct decorator pattern

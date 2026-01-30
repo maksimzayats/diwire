@@ -509,7 +509,7 @@ class TestAsyncConcurrentResolution:
         service_key = ServiceKey.from_value(SlowAsyncService)
 
         # Get the singleton lock
-        singleton_lock = await container._get_singleton_lock(service_key)
+        singleton_lock = await container._locks.get_singleton_lock(service_key)
 
         # Create a pre-made instance to inject into the cache
         injected_instance = SlowAsyncService()
@@ -546,17 +546,17 @@ class TestSyncSingletonLocking:
         service_key = ServiceKey.from_value(TestService)
 
         # Lock should not exist before resolution
-        assert service_key not in container._sync_singleton_locks
+        assert service_key not in container._locks._sync_singleton_locks
 
         # Get a lock
-        lock = container._get_sync_singleton_lock(service_key)
+        lock = container._locks.get_sync_singleton_lock(service_key)
 
         # Lock should now exist
-        assert service_key in container._sync_singleton_locks
-        assert lock is container._sync_singleton_locks[service_key]
+        assert service_key in container._locks._sync_singleton_locks
+        assert lock is container._locks._sync_singleton_locks[service_key]
 
         # Getting the same lock again should return the same object
-        lock2 = container._get_sync_singleton_lock(service_key)
+        lock2 = container._locks.get_sync_singleton_lock(service_key)
         assert lock is lock2
 
     def test_sync_singleton_double_check_locking(self) -> None:
