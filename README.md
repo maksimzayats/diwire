@@ -8,8 +8,8 @@
 [![codecov](https://codecov.io/gh/MaksimZayats/diwire/graph/badge.svg)](https://codecov.io/gh/MaksimZayats/diwire)
 
 diwire is a dependency injection container for Python 3.10+ that builds your object graph from type hints alone. It
-supports scoped lifetimes, async-first resolution, generator-based cleanup, open generics, and free-threaded Python (
-no-GIL) — all with zero runtime dependencies.
+supports scoped lifetimes, async-first resolution, generator-based cleanup,
+open generics, and free-threaded Python (no-GIL) — all with zero runtime dependencies.
 
 ## Quick Start
 
@@ -47,11 +47,11 @@ which needs a `Database`, and builds the entire chain automatically.
 ## Installation
 
 ```bash
-pip install diwire
+uv add diwire
 ```
 
 ```bash
-uv add diwire
+pip install diwire
 ```
 
 ## Features
