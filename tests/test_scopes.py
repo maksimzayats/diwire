@@ -12,10 +12,10 @@ import pytest
 
 from diwire.container import (
     Container,
-    InjectedFunction,
-    ScopedInjectedFunction,
-    ScopeId,
     _current_scope,
+    _InjectedFunction,
+    _ScopedInjectedFunction,
+    _ScopeId,
 )
 from diwire.exceptions import (
     DIWireAsyncCleanupWithoutEventLoopError,
@@ -195,7 +195,7 @@ class TestScopedInjected:
             return service
 
         result = container.resolve(handler, scope="request")
-        assert isinstance(result, ScopedInjectedFunction)
+        assert isinstance(result, _ScopedInjectedFunction)
 
     def test_scoped_injected_shares_instance_within_call(self, container: Container) -> None:
         """ScopedInjected shares scoped instances within a single call."""
@@ -457,8 +457,8 @@ class TestAutoScopeDetection:
         # No explicit scope - should auto-detect from Session dependency
         request_handler = container.resolve(handler)
 
-        # Should be ScopedInjectedFunction because Session has scope="request"
-        assert isinstance(request_handler, ScopedInjectedFunction)
+        # Should be _ScopedInjectedFunction because Session has scope="request"
+        assert isinstance(request_handler, _ScopedInjectedFunction)
 
     def test_explicit_scope_overrides_auto_detection(self, container: Container) -> None:
         """Explicit scope parameter overrides auto-detection."""
@@ -469,7 +469,7 @@ class TestAutoScopeDetection:
 
         # Explicit scope
         result = container.resolve(handler, scope="custom")
-        assert isinstance(result, ScopedInjectedFunction)
+        assert isinstance(result, _ScopedInjectedFunction)
 
     def test_no_scope_returns_injected(self, container: Container) -> None:
         """Without scoped dependencies, resolve returns regular Injected."""
@@ -479,8 +479,8 @@ class TestAutoScopeDetection:
             return service
 
         result = container.resolve(handler)
-        assert isinstance(result, InjectedFunction)
-        assert not isinstance(result, ScopedInjectedFunction)
+        assert isinstance(result, _InjectedFunction)
+        assert not isinstance(result, _ScopedInjectedFunction)
 
     def test_auto_detect_scope_from_scoped_registry(self, container: Container) -> None:
         """resolve() auto-detects scope from scoped_registry."""
@@ -490,7 +490,7 @@ class TestAutoScopeDetection:
             return session
 
         injected = container.resolve(handler)
-        assert isinstance(injected, ScopedInjectedFunction)
+        assert isinstance(injected, _ScopedInjectedFunction)
 
     def test_ambiguous_scope_detection_returns_none(self, container: Container) -> None:
         """Ambiguous scopes (different values) don't auto-detect."""
@@ -507,8 +507,8 @@ class TestAutoScopeDetection:
 
         injected = container.resolve(handler)
         # Should not auto-detect scope due to ambiguity
-        assert isinstance(injected, InjectedFunction)
-        assert not isinstance(injected, ScopedInjectedFunction)
+        assert isinstance(injected, _InjectedFunction)
+        assert not isinstance(injected, _ScopedInjectedFunction)
 
 
 class TestScopeHierarchyMatching:
@@ -1519,7 +1519,7 @@ class TestScopeErrorRecovery:
             scope_id = _current_scope.get()
 
             # Manually clear the scope (unusual operation)
-            container.clear_scope(scope_id)  # type: ignore[arg-type]
+            container._clear_scope(scope_id)  # type: ignore[arg-type]
 
             # After clearing, a new instance is created (cache was emptied)
             session2 = container.resolve(Session)
@@ -1539,7 +1539,7 @@ class TestScopeErrorRecovery:
         assert not any(k[0] == scope_id.segments for k in container._scoped_instances)
 
         # Manually calling clear_scope again should be idempotent (no error)
-        container.clear_scope(scope_id)
+        container._clear_scope(scope_id)
 
         # Still no error and scope context is None
         assert _current_scope.get() is None
@@ -1668,7 +1668,7 @@ class TestConcurrentScopeEdgeCases:
                     for key in list(container._scoped_instances.keys()):
                         scope_segments, _ = key
                         if scope_segments and scope_segments[0][0] == "test":
-                            container.clear_scope(ScopeId(segments=scope_segments))
+                            container._clear_scope(_ScopeId(segments=scope_segments))
                 except expected_race_errors:  # noqa: PERF203
                     pass  # Expected race condition outcome
                 except Exception as e:
@@ -3162,7 +3162,7 @@ class TestImperativeScopeManagement:
 
             with contextlib.suppress(ValueError, RuntimeError):
                 _current_scope.reset(scope._token)
-            scope._container.clear_scope(scope._scope_id)
+            scope._container._clear_scope(scope._scope_id)
             # Deliberately skip _unregister_active_scope
             scope._exited = True
 
@@ -3187,7 +3187,7 @@ class TestImperativeScopeManagement:
 
                 with contextlib.suppress(ValueError, RuntimeError):
                     _current_scope.reset(scope._token)
-                await scope._container.aclear_scope(scope._scope_id)
+                await scope._container._aclear_scope(scope._scope_id)
                 # Deliberately skip _unregister_active_scope
                 scope._exited = True
 
@@ -3238,12 +3238,12 @@ class TestContainerClosedError:
         container: Container,
     ) -> None:
         """Directly creating ScopedContainer on closed container raises error."""
-        from diwire.container import ScopedContainer, ScopeId
+        from diwire.container import ScopedContainer, _ScopeId
         from diwire.exceptions import DIWireContainerClosedError
 
         container.close()
 
-        scope_id = ScopeId(segments=((None, 1),))
+        scope_id = _ScopeId(segments=((None, 1),))
 
         with pytest.raises(DIWireContainerClosedError, match="closed container"):
             ScopedContainer(container, scope_id)

@@ -78,12 +78,14 @@ from diwire.registry import Registration
 from diwire.service_key import Component, ServiceKey
 from diwire.types import Factory, Injected, Lifetime
 
+__all__ = ["Container", "ScopedContainer"]
+
 T = TypeVar("T", bound=Any)
 _C = TypeVar("_C", bound=type)  # For class decorator
 
 
 @dataclass(frozen=True, slots=True)
-class ScopeId:
+class _ScopeId:
     """Tuple-based scope identifier for fast scope matching.
 
     Replaces string-based scope paths to eliminate split/join operations.
@@ -123,7 +125,7 @@ _resolution_stack: ContextVar[tuple[int | None, list[ServiceKey]] | None] = Cont
 )
 
 # Context variable for current scope
-_current_scope: ContextVar[ScopeId | None] = ContextVar("current_scope", default=None)
+_current_scope: ContextVar[_ScopeId | None] = ContextVar("current_scope", default=None)
 
 
 def _get_context_id() -> int | None:
@@ -263,7 +265,7 @@ def _is_method_descriptor(obj: Any) -> bool:
 
 
 @dataclass(kw_only=True, slots=True, frozen=True)
-class ResolvedDependencies:
+class _ResolvedDependencies:
     """Result of dependency resolution containing resolved values and any missing keys."""
 
     dependencies: dict[str, Any] = field(default_factory=dict)
@@ -366,7 +368,7 @@ def _get_generic_origin_and_args(value: Any) -> tuple[type | None, tuple[Any, ..
     return origin, get_args(value)
 
 
-class InjectedFunction(Generic[T]):
+class _InjectedFunction(Generic[T]):
     """A callable wrapper that resolves dependencies on each call.
 
     This ensures transient dependencies are created fresh on every invocation,
@@ -423,7 +425,7 @@ class InjectedFunction(Generic[T]):
         return {name: self._container.resolve(dep) for name, dep in injected_deps.items()}
 
     def __repr__(self) -> str:
-        return f"InjectedFunction({self._func!r})"
+        return f"_InjectedFunction({self._func!r})"
 
     def __get__(self, obj: Any, objtype: type | None = None) -> Any:
         """Descriptor protocol to bind this callable to an instance when used as a method."""
@@ -447,7 +449,7 @@ class ScopedContainer:
     """
 
     _container: Container
-    _scope_id: ScopeId
+    _scope_id: _ScopeId
     _token: Any = field(default=None, init=False)
     _exited: bool = field(default=False, init=False)
     _activated: bool = field(default=False, init=False)
@@ -495,7 +497,7 @@ class ScopedContainer:
             return
         with contextlib.suppress(ValueError, RuntimeError):
             _current_scope.reset(self._token)
-        self._container.clear_scope(self._scope_id)
+        self._container._clear_scope(self._scope_id)  # noqa: SLF001
         self._container._unregister_active_scope(self)  # noqa: SLF001
         self._exited = True
 
@@ -505,7 +507,7 @@ class ScopedContainer:
             return
         with contextlib.suppress(ValueError, RuntimeError):
             _current_scope.reset(self._token)
-        await self._container.aclear_scope(self._scope_id)
+        await self._container._aclear_scope(self._scope_id)  # noqa: SLF001
         self._container._unregister_active_scope(self)  # noqa: SLF001
         self._exited = True
 
@@ -542,10 +544,10 @@ class ScopedContainer:
         await self._close_async()
 
 
-class ScopedInjectedFunction(Generic[T]):
+class _ScopedInjectedFunction(Generic[T]):
     """A callable wrapper that creates a new scope for each call.
 
-    Similar to InjectedFunction, but ensures SCOPED dependencies are shared
+    Similar to _InjectedFunction, but ensures SCOPED dependencies are shared
     within a single call invocation.
 
     Uses lazy initialization to support `from __future__ import annotations`,
@@ -600,7 +602,7 @@ class ScopedInjectedFunction(Generic[T]):
         return {name: self._container.resolve(dep) for name, dep in injected_deps.items()}
 
     def __repr__(self) -> str:
-        return f"ScopedInjectedFunction({self._func!r}, scope={self._scope_name!r})"
+        return f"_ScopedInjectedFunction({self._func!r}, scope={self._scope_name!r})"
 
     def __get__(self, obj: Any, objtype: type | None = None) -> Any:
         """Descriptor protocol to bind this callable to an instance when used as a method."""
@@ -609,7 +611,7 @@ class ScopedInjectedFunction(Generic[T]):
         return types.MethodType(self, obj)
 
 
-class AsyncInjectedFunction(Generic[T]):
+class _AsyncInjectedFunction(Generic[T]):
     """A callable wrapper that resolves dependencies on each call for async functions.
 
     This ensures transient dependencies are created fresh on every invocation,
@@ -671,7 +673,7 @@ class AsyncInjectedFunction(Generic[T]):
         return dict(zip(coros.keys(), results, strict=True))
 
     def __repr__(self) -> str:
-        return f"AsyncInjectedFunction({self._func!r})"
+        return f"_AsyncInjectedFunction({self._func!r})"
 
     def __get__(self, obj: Any, objtype: type | None = None) -> Any:
         """Descriptor protocol to bind this callable to an instance when used as a method."""
@@ -680,10 +682,10 @@ class AsyncInjectedFunction(Generic[T]):
         return types.MethodType(self, obj)
 
 
-class AsyncScopedInjectedFunction(Generic[T]):
+class _AsyncScopedInjectedFunction(Generic[T]):
     """A callable wrapper that creates a new async scope for each call.
 
-    Similar to AsyncInjectedFunction, but ensures SCOPED dependencies are shared
+    Similar to _AsyncInjectedFunction, but ensures SCOPED dependencies are shared
     within a single call invocation.
 
     Uses lazy initialization to support `from __future__ import annotations`,
@@ -743,7 +745,7 @@ class AsyncScopedInjectedFunction(Generic[T]):
         return dict(zip(coros.keys(), results, strict=True))
 
     def __repr__(self) -> str:
-        return f"AsyncScopedInjectedFunction({self._func!r}, scope={self._scope_name!r})"
+        return f"_AsyncScopedInjectedFunction({self._func!r}, scope={self._scope_name!r})"
 
     def __get__(self, obj: Any, objtype: type | None = None) -> Any:
         """Descriptor protocol to bind this callable to an instance when used as a method."""
@@ -1512,10 +1514,10 @@ class Container:
         current = _current_scope.get()
         segments = (*current.segments, new_segment) if current is not None else (new_segment,)
 
-        scope_id = ScopeId(segments=segments)
+        scope_id = _ScopeId(segments=segments)
         return ScopedContainer(_container=self, _scope_id=scope_id)
 
-    def clear_scope(self, scope_id: ScopeId) -> None:
+    def _clear_scope(self, scope_id: _ScopeId) -> None:
         """Clear cached instances for a scope.
 
         Args:
@@ -1534,7 +1536,7 @@ class Container:
             try:
                 loop = asyncio.get_running_loop()
             except RuntimeError:
-                # No running event loop - leave stack in place for later aclear_scope() call
+                # No running event loop - leave stack in place for later _aclear_scope() call
                 scope_name = scope_key[-1][0] if scope_key else None
                 raise DIWireAsyncCleanupWithoutEventLoopError(scope_name) from None
             # Event loop is running - schedule cleanup as a task
@@ -1902,7 +1904,7 @@ class Container:
         key: Callable[..., Coroutine[Any, Any, T]],
         *,
         scope: None = None,
-    ) -> AsyncInjectedFunction[T]: ...
+    ) -> _AsyncInjectedFunction[T]: ...
 
     @overload
     def resolve(
@@ -1910,13 +1912,13 @@ class Container:
         key: Callable[..., Coroutine[Any, Any, T]],
         *,
         scope: str,
-    ) -> AsyncScopedInjectedFunction[T]: ...
+    ) -> _AsyncScopedInjectedFunction[T]: ...
 
     @overload
-    def resolve(self, key: Callable[..., T], *, scope: None = None) -> InjectedFunction[T]: ...
+    def resolve(self, key: Callable[..., T], *, scope: None = None) -> _InjectedFunction[T]: ...
 
     @overload
-    def resolve(self, key: Callable[..., T], *, scope: str) -> ScopedInjectedFunction[T]: ...
+    def resolve(self, key: Callable[..., T], *, scope: str) -> _ScopedInjectedFunction[T]: ...
 
     @overload
     def resolve(self, key: ServiceKey, *, scope: str | None = None) -> Any: ...
@@ -2000,14 +2002,14 @@ class Container:
 
             if effective_scope is not None:
                 if is_async_func:
-                    return AsyncScopedInjectedFunction(
+                    return _AsyncScopedInjectedFunction(
                         func=service_key.value,
                         container=self,
                         dependencies_extractor=self._dependencies_extractor,
                         service_key=service_key,
                         scope_name=effective_scope,
                     )
-                return ScopedInjectedFunction(
+                return _ScopedInjectedFunction(
                     func=service_key.value,
                     container=self,
                     dependencies_extractor=self._dependencies_extractor,
@@ -2015,13 +2017,13 @@ class Container:
                     scope_name=effective_scope,
                 )
             if is_async_func:
-                return AsyncInjectedFunction(
+                return _AsyncInjectedFunction(
                     func=service_key.value,
                     container=self,
                     dependencies_extractor=self._dependencies_extractor,
                     service_key=service_key,
                 )
-            return InjectedFunction(
+            return _InjectedFunction(
                 func=service_key.value,
                 container=self,
                 dependencies_extractor=self._dependencies_extractor,
@@ -2243,7 +2245,7 @@ class Container:
         key: Callable[..., Coroutine[Any, Any, T]],
         *,
         scope: None = None,
-    ) -> AsyncInjectedFunction[T]: ...
+    ) -> _AsyncInjectedFunction[T]: ...
 
     @overload
     async def aresolve(
@@ -2251,7 +2253,7 @@ class Container:
         key: Callable[..., Coroutine[Any, Any, T]],
         *,
         scope: str,
-    ) -> AsyncScopedInjectedFunction[T]: ...
+    ) -> _AsyncScopedInjectedFunction[T]: ...
 
     @overload
     async def aresolve(self, key: ServiceKey, *, scope: str | None = None) -> Any: ...
@@ -2318,14 +2320,14 @@ class Container:
 
             if effective_scope is not None:
                 if is_async_func:
-                    return AsyncScopedInjectedFunction(
+                    return _AsyncScopedInjectedFunction(
                         func=service_key.value,
                         container=self,
                         dependencies_extractor=self._dependencies_extractor,
                         service_key=service_key,
                         scope_name=effective_scope,
                     )
-                return ScopedInjectedFunction(
+                return _ScopedInjectedFunction(
                     func=service_key.value,
                     container=self,
                     dependencies_extractor=self._dependencies_extractor,
@@ -2333,13 +2335,13 @@ class Container:
                     scope_name=effective_scope,
                 )
             if is_async_func:
-                return AsyncInjectedFunction(
+                return _AsyncInjectedFunction(
                     func=service_key.value,
                     container=self,
                     dependencies_extractor=self._dependencies_extractor,
                     service_key=service_key,
                 )
-            return InjectedFunction(
+            return _InjectedFunction(
                 func=service_key.value,
                 container=self,
                 dependencies_extractor=self._dependencies_extractor,
@@ -2532,9 +2534,9 @@ class Container:
         service_key: ServiceKey,
         *,
         typevar_map: dict[Any, Any] | None = None,
-    ) -> ResolvedDependencies:
+    ) -> _ResolvedDependencies:
         """Asynchronously resolve dependencies for a service."""
-        resolved_dependencies = ResolvedDependencies()
+        resolved_dependencies = _ResolvedDependencies()
 
         dependencies = self._dependencies_extractor.get_dependencies_with_defaults(
             service_key=service_key,
@@ -2689,7 +2691,7 @@ class Container:
                     self._sync_singleton_locks[key] = threading.Lock()
         return self._sync_singleton_locks[key]
 
-    async def aclear_scope(self, scope_id: ScopeId) -> None:
+    async def _aclear_scope(self, scope_id: _ScopeId) -> None:
         """Asynchronously clear cached instances for a scope.
 
         This properly cleans up async generators registered in the scope.
@@ -2843,7 +2845,7 @@ class Container:
     def _get_scoped_registration(
         self,
         service_key: ServiceKey,
-        current_scope: ScopeId,
+        current_scope: _ScopeId,
     ) -> Registration | None:
         """Get a scoped registration for a service, if one exists.
 
@@ -2864,7 +2866,7 @@ class Container:
         self,
         origin: type,
         component: Component | None,
-        current_scope: ScopeId,
+        current_scope: _ScopeId,
     ) -> _OpenGenericRegistration | None:
         """Get a scoped open generic registration for a matching scope, if any."""
         for i in range(len(current_scope.segments), 0, -1):
@@ -2924,7 +2926,7 @@ class Container:
         name: str,
         param_info: ParameterInfo,
         typevar_map: dict[Any, Any] | None,
-        resolved_dependencies: ResolvedDependencies,
+        resolved_dependencies: _ResolvedDependencies,
     ) -> bool:
         """Inject TypeVar-bound arguments if present; return True when handled."""
         if param_info.typevar is None:
@@ -2945,7 +2947,7 @@ class Container:
     def _resolve_open_generic_registration(
         self,
         service_key: ServiceKey,
-        current_scope: ScopeId | None,
+        current_scope: _ScopeId | None,
     ) -> Registration | None:
         origin, args = _get_generic_origin_and_args(service_key.value)
         if origin is None or not args:
@@ -2999,7 +3001,7 @@ class Container:
     def _get_registration(
         self,
         service_key: ServiceKey,
-        current_scope: ScopeId | None,
+        current_scope: _ScopeId | None,
     ) -> Registration:
         """Get the registration for a service, checking scoped registry first.
 
@@ -3048,13 +3050,13 @@ class Container:
 
     def _get_cache_scope(
         self,
-        current_scope: ScopeId | None,
+        current_scope: _ScopeId | None,
         registered_scope: str | None,
     ) -> tuple[tuple[str | None, int], ...] | None:
         """Get the scope key to use for caching scoped instances.
 
         Returns the tuple key up to and including the registered scope segment.
-        E.g., current=ScopeId((("request", 1), ("child", 2))), registered="request"
+        E.g., current=_ScopeId((("request", 1), ("child", 2))), registered="request"
         -> (("request", 1),)
         """
         if current_scope is None:
@@ -3065,7 +3067,7 @@ class Container:
         # Find segments up to and including the registered scope name
         return current_scope.get_cache_key_for_scope(registered_scope)
 
-    def _scope_matches(self, current_scope: ScopeId, registered_scope: str) -> bool:
+    def _scope_matches(self, current_scope: _ScopeId, registered_scope: str) -> bool:
         """Check if the current scope matches or contains the registered scope.
 
         Uses tuple iteration instead of string operations for performance.
@@ -3143,8 +3145,8 @@ class Container:
         service_key: ServiceKey,
         *,
         typevar_map: dict[Any, Any] | None = None,
-    ) -> ResolvedDependencies:
-        resolved_dependencies = ResolvedDependencies()
+    ) -> _ResolvedDependencies:
+        resolved_dependencies = _ResolvedDependencies()
 
         dependencies = self._dependencies_extractor.get_dependencies_with_defaults(
             service_key=service_key,

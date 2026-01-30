@@ -2,6 +2,8 @@ from collections.abc import Callable, Generator
 from enum import Enum
 from typing import Any, TypeAlias
 
+__all__ = ["Injected", "Lifetime"]
+
 
 class Lifetime(str, Enum):
     """Defines the lifetime of a service in the container."""
@@ -19,7 +21,7 @@ class Lifetime(str, Enum):
 class FactoryClassProtocol:
     """Protocol for factory classes that create instances of a specific type."""
 
-    def __call__(self, *args: Any, **kwargs: Any) -> "FactoryReturn": ...  # noqa: D102
+    def __call__(self, *args: Any, **kwargs: Any) -> "FactoryReturn": ...
 
 
 FactoryReturn: TypeAlias = Any | Generator[Any, None, None]

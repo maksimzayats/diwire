@@ -10,11 +10,11 @@ from inspect import signature
 from typing import Annotated
 
 from diwire.container import (
-    AsyncInjectedFunction,
-    AsyncScopedInjectedFunction,
     Container,
-    InjectedFunction,
-    ScopedInjectedFunction,
+    _AsyncInjectedFunction,
+    _AsyncScopedInjectedFunction,
+    _InjectedFunction,
+    _ScopedInjectedFunction,
 )
 from diwire.types import Injected, Lifetime
 
@@ -78,7 +78,7 @@ class TestPEP563ForwardReferences:
     """Test that forward references work when type is defined after decorator."""
 
     def test_sync_injected_with_forward_reference(self) -> None:
-        """InjectedFunction wrapper works when type is defined after the decorated function."""
+        """_InjectedFunction wrapper works when type is defined after the decorated function."""
         container = Container()
 
         # Decorate function BEFORE ForwardService is defined
@@ -99,7 +99,7 @@ class TestPEP563ForwardReferences:
         assert "ForwardService" in result
 
     def test_async_injected_with_forward_reference(self) -> None:
-        """AsyncInjectedFunction wrapper works with forward references."""
+        """_AsyncInjectedFunction wrapper works with forward references."""
         container = Container()
 
         @container.resolve()
@@ -112,10 +112,10 @@ class TestPEP563ForwardReferences:
         # Signature should be correct at decoration time
         sig = signature(handler)
         assert list(sig.parameters.keys()) == ["value"]
-        assert isinstance(handler, AsyncInjectedFunction)
+        assert isinstance(handler, _AsyncInjectedFunction)
 
     def test_scoped_injected_with_forward_reference(self) -> None:
-        """ScopedInjectedFunction works with explicit scope and forward references."""
+        """_ScopedInjectedFunction works with explicit scope and forward references."""
         container = Container()
         container.register(
             ForwardService,
@@ -132,10 +132,10 @@ class TestPEP563ForwardReferences:
 
         sig = signature(handler)
         assert list(sig.parameters.keys()) == ["value"]
-        assert isinstance(handler, ScopedInjectedFunction)
+        assert isinstance(handler, _ScopedInjectedFunction)
 
     def test_async_scoped_injected_with_forward_reference(self) -> None:
-        """AsyncScopedInjectedFunction works with explicit scope and forward references."""
+        """_AsyncScopedInjectedFunction works with explicit scope and forward references."""
         container = Container()
         container.register(
             ForwardService,
@@ -152,7 +152,7 @@ class TestPEP563ForwardReferences:
 
         sig = signature(handler)
         assert list(sig.parameters.keys()) == ["value"]
-        assert isinstance(handler, AsyncScopedInjectedFunction)
+        assert isinstance(handler, _AsyncScopedInjectedFunction)
 
 
 class TestPEP563ScopeDetection:
@@ -175,7 +175,7 @@ class TestPEP563ScopeDetection:
         def handler(service: Annotated[ForwardService, Injected()]) -> str:
             return service.name
 
-        assert isinstance(handler, ScopedInjectedFunction)
+        assert isinstance(handler, _ScopedInjectedFunction)
 
     def test_scope_detection_fallback_on_name_error(self) -> None:
         """When scope detection fails due to NameError, should fall back gracefully."""
@@ -187,9 +187,9 @@ class TestPEP563ScopeDetection:
         def handler(service: Annotated[ForwardService, Injected()]) -> str:
             return service.name
 
-        # Should be regular InjectedFunction (not ScopedInjectedFunction) since scope
+        # Should be regular _InjectedFunction (not _ScopedInjectedFunction) since scope
         # detection couldn't resolve the type
-        assert isinstance(handler, InjectedFunction)
+        assert isinstance(handler, _InjectedFunction)
 
 
 class TestPEP563Resolution:

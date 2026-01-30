@@ -5,6 +5,12 @@ from diwire.registry import Registration
 from diwire.service_key import ServiceKey
 from diwire.types import Lifetime
 
+__all__ = [
+    "DEFAULT_AUTOREGISTER_IGNORES",
+    "DEFAULT_AUTOREGISTER_LIFETIME",
+    "DEFAULT_AUTOREGISTER_REGISTRATION_FACTORIES",
+]
+
 DEFAULT_AUTOREGISTER_IGNORES: set[type[Any]] = {
     int,
     str,

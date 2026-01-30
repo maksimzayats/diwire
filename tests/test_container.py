@@ -9,14 +9,14 @@ import pytest
 
 from diwire.compiled_providers import ScopedSingletonArgsProvider
 from diwire.container import (
-    AsyncInjectedFunction,
-    AsyncScopedInjectedFunction,
     Container,
-    InjectedFunction,
-    ScopedInjectedFunction,
-    ScopeId,
+    _AsyncInjectedFunction,
+    _AsyncScopedInjectedFunction,
     _current_scope,
+    _InjectedFunction,
     _is_async_factory,
+    _ScopedInjectedFunction,
+    _ScopeId,
 )
 from diwire.dependencies import DependenciesExtractor
 from diwire.exceptions import (
@@ -112,7 +112,7 @@ def test_resolve_function_returns_injected(container: Container) -> None:
         return service
 
     injected = container.resolve(my_func)
-    assert isinstance(injected, InjectedFunction)
+    assert isinstance(injected, _InjectedFunction)
 
 
 def test_injected_resolves_transient_deps_on_each_call(container: Container) -> None:
@@ -356,7 +356,7 @@ class TestAsyncResolveFunction:
         injected = await container.aresolve(my_func)
 
         # Should be Injected, not AsyncInjected
-        assert isinstance(injected, InjectedFunction)
+        assert isinstance(injected, _InjectedFunction)
         # Verify it's callable and works
         result = injected()
         assert isinstance(result, ServiceA)
@@ -482,7 +482,7 @@ class TestDescriptorProtocol:
         self,
         container: Container,
     ) -> None:
-        """InjectedFunction descriptor returns self when accessed on class."""
+        """_InjectedFunction descriptor returns self when accessed on class."""
 
         class ServiceA:
             pass
@@ -493,7 +493,7 @@ class TestDescriptorProtocol:
         service_key = ServiceKey.from_value(my_func)
         deps_extractor = DependenciesExtractor()
 
-        injected_func = InjectedFunction(
+        injected_func = _InjectedFunction(
             func=my_func,
             container=container,
             dependencies_extractor=deps_extractor,
@@ -508,7 +508,7 @@ class TestDescriptorProtocol:
         self,
         container: Container,
     ) -> None:
-        """ScopedInjectedFunction descriptor returns self when accessed on class."""
+        """_ScopedInjectedFunction descriptor returns self when accessed on class."""
 
         class ServiceA:
             pass
@@ -519,7 +519,7 @@ class TestDescriptorProtocol:
         service_key = ServiceKey.from_value(my_func)
         deps_extractor = DependenciesExtractor()
 
-        scoped_injected = ScopedInjectedFunction(
+        scoped_injected = _ScopedInjectedFunction(
             func=my_func,
             container=container,
             dependencies_extractor=deps_extractor,
@@ -535,7 +535,7 @@ class TestDescriptorProtocol:
         self,
         container: Container,
     ) -> None:
-        """AsyncInjectedFunction descriptor returns self when accessed on class."""
+        """_AsyncInjectedFunction descriptor returns self when accessed on class."""
 
         class ServiceA:
             pass
@@ -546,7 +546,7 @@ class TestDescriptorProtocol:
         service_key = ServiceKey.from_value(my_async_func)
         deps_extractor = DependenciesExtractor()
 
-        async_injected = AsyncInjectedFunction(
+        async_injected = _AsyncInjectedFunction(
             func=my_async_func,
             container=container,
             dependencies_extractor=deps_extractor,
@@ -561,7 +561,7 @@ class TestDescriptorProtocol:
         self,
         container: Container,
     ) -> None:
-        """AsyncScopedInjectedFunction descriptor returns self when accessed on class."""
+        """_AsyncScopedInjectedFunction descriptor returns self when accessed on class."""
 
         class ServiceA:
             pass
@@ -572,7 +572,7 @@ class TestDescriptorProtocol:
         service_key = ServiceKey.from_value(my_async_func)
         deps_extractor = DependenciesExtractor()
 
-        async_scoped_injected = AsyncScopedInjectedFunction(
+        async_scoped_injected = _AsyncScopedInjectedFunction(
             func=my_async_func,
             container=container,
             dependencies_extractor=deps_extractor,
@@ -734,7 +734,7 @@ class TestForwardReferenceHandling:
         result = container.resolve(handler)
 
         # Should return an Injected (not ScopedInjected) because scope detection failed
-        assert isinstance(result, InjectedFunction)
+        assert isinstance(result, _InjectedFunction)
 
     @pytest.mark.asyncio
     async def test_aresolve_forward_reference_name_error(self) -> None:
@@ -749,7 +749,7 @@ class TestForwardReferenceHandling:
         result = await container.aresolve(handler)
 
         # Should return an Injected (not ScopedInjected)
-        assert isinstance(result, InjectedFunction)
+        assert isinstance(result, _InjectedFunction)
 
 
 class TestAsyncResolutionEdgeCases:
@@ -1008,7 +1008,7 @@ class TestAsyncResolutionEdgeCases:
         )
 
         # Create a scope context
-        scope_id = ScopeId(segments=(("request", 1),))
+        scope_id = _ScopeId(segments=(("request", 1),))
         token = _current_scope.set(scope_id)
         try:
             service_key = ServiceKey.from_value(ServiceA)
@@ -1046,7 +1046,7 @@ class TestAsyncResolutionEdgeCases:
         injected = container.resolve(handler, scope="request")
 
         # Verify it's a ScopedInjected (scope was detected from ServiceB registration)
-        assert isinstance(injected, ScopedInjectedFunction)
+        assert isinstance(injected, _ScopedInjectedFunction)
 
 
 class TestMissingCoverageSync:
@@ -1465,7 +1465,7 @@ class TestCoverageEdgeCases:
 
         # Create a scope ID with an anonymous segment (name=None)
         # This simulates entering nested scopes where inner one is anonymous
-        scope_id = ScopeId(segments=(("request", 1), (None, 2)))
+        scope_id = _ScopeId(segments=(("request", 1), (None, 2)))
         token = _current_scope.set(scope_id)
         try:
             service_key = ServiceKey.from_value(Session)
@@ -1498,7 +1498,7 @@ class TestCoverageEdgeCases:
         injected = container.resolve(handler, scope="request")
 
         # Should be ScopedInjected because scope was explicitly provided
-        assert isinstance(injected, ScopedInjectedFunction)
+        assert isinstance(injected, _ScopedInjectedFunction)
 
     def test_resolve_dependencies_error_with_default(self) -> None:
         """_resolve_dependencies handles error when param has default."""
@@ -1561,4 +1561,4 @@ class TestDependencyExtractionErrorHandling:
         result = container.resolve(handler)
 
         # Should return Injected (no scope detected due to extraction error)
-        assert isinstance(result, InjectedFunction)
+        assert isinstance(result, _InjectedFunction)

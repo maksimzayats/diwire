@@ -8,11 +8,11 @@ from typing import Annotated, Any
 import pytest
 
 from diwire.container import (
-    AsyncInjectedFunction,
-    AsyncScopedInjectedFunction,
     Container,
-    InjectedFunction,
-    ScopedInjectedFunction,
+    _AsyncInjectedFunction,
+    _AsyncScopedInjectedFunction,
+    _InjectedFunction,
+    _ScopedInjectedFunction,
 )
 from diwire.exceptions import DIWireServiceNotRegisteredError
 from diwire.types import Injected, Lifetime
@@ -30,42 +30,42 @@ class TestDecoratorBasic:
     """Basic decorator pattern tests."""
 
     def test_decorator_with_scope_sync(self, container: Container) -> None:
-        """@container.resolve(scope="test") on sync function returns ScopedInjectedFunction."""
+        """@container.resolve(scope="test") on sync function returns _ScopedInjectedFunction."""
 
         @container.resolve(scope="test")
         def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
-        assert isinstance(handler, ScopedInjectedFunction)
+        assert isinstance(handler, _ScopedInjectedFunction)
 
     @pytest.mark.asyncio
     async def test_decorator_with_scope_async(self, container: Container) -> None:
-        """@container.resolve(scope="test") on async function returns AsyncScopedInjectedFunction."""
+        """@container.resolve(scope="test") on async function returns _AsyncScopedInjectedFunction."""
 
         @container.resolve(scope="test")
         async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
-        assert isinstance(handler, AsyncScopedInjectedFunction)
+        assert isinstance(handler, _AsyncScopedInjectedFunction)
 
     def test_decorator_without_scope_sync(self, container: Container) -> None:
-        """@container.resolve() on sync function returns InjectedFunction."""
+        """@container.resolve() on sync function returns _InjectedFunction."""
 
         @container.resolve()
         def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
-        assert isinstance(handler, InjectedFunction)
+        assert isinstance(handler, _InjectedFunction)
 
     @pytest.mark.asyncio
     async def test_decorator_without_scope_async(self, container: Container) -> None:
-        """@container.resolve() on async function returns AsyncInjectedFunction."""
+        """@container.resolve() on async function returns _AsyncInjectedFunction."""
 
         @container.resolve()
         async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
-        assert isinstance(handler, AsyncInjectedFunction)
+        assert isinstance(handler, _AsyncInjectedFunction)
 
 
 class TestDecoratorBackwardCompatibility:
@@ -78,7 +78,7 @@ class TestDecoratorBackwardCompatibility:
             return service
 
         injected = container.resolve(my_func, scope="test")
-        assert isinstance(injected, ScopedInjectedFunction)
+        assert isinstance(injected, _ScopedInjectedFunction)
 
     def test_type_resolution_still_works(self, container: Container) -> None:
         """container.resolve(MyService) works."""
@@ -92,7 +92,7 @@ class TestDecoratorBackwardCompatibility:
             return service
 
         injected = container.resolve(my_func)
-        assert isinstance(injected, InjectedFunction)
+        assert isinstance(injected, _InjectedFunction)
 
 
 class TestDecoratorMetadataPreservation:
@@ -418,4 +418,4 @@ class TestDecoratorWithoutParentheses:
             return service
 
         result = injected(handler)
-        assert isinstance(result, InjectedFunction)
+        assert isinstance(result, _InjectedFunction)
