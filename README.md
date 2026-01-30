@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![codecov](https://codecov.io/gh/MaksimZayats/diwire/graph/badge.svg)](https://codecov.io/gh/MaksimZayats/diwire)
 
-`diwire` is a lightweight DI container for Python 3.10+ that resolves dependency graphs from type hints, supports scoped lifetimes, and cleans up resources via generator factories. It is async-first, thread-safe, and has zero runtime dependencies.
+`diwire` is a lightweight DI container for Python 3.10+ that resolves dependency graphs from type hints, supports scoped lifetimes, and cleans up resources via generator factories. It is async-first, thread-safe (including free-threaded Python 3.13t+), and has zero runtime dependencies.
 
 ## Why diwire
 
@@ -16,6 +16,7 @@
 - **Generator factories** with cleanup on scope exit
 - **Async support** with `aresolve()` and async factories
 - **Interface + component registration** for multiple implementations
+- **Free-threaded Python** (no-GIL) support out of the box
 - **Zero dependencies** and minimal overhead
 
 ## Installation
