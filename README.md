@@ -88,6 +88,55 @@ print(app.auth.logger.level)  # => INFO
 print(app.logger.level)  # => INFO
 ```
 
+### Decorator Registration
+
+Use `@container.register` as a decorator on classes, factory functions, and static methods — with or without parameters.
+
+```python
+from dataclasses import dataclass
+from typing import Annotated, Protocol
+
+from diwire import Container, Lifetime, Component
+
+
+class IDatabase(Protocol):
+    def query(self, sql: str) -> str: ...
+
+
+container = Container()
+
+
+# Bare decorator — registers the class with default lifetime
+@container.register
+class Config:
+    debug: bool = True
+
+
+# With lifetime parameter
+@container.register(lifetime=Lifetime.SINGLETON)
+class Logger:
+    def log(self, msg: str) -> None:
+        print(f"[LOG] {msg}")
+
+
+# Interface binding via decorator
+@container.register(IDatabase, lifetime=Lifetime.SINGLETON)
+class PostgresDatabase:
+    def query(self, sql: str) -> str:
+        return f"result of: {sql}"
+
+
+# Factory function — return type is inferred from annotation
+@container.register
+def create_connection_string(config: Config) -> Annotated[str, Component("connection_string")]:
+    return f"postgres://localhost?debug={config.debug}"
+
+
+print(container.resolve(Config).debug)  # => True
+print(container.resolve(IDatabase).query("SELECT 1"))  # => result of: SELECT 1
+print(container.resolve(Annotated[str, Component("connection_string")]))  # => postgres://localhost?debug=True
+```
+
 ### Lifetimes
 
 Control how instances are created and shared.
@@ -153,6 +202,42 @@ with container.enter_scope("request") as scope:
     print(session.closed)  # => False
 
 print(session.closed)  # => True
+```
+
+### Auto-Register Safety
+
+When auto-registration is enabled and a type already has a scoped registration, diwire raises
+`DIWireScopeMismatchError` instead of silently creating a second, unscoped instance. This prevents bugs where you
+expect a scoped service but accidentally resolve it outside the correct scope.
+
+```python
+from dataclasses import dataclass
+
+from diwire import Container, Lifetime
+
+
+@dataclass
+class Session:
+    active: bool = True
+
+
+container = Container(autoregister=True)
+container.register(Session, lifetime=Lifetime.SCOPED, scope="request")
+
+# Resolving outside any scope raises — no silent fallback
+# container.resolve(Session)  # => DIWireScopeMismatchError
+
+# Resolving inside the correct scope works
+with container.enter_scope("request") as scope:
+    session = scope.resolve(Session)
+    print(session.active)  # => True
+
+# Unregistered types still auto-register normally
+@dataclass
+class Logger:
+    level: str = "INFO"
+
+print(container.resolve(Logger).level)  # => INFO
 ```
 
 ### Async Support
