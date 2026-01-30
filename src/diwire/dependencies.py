@@ -173,7 +173,7 @@ class DependenciesExtractor:
     def _get_type_hints(self, service_key: ServiceKey) -> dict[str, Any]:
         """Get type hints for a service, with fallback for generated __init__ (e.g. pydantic).
 
-        For non-class callables (functions/methods), returns get_type_hints(__init__).
+        For non-class callables (functions/methods), returns get_type_hints(callable).
         For classes, checks if __init__ hints cover the class's __signature__ params. If not
         (generated __init__), falls back to class-level annotations filtered by signature.
         """
