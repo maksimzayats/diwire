@@ -2563,6 +2563,32 @@ class TestCrossThreadDefaultContainer:
         finally:
             _current_container.reset(initial_token)
 
+    def test_default_container_fallback_when_contextvar_and_threadlocal_cleared(self) -> None:
+        """get_current() falls back to _default_container when ContextVar and thread-local are unset."""
+        container = Container()
+        container.register(ServiceA, instance=ServiceA(id="default-fallback"))
+
+        initial_token = _current_container.set(None)
+        original_default = container_context._default_container
+        had_thread_local = hasattr(_thread_local_fallback, "container")
+        original_thread_local = getattr(_thread_local_fallback, "container", None)
+        try:
+            # Set _default_container but clear ContextVar and thread-local
+            container_context._default_container = container
+            if hasattr(_thread_local_fallback, "container"):
+                del _thread_local_fallback.container
+
+            # get_current should fall through to _default_container (line 320)
+            result = container_context.get_current()
+            assert result is container
+        finally:
+            _current_container.reset(initial_token)
+            container_context._default_container = original_default
+            if had_thread_local:
+                _thread_local_fallback.container = original_thread_local
+            elif hasattr(_thread_local_fallback, "container"):
+                del _thread_local_fallback.container
+
     def test_decorated_sync_handler_works_from_thread_pool(self) -> None:
         """Decorated sync handlers work when called from thread pool."""
         from concurrent.futures import ThreadPoolExecutor
