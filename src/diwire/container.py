@@ -5,31 +5,17 @@ import contextlib
 import inspect
 import itertools
 import threading
-import types
 from collections.abc import AsyncGenerator, Callable, Coroutine, Generator
 from contextlib import AsyncExitStack, ExitStack
-from contextvars import ContextVar
-from dataclasses import dataclass, field
-from functools import wraps
-from inspect import signature
 from types import FunctionType, MethodType
 from typing import (
-    TYPE_CHECKING,
-    Annotated,
     Any,
     ClassVar,
-    Generic,
     TypeVar,
-    Union,
     cast,
-    get_args,
     get_origin,
-    get_type_hints,
     overload,
 )
-
-if TYPE_CHECKING:
-    from typing_extensions import Self
 
 from diwire.compiled_providers import (
     ArgsTypeProvider,
@@ -42,6 +28,21 @@ from diwire.compiled_providers import (
     SingletonFactoryProvider,
     SingletonTypeProvider,
     TypeProvider,
+)
+from diwire.container_helpers import (
+    _build_signature_without_injected,
+    _get_generic_origin_and_args,
+    _get_return_annotation,
+    _has_injected_annotation,
+    _is_any_type,
+    _is_async_factory,
+    _is_method_descriptor,
+    _is_typevar,
+    _is_union_type,
+    _OpenGenericRegistration,
+    _ResolvedDependencies,
+    _type_arg_matches_constraint,
+    _unwrap_method_descriptor,
 )
 from diwire.defaults import (
     DEFAULT_AUTOREGISTER_IGNORES,
@@ -76,680 +77,55 @@ from diwire.exceptions import (
 )
 from diwire.registry import Registration
 from diwire.service_key import Component, ServiceKey
-from diwire.types import Factory, Injected, Lifetime
+from diwire.types import Factory, Lifetime
+
+# Re-export all moved names for backward compatibility
+__all__ = [
+    "ScopedContainer",
+    "_AsyncInjectedFunction",
+    "_AsyncScopedInjectedFunction",
+    "_InjectedFunction",
+    "_OpenGenericRegistration",
+    "_ResolvedDependencies",
+    "_ScopeId",
+    "_ScopedInjectedFunction",
+    "_build_signature_without_injected",
+    "_current_scope",
+    "_get_context_id",
+    "_get_generic_origin_and_args",
+    "_get_resolution_stack",
+    "_get_return_annotation",
+    "_has_injected_annotation",
+    "_is_any_type",
+    "_is_async_factory",
+    "_is_method_descriptor",
+    "_is_typevar",
+    "_is_union_type",
+    "_resolution_stack",
+    "_type_arg_matches_constraint",
+    "_unwrap_method_descriptor",
+]
 
 T = TypeVar("T", bound=Any)
 _C = TypeVar("_C", bound=type)  # For class decorator
 
-
-@dataclass(frozen=True, slots=True)
-class _ScopeId:
-    """Tuple-based scope identifier for fast scope matching.
-
-    Replaces string-based scope paths to eliminate split/join operations.
-    Each segment is a (scope_name, instance_id) pair.
-    """
-
-    segments: tuple[tuple[str | None, int], ...]
-
-    @property
-    def path(self) -> str:
-        """Generate string path only when needed (error messages)."""
-        parts = []
-        for name, id_ in self.segments:
-            parts.append(f"{name}/{id_}" if name else str(id_))
-        return "/".join(parts)
-
-    def contains_scope(self, scope_name: str) -> bool:
-        """Check if this scope contains the given scope name."""
-        return any(name == scope_name for name, _ in self.segments)
-
-    def get_cache_key_for_scope(self, scope_name: str) -> tuple[tuple[str | None, int], ...] | None:
-        """Get the tuple key up to and including the specified scope segment.
-
-        Returns None if the scope is not found.
-        """
-        for i, (name, _) in enumerate(self.segments):
-            if name == scope_name:
-                return self.segments[: i + 1]
-        return None
-
-
-# Context variable for resolution tracking (works with both threads and async tasks)
-# Stores (task_id, stack) tuple to detect when stack needs cloning for new async tasks
-_resolution_stack: ContextVar[tuple[int | None, list[ServiceKey]] | None] = ContextVar(
-    "resolution_stack",
-    default=None,
+from diwire.container_injection import (  # noqa: E402
+    _AsyncInjectedFunction,
+    _AsyncScopedInjectedFunction,
+    _InjectedFunction,
+    _ScopedInjectedFunction,
 )
-
-# Context variable for current scope
-_current_scope: ContextVar[_ScopeId | None] = ContextVar("current_scope", default=None)
-
-
-def _get_context_id() -> int | None:
-    """Get an identifier for the current execution context.
-
-    Returns the id of the current async task if running in an async context,
-    or None if running in a sync context.
-    """
-    try:
-        task = asyncio.current_task()
-        return id(task) if task is not None else None
-    except RuntimeError:
-        return None
-
-
-def _get_resolution_stack() -> list[ServiceKey]:
-    """Get the current context's resolution stack.
-
-    When called from a different async task than the one that created the stack,
-    returns a cloned copy to ensure task isolation during parallel resolution.
-    """
-    current_task_id = _get_context_id()
-    stored = _resolution_stack.get()
-
-    if stored is None:
-        # Create a new list for this context
-        stack: list[ServiceKey] = []
-        _resolution_stack.set((current_task_id, stack))
-        return stack
-
-    owner_task_id, stack = stored
-
-    # If we're in a different async task, clone the stack for isolation
-    if current_task_id is not None and owner_task_id != current_task_id:
-        cloned_stack = list(stack)
-        _resolution_stack.set((current_task_id, cloned_stack))
-        return cloned_stack
-
-    return stack
-
-
-def _is_async_factory(factory: Any) -> bool:
-    """Check if a factory is async (coroutine function or async generator function)."""
-    # Handle callable classes by checking __call__ method
-    if isinstance(factory, type):
-        call_method = getattr(factory, "__call__", None)  # noqa: B004
-        if call_method is not None:
-            return inspect.iscoroutinefunction(call_method) or inspect.isasyncgenfunction(
-                call_method,
-            )
-        return False  # pragma: no cover - __call__ is never None for a normal class
-
-    # Handle callable instances (objects with __call__ that aren't functions/classes)
-    if callable(factory) and not inspect.isfunction(factory) and not inspect.ismethod(factory):
-        wrapped_factory = getattr(factory, "func", None)
-        if wrapped_factory is not None and (
-            inspect.isfunction(wrapped_factory) or inspect.ismethod(wrapped_factory)
-        ):
-            return inspect.iscoroutinefunction(wrapped_factory) or inspect.isasyncgenfunction(
-                wrapped_factory,
-            )
-        call_method = getattr(factory, "__call__", None)  # noqa: B004
-        # Callable objects always have __call__, so this is always True
-        if call_method is not None:  # pragma: no branch
-            return inspect.iscoroutinefunction(call_method) or inspect.isasyncgenfunction(
-                call_method,
-            )
-
-    return inspect.iscoroutinefunction(factory) or inspect.isasyncgenfunction(factory)
-
-
-def _get_return_annotation(func: Callable[..., Any]) -> type | None:
-    """Extract the return type annotation from a callable.
-
-    Returns None if there's no return annotation or if the return type is None.
-    Handles unwrapping of Optional, Union, AsyncGenerator, Generator, etc.
-    """
-    try:
-        hints = get_type_hints(func, include_extras=True)
-    except (NameError, TypeError, AttributeError):
-        # NameError: unresolved forward references
-        # TypeError: invalid type annotations
-        # AttributeError: missing module or attribute
-        return None
-
-    return_type = hints.get("return")
-    if return_type is None:
-        return None
-
-    # Handle NoneType - if return annotation is just None/NoneType, return None
-    if return_type is type(None):
-        return None
-
-    # Unwrap async generator and generator types
-    origin = get_origin(return_type)
-    if origin is not None:
-        # Handle Annotated[T, ...] - return full type to preserve metadata
-        if origin is Annotated:
-            return return_type  # type: ignore[return-value]
-        # Handle Generator[YieldType, SendType, ReturnType] and AsyncGenerator[YieldType, SendType]
-        if origin in (Generator, AsyncGenerator):
-            args = get_args(return_type)
-            if args:
-                return args[0]  # Return the yield type
-        # Handle union types - return the full union type, not just the origin
-        if _is_union_type(return_type):
-            return return_type  # type: ignore[return-value]
-        # Handle other generic types - just return the origin if it's a class
-        if isinstance(origin, type):
-            return origin
-
-    # Return the type if it's a class
-    if isinstance(return_type, type):
-        return return_type
-
-    return None
-
-
-def _unwrap_method_descriptor(
-    obj: Any,
-) -> tuple[Callable[..., Any] | None, Any]:
-    """Unwrap staticmethod descriptors to get the underlying function.
-
-    Returns:
-        A tuple of (unwrapped_function, original_descriptor).
-        If obj is not a descriptor, returns (None, None).
-
-    """
-    if isinstance(obj, staticmethod):
-        return obj.__func__, obj
-    return None, None
-
-
-def _is_method_descriptor(obj: Any) -> bool:
-    """Check if obj is a staticmethod descriptor."""
-    return isinstance(obj, staticmethod)
-
-
-@dataclass(kw_only=True, slots=True, frozen=True)
-class _ResolvedDependencies:
-    """Result of dependency resolution containing resolved values and any missing keys."""
-
-    dependencies: dict[str, Any] = field(default_factory=dict)
-    missing: list[ServiceKey] = field(default_factory=list)
-
-
-@dataclass(frozen=True, slots=True)
-class _OpenGenericRegistration:
-    """Open generic registration template."""
-
-    service_key: ServiceKey
-    registration: Registration
-    typevars: tuple[Any, ...]
-
-
-def _has_injected_annotation(param: inspect.Parameter) -> bool:
-    """Check if a parameter has Injected in its annotation.
-
-    Handles both:
-    - String annotations (from `from __future__ import annotations` / PEP 563)
-    - Resolved Annotated types with Injected metadata
-    """
-    annotation = param.annotation
-    if annotation is inspect.Parameter.empty:
-        return False
-
-    # String annotation check (PEP 563)
-    if isinstance(annotation, str):
-        return "Injected" in annotation
-
-    # Check for Annotated type with Injected metadata
-    # For Annotated[T, ...], args[0] is T and args[1:] are the metadata
-    if get_origin(annotation) is Annotated:
-        args = get_args(annotation)
-        return any(isinstance(arg, Injected) for arg in args[1:])
-
-    return False
-
-
-def _build_signature_without_injected(func: Callable[..., Any]) -> inspect.Signature:
-    """Build a signature excluding parameters marked with Injected."""
-    original_sig = signature(func)
-    new_params = [p for p in original_sig.parameters.values() if not _has_injected_annotation(p)]
-    return original_sig.replace(parameters=new_params)
-
-
-def _is_typevar(arg: Any) -> bool:
-    """Return True when arg is a TypeVar instance."""
-    return isinstance(arg, TypeVar)
-
-
-def _is_any_type(arg: Any) -> bool:
-    """Return True when arg represents Any."""
-    return arg is Any
-
-
-def _is_union_type(value: Any) -> bool:
-    """Check if value is a union type (str | int or Union[str, int])."""
-    origin = get_origin(value)
-    # Python 3.10+ uses types.UnionType for `X | Y` syntax
-    # typing.Union is used for Union[X, Y] syntax
-    return origin is types.UnionType or origin is Union
-
-
-def _type_arg_matches_constraint(arg: Any, constraint: Any) -> bool:
-    """Check whether a type argument satisfies a bound/constraint."""
-    if _is_any_type(arg) or _is_any_type(constraint):
-        return True
-    # For generic aliases (e.g., list[int]), compare structurally.
-    # This check must come BEFORE isinstance(arg, type) because in Python 3.10,
-    # types.GenericAlias passes isinstance(arg, type) but issubclass fails on it.
-    arg_origin = get_origin(arg)
-    constraint_origin = get_origin(constraint)
-    if arg_origin is not None and constraint_origin is not None:
-        if arg_origin != constraint_origin:
-            return False
-        arg_args = get_args(arg)
-        constraint_args = get_args(constraint)
-        if len(arg_args) != len(constraint_args):
-            return False
-        return all(
-            _type_arg_matches_constraint(a, c)
-            for a, c in zip(arg_args, constraint_args, strict=True)
-        )
-    if isinstance(arg, type) and isinstance(constraint, type):
-        try:
-            return issubclass(arg, constraint)
-        except TypeError:
-            return False
-    return arg == constraint
-
-
-def _get_generic_origin_and_args(value: Any) -> tuple[type | None, tuple[Any, ...]]:
-    """Return (origin, args) for generic aliases, or (None, ()) otherwise."""
-    origin = get_origin(value)
-    if origin is None or origin is Annotated:
-        return None, ()
-    if not isinstance(origin, type):
-        return None, ()
-    return origin, get_args(value)
-
-
-class _InjectedFunction(Generic[T]):
-    """A callable wrapper that resolves dependencies on each call.
-
-    This ensures transient dependencies are created fresh on every invocation,
-    while singletons are still shared as expected.
-
-    Uses lazy initialization to support `from __future__ import annotations`,
-    deferring type hint resolution until the first call.
-    """
-
-    def __init__(
-        self,
-        func: Callable[..., T],
-        container: Container,
-        dependencies_extractor: DependenciesExtractor,
-        service_key: ServiceKey,
-    ) -> None:
-        self._func = func
-        self._container = container
-        self._dependencies_extractor = dependencies_extractor
-        self._service_key = service_key
-        self._injected_params: set[str] | None = None
-
-        # Preserve function metadata for introspection
-        wraps(func)(self)
-        self.__name__: str = getattr(func, "__name__", repr(func))
-        self.__wrapped__: Callable[..., T] = func
-
-        # Build signature at decoration time by detecting Injected in annotations
-        # This works even with string annotations from PEP 563
-        self.__signature__ = _build_signature_without_injected(func)
-
-    def _ensure_initialized(self) -> None:
-        """Lazily extract dependencies on first call."""
-        if self._injected_params is not None:
-            return
-        injected_deps = self._dependencies_extractor.get_injected_dependencies(
-            service_key=self._service_key,
-        )
-        self._injected_params = set(injected_deps.keys())
-
-    def __call__(self, *args: Any, **kwargs: Any) -> T:
-        """Call the wrapped function, resolving Injected dependencies fresh each time."""
-        self._ensure_initialized()
-        resolved = self._resolve_injected_dependencies()
-        # Merge resolved dependencies with explicit kwargs (explicit kwargs take precedence)
-        merged_kwargs = {**resolved, **kwargs}
-        return self._func(*args, **merged_kwargs)
-
-    def _resolve_injected_dependencies(self) -> dict[str, Any]:
-        """Resolve dependencies marked with Injected."""
-        injected_deps = self._dependencies_extractor.get_injected_dependencies(
-            service_key=self._service_key,
-        )
-        return {name: self._container.resolve(dep) for name, dep in injected_deps.items()}
-
-    def __repr__(self) -> str:
-        return f"_InjectedFunction({self._func!r})"
-
-    def __get__(self, obj: Any, objtype: type | None = None) -> Any:
-        """Descriptor protocol to bind this callable to an instance when used as a method."""
-        if obj is None:
-            return self
-        return types.MethodType(self, obj)
-
-
-@dataclass
-class ScopedContainer:
-    """A context manager for scoped dependency resolution.
-
-    Supports both sync and async context managers:
-    - `with container.enter_scope()` for sync usage
-    - `async with container.enter_scope()` for async usage with proper async cleanup
-
-    Also supports imperative usage:
-    - `scope = container.enter_scope()` to activate immediately
-    - `scope.close()` or `scope.aclose()` to close explicitly
-    - `container.close()` or `container.aclose()` to close all active scopes
-    """
-
-    _container: Container
-    _scope_id: _ScopeId
-    _token: Any = field(default=None, init=False)
-    _exited: bool = field(default=False, init=False)
-    _activated: bool = field(default=False, init=False)
-
-    def __post_init__(self) -> None:
-        """Activate scope immediately on creation for imperative usage."""
-        self._token = _current_scope.set(self._scope_id)
-        try:
-            self._container._register_active_scope(self)  # noqa: SLF001
-            self._activated = True
-        except:
-            with contextlib.suppress(ValueError, RuntimeError):
-                _current_scope.reset(self._token)
-            raise
-
-    def resolve(self, key: Any) -> Any:
-        """Resolve a service within this scope."""
-        if self._exited:
-            current = _current_scope.get()
-            raise DIWireScopeMismatchError(
-                ServiceKey.from_value(key),
-                self._scope_id.path,
-                current.path if current else None,
-            )
-        return self._container.resolve(key)
-
-    async def aresolve(self, key: Any) -> Any:
-        """Asynchronously resolve a service within this scope."""
-        if self._exited:
-            current = _current_scope.get()
-            raise DIWireScopeMismatchError(
-                ServiceKey.from_value(key),
-                self._scope_id.path,
-                current.path if current else None,
-            )
-        return await self._container.aresolve(key)
-
-    def enter_scope(self, scope_name: str | None = None) -> ScopedContainer:
-        """Start a nested scope."""
-        return self._container.enter_scope(scope_name)
-
-    def _close_sync(self) -> None:
-        """Close the scope synchronously."""
-        if self._exited:
-            return
-        with contextlib.suppress(ValueError, RuntimeError):
-            _current_scope.reset(self._token)
-        self._container._clear_scope(self._scope_id)  # noqa: SLF001
-        self._container._unregister_active_scope(self)  # noqa: SLF001
-        self._exited = True
-
-    async def _close_async(self) -> None:
-        """Close the scope asynchronously."""
-        if self._exited:
-            return
-        with contextlib.suppress(ValueError, RuntimeError):
-            _current_scope.reset(self._token)
-        await self._container._aclear_scope(self._scope_id)  # noqa: SLF001
-        self._container._unregister_active_scope(self)  # noqa: SLF001
-        self._exited = True
-
-    def close(self) -> None:
-        """Explicitly close this scope (sync)."""
-        self._close_sync()
-
-    async def aclose(self) -> None:
-        """Explicitly close this scope (async)."""
-        await self._close_async()
-
-    def __enter__(self) -> Self:
-        # Scope is already activated in __post_init__, just return self
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: types.TracebackType | None,
-    ) -> None:
-        self._close_sync()
-
-    async def __aenter__(self) -> Self:
-        # Scope is already activated in __post_init__, just return self
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: types.TracebackType | None,
-    ) -> None:
-        await self._close_async()
-
-
-class _ScopedInjectedFunction(Generic[T]):
-    """A callable wrapper that creates a new scope for each call.
-
-    Similar to _InjectedFunction, but ensures SCOPED dependencies are shared
-    within a single call invocation.
-
-    Uses lazy initialization to support `from __future__ import annotations`,
-    deferring type hint resolution until the first call.
-    """
-
-    def __init__(
-        self,
-        func: Callable[..., T],
-        container: Container,
-        dependencies_extractor: DependenciesExtractor,
-        service_key: ServiceKey,
-        scope_name: str,
-    ) -> None:
-        self._func = func
-        self._container = container
-        self._dependencies_extractor = dependencies_extractor
-        self._service_key = service_key
-        self._injected_params: set[str] | None = None
-        self._scope_name = scope_name
-
-        # Preserve function metadata for introspection
-        wraps(func)(self)
-        self.__name__: str = getattr(func, "__name__", repr(func))
-        self.__wrapped__: Callable[..., T] = func
-
-        # Build signature at decoration time by detecting Injected in annotations
-        # This works even with string annotations from PEP 563
-        self.__signature__ = _build_signature_without_injected(func)
-
-    def _ensure_initialized(self) -> None:
-        """Lazily extract dependencies on first call."""
-        if self._injected_params is not None:
-            return
-        injected_deps = self._dependencies_extractor.get_injected_dependencies(
-            service_key=self._service_key,
-        )
-        self._injected_params = set(injected_deps.keys())
-
-    def __call__(self, *args: Any, **kwargs: Any) -> T:
-        """Call the wrapped function, creating a new scope for this invocation."""
-        self._ensure_initialized()
-        with self._container.enter_scope(self._scope_name):
-            resolved = self._resolve_injected_dependencies()
-            return self._func(*args, **{**resolved, **kwargs})
-
-    def _resolve_injected_dependencies(self) -> dict[str, Any]:
-        """Resolve dependencies marked with Injected."""
-        injected_deps = self._dependencies_extractor.get_injected_dependencies(
-            service_key=self._service_key,
-        )
-        return {name: self._container.resolve(dep) for name, dep in injected_deps.items()}
-
-    def __repr__(self) -> str:
-        return f"_ScopedInjectedFunction({self._func!r}, scope={self._scope_name!r})"
-
-    def __get__(self, obj: Any, objtype: type | None = None) -> Any:
-        """Descriptor protocol to bind this callable to an instance when used as a method."""
-        if obj is None:
-            return self
-        return types.MethodType(self, obj)
-
-
-class _AsyncInjectedFunction(Generic[T]):
-    """A callable wrapper that resolves dependencies on each call for async functions.
-
-    This ensures transient dependencies are created fresh on every invocation,
-    while singletons are still shared as expected.
-
-    Uses lazy initialization to support `from __future__ import annotations`,
-    deferring type hint resolution until the first call.
-    """
-
-    def __init__(
-        self,
-        func: Callable[..., Coroutine[Any, Any, T]],
-        container: Container,
-        dependencies_extractor: DependenciesExtractor,
-        service_key: ServiceKey,
-    ) -> None:
-        self._func = func
-        self._container = container
-        self._dependencies_extractor = dependencies_extractor
-        self._service_key = service_key
-        self._injected_params: set[str] | None = None
-
-        # Preserve function metadata for introspection
-        wraps(func)(self)
-        self.__name__: str = getattr(func, "__name__", repr(func))
-        self.__wrapped__: Callable[..., Coroutine[Any, Any, T]] = func
-
-        # Build signature at decoration time by detecting Injected in annotations
-        # This works even with string annotations from PEP 563
-        self.__signature__ = _build_signature_without_injected(func)
-
-    def _ensure_initialized(self) -> None:
-        """Lazily extract dependencies on first call."""
-        if self._injected_params is not None:
-            return
-        injected_deps = self._dependencies_extractor.get_injected_dependencies(
-            service_key=self._service_key,
-        )
-        self._injected_params = set(injected_deps.keys())
-
-    async def __call__(self, *args: Any, **kwargs: Any) -> T:
-        """Call the wrapped async function, resolving Injected dependencies fresh each time."""
-        self._ensure_initialized()
-        resolved = await self._resolve_injected_dependencies()
-        # Merge resolved dependencies with explicit kwargs (explicit kwargs take precedence)
-        merged_kwargs = {**resolved, **kwargs}
-        return await self._func(*args, **merged_kwargs)
-
-    async def _resolve_injected_dependencies(self) -> dict[str, Any]:
-        """Asynchronously resolve dependencies marked with Injected."""
-        injected_deps = self._dependencies_extractor.get_injected_dependencies(
-            service_key=self._service_key,
-        )
-        # Resolve all dependencies in parallel
-        # Wrap in create_task() so each coroutine gets its own context copy
-        coros = {name: self._container.aresolve(dep) for name, dep in injected_deps.items()}
-        tasks = [asyncio.create_task(coro) for coro in coros.values()]
-        results = await asyncio.gather(*tasks)
-        return dict(zip(coros.keys(), results, strict=True))
-
-    def __repr__(self) -> str:
-        return f"_AsyncInjectedFunction({self._func!r})"
-
-    def __get__(self, obj: Any, objtype: type | None = None) -> Any:
-        """Descriptor protocol to bind this callable to an instance when used as a method."""
-        if obj is None:
-            return self
-        return types.MethodType(self, obj)
-
-
-class _AsyncScopedInjectedFunction(Generic[T]):
-    """A callable wrapper that creates a new async scope for each call.
-
-    Similar to _AsyncInjectedFunction, but ensures SCOPED dependencies are shared
-    within a single call invocation.
-
-    Uses lazy initialization to support `from __future__ import annotations`,
-    deferring type hint resolution until the first call.
-    """
-
-    def __init__(
-        self,
-        func: Callable[..., Coroutine[Any, Any, T]],
-        container: Container,
-        dependencies_extractor: DependenciesExtractor,
-        service_key: ServiceKey,
-        scope_name: str,
-    ) -> None:
-        self._func = func
-        self._container = container
-        self._dependencies_extractor = dependencies_extractor
-        self._service_key = service_key
-        self._injected_params: set[str] | None = None
-        self._scope_name = scope_name
-
-        # Preserve function metadata for introspection
-        wraps(func)(self)
-        self.__name__: str = getattr(func, "__name__", repr(func))
-        self.__wrapped__: Callable[..., Coroutine[Any, Any, T]] = func
-
-        # Build signature at decoration time by detecting Injected in annotations
-        # This works even with string annotations from PEP 563
-        self.__signature__ = _build_signature_without_injected(func)
-
-    def _ensure_initialized(self) -> None:
-        """Lazily extract dependencies on first call."""
-        if self._injected_params is not None:
-            return
-        injected_deps = self._dependencies_extractor.get_injected_dependencies(
-            service_key=self._service_key,
-        )
-        self._injected_params = set(injected_deps.keys())
-
-    async def __call__(self, *args: Any, **kwargs: Any) -> T:
-        """Call the wrapped async function, creating a new scope for this invocation."""
-        self._ensure_initialized()
-        async with self._container.enter_scope(self._scope_name):
-            resolved = await self._resolve_injected_dependencies()
-            return await self._func(*args, **{**resolved, **kwargs})
-
-    async def _resolve_injected_dependencies(self) -> dict[str, Any]:
-        """Asynchronously resolve dependencies marked with Injected."""
-        injected_deps = self._dependencies_extractor.get_injected_dependencies(
-            service_key=self._service_key,
-        )
-        # Resolve all dependencies in parallel
-        # Wrap in create_task() so each coroutine gets its own context copy
-        coros = {name: self._container.aresolve(dep) for name, dep in injected_deps.items()}
-        tasks = [asyncio.create_task(coro) for coro in coros.values()]
-        results = await asyncio.gather(*tasks)
-        return dict(zip(coros.keys(), results, strict=True))
-
-    def __repr__(self) -> str:
-        return f"_AsyncScopedInjectedFunction({self._func!r}, scope={self._scope_name!r})"
-
-    def __get__(self, obj: Any, objtype: type | None = None) -> Any:
-        """Descriptor protocol to bind this callable to an instance when used as a method."""
-        if obj is None:
-            return self
-        return types.MethodType(self, obj)
+from diwire.container_locks import LockManager  # noqa: E402
+from diwire.container_resolution_stack import (  # noqa: E402
+    _get_context_id,
+    _get_resolution_stack,
+    _resolution_stack,
+)
+from diwire.container_scopes import (  # noqa: E402
+    ScopedContainer,
+    _current_scope,
+    _ScopeId,
+)
 
 
 class Container:
@@ -777,6 +153,7 @@ class Container:
         "_dependencies_extractor",
         "_has_scoped_registrations",
         "_is_compiled",
+        "_locks",
         "_open_generic_registry",
         "_registry",
         "_scope_exit_stacks",
@@ -784,15 +161,7 @@ class Container:
         "_scoped_instances",
         "_scoped_open_generic_registry",
         "_scoped_registry",
-        "_scoped_singleton_locks",
-        "_scoped_singleton_locks_lock",
-        "_singleton_locks",
-        "_singleton_locks_lock",
         "_singletons",
-        "_sync_scoped_singleton_locks",
-        "_sync_scoped_singleton_locks_lock",
-        "_sync_singleton_locks",
-        "_sync_singleton_locks_lock",
         "_type_providers",
         "_type_singletons",
     )
@@ -855,27 +224,8 @@ class Container:
         # Cache for async dependency info (Phase 4 optimization)
         self._async_deps_cache: dict[ServiceKey, frozenset[ServiceKey]] = {}
 
-        # Per-cache-key locks for async scoped singleton resolution to prevent races
-        self._scoped_singleton_locks: dict[
-            tuple[tuple[tuple[str | None, int], ...], ServiceKey],
-            asyncio.Lock,
-        ] = {}
-        self._scoped_singleton_locks_lock = asyncio.Lock()
-
-        # Per-cache-key locks for sync scoped singleton resolution to prevent races
-        self._sync_scoped_singleton_locks: dict[
-            tuple[tuple[tuple[str | None, int], ...], ServiceKey],
-            threading.Lock,
-        ] = {}
-        self._sync_scoped_singleton_locks_lock = threading.Lock()
-
-        # Per-service-key locks for async singleton resolution to prevent race conditions
-        self._singleton_locks: dict[ServiceKey, asyncio.Lock] = {}
-        self._singleton_locks_lock = asyncio.Lock()
-
-        # Per-service-key locks for sync singleton resolution to prevent race conditions
-        self._sync_singleton_locks: dict[ServiceKey, threading.Lock] = {}
-        self._sync_singleton_locks_lock = threading.Lock()
+        # Lock manager for singleton and scoped singleton resolution
+        self._locks = LockManager()
 
         # Track active scopes for imperative close()
         self._active_scopes: list[ScopedContainer] = []
@@ -883,6 +233,35 @@ class Container:
         self._closed = False
 
         self.register(type(self), instance=self, lifetime=Lifetime.SINGLETON)
+
+    # Backward-compatible lock delegation properties
+    @property
+    def _singleton_locks(self) -> dict[Any, asyncio.Lock]:
+        return self._locks._singleton_locks  # noqa: SLF001
+
+    @property
+    def _sync_singleton_locks(self) -> dict[Any, threading.Lock]:
+        return self._locks._sync_singleton_locks  # noqa: SLF001
+
+    @property
+    def _scoped_singleton_locks(self) -> dict[Any, asyncio.Lock]:
+        return self._locks._scoped_singleton_locks  # noqa: SLF001
+
+    @property
+    def _sync_scoped_singleton_locks(self) -> dict[Any, threading.Lock]:  # pragma: no cover
+        return self._locks._sync_scoped_singleton_locks  # noqa: SLF001
+
+    async def _get_singleton_lock(self, key: Any) -> asyncio.Lock:
+        return await self._locks.get_singleton_lock(key)
+
+    def _get_sync_singleton_lock(self, key: Any) -> threading.Lock:
+        return self._locks.get_sync_singleton_lock(key)
+
+    async def _get_scoped_singleton_lock(self, cache_key: Any) -> asyncio.Lock:  # pragma: no cover
+        return await self._locks.get_scoped_singleton_lock(cache_key)
+
+    def _get_sync_scoped_singleton_lock(self, cache_key: Any) -> threading.Lock:  # pragma: no cover
+        return self._locks.get_sync_scoped_singleton_lock(cache_key)
 
     # Overload 1: Bare class decorator - @container.register
     # Must come first to match the direct decorator pattern
@@ -1548,12 +927,7 @@ class Container:
         keys_to_remove = [k for k in self._scoped_instances if k[0] == scope_key]
         for k in keys_to_remove:
             del self._scoped_instances[k]
-        scoped_lock_keys = [k for k in self._sync_scoped_singleton_locks if k[0] == scope_key]
-        for k in scoped_lock_keys:
-            del self._sync_scoped_singleton_locks[k]
-        async_scoped_lock_keys = [k for k in self._scoped_singleton_locks if k[0] == scope_key]
-        for k in async_scoped_lock_keys:
-            del self._scoped_singleton_locks[k]
+        self._locks.clear_scope_locks(scope_key)
 
     def _get_scope_exit_stack(
         self,
@@ -2074,7 +1448,7 @@ class Container:
                     cached = self._scoped_instances.get(cache_key)
                     if cached is not None:
                         return cached
-                    scoped_lock = self._get_sync_scoped_singleton_lock(cache_key)
+                    scoped_lock = self._locks.get_sync_scoped_singleton_lock(cache_key)
                     with scoped_lock:
                         cached = self._scoped_instances.get(cache_key)
                         if cached is not None:  # pragma: no cover - race timing dependent
@@ -2129,7 +1503,7 @@ class Container:
                 and cache_key is not None  # type: ignore[redundant-expr]
                 and registration.instance is None
             ):
-                scoped_lock = self._get_sync_scoped_singleton_lock(cache_key)
+                scoped_lock = self._locks.get_sync_scoped_singleton_lock(cache_key)
                 scoped_lock.acquire()
                 # Double-check cache after acquiring lock
                 cached = self._scoped_instances.get(cache_key)
@@ -2154,7 +1528,7 @@ class Container:
             singleton_lock: threading.Lock | None = None
 
             if is_global_singleton:
-                singleton_lock = self._get_sync_singleton_lock(service_key)
+                singleton_lock = self._locks.get_sync_singleton_lock(service_key)
                 singleton_lock.acquire()
                 # Double-check: re-check cache after acquiring lock
                 if service_key in self._singletons:
@@ -2401,7 +1775,7 @@ class Container:
                 and cache_key is not None
                 and registration.instance is None
             ):
-                scoped_lock = await self._get_scoped_singleton_lock(cache_key)
+                scoped_lock = await self._locks.get_scoped_singleton_lock(cache_key)
                 await scoped_lock.acquire()
                 # Double-check cache after acquiring lock
                 cached = self._scoped_instances.get(cache_key)
@@ -2428,7 +1802,7 @@ class Container:
             singleton_lock: asyncio.Lock | None = None
 
             if is_global_singleton:
-                singleton_lock = await self._get_singleton_lock(service_key)
+                singleton_lock = await self._locks.get_singleton_lock(service_key)
                 await singleton_lock.acquire()
                 # Double-check: re-check cache after acquiring lock
                 # This path is hit when another coroutine resolved while we were waiting for the lock
@@ -2629,66 +2003,6 @@ class Container:
             self._async_scope_exit_stacks[scope_key] = async_exit_stack
         return async_exit_stack
 
-    async def _get_scoped_singleton_lock(
-        self,
-        cache_key: tuple[tuple[tuple[str | None, int], ...], ServiceKey],
-    ) -> asyncio.Lock:
-        """Get or create an async lock for scoped singleton resolution of the cache key.
-
-        Uses double-checked locking to minimize lock contention.
-        """
-        if cache_key not in self._scoped_singleton_locks:
-            async with self._scoped_singleton_locks_lock:
-                # Second check after acquiring lock - race timing dependent
-                if (
-                    cache_key not in self._scoped_singleton_locks
-                ):  # pragma: no cover - race timing dependent
-                    self._scoped_singleton_locks[cache_key] = asyncio.Lock()
-        return self._scoped_singleton_locks[cache_key]
-
-    def _get_sync_scoped_singleton_lock(
-        self,
-        cache_key: tuple[tuple[tuple[str | None, int], ...], ServiceKey],
-    ) -> threading.Lock:
-        """Get or create a thread lock for scoped singleton resolution of the cache key.
-
-        Uses double-checked locking to minimize lock contention.
-        """
-        if cache_key not in self._sync_scoped_singleton_locks:
-            with self._sync_scoped_singleton_locks_lock:
-                # Second check after acquiring lock - race timing dependent
-                if (
-                    cache_key not in self._sync_scoped_singleton_locks
-                ):  # pragma: no cover - race timing dependent
-                    self._sync_scoped_singleton_locks[cache_key] = threading.Lock()
-        return self._sync_scoped_singleton_locks[cache_key]
-
-    async def _get_singleton_lock(self, key: ServiceKey) -> asyncio.Lock:
-        """Get or create an async lock for singleton resolution of the given service key.
-
-        Uses double-checked locking to minimize lock contention.
-        """
-        if key not in self._singleton_locks:
-            async with self._singleton_locks_lock:
-                # Second check after acquiring lock - race timing dependent
-                if key not in self._singleton_locks:  # pragma: no cover - race timing dependent
-                    self._singleton_locks[key] = asyncio.Lock()
-        return self._singleton_locks[key]
-
-    def _get_sync_singleton_lock(self, key: ServiceKey) -> threading.Lock:
-        """Get or create a thread lock for singleton resolution of the given service key.
-
-        Uses double-checked locking to minimize lock contention.
-        """
-        if key not in self._sync_singleton_locks:
-            with self._sync_singleton_locks_lock:
-                # Second check after acquiring lock - race timing dependent
-                if (
-                    key not in self._sync_singleton_locks
-                ):  # pragma: no cover - race timing dependent
-                    self._sync_singleton_locks[key] = threading.Lock()
-        return self._sync_singleton_locks[key]
-
     async def _aclear_scope(self, scope_id: _ScopeId) -> None:
         """Asynchronously clear cached instances for a scope.
 
@@ -2713,12 +2027,7 @@ class Container:
         keys_to_remove = [k for k in self._scoped_instances if k[0] == scope_key]
         for k in keys_to_remove:
             del self._scoped_instances[k]
-        scoped_lock_keys = [k for k in self._sync_scoped_singleton_locks if k[0] == scope_key]
-        for k in scoped_lock_keys:
-            del self._sync_scoped_singleton_locks[k]
-        async_scoped_lock_keys = [k for k in self._scoped_singleton_locks if k[0] == scope_key]
-        for k in async_scoped_lock_keys:
-            del self._scoped_singleton_locks[k]
+        self._locks.clear_scope_locks(scope_key)
 
     def _register_active_scope(self, scope: ScopedContainer) -> None:
         """Register a scope as active for imperative close()."""
