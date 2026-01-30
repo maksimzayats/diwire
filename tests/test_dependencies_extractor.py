@@ -1,5 +1,6 @@
 """Tests for DependenciesExtractor class."""
 
+import inspect
 import types
 from dataclasses import dataclass, field
 from typing import Annotated, Generic, TypeVar, Union
@@ -590,3 +591,127 @@ class TestGetDependenciesWithDefaults:
         assert result["required"].has_default is False
         assert result["with_default"].has_default is True
         assert result["with_factory"].has_default is True
+
+
+def _make_generated_init_class(
+    annotations: dict[str, type],
+    defaults: dict[str, object] | None = None,
+) -> type:
+    """Create a class that simulates a generated __init__ (like pydantic BaseModel).
+
+    The class has class-level annotations and a __signature__, but its __init__
+    has no useful type hints (mimicking pydantic's generated __init__).
+    """
+    defaults = defaults or {}
+
+    params = []
+    for name in annotations:
+        default = defaults.get(name, inspect.Parameter.empty)
+        params.append(
+            inspect.Parameter(
+                name,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                default=default,
+            ),
+        )
+
+    cls = type("GeneratedClass", (), {"__annotations__": annotations})
+    cls.__signature__ = inspect.Signature(params)  # type: ignore[attr-defined]
+
+    # Simulate a generated __init__ that has **kwargs (no useful hints)
+    def _generated_init(_self: object, **_kwargs: object) -> None:
+        pass
+
+    cls.__init__ = _generated_init  # type: ignore[misc, assignment]
+    return cls
+
+
+class TestGeneratedInitFallback:
+    """Tests for _get_type_hints fallback with generated __init__ classes."""
+
+    def test_generated_init_class_dependencies(
+        self,
+        dependencies_extractor: DependenciesExtractor,
+    ) -> None:
+        """Class with generated __init__ uses class-level annotations."""
+        cls = _make_generated_init_class({"service_a": ServiceA})
+        deps = dependencies_extractor.get_dependencies(ServiceKey.from_value(cls))
+
+        assert deps == {"service_a": ServiceKey.from_value(ServiceA)}
+
+    def test_generated_init_class_no_fields(
+        self,
+        dependencies_extractor: DependenciesExtractor,
+    ) -> None:
+        """Class with generated __init__ and no fields."""
+        cls = _make_generated_init_class({})
+        deps = dependencies_extractor.get_dependencies(ServiceKey.from_value(cls))
+
+        assert deps == {}
+
+    def test_generated_init_class_with_defaults(
+        self,
+        dependencies_extractor: DependenciesExtractor,
+    ) -> None:
+        """Class with generated __init__ detects default values."""
+        cls = _make_generated_init_class(
+            {"required": ServiceA, "optional": int},
+            defaults={"optional": 42},
+        )
+        result = dependencies_extractor.get_dependencies_with_defaults(
+            ServiceKey.from_value(cls),
+        )
+
+        assert result["required"].has_default is False
+        assert result["optional"].has_default is True
+
+    def test_generated_init_class_multiple_deps(
+        self,
+        dependencies_extractor: DependenciesExtractor,
+    ) -> None:
+        """Class with generated __init__ and multiple dependencies."""
+
+        class ServiceC:
+            pass
+
+        cls = _make_generated_init_class({"a": ServiceA, "b": ServiceB, "c": ServiceC})
+        deps = dependencies_extractor.get_dependencies(ServiceKey.from_value(cls))
+
+        assert deps == {
+            "a": ServiceKey.from_value(ServiceA),
+            "b": ServiceKey.from_value(ServiceB),
+            "c": ServiceKey.from_value(ServiceC),
+        }
+
+    def test_regular_class_still_uses_init_hints(
+        self,
+        dependencies_extractor: DependenciesExtractor,
+    ) -> None:
+        """Regular classes are not affected by the fallback."""
+
+        class RegularClass:
+            def __init__(self, service_a: ServiceA) -> None:
+                self.service_a = service_a
+
+        deps = dependencies_extractor.get_dependencies(ServiceKey.from_value(RegularClass))
+
+        assert deps == {"service_a": ServiceKey.from_value(ServiceA)}
+
+    def test_class_with_matching_signature_and_init_hints(
+        self,
+        dependencies_extractor: DependenciesExtractor,
+    ) -> None:
+        """Class with __signature__ that matches init hints uses init hints."""
+
+        class MatchingClass:
+            def __init__(self, service_a: ServiceA) -> None:
+                self.service_a = service_a
+
+        # Set __signature__ that matches __init__ params
+        MatchingClass.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+            [inspect.Parameter("service_a", inspect.Parameter.POSITIONAL_OR_KEYWORD)],
+        )
+
+        deps = dependencies_extractor.get_dependencies(ServiceKey.from_value(MatchingClass))
+
+        assert deps == {"service_a": ServiceKey.from_value(ServiceA)}
