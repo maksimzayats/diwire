@@ -26,7 +26,7 @@ class UserService:
 
 def main() -> None:
     # Disable auto-registration to see DIWireMissingDependenciesError
-    container = Container(register_if_missing=False)
+    container = Container(autoregister=False)
 
     # Only register UserService, not ExternalAPI
     container.register(UserService)
@@ -42,9 +42,9 @@ def main() -> None:
         print(f"  Service key: {e.service_key}")
         print(f"  Missing dependencies: {e.missing}")
 
-    # With register_if_missing=True (default), simple classes would be auto-registered
-    print("\nWith register_if_missing=True (default):")
-    container_auto = Container(register_if_missing=True)
+    # With autoregister=True (default), simple classes would be auto-registered
+    print("\nWith autoregister=True (default):")
+    container_auto = Container(autoregister=True)
     container_auto.register(UserService)
 
     # Note: ExternalAPI still fails because it has a non-injectable 'api_key' param

@@ -31,7 +31,7 @@ class ILogger(Protocol):
 
 
 # Create the container
-container = Container(register_if_missing=False)
+container = Container(autoregister=False)
 
 
 # Pattern 1: Bare class decorator (transient lifetime by default)

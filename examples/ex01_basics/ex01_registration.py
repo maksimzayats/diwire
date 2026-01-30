@@ -28,7 +28,7 @@ class Cache:
 
 
 def main() -> None:
-    container = Container(register_if_missing=False)
+    container = Container(autoregister=False)
 
     # 1. Simple class registration
     # Container will create instances using the class constructor

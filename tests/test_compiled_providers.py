@@ -526,7 +526,7 @@ class TestCompilationMissingCoverage:
 
     def test_compile_or_get_provider_registration_found(self) -> None:
         """Registration found in registry and compiled."""
-        container = Container(register_if_missing=False, auto_compile=False)
+        container = Container(autoregister=False, auto_compile=False)
 
         class ServiceALocal:
             pass
@@ -547,7 +547,7 @@ class TestCompilationMissingCoverage:
 
     def test_scoped_compilation_ignored_type_without_default(self) -> None:
         """Scoped registration with ignored type (str) without default returns None."""
-        container = Container(register_if_missing=False, auto_compile=False)
+        container = Container(autoregister=False, auto_compile=False)
 
         class ServiceWithStr:
             def __init__(self, name: str) -> None:
@@ -566,7 +566,7 @@ class TestCompilationMissingCoverage:
 
     def test_scoped_compilation_dependency_fails(self) -> None:
         """Scoped registration where dependency compilation fails."""
-        container = Container(register_if_missing=False, auto_compile=False)
+        container = Container(autoregister=False, auto_compile=False)
 
         class UnregisteredDep:
             pass
@@ -589,7 +589,7 @@ class TestCompilationMissingCoverage:
 
     def test_async_deps_cache_non_class_key(self) -> None:
         """Non-class service key causes DIWireError during dependency extraction."""
-        container = Container(register_if_missing=False, auto_compile=False)
+        container = Container(autoregister=False, auto_compile=False)
 
         # Register a string service key - dependency extraction will fail
         string_key = ServiceKey(value="string_service", component=None)
@@ -656,7 +656,7 @@ class TestCompilationMissingCoverage:
 
     def test_compile_scoped_provider_returns_none_on_dependency_extraction_error(self) -> None:
         """_compile_scoped_provider returns None when dependency extraction fails."""
-        container = Container(register_if_missing=False, auto_compile=False)
+        container = Container(autoregister=False, auto_compile=False)
 
         class ServiceWithBadDep:
             def __init__(
@@ -704,7 +704,7 @@ class TestCompilationMissingCoverage:
             def __call__(self) -> ServiceA:
                 return ServiceA(id="factory-result")
 
-        container = Container(register_if_missing=False, auto_compile=False)
+        container = Container(autoregister=False, auto_compile=False)
 
         # Register the factory class which depends on UncompilableDep
         container.register(ServiceA, factory=FactoryClass, lifetime=Lifetime.TRANSIENT)
@@ -745,7 +745,7 @@ class TestCompilationMissingCoverage:
             ) -> None:
                 self.db = db
 
-        container = Container(register_if_missing=True, auto_compile=False)
+        container = Container(autoregister=True, auto_compile=False)
 
         # Register the top-level service
         container.register(ServiceWithComponentDep, lifetime=Lifetime.TRANSIENT)

@@ -10,20 +10,20 @@ from diwire.types import Lifetime
 @pytest.fixture()
 def container() -> Container:
     """Default container with auto-registration enabled."""
-    return Container(register_if_missing=True)
+    return Container(autoregister=True)
 
 
 @pytest.fixture()
 def container_no_autoregister() -> Container:
-    """Container with register_if_missing=False."""
-    return Container(register_if_missing=False)
+    """Container with autoregister=False."""
+    return Container(autoregister=False)
 
 
 @pytest.fixture()
 def container_singleton() -> Container:
     """Container with lifetime singleton as default."""
     return Container(
-        register_if_missing=True,
+        autoregister=True,
         autoregister_default_lifetime=Lifetime.SINGLETON,
     )
 

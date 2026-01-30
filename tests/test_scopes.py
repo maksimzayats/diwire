@@ -259,7 +259,7 @@ class TestScopeValidation:
     def test_scoped_service_not_found_outside_scope(self) -> None:
         """Resolving scoped service outside its scope raises DIWireServiceNotRegisteredError."""
         # With scoped registrations, the registration is only found when scope matches
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with pytest.raises(DIWireServiceNotRegisteredError), container.enter_scope("other_scope"):
@@ -267,7 +267,7 @@ class TestScopeValidation:
 
     def test_scoped_service_not_found_without_scope(self) -> None:
         """Resolving scoped service with no active scope raises DIWireServiceNotRegisteredError."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with pytest.raises(DIWireServiceNotRegisteredError):
@@ -276,7 +276,7 @@ class TestScopeValidation:
     def test_scope_mismatch_error_with_global_registration(self) -> None:
         """DIWireScopeMismatchError raised when global registration has scope that doesn't match."""
         # This tests the case where registration is in global registry with scope set
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         service_key = ServiceKey.from_value(Session)
         container._registry[service_key] = Registration(
             service_key=service_key,
@@ -296,7 +296,7 @@ class TestScopeValidation:
 
     def test_autoregister_raises_error_when_scoped_registration_exists(self) -> None:
         """Auto-registration raises DIWireScopeMismatchError when a scoped registration exists."""
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         container.register(Session, scope="app", lifetime=Lifetime.SCOPED)
 
         with pytest.raises(DIWireScopeMismatchError) as exc_info:
@@ -308,7 +308,7 @@ class TestScopeValidation:
 
     def test_autoregister_raises_error_in_wrong_scope(self) -> None:
         """Auto-registration raises DIWireScopeMismatchError when resolved in wrong scope."""
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         container.register(Session, scope="app", lifetime=Lifetime.SCOPED)
 
         with pytest.raises(DIWireScopeMismatchError) as exc_info, container.enter_scope("other"):
@@ -325,7 +325,7 @@ class TestScopeValidation:
         class Unrelated:
             pass
 
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         container.register(Session, scope="app", lifetime=Lifetime.SCOPED)
 
         # Unrelated has no scoped registration, so auto-registration should work
@@ -542,7 +542,7 @@ class TestScopeHierarchyMatching:
 
     def test_non_matching_scope_not_found(self) -> None:
         """Non-matching scope raises DIWireServiceNotRegisteredError."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with pytest.raises(DIWireServiceNotRegisteredError), container.enter_scope("other"):
@@ -1238,7 +1238,7 @@ class TestTransitiveScopeDependencies:
 
     def test_transitive_scoped_resolved_outside_scope(self) -> None:
         """A -> B(scoped:special) resolved outside scope raises error."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
 
         container.register(OuterService, lifetime=Lifetime.TRANSIENT)
         container.register(InnerService, scope="special", lifetime=Lifetime.SCOPED)
@@ -1787,7 +1787,7 @@ class TestScopeResolutionEdgeCases:
 
     def test_scope_segment_partial_match_rejected(self) -> None:
         """Scope 'req' vs registered 'request': no match."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         # "req" should not match "request"
@@ -1797,7 +1797,7 @@ class TestScopeResolutionEdgeCases:
 
     def test_resolve_service_nonexistent_scope(self) -> None:
         """Service for scope X, in scope Y raises DIWireServiceNotRegisteredError."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         container.register(Session, scope="scope_x", lifetime=Lifetime.SCOPED)
 
         with pytest.raises(DIWireServiceNotRegisteredError):

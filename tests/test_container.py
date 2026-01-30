@@ -590,7 +590,7 @@ class TestCompilationEdgeCases:
 
     def test_async_deps_cache_diwire_error_continues(self) -> None:
         """DIWireError during async deps cache building is caught gracefully."""
-        container = Container(register_if_missing=False, auto_compile=False)
+        container = Container(autoregister=False, auto_compile=False)
 
         class ServiceA:
             pass
@@ -645,7 +645,7 @@ class TestCompilationEdgeCases:
 
     def test_missing_required_ignored_dependency_during_compilation(self) -> None:
         """Missing required ignored dependency returns None during compilation."""
-        container = Container(register_if_missing=False, auto_compile=False)
+        container = Container(autoregister=False, auto_compile=False)
 
         class ServiceWithStr:
             def __init__(self, name: str) -> None:  # str is ignored, no default
@@ -660,7 +660,7 @@ class TestCompilationEdgeCases:
 
     def test_auto_registration_provider_compilation_fallback(self) -> None:
         """Auto-registration compiles providers during resolution."""
-        container = Container(register_if_missing=True, auto_compile=False)
+        container = Container(autoregister=True, auto_compile=False)
 
         class ServiceA:
             pass
@@ -786,7 +786,7 @@ class TestAsyncResolutionEdgeCases:
     @pytest.mark.asyncio
     async def test_aresolve_scope_mismatch(self) -> None:
         """aresolve raises scope mismatch error."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
 
         class ServiceA:
             pass
@@ -905,7 +905,7 @@ class TestAsyncResolutionEdgeCases:
     @pytest.mark.asyncio
     async def test_aresolve_missing_dependencies_error(self) -> None:
         """aresolve raises missing dependencies error."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
 
         class ServiceA:
             pass
@@ -945,7 +945,7 @@ class TestAsyncResolutionEdgeCases:
     @pytest.mark.asyncio
     async def test_aget_resolved_dependencies_diwire_error_with_defaults(self) -> None:
         """DIWireError uses defaults in async resolution."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
 
         class UnregisteredService:
             pass
@@ -1022,7 +1022,7 @@ class TestAsyncResolutionEdgeCases:
     @pytest.mark.asyncio
     async def test_nested_scope_diwire_error_continues(self) -> None:
         """DIWireError during nested scope detection is caught gracefully."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
 
         class ServiceA:
             pass
@@ -1160,7 +1160,7 @@ class TestMissingCoverageSync:
 
     def test_resolve_instance_registration_stores_singleton(self) -> None:
         """Instance registration without scope stores in _singletons."""
-        container = Container(register_if_missing=False, auto_compile=False)
+        container = Container(autoregister=False, auto_compile=False)
 
         class ServiceA:
             pass
@@ -1187,7 +1187,7 @@ class TestCoverageEdgeCases:
 
     def test_compile_dependency_from_registry(self) -> None:
         """_compile_or_get_provider compiles dependency from registry."""
-        container = Container(auto_compile=False, register_if_missing=False)
+        container = Container(auto_compile=False, autoregister=False)
 
         class ServiceA:
             pass
@@ -1213,7 +1213,7 @@ class TestCoverageEdgeCases:
 
     def test_compile_scoped_registration_without_scoped_registry(self) -> None:
         """_compile_scoped_registration handles empty scoped registry."""
-        container = Container(auto_compile=False, register_if_missing=False)
+        container = Container(auto_compile=False, autoregister=False)
 
         class ServiceA:
             pass
@@ -1237,7 +1237,7 @@ class TestCoverageEdgeCases:
 
     def test_compile_auto_registration_returns_none(self) -> None:
         """_compile_or_get_provider auto-registers but compilation fails."""
-        container = Container(auto_compile=False, register_if_missing=True)
+        container = Container(auto_compile=False, autoregister=True)
 
         class ServiceA:
             # str dependency without default - compilation will fail
@@ -1283,7 +1283,7 @@ class TestCoverageEdgeCases:
 
     def test_compile_scoped_registration_with_scoped_dependency(self) -> None:
         """Scoped registration compilation returns None when dependency can't be compiled."""
-        container = Container(auto_compile=False, register_if_missing=False)
+        container = Container(auto_compile=False, autoregister=False)
 
         class ServiceA:
             pass
@@ -1306,7 +1306,7 @@ class TestCoverageEdgeCases:
 
     def test_compile_scoped_registration_skips_scoped_dependency(self) -> None:
         """Scoped compilation skips when dependencies have scoped registrations."""
-        container = Container(auto_compile=False, register_if_missing=False)
+        container = Container(auto_compile=False, autoregister=False)
 
         class ServiceA:
             def __init__(self, name: str) -> None:
@@ -1431,7 +1431,7 @@ class TestCoverageEdgeCases:
             def __init__(self, name: str = "default") -> None:
                 self.name = name
 
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         result = await container.aresolve(ServiceWithIgnoredDefault)
         assert result.name == "default"
 
@@ -1443,7 +1443,7 @@ class TestCoverageEdgeCases:
             def __init__(self, name: str) -> None:
                 self.name = name
 
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         # Explicitly register str - this is normally an ignored type
         container.register(str, instance="explicit_value")
         container.register(ServiceWithStr)
@@ -1478,7 +1478,7 @@ class TestCoverageEdgeCases:
 
     def test_find_scope_in_dependencies_with_extraction_error(self) -> None:
         """_find_scope_in_dependencies catches DIWireError gracefully."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
 
         class ServiceA:
             pass
@@ -1502,7 +1502,7 @@ class TestCoverageEdgeCases:
 
     def test_resolve_dependencies_error_with_default(self) -> None:
         """_resolve_dependencies handles error when param has default."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
 
         class UnregisteredService:
             pass
@@ -1549,7 +1549,7 @@ class TestDependencyExtractionErrorHandling:
             def __init__(self, dep: "UndefinedType") -> None:  # type: ignore[name-defined] # noqa: F821
                 pass
 
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         container.register(ServiceWithBadNestedDep)
 
         # Create a handler that depends on the service with bad nested deps

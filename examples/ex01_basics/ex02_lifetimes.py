@@ -17,7 +17,7 @@ class SingletonService:
 
 
 def main() -> None:
-    container = Container(register_if_missing=False)
+    container = Container(autoregister=False)
 
     # TRANSIENT: new instance every time
     container.register(TransientService, lifetime=Lifetime.TRANSIENT)

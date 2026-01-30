@@ -937,7 +937,7 @@ class TestAsyncMissingCoverage:
         from diwire.registry import Registration
         from diwire.service_key import ServiceKey
 
-        container = Container(register_if_missing=False, auto_compile=False)
+        container = Container(autoregister=False, auto_compile=False)
 
         instance = ServiceA()
         service_key = ServiceKey.from_value(ServiceA)
@@ -998,7 +998,7 @@ class TestAsyncMissingCoverage:
         """Async resolve with ignored type without default raises missing deps error."""
         from diwire.exceptions import DIWireMissingDependenciesError
 
-        container = Container(register_if_missing=False, auto_compile=False)
+        container = Container(autoregister=False, auto_compile=False)
 
         class ServiceWithStr:
             def __init__(self, name: str) -> None:  # str is ignored, no default

@@ -767,6 +767,7 @@ class Container:
         "_async_deps_cache",
         "_async_scope_exit_stacks",
         "_auto_compile",
+        "_autoregister",
         "_autoregister_default_lifetime",
         "_autoregister_ignores",
         "_autoregister_registration_factories",
@@ -777,7 +778,6 @@ class Container:
         "_has_scoped_registrations",
         "_is_compiled",
         "_open_generic_registry",
-        "_register_if_missing",
         "_registry",
         "_scope_exit_stacks",
         "_scoped_compiled_providers",
@@ -800,14 +800,14 @@ class Container:
     def __init__(
         self,
         *,
-        register_if_missing: bool = True,
+        autoregister: bool = True,
         autoregister_ignores: set[type[Any]] | None = None,
         autoregister_registration_factories: dict[type[Any], Callable[[Any], Registration]]
         | None = None,
         autoregister_default_lifetime: Lifetime = DEFAULT_AUTOREGISTER_LIFETIME,
         auto_compile: bool = True,
     ) -> None:
-        self._register_if_missing = register_if_missing
+        self._autoregister = autoregister
         self._autoregister_ignores = autoregister_ignores or DEFAULT_AUTOREGISTER_IGNORES
         self._autoregister_registration_factories = (
             autoregister_registration_factories or DEFAULT_AUTOREGISTER_REGISTRATION_FACTORIES
@@ -1787,7 +1787,7 @@ class Container:
             return provider
 
         # Auto-register if enabled
-        if self._register_if_missing:
+        if self._autoregister:
             try:
                 registration = self._get_auto_registration(service_key)
                 self._registry[service_key] = registration
@@ -3022,7 +3022,7 @@ class Container:
             return registration
 
         # Auto-register if enabled
-        if not self._register_if_missing:
+        if not self._autoregister:
             raise DIWireServiceNotRegisteredError(service_key)
 
         # Check if there's any scoped registration for this key before auto-registering

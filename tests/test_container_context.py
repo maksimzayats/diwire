@@ -178,7 +178,7 @@ class TestProxyMethodDelegation:
 
     def test_register_delegates_to_container(self) -> None:
         """register() delegates to the current container."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         token = container_context.set_current(container)
         try:
             container_context.register(ServiceA, lifetime=Lifetime.SINGLETON)
@@ -238,7 +238,7 @@ class TestRegisterDecoratorPattern:
 
     def test_register_decorator_registers_class(self) -> None:
         """@container_context.register on a class should register it."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         token = container_context.set_current(container)
         try:
 
@@ -253,7 +253,7 @@ class TestRegisterDecoratorPattern:
 
     def test_register_decorator_returns_original_class(self) -> None:
         """@container_context.register should return the original class unchanged."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         token = container_context.set_current(container)
         try:
 
@@ -268,7 +268,7 @@ class TestRegisterDecoratorPattern:
 
     def test_register_decorator_with_lifetime_singleton(self) -> None:
         """@container_context.register(lifetime=SINGLETON) should create singletons."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         token = container_context.set_current(container)
         try:
 
@@ -284,7 +284,7 @@ class TestRegisterDecoratorPattern:
 
     def test_register_factory_decorator_infers_type(self) -> None:
         """@container_context.register on a function should infer return type."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         token = container_context.set_current(container)
         try:
 
@@ -1403,7 +1403,7 @@ class TestErrorPropagation:
         """DIWireServiceNotRegisteredError propagates from decorated function."""
         from diwire.exceptions import DIWireServiceNotRegisteredError
 
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         token = container_context.set_current(container)
         try:
 
@@ -1420,9 +1420,9 @@ class TestErrorPropagation:
         """DIWireCircularDependencyError propagates from decorated function."""
         from diwire.exceptions import DIWireCircularDependencyError
 
-        # Use auto-registration (register_if_missing=True) for proper
+        # Use auto-registration (autoregister=True) for proper
         # circular dependency detection
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
 
         token = container_context.set_current(container)
         try:
@@ -1562,7 +1562,7 @@ class TestContainerOperationsWithoutContainer:
             class DeferredService:
                 pass
 
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             token = container_context.set_current(container)
             try:
                 service = container.resolve(DeferredService)
@@ -1623,7 +1623,7 @@ class TestDeferredRegistrations:
             def create_service() -> ServiceA:
                 return ServiceA(id="deferred-factory")
 
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             token = container_context.set_current(container)
             try:
                 service1 = container.resolve(ServiceA)
@@ -1646,7 +1646,7 @@ class TestDeferredRegistrations:
             container_context._deferred_registrations.clear()
 
             decorator = container_context.register(lifetime=Lifetime.SINGLETON)
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             token = container_context.set_current(container)
             try:
 
@@ -1675,7 +1675,7 @@ class TestDeferredRegistrations:
             instance = ServiceA(id="deferred-instance")
             container_context.register(ServiceA, instance=instance)
 
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             token = container_context.set_current(container)
             try:
                 assert container.resolve(ServiceA) is instance
@@ -1694,7 +1694,7 @@ class TestDeferredRegistrations:
             container_context._default_container = None
             container_context._deferred_registrations.clear()
 
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             _thread_local_fallback.container = container
 
             instance = ServiceA(id="thread-local")
@@ -2665,7 +2665,7 @@ class TestDeferredRegistrationWithTypeKey:
             # Verify function was returned
             assert callable(create_service)
 
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             token = container_context.set_current(container)
             try:
                 service = container.resolve(ServiceA)
@@ -2696,7 +2696,7 @@ class TestDeferredRegistrationWithTypeKey:
             class PostgresDBImpl(IDatabase):  # type: ignore[misc]
                 pass
 
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             token = container_context.set_current(container)
             try:
                 db = container.resolve(IDatabase)
@@ -2745,7 +2745,7 @@ class TestDeferredRegistrationWithTypeKey:
             decorator = container_context.register(MyInterface, lifetime=Lifetime.SINGLETON)
 
             # Set container
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             token = container_context.set_current(container)
             try:
                 # Apply decorator - should delegate to container
@@ -2778,7 +2778,7 @@ class TestDeferredRegistrationWithTypeKey:
             # Should have deferred registration
             assert len(container_context._deferred_registrations) == 1
 
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             token = container_context.set_current(container)
             try:
                 service = container.resolve(ServiceA)
@@ -2813,7 +2813,7 @@ class TestDeferredRegistrationWithTypeKey:
             # Should have deferred registration
             assert len(container_context._deferred_registrations) == 1
 
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             token = container_context.set_current(container)
             try:
                 config = container.resolve(MyConfig)

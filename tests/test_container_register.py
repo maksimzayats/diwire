@@ -504,7 +504,7 @@ class TestResolveManualRegistration:
         self,
         container_no_autoregister: Container,
     ) -> None:
-        """Manual registration works with register_if_missing=False."""
+        """Manual registration works with autoregister=False."""
 
         class ServiceA:
             pass
@@ -819,7 +819,7 @@ class TestBuiltinCallableFactoryWithoutCompilation:
         request_var.set(expected_request)
 
         # Create container without auto-compile
-        c = Container(register_if_missing=True, auto_compile=False)
+        c = Container(autoregister=True, auto_compile=False)
         c.register(Request, factory=request_var.get)
 
         instance = c.resolve(Request)
@@ -845,7 +845,7 @@ class TestBuiltinCallableFactoryWithoutCompilation:
         request_var.set(expected_request)
 
         # Create container without auto-compile
-        c = Container(register_if_missing=True, auto_compile=False)
+        c = Container(autoregister=True, auto_compile=False)
         c.register(Request, factory=request_var.get)
 
         instance = await c.aresolve(Request)
