@@ -16,12 +16,12 @@ from typing import Annotated
 import pytest
 
 from diwire.container import (
-    AsyncInjectedFunction,
-    AsyncScopedInjectedFunction,
     Container,
-    InjectedFunction,
-    ScopedInjectedFunction,
+    _AsyncInjectedFunction,
+    _AsyncScopedInjectedFunction,
     _current_scope,
+    _InjectedFunction,
+    _ScopedInjectedFunction,
 )
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
@@ -495,7 +495,7 @@ class TestAsyncInjected:
             return service
 
         injected = await container.aresolve(handler)
-        assert isinstance(injected, AsyncInjectedFunction)
+        assert isinstance(injected, _AsyncInjectedFunction)
 
     async def test_async_injected_resolves_transient_deps(
         self,
@@ -548,7 +548,7 @@ class TestAsyncInjected:
         self,
         container: Container,
     ) -> None:
-        """AsyncInjectedFunction signature excludes Injected parameters."""
+        """_AsyncInjectedFunction signature excludes Injected parameters."""
 
         async def handler(
             value: int,
@@ -594,7 +594,7 @@ class TestAsyncScopedInjected:
             return service
 
         injected = await container.aresolve(handler, scope="request")
-        assert isinstance(injected, AsyncScopedInjectedFunction)
+        assert isinstance(injected, _AsyncScopedInjectedFunction)
 
     async def test_async_scoped_injected_fresh_scope_per_call(
         self,
@@ -806,8 +806,8 @@ class TestAsyncResolveOnSyncFunction:
         injected = await container.aresolve(sync_handler)
 
         # Sync function should return Injected, not AsyncInjected
-        assert isinstance(injected, InjectedFunction)
-        assert not isinstance(injected, AsyncInjectedFunction)  # type: ignore[unreachable]
+        assert isinstance(injected, _InjectedFunction)
+        assert not isinstance(injected, _AsyncInjectedFunction)  # type: ignore[unreachable]
 
     async def test_aresolve_sync_function_with_scope_returns_scoped_injected(
         self,
@@ -820,8 +820,8 @@ class TestAsyncResolveOnSyncFunction:
 
         injected = await container.aresolve(sync_handler, scope="request")
 
-        assert isinstance(injected, ScopedInjectedFunction)
-        assert not isinstance(injected, AsyncScopedInjectedFunction)  # type: ignore[unreachable]
+        assert isinstance(injected, _ScopedInjectedFunction)
+        assert not isinstance(injected, _AsyncScopedInjectedFunction)  # type: ignore[unreachable]
 
 
 # =============================================================================
@@ -842,7 +842,7 @@ class TestSyncResolveReturnsAsyncInjected:
             return service
 
         injected = container.resolve(handler)
-        assert isinstance(injected, AsyncInjectedFunction)
+        assert isinstance(injected, _AsyncInjectedFunction)
 
     def test_resolve_returns_async_scoped_injected_with_scope(
         self,
@@ -854,7 +854,7 @@ class TestSyncResolveReturnsAsyncInjected:
             return service
 
         injected = container.resolve(handler, scope="request")
-        assert isinstance(injected, AsyncScopedInjectedFunction)
+        assert isinstance(injected, _AsyncScopedInjectedFunction)
 
     async def test_resolve_async_function_with_async_factory(
         self,
@@ -871,7 +871,7 @@ class TestSyncResolveReturnsAsyncInjected:
         container.register(ServiceA, factory=create_service)
         injected = container.resolve(handler)
 
-        assert isinstance(injected, AsyncInjectedFunction)
+        assert isinstance(injected, _AsyncInjectedFunction)
         result = await injected()
         assert result.id == "from-async-factory"
 
@@ -890,7 +890,7 @@ class TestSyncResolveReturnsAsyncInjected:
         container.register(Session, factory=get_session)
         resolved_handler = container.resolve(handler)
 
-        assert isinstance(resolved_handler, AsyncInjectedFunction)
+        assert isinstance(resolved_handler, _AsyncInjectedFunction)
         result = await resolved_handler("dummy-request")
         assert result == {"session_id": "session-123"}
 
@@ -905,8 +905,8 @@ class TestSyncResolveReturnsAsyncInjected:
 
         injected = container.resolve(sync_handler)
 
-        assert isinstance(injected, InjectedFunction)
-        assert not isinstance(injected, AsyncInjectedFunction)  # type: ignore[unreachable]
+        assert isinstance(injected, _InjectedFunction)
+        assert not isinstance(injected, _AsyncInjectedFunction)  # type: ignore[unreachable]
 
     def test_resolve_sync_function_with_scope_still_returns_scoped_injected(
         self,
@@ -919,8 +919,8 @@ class TestSyncResolveReturnsAsyncInjected:
 
         injected = container.resolve(sync_handler, scope="request")
 
-        assert isinstance(injected, ScopedInjectedFunction)
-        assert not isinstance(injected, AsyncScopedInjectedFunction)  # type: ignore[unreachable]
+        assert isinstance(injected, _ScopedInjectedFunction)
+        assert not isinstance(injected, _AsyncScopedInjectedFunction)  # type: ignore[unreachable]
 
 
 # =============================================================================
@@ -937,7 +937,7 @@ class TestAsyncMissingCoverage:
         from diwire.registry import Registration
         from diwire.service_key import ServiceKey
 
-        container = Container(register_if_missing=False, auto_compile=False)
+        container = Container(autoregister=False, auto_compile=False)
 
         instance = ServiceA()
         service_key = ServiceKey.from_value(ServiceA)
@@ -998,7 +998,7 @@ class TestAsyncMissingCoverage:
         """Async resolve with ignored type without default raises missing deps error."""
         from diwire.exceptions import DIWireMissingDependenciesError
 
-        container = Container(register_if_missing=False, auto_compile=False)
+        container = Container(autoregister=False, auto_compile=False)
 
         class ServiceWithStr:
             def __init__(self, name: str) -> None:  # str is ignored, no default
@@ -1111,8 +1111,8 @@ class TestNameErrorHandlingInFunctionResolution:
             injected = container.resolve(handler)
 
         # Should return Injected (not ScopedInjected) since effective_scope = None
-        assert isinstance(injected, InjectedFunction)
-        assert not isinstance(injected, ScopedInjectedFunction)  # type: ignore[unreachable]
+        assert isinstance(injected, _InjectedFunction)
+        assert not isinstance(injected, _ScopedInjectedFunction)  # type: ignore[unreachable]
 
     def test_resolve_async_function_with_nameerror_falls_back_to_async_injected(
         self,
@@ -1133,8 +1133,8 @@ class TestNameErrorHandlingInFunctionResolution:
             injected = container.resolve(handler)
 
         # Should return AsyncInjected (not AsyncScopedInjected) since effective_scope = None
-        assert isinstance(injected, AsyncInjectedFunction)
-        assert not isinstance(injected, AsyncScopedInjectedFunction)  # type: ignore[unreachable]
+        assert isinstance(injected, _AsyncInjectedFunction)
+        assert not isinstance(injected, _AsyncScopedInjectedFunction)  # type: ignore[unreachable]
 
     async def test_aresolve_function_with_nameerror_falls_back_to_no_scope(
         self,
@@ -1155,8 +1155,8 @@ class TestNameErrorHandlingInFunctionResolution:
             injected = await container.aresolve(handler)
 
         # Should return Injected (not ScopedInjected) since effective_scope = None
-        assert isinstance(injected, InjectedFunction)
-        assert not isinstance(injected, ScopedInjectedFunction)  # type: ignore[unreachable]
+        assert isinstance(injected, _InjectedFunction)
+        assert not isinstance(injected, _ScopedInjectedFunction)  # type: ignore[unreachable]
 
     async def test_aresolve_async_function_with_nameerror_falls_back_to_async_injected(
         self,
@@ -1177,8 +1177,8 @@ class TestNameErrorHandlingInFunctionResolution:
             injected = await container.aresolve(handler)
 
         # Should return AsyncInjected (not AsyncScopedInjected) since effective_scope = None
-        assert isinstance(injected, AsyncInjectedFunction)
-        assert not isinstance(injected, AsyncScopedInjectedFunction)  # type: ignore[unreachable]
+        assert isinstance(injected, _AsyncInjectedFunction)
+        assert not isinstance(injected, _AsyncScopedInjectedFunction)  # type: ignore[unreachable]
 
 
 # =============================================================================

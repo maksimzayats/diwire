@@ -338,7 +338,7 @@ class TestAsyncCircularDependencies:
             return AsyncCircularY(x)
 
         # Create container without auto-compile and register with async factories
-        container = Container(register_if_missing=False, auto_compile=False)
+        container = Container(autoregister=False, auto_compile=False)
         container.register(AsyncCircularX, factory=create_x)
         container.register(AsyncCircularY, factory=create_y)
 

@@ -1,11 +1,11 @@
-"""Tests for InjectedFunction wrapper class."""
+"""Tests for _InjectedFunction wrapper class."""
 
 from inspect import signature
 from typing import Annotated
 
 import pytest
 
-from diwire.container import Container, InjectedFunction
+from diwire.container import Container, _InjectedFunction
 from diwire.exceptions import DIWireServiceNotRegisteredError
 from diwire.types import Injected
 
@@ -39,7 +39,7 @@ class TestInjectedMetadata:
         injected = container.resolve(my_func)
 
         repr_str = repr(injected)
-        assert repr_str.startswith("InjectedFunction(")
+        assert repr_str.startswith("_InjectedFunction(")
         assert "my_func" in repr_str
 
 
@@ -85,7 +85,7 @@ class TestInjectedCallPatterns:
         injected = container.resolve(my_func)
 
         # Since no Injected params, injected should still work
-        assert isinstance(injected, InjectedFunction)
+        assert isinstance(injected, _InjectedFunction)
         result = injected(21)
         assert result == 42
 
@@ -206,7 +206,7 @@ class TestInjectedSpecialMethods:
         my_lambda = lambda x: x  # noqa: E731
         injected = container.resolve(my_lambda)
 
-        assert isinstance(injected, InjectedFunction)
+        assert isinstance(injected, _InjectedFunction)
         result = injected(42)
         assert result == 42
 
@@ -333,7 +333,7 @@ class TestAsyncInjectedMetadata:
 
     async def test_async_injected_preserves_docstring(self, container: Container) -> None:
         """AsyncInjected preserves function docstring."""
-        from diwire.container import AsyncInjectedFunction
+        from diwire.container import _AsyncInjectedFunction
 
         async def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             """This is my async docstring."""
@@ -341,7 +341,7 @@ class TestAsyncInjectedMetadata:
 
         injected = await container.aresolve(my_func)
 
-        assert isinstance(injected, AsyncInjectedFunction)
+        assert isinstance(injected, _AsyncInjectedFunction)
         assert injected.__doc__ == "This is my async docstring."
 
     async def test_async_injected_repr_format(self, container: Container) -> None:
@@ -353,7 +353,7 @@ class TestAsyncInjectedMetadata:
         injected = await container.aresolve(my_async_func)
 
         repr_str = repr(injected)
-        assert repr_str.startswith("AsyncInjectedFunction(")
+        assert repr_str.startswith("_AsyncInjectedFunction(")
         assert "my_async_func" in repr_str
 
 
@@ -665,7 +665,7 @@ class TestInjectedMethodDecoration:
                 return service
 
         # Accessing on class should return the Injected wrapper itself
-        assert isinstance(MyClass.method, InjectedFunction)
+        assert isinstance(MyClass.method, _InjectedFunction)
 
     def test_property_with_di(self, container: Container) -> None:
         """Property getter can use DI to resolve dependencies."""

@@ -12,10 +12,10 @@ import pytest
 
 from diwire.container import (
     Container,
-    InjectedFunction,
-    ScopedInjectedFunction,
-    ScopeId,
     _current_scope,
+    _InjectedFunction,
+    _ScopedInjectedFunction,
+    _ScopeId,
 )
 from diwire.exceptions import (
     DIWireAsyncCleanupWithoutEventLoopError,
@@ -195,7 +195,7 @@ class TestScopedInjected:
             return service
 
         result = container.resolve(handler, scope="request")
-        assert isinstance(result, ScopedInjectedFunction)
+        assert isinstance(result, _ScopedInjectedFunction)
 
     def test_scoped_injected_shares_instance_within_call(self, container: Container) -> None:
         """ScopedInjected shares scoped instances within a single call."""
@@ -259,7 +259,7 @@ class TestScopeValidation:
     def test_scoped_service_not_found_outside_scope(self) -> None:
         """Resolving scoped service outside its scope raises DIWireServiceNotRegisteredError."""
         # With scoped registrations, the registration is only found when scope matches
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with pytest.raises(DIWireServiceNotRegisteredError), container.enter_scope("other_scope"):
@@ -267,7 +267,7 @@ class TestScopeValidation:
 
     def test_scoped_service_not_found_without_scope(self) -> None:
         """Resolving scoped service with no active scope raises DIWireServiceNotRegisteredError."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with pytest.raises(DIWireServiceNotRegisteredError):
@@ -276,7 +276,7 @@ class TestScopeValidation:
     def test_scope_mismatch_error_with_global_registration(self) -> None:
         """DIWireScopeMismatchError raised when global registration has scope that doesn't match."""
         # This tests the case where registration is in global registry with scope set
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         service_key = ServiceKey.from_value(Session)
         container._registry[service_key] = Registration(
             service_key=service_key,
@@ -296,7 +296,7 @@ class TestScopeValidation:
 
     def test_autoregister_raises_error_when_scoped_registration_exists(self) -> None:
         """Auto-registration raises DIWireScopeMismatchError when a scoped registration exists."""
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         container.register(Session, scope="app", lifetime=Lifetime.SCOPED)
 
         with pytest.raises(DIWireScopeMismatchError) as exc_info:
@@ -308,7 +308,7 @@ class TestScopeValidation:
 
     def test_autoregister_raises_error_in_wrong_scope(self) -> None:
         """Auto-registration raises DIWireScopeMismatchError when resolved in wrong scope."""
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         container.register(Session, scope="app", lifetime=Lifetime.SCOPED)
 
         with pytest.raises(DIWireScopeMismatchError) as exc_info, container.enter_scope("other"):
@@ -325,7 +325,7 @@ class TestScopeValidation:
         class Unrelated:
             pass
 
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         container.register(Session, scope="app", lifetime=Lifetime.SCOPED)
 
         # Unrelated has no scoped registration, so auto-registration should work
@@ -457,8 +457,8 @@ class TestAutoScopeDetection:
         # No explicit scope - should auto-detect from Session dependency
         request_handler = container.resolve(handler)
 
-        # Should be ScopedInjectedFunction because Session has scope="request"
-        assert isinstance(request_handler, ScopedInjectedFunction)
+        # Should be _ScopedInjectedFunction because Session has scope="request"
+        assert isinstance(request_handler, _ScopedInjectedFunction)
 
     def test_explicit_scope_overrides_auto_detection(self, container: Container) -> None:
         """Explicit scope parameter overrides auto-detection."""
@@ -469,7 +469,7 @@ class TestAutoScopeDetection:
 
         # Explicit scope
         result = container.resolve(handler, scope="custom")
-        assert isinstance(result, ScopedInjectedFunction)
+        assert isinstance(result, _ScopedInjectedFunction)
 
     def test_no_scope_returns_injected(self, container: Container) -> None:
         """Without scoped dependencies, resolve returns regular Injected."""
@@ -479,8 +479,8 @@ class TestAutoScopeDetection:
             return service
 
         result = container.resolve(handler)
-        assert isinstance(result, InjectedFunction)
-        assert not isinstance(result, ScopedInjectedFunction)
+        assert isinstance(result, _InjectedFunction)
+        assert not isinstance(result, _ScopedInjectedFunction)
 
     def test_auto_detect_scope_from_scoped_registry(self, container: Container) -> None:
         """resolve() auto-detects scope from scoped_registry."""
@@ -490,7 +490,7 @@ class TestAutoScopeDetection:
             return session
 
         injected = container.resolve(handler)
-        assert isinstance(injected, ScopedInjectedFunction)
+        assert isinstance(injected, _ScopedInjectedFunction)
 
     def test_ambiguous_scope_detection_returns_none(self, container: Container) -> None:
         """Ambiguous scopes (different values) don't auto-detect."""
@@ -507,8 +507,8 @@ class TestAutoScopeDetection:
 
         injected = container.resolve(handler)
         # Should not auto-detect scope due to ambiguity
-        assert isinstance(injected, InjectedFunction)
-        assert not isinstance(injected, ScopedInjectedFunction)
+        assert isinstance(injected, _InjectedFunction)
+        assert not isinstance(injected, _ScopedInjectedFunction)
 
 
 class TestScopeHierarchyMatching:
@@ -542,7 +542,7 @@ class TestScopeHierarchyMatching:
 
     def test_non_matching_scope_not_found(self) -> None:
         """Non-matching scope raises DIWireServiceNotRegisteredError."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with pytest.raises(DIWireServiceNotRegisteredError), container.enter_scope("other"):
@@ -1238,7 +1238,7 @@ class TestTransitiveScopeDependencies:
 
     def test_transitive_scoped_resolved_outside_scope(self) -> None:
         """A -> B(scoped:special) resolved outside scope raises error."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
 
         container.register(OuterService, lifetime=Lifetime.TRANSIENT)
         container.register(InnerService, scope="special", lifetime=Lifetime.SCOPED)
@@ -1519,7 +1519,7 @@ class TestScopeErrorRecovery:
             scope_id = _current_scope.get()
 
             # Manually clear the scope (unusual operation)
-            container.clear_scope(scope_id)  # type: ignore[arg-type]
+            container._clear_scope(scope_id)  # type: ignore[arg-type]
 
             # After clearing, a new instance is created (cache was emptied)
             session2 = container.resolve(Session)
@@ -1539,7 +1539,7 @@ class TestScopeErrorRecovery:
         assert not any(k[0] == scope_id.segments for k in container._scoped_instances)
 
         # Manually calling clear_scope again should be idempotent (no error)
-        container.clear_scope(scope_id)
+        container._clear_scope(scope_id)
 
         # Still no error and scope context is None
         assert _current_scope.get() is None
@@ -1668,7 +1668,7 @@ class TestConcurrentScopeEdgeCases:
                     for key in list(container._scoped_instances.keys()):
                         scope_segments, _ = key
                         if scope_segments and scope_segments[0][0] == "test":
-                            container.clear_scope(ScopeId(segments=scope_segments))
+                            container._clear_scope(_ScopeId(segments=scope_segments))
                 except expected_race_errors:  # noqa: PERF203
                     pass  # Expected race condition outcome
                 except Exception as e:
@@ -1787,7 +1787,7 @@ class TestScopeResolutionEdgeCases:
 
     def test_scope_segment_partial_match_rejected(self) -> None:
         """Scope 'req' vs registered 'request': no match."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         # "req" should not match "request"
@@ -1797,7 +1797,7 @@ class TestScopeResolutionEdgeCases:
 
     def test_resolve_service_nonexistent_scope(self) -> None:
         """Service for scope X, in scope Y raises DIWireServiceNotRegisteredError."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         container.register(Session, scope="scope_x", lifetime=Lifetime.SCOPED)
 
         with pytest.raises(DIWireServiceNotRegisteredError):
@@ -3162,7 +3162,7 @@ class TestImperativeScopeManagement:
 
             with contextlib.suppress(ValueError, RuntimeError):
                 _current_scope.reset(scope._token)
-            scope._container.clear_scope(scope._scope_id)
+            scope._container._clear_scope(scope._scope_id)
             # Deliberately skip _unregister_active_scope
             scope._exited = True
 
@@ -3187,7 +3187,7 @@ class TestImperativeScopeManagement:
 
                 with contextlib.suppress(ValueError, RuntimeError):
                     _current_scope.reset(scope._token)
-                await scope._container.aclear_scope(scope._scope_id)
+                await scope._container._aclear_scope(scope._scope_id)
                 # Deliberately skip _unregister_active_scope
                 scope._exited = True
 
@@ -3238,12 +3238,12 @@ class TestContainerClosedError:
         container: Container,
     ) -> None:
         """Directly creating ScopedContainer on closed container raises error."""
-        from diwire.container import ScopedContainer, ScopeId
+        from diwire.container import ScopedContainer, _ScopeId
         from diwire.exceptions import DIWireContainerClosedError
 
         container.close()
 
-        scope_id = ScopeId(segments=((None, 1),))
+        scope_id = _ScopeId(segments=((None, 1),))
 
         with pytest.raises(DIWireContainerClosedError, match="closed container"):
             ScopedContainer(container, scope_id)

@@ -13,9 +13,9 @@ import pytest
 
 from diwire import Container, Injected, Lifetime, container_context
 from diwire.container_context import (
-    ContainerContextProxy,
     _AsyncContextInjected,
     _AsyncContextScopedInjected,
+    _ContainerContextProxy,
     _ContextInjected,
     _ContextScopedInjected,
     _current_container,
@@ -73,7 +73,7 @@ class TestDIWireContainerNotSetError:
 
     def test_get_current_without_container_raises_error(self) -> None:
         """get_current() raises DIWireContainerNotSetError when no container set."""
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         # Ensure no container is set
         token = _current_container.set(None)
         try:
@@ -87,7 +87,7 @@ class TestDIWireContainerNotSetError:
 
     def test_resolve_type_without_container_raises_error(self) -> None:
         """resolve(SomeType) raises DIWireContainerNotSetError when no container set."""
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         token = _current_container.set(None)
         try:
             with pytest.raises(DIWireContainerNotSetError):
@@ -102,11 +102,11 @@ class TestDIWireContainerNotSetError:
 
 
 class TestBasicProxyFunctionality:
-    """Tests for basic ContainerContextProxy functionality."""
+    """Tests for basic _ContainerContextProxy functionality."""
 
     def test_set_current_returns_token(self) -> None:
         """set_current() returns a token for reset."""
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         container = Container()
 
         token = proxy.set_current(container)
@@ -118,7 +118,7 @@ class TestBasicProxyFunctionality:
 
     def test_get_current_returns_container(self) -> None:
         """get_current() returns the current container."""
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         container = Container()
 
         token = proxy.set_current(container)
@@ -129,7 +129,7 @@ class TestBasicProxyFunctionality:
 
     def test_reset_restores_previous_value(self) -> None:
         """reset() restores the previous container value."""
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         container1 = Container()
         container2 = Container()
 
@@ -145,7 +145,7 @@ class TestBasicProxyFunctionality:
 
     def test_reset_to_none(self) -> None:
         """reset() can restore to no container."""
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         container = Container()
 
         # Start with no container
@@ -178,7 +178,7 @@ class TestProxyMethodDelegation:
 
     def test_register_delegates_to_container(self) -> None:
         """register() delegates to the current container."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         token = container_context.set_current(container)
         try:
             container_context.register(ServiceA, lifetime=Lifetime.SINGLETON)
@@ -238,7 +238,7 @@ class TestRegisterDecoratorPattern:
 
     def test_register_decorator_registers_class(self) -> None:
         """@container_context.register on a class should register it."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         token = container_context.set_current(container)
         try:
 
@@ -253,7 +253,7 @@ class TestRegisterDecoratorPattern:
 
     def test_register_decorator_returns_original_class(self) -> None:
         """@container_context.register should return the original class unchanged."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         token = container_context.set_current(container)
         try:
 
@@ -268,7 +268,7 @@ class TestRegisterDecoratorPattern:
 
     def test_register_decorator_with_lifetime_singleton(self) -> None:
         """@container_context.register(lifetime=SINGLETON) should create singletons."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         token = container_context.set_current(container)
         try:
 
@@ -284,7 +284,7 @@ class TestRegisterDecoratorPattern:
 
     def test_register_factory_decorator_infers_type(self) -> None:
         """@container_context.register on a function should infer return type."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         token = container_context.set_current(container)
         try:
 
@@ -987,7 +987,7 @@ class TestThreadLocalFallbackIsolation:
         This test covers line 259 in container_context.py where the thread-local
         fallback path is used when ContextVar returns None.
         """
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         container = Container()
         container.register(ServiceA, instance=ServiceA(id="thread-local-container"))
 
@@ -1403,7 +1403,7 @@ class TestErrorPropagation:
         """DIWireServiceNotRegisteredError propagates from decorated function."""
         from diwire.exceptions import DIWireServiceNotRegisteredError
 
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         token = container_context.set_current(container)
         try:
 
@@ -1420,9 +1420,9 @@ class TestErrorPropagation:
         """DIWireCircularDependencyError propagates from decorated function."""
         from diwire.exceptions import DIWireCircularDependencyError
 
-        # Use auto-registration (register_if_missing=True) for proper
+        # Use auto-registration (autoregister=True) for proper
         # circular dependency detection
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
 
         token = container_context.set_current(container)
         try:
@@ -1562,7 +1562,7 @@ class TestContainerOperationsWithoutContainer:
             class DeferredService:
                 pass
 
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             token = container_context.set_current(container)
             try:
                 service = container.resolve(DeferredService)
@@ -1623,7 +1623,7 @@ class TestDeferredRegistrations:
             def create_service() -> ServiceA:
                 return ServiceA(id="deferred-factory")
 
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             token = container_context.set_current(container)
             try:
                 service1 = container.resolve(ServiceA)
@@ -1646,7 +1646,7 @@ class TestDeferredRegistrations:
             container_context._deferred_registrations.clear()
 
             decorator = container_context.register(lifetime=Lifetime.SINGLETON)
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             token = container_context.set_current(container)
             try:
 
@@ -1675,7 +1675,7 @@ class TestDeferredRegistrations:
             instance = ServiceA(id="deferred-instance")
             container_context.register(ServiceA, instance=instance)
 
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             token = container_context.set_current(container)
             try:
                 assert container.resolve(ServiceA) is instance
@@ -1694,7 +1694,7 @@ class TestDeferredRegistrations:
             container_context._default_container = None
             container_context._deferred_registrations.clear()
 
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             _thread_local_fallback.container = container
 
             instance = ServiceA(id="thread-local")
@@ -2354,7 +2354,7 @@ class TestContextInjectedDescriptors:
         def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         context_injected = _ContextInjected(handler, proxy)
 
         # When obj is None, __get__ should return self
@@ -2367,7 +2367,7 @@ class TestContextInjectedDescriptors:
         def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         context_scoped_injected = _ContextScopedInjected(handler, proxy, "request")
 
         # When obj is None, __get__ should return self
@@ -2381,7 +2381,7 @@ class TestContextInjectedDescriptors:
         def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         context_scoped_injected = _ContextScopedInjected(handler, proxy, "request")
 
         # When obj is not None, __get__ should return MethodType bound to obj
@@ -2395,7 +2395,7 @@ class TestContextInjectedDescriptors:
         async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         async_context_injected = _AsyncContextInjected(handler, proxy)
 
         # When obj is None, __get__ should return self
@@ -2409,7 +2409,7 @@ class TestContextInjectedDescriptors:
         async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         async_context_injected = _AsyncContextInjected(handler, proxy)
 
         # When obj is not None, __get__ should return MethodType bound to obj
@@ -2423,7 +2423,7 @@ class TestContextInjectedDescriptors:
         async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         async_context_scoped_injected = _AsyncContextScopedInjected(handler, proxy, "request")
 
         # When obj is None, __get__ should return self
@@ -2437,7 +2437,7 @@ class TestContextInjectedDescriptors:
         async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             return service
 
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         async_context_scoped_injected = _AsyncContextScopedInjected(handler, proxy, "request")
 
         # When obj is not None, __get__ should return MethodType bound to obj
@@ -2665,7 +2665,7 @@ class TestDeferredRegistrationWithTypeKey:
             # Verify function was returned
             assert callable(create_service)
 
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             token = container_context.set_current(container)
             try:
                 service = container.resolve(ServiceA)
@@ -2696,7 +2696,7 @@ class TestDeferredRegistrationWithTypeKey:
             class PostgresDBImpl(IDatabase):  # type: ignore[misc]
                 pass
 
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             token = container_context.set_current(container)
             try:
                 db = container.resolve(IDatabase)
@@ -2745,7 +2745,7 @@ class TestDeferredRegistrationWithTypeKey:
             decorator = container_context.register(MyInterface, lifetime=Lifetime.SINGLETON)
 
             # Set container
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             token = container_context.set_current(container)
             try:
                 # Apply decorator - should delegate to container
@@ -2778,7 +2778,7 @@ class TestDeferredRegistrationWithTypeKey:
             # Should have deferred registration
             assert len(container_context._deferred_registrations) == 1
 
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             token = container_context.set_current(container)
             try:
                 service = container.resolve(ServiceA)
@@ -2813,7 +2813,7 @@ class TestDeferredRegistrationWithTypeKey:
             # Should have deferred registration
             assert len(container_context._deferred_registrations) == 1
 
-            container = Container(register_if_missing=False)
+            container = Container(autoregister=False)
             token = container_context.set_current(container)
             try:
                 config = container.resolve(MyConfig)
@@ -2831,11 +2831,11 @@ class TestDeferredRegistrationWithTypeKey:
 
 
 class TestContainerContextClose:
-    """Tests for close/aclose methods on ContainerContextProxy."""
+    """Tests for close/aclose methods on _ContainerContextProxy."""
 
     def test_close_delegates_to_current_container(self) -> None:
         """close() delegates to the current container's close method."""
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         container = Container()
         token = proxy.set_current(container)
         try:
@@ -2846,7 +2846,7 @@ class TestContainerContextClose:
 
     async def test_aclose_delegates_to_current_container(self) -> None:
         """aclose() delegates to the current container's aclose method."""
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         container = Container()
         token = proxy.set_current(container)
         try:
@@ -2857,7 +2857,7 @@ class TestContainerContextClose:
 
     def test_close_without_container_raises_error(self) -> None:
         """close() raises DIWireContainerNotSetError when no container set."""
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         token = _current_container.set(None)
         try:
             with pytest.raises(DIWireContainerNotSetError):
@@ -2867,7 +2867,7 @@ class TestContainerContextClose:
 
     async def test_aclose_without_container_raises_error(self) -> None:
         """aclose() raises DIWireContainerNotSetError when no container set."""
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         token = _current_container.set(None)
         try:
             with pytest.raises(DIWireContainerNotSetError):
@@ -2877,7 +2877,7 @@ class TestContainerContextClose:
 
     def test_close_scope_delegates_to_current_container(self) -> None:
         """close_scope() delegates to the current container's close_scope method."""
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         container = Container()
         container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
         token = proxy.set_current(container)
@@ -2893,7 +2893,7 @@ class TestContainerContextClose:
 
     async def test_aclose_scope_delegates_to_current_container(self) -> None:
         """aclose_scope() delegates to the current container's aclose_scope method."""
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         container = Container()
         container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
         token = proxy.set_current(container)
@@ -2909,7 +2909,7 @@ class TestContainerContextClose:
 
     def test_close_scope_without_container_raises_error(self) -> None:
         """close_scope() raises DIWireContainerNotSetError when no container set."""
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         token = _current_container.set(None)
         try:
             with pytest.raises(DIWireContainerNotSetError):
@@ -2919,7 +2919,7 @@ class TestContainerContextClose:
 
     async def test_aclose_scope_without_container_raises_error(self) -> None:
         """aclose_scope() raises DIWireContainerNotSetError when no container set."""
-        proxy = ContainerContextProxy()
+        proxy = _ContainerContextProxy()
         token = _current_container.set(None)
         try:
             with pytest.raises(DIWireContainerNotSetError):

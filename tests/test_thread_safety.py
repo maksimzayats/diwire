@@ -99,7 +99,7 @@ class TestConcurrentResolution:
 class TestConcurrentRegistration:
     def test_concurrent_registration_no_corruption(self) -> None:
         """Concurrent registration doesn't corrupt registry."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
         errors: list[Exception] = []
 
         def register_service(i: int) -> None:
@@ -122,7 +122,7 @@ class TestConcurrentRegistration:
 
     def test_concurrent_registration_and_resolution(self) -> None:
         """Concurrent registration and resolution don't deadlock."""
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         results: list[object] = []
         errors: list[Exception] = []
 
@@ -156,7 +156,7 @@ class TestRaceConditions:
         even when many threads race to resolve the same singleton.
         """
         container = Container(
-            register_if_missing=True,
+            autoregister=True,
             autoregister_default_lifetime=Lifetime.SINGLETON,
         )
 
@@ -188,7 +188,7 @@ class TestRaceConditions:
 class TestStress:
     def test_many_concurrent_resolutions(self) -> None:
         """100 threads resolving concurrently."""
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
 
         class StressService:
             def __init__(self, a: ServiceA, b: ServiceB) -> None:
@@ -238,7 +238,7 @@ class CircularY:
 class TestCircularDetectionThreadSafety:
     def test_circular_detection_thread_isolated(self) -> None:
         """Each thread has its own resolution stack."""
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         circular_errors: list[DIWireCircularDependencyError] = []
         unexpected_errors: list[Exception] = []
 
@@ -263,7 +263,7 @@ class TestCircularDetectionThreadSafety:
 
     def test_concurrent_circular_and_normal_resolution(self) -> None:
         """Circular detection in one thread doesn't affect normal resolution in another."""
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         normal_results: list[ServiceA] = []
         circular_errors: list[DIWireCircularDependencyError] = []
         unexpected_errors: list[Exception] = []
@@ -319,7 +319,7 @@ class AsyncCircularB:
 class TestAsyncContextIsolation:
     def test_circular_detection_async_task_isolated(self) -> None:
         """Each async task has its own resolution stack."""
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         circular_errors: list[DIWireCircularDependencyError] = []
         unexpected_errors: list[Exception] = []
 
@@ -342,7 +342,7 @@ class TestAsyncContextIsolation:
 
     def test_concurrent_async_circular_and_normal_resolution(self) -> None:
         """Circular detection in one async task doesn't affect normal resolution in another."""
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         normal_results: list[ServiceA] = []
         circular_errors: list[DIWireCircularDependencyError] = []
         unexpected_errors: list[Exception] = []
@@ -381,7 +381,7 @@ class TestAsyncContextIsolation:
 
     def test_async_normal_resolution_works(self) -> None:
         """Normal resolution works correctly in async context."""
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         results: list[ServiceB] = []
 
         async def resolve_service() -> None:
@@ -405,7 +405,7 @@ class TestAsyncConcurrentResolution:
     async def test_concurrent_async_singleton_returns_same_instance(self) -> None:
         """Concurrent async singleton resolution returns same instance."""
         container = Container(
-            register_if_missing=True,
+            autoregister=True,
             autoregister_default_lifetime=Lifetime.SINGLETON,
         )
         results: list[ServiceA] = []
@@ -422,7 +422,7 @@ class TestAsyncConcurrentResolution:
 
     async def test_concurrent_async_transient_returns_different_instances(self) -> None:
         """Concurrent async transient resolution returns different instances."""
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         results: list[ServiceA] = []
 
         async def worker() -> None:
@@ -438,7 +438,7 @@ class TestAsyncConcurrentResolution:
 
     async def test_async_resolution_with_dependencies(self) -> None:
         """Concurrent async resolution with dependencies works correctly."""
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         results: list[ServiceB] = []
 
         async def worker() -> None:
@@ -460,7 +460,7 @@ class TestAsyncConcurrentResolution:
         """
         # Use a simple class that's already defined (ServiceA) with singleton lifetime
         container = Container(
-            register_if_missing=True,
+            autoregister=True,
             autoregister_default_lifetime=Lifetime.SINGLETON,
             auto_compile=False,  # Disable compilation to use aresolve path
         )
@@ -499,7 +499,7 @@ class TestAsyncConcurrentResolution:
 
         SlowAsyncService.reset_count()
 
-        container = Container(register_if_missing=False, auto_compile=False)
+        container = Container(autoregister=False, auto_compile=False)
         container.register(
             SlowAsyncService,
             factory=slow_async_service_factory,
@@ -538,7 +538,7 @@ class TestSyncSingletonLocking:
         """Verify per-service locks are created correctly."""
         from diwire.service_key import ServiceKey
 
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
 
         class TestService:
             pass
@@ -562,7 +562,7 @@ class TestSyncSingletonLocking:
     def test_sync_singleton_double_check_locking(self) -> None:
         """Test double-check locking with barrier synchronization."""
         container = Container(
-            register_if_missing=True,
+            autoregister=True,
             autoregister_default_lifetime=Lifetime.SINGLETON,
             auto_compile=False,  # Disable compilation to test uncompiled path
         )
@@ -598,7 +598,7 @@ class TestSyncSingletonLocking:
         import time
 
         container = Container(
-            register_if_missing=True,
+            autoregister=True,
             autoregister_default_lifetime=Lifetime.SINGLETON,
             auto_compile=False,  # Test uncompiled path
         )
@@ -639,7 +639,7 @@ class TestCompiledProviderThreadSafety:
     def test_singleton_type_provider_thread_safe(self) -> None:
         """SingletonTypeProvider should be thread-safe."""
         container = Container(
-            register_if_missing=True,
+            autoregister=True,
             autoregister_default_lifetime=Lifetime.SINGLETON,
             auto_compile=True,
         )
@@ -675,7 +675,7 @@ class TestCompiledProviderThreadSafety:
     def test_singleton_args_provider_thread_safe(self) -> None:
         """SingletonArgsTypeProvider should be thread-safe."""
         container = Container(
-            register_if_missing=True,
+            autoregister=True,
             autoregister_default_lifetime=Lifetime.SINGLETON,
             auto_compile=True,
         )
@@ -718,7 +718,7 @@ class TestCompiledProviderThreadSafety:
     def test_singleton_factory_provider_thread_safe(self) -> None:
         """SingletonFactoryProvider should be thread-safe."""
         container = Container(
-            register_if_missing=False,
+            autoregister=False,
             auto_compile=True,
         )
 

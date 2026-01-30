@@ -39,7 +39,7 @@ def test_ex02_missing_dependency(capsys: pytest.CaptureFixture[str]) -> None:
         "DIWireMissingDependenciesError caught!",
         "Service key:",
         "Missing dependencies:",
-        "With register_if_missing=True",
+        "With autoregister=True",
         "api_key: str",
     )
 

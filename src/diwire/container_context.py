@@ -78,7 +78,7 @@ class _ContextInjected:
     def __init__(
         self,
         func: Callable[..., Any],
-        proxy: ContainerContextProxy,
+        proxy: _ContainerContextProxy,
     ) -> None:
         self._func = func
         self._proxy = proxy
@@ -118,7 +118,7 @@ class _ContextScopedInjected:
     def __init__(
         self,
         func: Callable[..., Any],
-        proxy: ContainerContextProxy,
+        proxy: _ContainerContextProxy,
         scope_name: str,
     ) -> None:
         self._func = func
@@ -160,7 +160,7 @@ class _AsyncContextInjected:
     def __init__(
         self,
         func: Callable[..., Coroutine[Any, Any, Any]],
-        proxy: ContainerContextProxy,
+        proxy: _ContainerContextProxy,
     ) -> None:
         self._func = func
         self._proxy = proxy
@@ -200,7 +200,7 @@ class _AsyncContextScopedInjected:
     def __init__(
         self,
         func: Callable[..., Coroutine[Any, Any, Any]],
-        proxy: ContainerContextProxy,
+        proxy: _ContainerContextProxy,
         scope_name: str,
     ) -> None:
         self._func = func
@@ -233,7 +233,7 @@ class _AsyncContextScopedInjected:
         return types.MethodType(self, obj)
 
 
-class ContainerContextProxy:
+class _ContainerContextProxy:
     """Lazy proxy that forwards calls to the current container from context.
 
     This allows setting up decorators before the container is configured,
@@ -739,4 +739,4 @@ class ContainerContextProxy:
         return await self.get_current().aclose_scope(scope_name)
 
 
-container_context = ContainerContextProxy()
+container_context = _ContainerContextProxy()

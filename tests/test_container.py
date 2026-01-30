@@ -9,14 +9,14 @@ import pytest
 
 from diwire.compiled_providers import ScopedSingletonArgsProvider
 from diwire.container import (
-    AsyncInjectedFunction,
-    AsyncScopedInjectedFunction,
     Container,
-    InjectedFunction,
-    ScopedInjectedFunction,
-    ScopeId,
+    _AsyncInjectedFunction,
+    _AsyncScopedInjectedFunction,
     _current_scope,
+    _InjectedFunction,
     _is_async_factory,
+    _ScopedInjectedFunction,
+    _ScopeId,
 )
 from diwire.dependencies import DependenciesExtractor
 from diwire.exceptions import (
@@ -112,7 +112,7 @@ def test_resolve_function_returns_injected(container: Container) -> None:
         return service
 
     injected = container.resolve(my_func)
-    assert isinstance(injected, InjectedFunction)
+    assert isinstance(injected, _InjectedFunction)
 
 
 def test_injected_resolves_transient_deps_on_each_call(container: Container) -> None:
@@ -356,7 +356,7 @@ class TestAsyncResolveFunction:
         injected = await container.aresolve(my_func)
 
         # Should be Injected, not AsyncInjected
-        assert isinstance(injected, InjectedFunction)
+        assert isinstance(injected, _InjectedFunction)
         # Verify it's callable and works
         result = injected()
         assert isinstance(result, ServiceA)
@@ -482,7 +482,7 @@ class TestDescriptorProtocol:
         self,
         container: Container,
     ) -> None:
-        """InjectedFunction descriptor returns self when accessed on class."""
+        """_InjectedFunction descriptor returns self when accessed on class."""
 
         class ServiceA:
             pass
@@ -493,7 +493,7 @@ class TestDescriptorProtocol:
         service_key = ServiceKey.from_value(my_func)
         deps_extractor = DependenciesExtractor()
 
-        injected_func = InjectedFunction(
+        injected_func = _InjectedFunction(
             func=my_func,
             container=container,
             dependencies_extractor=deps_extractor,
@@ -508,7 +508,7 @@ class TestDescriptorProtocol:
         self,
         container: Container,
     ) -> None:
-        """ScopedInjectedFunction descriptor returns self when accessed on class."""
+        """_ScopedInjectedFunction descriptor returns self when accessed on class."""
 
         class ServiceA:
             pass
@@ -519,7 +519,7 @@ class TestDescriptorProtocol:
         service_key = ServiceKey.from_value(my_func)
         deps_extractor = DependenciesExtractor()
 
-        scoped_injected = ScopedInjectedFunction(
+        scoped_injected = _ScopedInjectedFunction(
             func=my_func,
             container=container,
             dependencies_extractor=deps_extractor,
@@ -535,7 +535,7 @@ class TestDescriptorProtocol:
         self,
         container: Container,
     ) -> None:
-        """AsyncInjectedFunction descriptor returns self when accessed on class."""
+        """_AsyncInjectedFunction descriptor returns self when accessed on class."""
 
         class ServiceA:
             pass
@@ -546,7 +546,7 @@ class TestDescriptorProtocol:
         service_key = ServiceKey.from_value(my_async_func)
         deps_extractor = DependenciesExtractor()
 
-        async_injected = AsyncInjectedFunction(
+        async_injected = _AsyncInjectedFunction(
             func=my_async_func,
             container=container,
             dependencies_extractor=deps_extractor,
@@ -561,7 +561,7 @@ class TestDescriptorProtocol:
         self,
         container: Container,
     ) -> None:
-        """AsyncScopedInjectedFunction descriptor returns self when accessed on class."""
+        """_AsyncScopedInjectedFunction descriptor returns self when accessed on class."""
 
         class ServiceA:
             pass
@@ -572,7 +572,7 @@ class TestDescriptorProtocol:
         service_key = ServiceKey.from_value(my_async_func)
         deps_extractor = DependenciesExtractor()
 
-        async_scoped_injected = AsyncScopedInjectedFunction(
+        async_scoped_injected = _AsyncScopedInjectedFunction(
             func=my_async_func,
             container=container,
             dependencies_extractor=deps_extractor,
@@ -590,7 +590,7 @@ class TestCompilationEdgeCases:
 
     def test_async_deps_cache_diwire_error_continues(self) -> None:
         """DIWireError during async deps cache building is caught gracefully."""
-        container = Container(register_if_missing=False, auto_compile=False)
+        container = Container(autoregister=False, auto_compile=False)
 
         class ServiceA:
             pass
@@ -645,7 +645,7 @@ class TestCompilationEdgeCases:
 
     def test_missing_required_ignored_dependency_during_compilation(self) -> None:
         """Missing required ignored dependency returns None during compilation."""
-        container = Container(register_if_missing=False, auto_compile=False)
+        container = Container(autoregister=False, auto_compile=False)
 
         class ServiceWithStr:
             def __init__(self, name: str) -> None:  # str is ignored, no default
@@ -660,7 +660,7 @@ class TestCompilationEdgeCases:
 
     def test_auto_registration_provider_compilation_fallback(self) -> None:
         """Auto-registration compiles providers during resolution."""
-        container = Container(register_if_missing=True, auto_compile=False)
+        container = Container(autoregister=True, auto_compile=False)
 
         class ServiceA:
             pass
@@ -734,7 +734,7 @@ class TestForwardReferenceHandling:
         result = container.resolve(handler)
 
         # Should return an Injected (not ScopedInjected) because scope detection failed
-        assert isinstance(result, InjectedFunction)
+        assert isinstance(result, _InjectedFunction)
 
     @pytest.mark.asyncio
     async def test_aresolve_forward_reference_name_error(self) -> None:
@@ -749,7 +749,7 @@ class TestForwardReferenceHandling:
         result = await container.aresolve(handler)
 
         # Should return an Injected (not ScopedInjected)
-        assert isinstance(result, InjectedFunction)
+        assert isinstance(result, _InjectedFunction)
 
 
 class TestAsyncResolutionEdgeCases:
@@ -786,7 +786,7 @@ class TestAsyncResolutionEdgeCases:
     @pytest.mark.asyncio
     async def test_aresolve_scope_mismatch(self) -> None:
         """aresolve raises scope mismatch error."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
 
         class ServiceA:
             pass
@@ -905,7 +905,7 @@ class TestAsyncResolutionEdgeCases:
     @pytest.mark.asyncio
     async def test_aresolve_missing_dependencies_error(self) -> None:
         """aresolve raises missing dependencies error."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
 
         class ServiceA:
             pass
@@ -945,7 +945,7 @@ class TestAsyncResolutionEdgeCases:
     @pytest.mark.asyncio
     async def test_aget_resolved_dependencies_diwire_error_with_defaults(self) -> None:
         """DIWireError uses defaults in async resolution."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
 
         class UnregisteredService:
             pass
@@ -1008,7 +1008,7 @@ class TestAsyncResolutionEdgeCases:
         )
 
         # Create a scope context
-        scope_id = ScopeId(segments=(("request", 1),))
+        scope_id = _ScopeId(segments=(("request", 1),))
         token = _current_scope.set(scope_id)
         try:
             service_key = ServiceKey.from_value(ServiceA)
@@ -1022,7 +1022,7 @@ class TestAsyncResolutionEdgeCases:
     @pytest.mark.asyncio
     async def test_nested_scope_diwire_error_continues(self) -> None:
         """DIWireError during nested scope detection is caught gracefully."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
 
         class ServiceA:
             pass
@@ -1046,7 +1046,7 @@ class TestAsyncResolutionEdgeCases:
         injected = container.resolve(handler, scope="request")
 
         # Verify it's a ScopedInjected (scope was detected from ServiceB registration)
-        assert isinstance(injected, ScopedInjectedFunction)
+        assert isinstance(injected, _ScopedInjectedFunction)
 
 
 class TestMissingCoverageSync:
@@ -1160,7 +1160,7 @@ class TestMissingCoverageSync:
 
     def test_resolve_instance_registration_stores_singleton(self) -> None:
         """Instance registration without scope stores in _singletons."""
-        container = Container(register_if_missing=False, auto_compile=False)
+        container = Container(autoregister=False, auto_compile=False)
 
         class ServiceA:
             pass
@@ -1187,7 +1187,7 @@ class TestCoverageEdgeCases:
 
     def test_compile_dependency_from_registry(self) -> None:
         """_compile_or_get_provider compiles dependency from registry."""
-        container = Container(auto_compile=False, register_if_missing=False)
+        container = Container(auto_compile=False, autoregister=False)
 
         class ServiceA:
             pass
@@ -1213,7 +1213,7 @@ class TestCoverageEdgeCases:
 
     def test_compile_scoped_registration_without_scoped_registry(self) -> None:
         """_compile_scoped_registration handles empty scoped registry."""
-        container = Container(auto_compile=False, register_if_missing=False)
+        container = Container(auto_compile=False, autoregister=False)
 
         class ServiceA:
             pass
@@ -1237,7 +1237,7 @@ class TestCoverageEdgeCases:
 
     def test_compile_auto_registration_returns_none(self) -> None:
         """_compile_or_get_provider auto-registers but compilation fails."""
-        container = Container(auto_compile=False, register_if_missing=True)
+        container = Container(auto_compile=False, autoregister=True)
 
         class ServiceA:
             # str dependency without default - compilation will fail
@@ -1283,7 +1283,7 @@ class TestCoverageEdgeCases:
 
     def test_compile_scoped_registration_with_scoped_dependency(self) -> None:
         """Scoped registration compilation returns None when dependency can't be compiled."""
-        container = Container(auto_compile=False, register_if_missing=False)
+        container = Container(auto_compile=False, autoregister=False)
 
         class ServiceA:
             pass
@@ -1306,7 +1306,7 @@ class TestCoverageEdgeCases:
 
     def test_compile_scoped_registration_skips_scoped_dependency(self) -> None:
         """Scoped compilation skips when dependencies have scoped registrations."""
-        container = Container(auto_compile=False, register_if_missing=False)
+        container = Container(auto_compile=False, autoregister=False)
 
         class ServiceA:
             def __init__(self, name: str) -> None:
@@ -1431,7 +1431,7 @@ class TestCoverageEdgeCases:
             def __init__(self, name: str = "default") -> None:
                 self.name = name
 
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         result = await container.aresolve(ServiceWithIgnoredDefault)
         assert result.name == "default"
 
@@ -1443,7 +1443,7 @@ class TestCoverageEdgeCases:
             def __init__(self, name: str) -> None:
                 self.name = name
 
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         # Explicitly register str - this is normally an ignored type
         container.register(str, instance="explicit_value")
         container.register(ServiceWithStr)
@@ -1465,7 +1465,7 @@ class TestCoverageEdgeCases:
 
         # Create a scope ID with an anonymous segment (name=None)
         # This simulates entering nested scopes where inner one is anonymous
-        scope_id = ScopeId(segments=(("request", 1), (None, 2)))
+        scope_id = _ScopeId(segments=(("request", 1), (None, 2)))
         token = _current_scope.set(scope_id)
         try:
             service_key = ServiceKey.from_value(Session)
@@ -1478,7 +1478,7 @@ class TestCoverageEdgeCases:
 
     def test_find_scope_in_dependencies_with_extraction_error(self) -> None:
         """_find_scope_in_dependencies catches DIWireError gracefully."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
 
         class ServiceA:
             pass
@@ -1498,11 +1498,11 @@ class TestCoverageEdgeCases:
         injected = container.resolve(handler, scope="request")
 
         # Should be ScopedInjected because scope was explicitly provided
-        assert isinstance(injected, ScopedInjectedFunction)
+        assert isinstance(injected, _ScopedInjectedFunction)
 
     def test_resolve_dependencies_error_with_default(self) -> None:
         """_resolve_dependencies handles error when param has default."""
-        container = Container(register_if_missing=False)
+        container = Container(autoregister=False)
 
         class UnregisteredService:
             pass
@@ -1549,7 +1549,7 @@ class TestDependencyExtractionErrorHandling:
             def __init__(self, dep: "UndefinedType") -> None:  # type: ignore[name-defined] # noqa: F821
                 pass
 
-        container = Container(register_if_missing=True)
+        container = Container(autoregister=True)
         container.register(ServiceWithBadNestedDep)
 
         # Create a handler that depends on the service with bad nested deps
@@ -1561,4 +1561,4 @@ class TestDependencyExtractionErrorHandling:
         result = container.resolve(handler)
 
         # Should return Injected (no scope detected due to extraction error)
-        assert isinstance(result, InjectedFunction)
+        assert isinstance(result, _InjectedFunction)
