@@ -7,8 +7,8 @@ from typing import Annotated, Any
 
 import pytest
 
-from diwire.container import (
-    Container,
+from diwire.container import Container
+from diwire.container_injection import (
     _AsyncInjectedFunction,
     _AsyncScopedInjectedFunction,
     _InjectedFunction,

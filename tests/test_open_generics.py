@@ -5,7 +5,8 @@ from typing import TYPE_CHECKING, Annotated, Any, Generic, TypeVar, cast
 
 import pytest
 
-from diwire.container import Container, _type_arg_matches_constraint
+from diwire.container import Container
+from diwire.container_helpers import _type_arg_matches_constraint
 from diwire.exceptions import (
     DIWireInvalidGenericTypeArgumentError,
     DIWireOpenGenericRegistrationError,

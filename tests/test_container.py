@@ -8,16 +8,15 @@ from typing import Annotated
 import pytest
 
 from diwire.compiled_providers import ScopedSingletonArgsProvider
-from diwire.container import (
-    Container,
+from diwire.container import Container
+from diwire.container_helpers import _is_async_factory
+from diwire.container_injection import (
     _AsyncInjectedFunction,
     _AsyncScopedInjectedFunction,
-    _current_scope,
     _InjectedFunction,
-    _is_async_factory,
     _ScopedInjectedFunction,
-    _ScopeId,
 )
+from diwire.container_scopes import _current_scope, _ScopeId
 from diwire.dependencies import DependenciesExtractor
 from diwire.exceptions import (
     DIWireCircularDependencyError,

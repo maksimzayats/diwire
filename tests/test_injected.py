@@ -5,7 +5,8 @@ from typing import Annotated
 
 import pytest
 
-from diwire.container import Container, _InjectedFunction
+from diwire.container import Container
+from diwire.container_injection import _InjectedFunction
 from diwire.exceptions import DIWireServiceNotRegisteredError
 from diwire.types import Injected
 
@@ -333,7 +334,7 @@ class TestAsyncInjectedMetadata:
 
     async def test_async_injected_preserves_docstring(self, container: Container) -> None:
         """AsyncInjected preserves function docstring."""
-        from diwire.container import _AsyncInjectedFunction
+        from diwire.container_injection import _AsyncInjectedFunction
 
         async def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
             """This is my async docstring."""

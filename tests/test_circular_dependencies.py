@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from diwire.container import Container, _current_scope
+from diwire.container import Container
+from diwire.container_scopes import _current_scope
 from diwire.exceptions import DIWireCircularDependencyError
 from diwire.types import Lifetime
 

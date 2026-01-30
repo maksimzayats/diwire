@@ -10,13 +10,9 @@ from typing import Annotated, Any
 
 import pytest
 
-from diwire.container import (
-    Container,
-    _current_scope,
-    _InjectedFunction,
-    _ScopedInjectedFunction,
-    _ScopeId,
-)
+from diwire.container import Container
+from diwire.container_injection import _InjectedFunction, _ScopedInjectedFunction
+from diwire.container_scopes import ScopedContainer, _current_scope, _ScopeId
 from diwire.exceptions import (
     DIWireAsyncCleanupWithoutEventLoopError,
     DIWireGeneratorFactoryWithoutScopeError,
@@ -2122,10 +2118,10 @@ class TestAsyncScopedSingletonLockCleanup:
             assert session.id == "async-created"
 
             # Verify async lock was created while scope is active
-            assert len(container._scoped_singleton_locks) > 0
+            assert len(container._locks._scoped_singleton_locks) > 0
 
         # After sync scope exit (close_scope), async locks should be cleaned up (line 807)
-        assert len(container._scoped_singleton_locks) == 0
+        assert len(container._locks._scoped_singleton_locks) == 0
 
     async def test_async_scoped_singleton_lock_cleanup_via_async_clear_scope(
         self,
@@ -2150,10 +2146,10 @@ class TestAsyncScopedSingletonLockCleanup:
         async with container.enter_scope("request"):
             # Resolve via aresolve to ensure async lock is created
             await container.aresolve(Session)
-            assert len(container._scoped_singleton_locks) > 0
+            assert len(container._locks._scoped_singleton_locks) > 0
 
         # After async scope exit, async locks should be cleaned up
-        assert len(container._scoped_singleton_locks) == 0
+        assert len(container._locks._scoped_singleton_locks) == 0
 
 
 # ============================================================================
@@ -3238,7 +3234,7 @@ class TestContainerClosedError:
         container: Container,
     ) -> None:
         """Directly creating ScopedContainer on closed container raises error."""
-        from diwire.container import ScopedContainer, _ScopeId
+        from diwire.container_scopes import _ScopeId
         from diwire.exceptions import DIWireContainerClosedError
 
         container.close()
