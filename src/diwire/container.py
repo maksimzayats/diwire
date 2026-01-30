@@ -901,7 +901,7 @@ class Container:
         self._build_async_deps_cache()
 
         # Pre-warm fast type caches for direct type lookups
-        for service_key, provider in self._compiled_providers.items():
+        for service_key, provider in list(self._compiled_providers.items()):
             if isinstance(service_key.value, type) and service_key.component is None:
                 self._type_providers[service_key.value] = provider
                 # Also cache any already-resolved singletons
@@ -915,7 +915,7 @@ class Container:
 
         This eliminates registry lookups in the async resolution path.
         """
-        for service_key in self._registry:
+        for service_key in list(self._registry):
             if not isinstance(service_key.value, type):
                 continue
 
