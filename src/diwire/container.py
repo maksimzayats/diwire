@@ -857,7 +857,8 @@ class Container:
             del self._async_scope_exit_stacks[scope_key]
 
         # Remove all scoped instances with keys starting with this scope
-        keys_to_remove = [k for k in self._scoped_instances if k[0] == scope_key]
+        # Snapshot keys to avoid RuntimeError from dict mutation during iteration
+        keys_to_remove = [k for k in list(self._scoped_instances) if k[0] == scope_key]
         for k in keys_to_remove:
             del self._scoped_instances[k]
         self._locks.clear_scope_locks(scope_key)
@@ -1957,7 +1958,8 @@ class Container:
             await async_exit_stack.aclose()
 
         # Remove all scoped instances with keys starting with this scope
-        keys_to_remove = [k for k in self._scoped_instances if k[0] == scope_key]
+        # Snapshot keys to avoid RuntimeError from dict mutation during iteration
+        keys_to_remove = [k for k in list(self._scoped_instances) if k[0] == scope_key]
         for k in keys_to_remove:
             del self._scoped_instances[k]
         self._locks.clear_scope_locks(scope_key)
