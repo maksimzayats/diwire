@@ -48,9 +48,8 @@ def test_punq_singleton_resolution(benchmark: BenchmarkFixture) -> None:
 def test_rodi_singleton_resolution(benchmark: BenchmarkFixture) -> None:
     container = RodiContainer()
     container.add_singleton(SingletonService)
-    provider = container.build_provider()
 
-    singleton = provider.get(SingletonService)
-    result = benchmark(provider.get, SingletonService)
+    singleton = container.resolve(SingletonService)
+    result = benchmark(container.resolve, SingletonService)
 
     assert result is singleton
