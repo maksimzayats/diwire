@@ -7,7 +7,11 @@ from typing import Annotated
 
 import pytest
 
-from diwire.compiled_providers import ScopedSingletonArgsProvider
+from diwire.compiled_providers import (
+    ScopedSingletonArgsProvider,
+    ScopedSingletonPositionalArgsProvider,
+    SingletonArgsTypeProvider,
+)
 from diwire.container import Container
 from diwire.container_helpers import _is_async_factory
 from diwire.container_injection import (
@@ -695,7 +699,7 @@ class TestCompilationEdgeCases:
         assert (string_key, "request") not in container._scoped_compiled_providers
 
     def test_scoped_singleton_args_provider_creation_with_dependencies(self) -> None:
-        """Scoped singleton with deps creates ScopedSingletonArgsProvider."""
+        """Scoped singleton with deps creates ScopedSingletonPositionalArgsProvider."""
         container = Container(auto_compile=False)
 
         class ServiceA:
@@ -714,7 +718,7 @@ class TestCompilationEdgeCases:
         provider = container._scoped_compiled_providers.get((service_key_b, "request"))
 
         assert provider is not None
-        assert isinstance(provider, ScopedSingletonArgsProvider)
+        assert isinstance(provider, ScopedSingletonPositionalArgsProvider)
 
 
 class TestForwardReferenceHandling:
@@ -1231,6 +1235,64 @@ class TestCoverageEdgeCases:
         )
 
         provider = container._compile_scoped_registration(service_key_b, registration, "request")
+
+        assert isinstance(provider, ScopedSingletonPositionalArgsProvider)
+
+    def test_compile_singleton_registration_gap_uses_keyword_provider(self) -> None:
+        """Singleton compilation falls back to keyword provider when positional args are unsafe."""
+        container = Container(auto_compile=False)
+
+        @dataclass
+        class Dep1:
+            pass
+
+        @dataclass
+        class Dep2:
+            pass
+
+        @dataclass
+        class GapService:
+            dep1: Dep1
+            name: str = "default"
+            dep2: Dep2 = field(default_factory=Dep2)
+
+        container.register(Dep1, lifetime=Lifetime.TRANSIENT)
+        container.register(Dep2, lifetime=Lifetime.TRANSIENT)
+        container.register(GapService, lifetime=Lifetime.SINGLETON)
+
+        container.compile()
+
+        service_key = ServiceKey.from_value(GapService)
+        provider = container._compiled_providers.get(service_key)
+
+        assert isinstance(provider, SingletonArgsTypeProvider)
+
+    def test_compile_scoped_registration_gap_uses_keyword_provider(self) -> None:
+        """Scoped compilation falls back to keyword provider when positional args are unsafe."""
+        container = Container(auto_compile=False)
+
+        @dataclass
+        class Dep1:
+            pass
+
+        @dataclass
+        class Dep2:
+            pass
+
+        @dataclass
+        class GapService:
+            dep1: Dep1
+            name: str = "default"
+            dep2: Dep2 = field(default_factory=Dep2)
+
+        container.register(Dep1, lifetime=Lifetime.TRANSIENT)
+        container.register(Dep2, lifetime=Lifetime.TRANSIENT)
+        container.register(GapService, scope="request", lifetime=Lifetime.SCOPED)
+
+        container.compile()
+
+        service_key = ServiceKey.from_value(GapService)
+        provider = container._scoped_compiled_providers.get((service_key, "request"))
 
         assert isinstance(provider, ScopedSingletonArgsProvider)
 

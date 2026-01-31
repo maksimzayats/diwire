@@ -22,10 +22,13 @@ from diwire.compiled_providers import (
     CompiledProvider,
     FactoryProvider,
     InstanceProvider,
+    PositionalArgsTypeProvider,
     ScopedSingletonArgsProvider,
+    ScopedSingletonPositionalArgsProvider,
     ScopedSingletonProvider,
     SingletonArgsTypeProvider,
     SingletonFactoryProvider,
+    SingletonPositionalArgsTypeProvider,
     SingletonTypeProvider,
     TypeProvider,
 )
@@ -1014,28 +1017,42 @@ class Container:
                 return SingletonTypeProvider(instantiation_type, service_key)
             return TypeProvider(instantiation_type)
 
+        positional_order = self._get_positional_dependency_order(instantiation_type, filtered_deps)
+        if positional_order is None:
+            use_positional = False
+            param_names = list(filtered_deps.keys())
+        else:
+            use_positional = True
+            param_names = list(positional_order)
+
         # Compile dependency providers
-        param_names: list[str] = []
         dep_providers: list[CompiledProvider] = []
-        for name, dep_key in filtered_deps.items():
+        for name in param_names:
+            dep_key = filtered_deps[name]
             dep_provider = self._compile_or_get_provider(dep_key)
             if dep_provider is None:
                 return None
-            param_names.append(name)
             dep_providers.append(dep_provider)
 
         if registration.lifetime == Lifetime.SINGLETON:
+            if use_positional:
+                return SingletonPositionalArgsTypeProvider(
+                    instantiation_type,
+                    service_key,
+                    tuple(dep_providers),
+                )
             return SingletonArgsTypeProvider(
                 instantiation_type,
                 service_key,
                 tuple(param_names),
                 tuple(dep_providers),
             )
-        return ArgsTypeProvider(
-            instantiation_type,
-            tuple(param_names),
-            tuple(dep_providers),
-        )
+        if use_positional:
+            return PositionalArgsTypeProvider(
+                instantiation_type,
+                tuple(dep_providers),
+            )
+        return ArgsTypeProvider(instantiation_type, tuple(param_names), tuple(dep_providers))
 
     def _make_compiled_factory_result_handler(
         self,
@@ -1052,6 +1069,63 @@ class Container:
             )
 
         return handler
+
+    def _get_positional_dependency_order(
+        self,
+        instantiation_type: type,
+        dependencies: dict[str, ServiceKey],
+    ) -> tuple[str, ...] | None:
+        if not dependencies:
+            return ()
+        signature_type = getattr(instantiation_type, "_original_class", None)
+        if not isinstance(signature_type, type):
+            signature_type = instantiation_type
+        try:
+            sig = inspect.signature(signature_type)
+        except (TypeError, ValueError):
+            return None
+
+        params = [param for param in sig.parameters.values() if param.name != "self"]
+
+        for param in params:
+            if param.kind in (
+                inspect.Parameter.VAR_POSITIONAL,
+                inspect.Parameter.VAR_KEYWORD,
+            ):
+                return None
+            if (
+                param.kind == inspect.Parameter.KEYWORD_ONLY
+                and param.default is inspect.Parameter.empty
+            ):
+                return None
+            if param.kind == inspect.Parameter.KEYWORD_ONLY and param.name in dependencies:
+                return None
+
+        positional_names = [
+            param.name
+            for param in params
+            if param.kind
+            in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            )
+        ]
+
+        if any(name not in positional_names for name in dependencies):
+            return None
+
+        included_indices = [
+            index for index, name in enumerate(positional_names) if name in dependencies
+        ]
+        if not included_indices:
+            return ()
+
+        last_index = max(included_indices)
+        for index in range(last_index + 1):
+            if positional_names[index] not in dependencies:
+                return None
+
+        return tuple(name for name in positional_names if name in dependencies)
 
     def _handle_compiled_factory_result(
         self,
@@ -1158,6 +1232,14 @@ class Container:
             # No dependencies - use simple scoped provider
             return ScopedSingletonProvider(instantiation_type, service_key)
 
+        positional_order = self._get_positional_dependency_order(instantiation_type, filtered_deps)
+        if positional_order is None:
+            use_positional = False
+            param_names = list(filtered_deps.keys())
+        else:
+            use_positional = True
+            param_names = list(positional_order)
+
         # Skip compilation when any dependency has a scoped registration.
         if self._scoped_registry:
             scoped_service_keys = {scoped_key for scoped_key, _ in self._scoped_registry}
@@ -1165,15 +1247,20 @@ class Container:
                 return None
 
         # Compile dependency providers
-        param_names: list[str] = []
         dep_providers: list[CompiledProvider] = []
-        for name, dep_key in filtered_deps.items():
+        for name in param_names:
+            dep_key = filtered_deps[name]
             dep_provider = self._compile_or_get_provider(dep_key)
             if dep_provider is None:
                 return None
-            param_names.append(name)
             dep_providers.append(dep_provider)
 
+        if use_positional:
+            return ScopedSingletonPositionalArgsProvider(
+                instantiation_type,
+                service_key,
+                tuple(dep_providers),
+            )
         return ScopedSingletonArgsProvider(
             instantiation_type,
             service_key,
