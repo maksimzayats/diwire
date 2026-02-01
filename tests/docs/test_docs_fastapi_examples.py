@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
-from tests.docs_examples import iter_rst_code_blocks
+from tests.docs.docs_examples import iter_rst_code_blocks
 
 
 def _exec_block(*, code: str, filename: str) -> dict[str, Any]:
@@ -34,7 +34,7 @@ def _exec_block(*, code: str, filename: str) -> dict[str, Any]:
 
 
 def test_docs_fastapi_examples_are_correct(capsys: Any) -> None:
-    docs_dir = Path(__file__).resolve().parent.parent / "docs"
+    docs_dir = Path(__file__).resolve().parents[2] / "docs"
     blocks = iter_rst_code_blocks(docs_dir=docs_dir)
 
     fastapi_doc = docs_dir / "howto" / "examples" / "fastapi.rst"
