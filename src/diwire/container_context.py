@@ -396,13 +396,15 @@ class _ContainerContextProxy:
             A service instance, or a wrapper for function decoration.
 
         Examples:
-            # Decorator usage (container looked up at call time):
-            @container_context.resolve(scope="request")
-            async def handler(service: Annotated[Service, Injected()]) -> dict:
-                ...
+            .. code-block:: python
 
-            # Direct resolution:
-            service = container_context.resolve(Service)
+                # Decorator usage (container looked up at call time):
+                @container_context.resolve(scope="request")
+                async def handler(service: Annotated[Service, Injected()]) -> dict:
+                    ...
+
+                # Direct resolution:
+                service = container_context.resolve(Service)
 
         """
         # DECORATOR PATTERN: resolve(scope="...") or resolve() returns decorator

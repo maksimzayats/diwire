@@ -21,7 +21,9 @@ uv run python examples/ex08_fastapi/ex01_basic.py
 | [ex01_registration.py](ex01_basics/ex01_registration.py)                   | Three registration methods: class, factory, and instance |
 | [ex02_lifetimes.py](ex01_basics/ex02_lifetimes.py)                         | TRANSIENT vs SINGLETON lifetimes                         |
 | [ex03_constructor_injection.py](ex01_basics/ex03_constructor_injection.py) | Automatic dependency resolution via type hints           |
+| [ex04_decorator_registration.py](ex01_basics/ex04_decorator_registration.py) | Decorator-based registration patterns                    |
 | [ex05_open_generics.py](ex01_basics/ex05_open_generics.py)                 | Open generic factory registration                        |
+| [ex06_compilation.py](ex01_basics/ex06_compilation.py)                     | Precomputing providers with `compile()`                  |
 
 ### ex02_scopes/ - Scoped Dependencies
 
@@ -73,7 +75,8 @@ uv run python examples/ex08_fastapi/ex01_basic.py
 |------------------------------------------------------------------------|-------------------------------------------------------|
 | [ex01_circular_dependency.py](ex07_errors/ex01_circular_dependency.py) | Circular dependency detection                         |
 | [ex02_missing_dependency.py](ex07_errors/ex02_missing_dependency.py)   | Missing dependency errors                             |
-| [ex03_scope_mismatch.py](ex07_errors/ex03_scope_mismatch.py)           | Scope mismatch errors (singleton depending on scoped) |
+| [ex03_scope_mismatch.py](ex07_errors/ex03_scope_mismatch.py)           | Resolving from an exited scope (scope mismatch)       |
+| [ex04_scoped_outside_scope.py](ex07_errors/ex04_scoped_outside_scope.py) | Resolving a scoped service outside its scope          |
 
 ### ex08_fastapi/ - FastAPI Integration
 
