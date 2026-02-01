@@ -111,11 +111,26 @@ await micropip.install([${escaped}])
       const result = await pyodide.runPythonAsync(`
 from contextlib import redirect_stdout, redirect_stderr
 from io import StringIO
+import sys
+import types
 
 _stdout = StringIO()
 _stderr = StringIO()
 with redirect_stdout(_stdout), redirect_stderr(_stderr):
-    exec(__RUN_CODE__, {})
+    # Execute in a real module so get_type_hints() can resolve names via sys.modules.
+    _mod = types.ModuleType("__main__")
+    _mod.__dict__["__name__"] = "__main__"
+    _mod.__dict__["__package__"] = None
+
+    _old_main = sys.modules.get("__main__")
+    sys.modules["__main__"] = _mod
+    try:
+        exec(__RUN_CODE__, _mod.__dict__)
+    finally:
+        if _old_main is None:
+            del sys.modules["__main__"]
+        else:
+            sys.modules["__main__"] = _old_main
 (_stdout.getvalue(), _stderr.getvalue())
 `);
 

@@ -518,8 +518,8 @@ No adapters or plugins needed — diwire extracts dependencies from type hints a
 
 Documentation: https://docs.diwire.dev
 
-Examples: [`examples/README.md`](examples/README.md) (guided tour of patterns, async usage, FastAPI integration, and
-error handling).
+Examples: https://docs.diwire.dev/howto/examples/ (runnable scripts and real-world scenarios: patterns, async, FastAPI,
+and error handling).
 
 ## Contributing
 

@@ -18,8 +18,8 @@
   outline: none;
   border-radius: 0.4em;
   background-color: var(--color-code-background);
-  color: var(--color-background-item);
-  opacity: 0;
+  color: var(--color-code-foreground);
+  opacity: 1;
   transition: color .3s, opacity .3s;
 }
 
@@ -28,11 +28,6 @@
   width: 1.5em;
   height: 1.5em;
   padding: 0;
-}
-
-.highlight:hover .py-runner-btn {
-  opacity: 1;
-  color: var(--color-code-foreground);
 }
 
 .highlight .py-runner-btn:hover {
@@ -134,4 +129,9 @@
   .py-runner-btn {
     display: none;
   }
+}
+
+/* On interactive blocks, also show the copy button without needing hover (helps on touch devices). */
+.py-run .highlight button.copybtn {
+  opacity: 1;
 }

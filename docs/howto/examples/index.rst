@@ -4,11 +4,13 @@
 Examples (runnable)
 ===================
 
-All examples below live in the repository's ``examples/`` folder and can be run directly:
+All examples below are self-contained scripts.
+You can:
 
-.. code-block:: bash
+- run most of them in your browser (click **Run** in the top-right of a code block)
+- copy a block into a local ``.py`` file and run it with ``python``
 
-   uv run python examples/ex01_basics/ex01_registration.py
+The FastAPI examples are the main exception: they are not runnable in the browser.
 
 Learning path
 -------------
@@ -32,4 +34,3 @@ Learning path
    async
    errors
    fastapi
-

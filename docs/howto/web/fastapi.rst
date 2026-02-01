@@ -47,12 +47,8 @@ Recommended pattern
 Runnable examples
 -----------------
 
-The repository includes three progressively more advanced FastAPI examples:
+See :doc:`../examples/fastapi` for three progressively more advanced FastAPI examples:
 
-- ``examples/ex08_fastapi/ex01_basic.py`` - straightforward usage with explicit container calls
-- ``examples/ex08_fastapi/ex02_decorator.py`` - decorator-based layering
-- ``examples/ex08_fastapi/ex03_context_container_decorator.py`` - ``container_context`` + middleware-managed request
-  context
-
-See also: :doc:`../examples/fastapi`
-
+- basic integration with explicit container calls
+- decorator-based layering
+- ``container_context`` + middleware-managed request context

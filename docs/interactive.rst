@@ -1,8 +1,8 @@
 Interactive code blocks
 =======================
 
-Hover over any Python code block marked with ``:class: py-run`` to reveal the
-action buttons in the top-right corner:
+Any Python code block marked with ``:class: py-run`` includes action buttons in
+the top-right corner:
 
 - **Run** (play icon) — executes the code in the browser using Pyodide and
   shows output below the block.

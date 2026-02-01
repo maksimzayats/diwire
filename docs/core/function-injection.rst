@@ -17,16 +17,14 @@ Basic injection with ``Injected()``
 Mark injectable parameters using ``Annotated[T, Injected()]``.
 All other parameters remain caller-provided.
 
-.. literalinclude:: ../../examples/ex03_function_injection/ex01_injected.py
-   :language: python
+See the runnable scripts in :doc:`howto/examples/function-injection` (Injected marker section).
 
 Per-call scopes for request handlers
 ------------------------------------
 
 If your function needs scoped services (for example a request-scoped DB session), resolve the function with a scope:
 
-.. literalinclude:: ../../examples/ex03_function_injection/ex03_scoped_injected.py
-   :language: python
+See the runnable scripts in :doc:`howto/examples/function-injection` (Per-call scope section).
 
 Decorator style
 ---------------
@@ -46,4 +44,3 @@ You can also use ``resolve()`` as a decorator:
        return service.run()
 
 For framework integration (FastAPI/Starlette), also see :doc:`container-context` and :doc:`../howto/web/fastapi`.
-

@@ -49,8 +49,7 @@ Basic usage
 Runnable example
 ----------------
 
-.. literalinclude:: ../../examples/ex01_basics/ex06_compilation.py
-   :language: python
+See the runnable script in :doc:`howto/examples/basics` (Compilation section).
 
 Notes and limitations
 ---------------------

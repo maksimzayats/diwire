@@ -15,8 +15,7 @@ Async factories + ``aresolve()``
 
 If any dependency in the graph is async, you must resolve the root using ``aresolve()``.
 
-.. literalinclude:: ../../examples/ex06_async/ex01_basic_async_factory.py
-   :language: python
+See the runnable scripts in :doc:`howto/examples/async` (Basic async factory section).
 
 Async cleanup with async generators
 -----------------------------------
@@ -24,13 +23,11 @@ Async cleanup with async generators
 Use an **async generator** when you need to ``await`` cleanup (closing connections, sessions, etc.).
 The ``finally`` block runs when the scope exits.
 
-.. literalinclude:: ../../examples/ex06_async/ex02_async_generator_cleanup.py
-   :language: python
+See the runnable scripts in :doc:`howto/examples/async` (Async generator cleanup section).
 
 Parallel resolution
 -------------------
 
 Independent async dependencies are resolved in parallel via ``asyncio.gather()``.
 
-.. literalinclude:: ../../examples/ex06_async/ex05_mixed_and_parallel.py
-   :language: python
+See the runnable scripts in :doc:`howto/examples/async` (Mixed sync/async + parallel resolution section).

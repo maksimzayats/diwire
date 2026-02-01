@@ -22,8 +22,7 @@ The three direct registration forms:
 
 Full runnable example:
 
-.. literalinclude:: ../../examples/ex01_basics/ex01_registration.py
-   :language: python
+See :doc:`howto/examples/basics` (Registration methods section).
 
 Decorator registration
 ----------------------
@@ -37,9 +36,7 @@ Decorator registration
 
 Selected patterns (see the full example for more):
 
-.. literalinclude:: ../../examples/ex01_basics/ex04_decorator_registration.py
-   :language: python
-   :lines: 1-170
+See :doc:`howto/examples/basics` (Decorator registration section).
 
 Interface/protocol binding
 --------------------------
@@ -81,4 +78,3 @@ Next
 ----
 
 Continue with :doc:`lifetimes` and :doc:`scopes` - these determine how long objects live, and when cleanup happens.
-

@@ -15,8 +15,27 @@ diwire supports three lifetimes:
 Transient vs singleton
 ----------------------
 
-.. literalinclude:: ../../examples/ex01_basics/ex02_lifetimes.py
-   :language: python
+See the runnable script in :doc:`howto/examples/basics` (Lifetimes section).
+
+.. code-block:: python
+
+   from diwire import Container, Lifetime
+
+
+   class TransientService:
+       pass
+
+
+   class SingletonService:
+       pass
+
+
+   container = Container(autoregister=False)
+   container.register(TransientService, lifetime=Lifetime.TRANSIENT)
+   container.register(SingletonService, lifetime=Lifetime.SINGLETON)
+
+   assert container.resolve(TransientService) is not container.resolve(TransientService)
+   assert container.resolve(SingletonService) is container.resolve(SingletonService)
 
 Scoped
 ------
@@ -41,4 +60,3 @@ Auto-registration uses the container's configuration:
    from diwire import Container, Lifetime
 
    container = Container(autoregister_default_lifetime=Lifetime.TRANSIENT)
-

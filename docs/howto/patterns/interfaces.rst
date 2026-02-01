@@ -25,6 +25,4 @@ Two common ways:
 Example (runnable)
 ------------------
 
-.. literalinclude:: ../../../examples/ex05_patterns/ex04_interface_registration.py
-   :language: python
-
+See the runnable script in :doc:`../examples/patterns` (Interface registration section).

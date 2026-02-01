@@ -50,5 +50,4 @@ This is an intentional safety feature.
 
 Runnable example:
 
-.. literalinclude:: ../../../examples/ex07_errors/ex04_scoped_outside_scope.py
-   :language: python
+See the runnable script in :doc:`../examples/errors` (Scoped resolved outside scope section).

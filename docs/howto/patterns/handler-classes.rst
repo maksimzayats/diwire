@@ -11,6 +11,4 @@ Use :func:`diwire.container_context.resolve` on methods to create injected calla
 Example (runnable)
 ------------------
 
-.. literalinclude:: ../../../examples/ex05_patterns/ex03_class_methods.py
-   :language: python
-
+See the runnable script in :doc:`../examples/patterns` (Class methods with container_context section).

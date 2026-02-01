@@ -18,12 +18,10 @@ Example (runnable)
 
 See the full script:
 
-.. literalinclude:: ../../../examples/ex05_patterns/ex01_request_handler.py
-   :language: python
+See the runnable script in :doc:`../examples/patterns` (HTTP request handler pattern section).
 
 Notes
 -----
 
 - Scoped services are reused within a single request, but *not* across requests.
 - Use generator/async-generator factories for cleanup (DB sessions, connections). See :doc:`resources`.
-

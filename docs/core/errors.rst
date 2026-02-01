@@ -16,8 +16,7 @@ This usually means one of:
 - a constructor parameter is a primitive (``str``, ``int``, ...) and you didn't register an instance/factory
 - you tried to resolve an interface/protocol without binding a concrete implementation
 
-.. literalinclude:: ../../examples/ex07_errors/ex02_missing_dependency.py
-   :language: python
+See the runnable scripts in :doc:`howto/examples/errors` (Missing dependencies section).
 
 Circular dependencies
 ---------------------
@@ -25,8 +24,7 @@ Circular dependencies
 If ``A`` depends on ``B`` and ``B`` depends on ``A``, resolution cannot complete.
 diwire detects the cycle and raises :class:`diwire.exceptions.DIWireCircularDependencyError`.
 
-.. literalinclude:: ../../examples/ex07_errors/ex01_circular_dependency.py
-   :language: python
+See the runnable scripts in :doc:`howto/examples/errors` (Circular dependencies section).
 
 Scope mismatch
 --------------
@@ -36,8 +34,7 @@ Scope-related errors typically happen when:
 - you try to resolve a scoped service outside of its scope
 - you keep a reference to a scope and use it after it has exited
 
-.. literalinclude:: ../../examples/ex07_errors/ex03_scope_mismatch.py
-   :language: python
+See the runnable scripts in :doc:`howto/examples/errors` (Scope mismatch section).
 
 Async in sync context
 ---------------------
@@ -45,4 +42,3 @@ Async in sync context
 If any dependency is async, use :meth:`diwire.Container.aresolve` (and ``async with`` scopes).
 Trying to resolve an async dependency in a sync path raises
 :class:`diwire.exceptions.DIWireAsyncDependencyInSyncContextError`.
-

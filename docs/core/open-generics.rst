@@ -15,8 +15,7 @@ diwire also validates TypeVar bounds/constraints at runtime.
 Example
 -------
 
-.. literalinclude:: ../../examples/ex01_basics/ex05_open_generics.py
-   :language: python
+See the runnable script in :doc:`howto/examples/basics` (Open generics section).
 
 How it works
 ------------
@@ -33,4 +32,3 @@ Notes for type checkers
 
 Some type checkers don't love runtime TypeVar usage. The example uses a ``TYPE_CHECKING`` guard so static tooling sees
 ``AnyBox[Any]`` while runtime code uses ``AnyBox[T]``.
-

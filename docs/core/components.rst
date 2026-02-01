@@ -15,12 +15,10 @@ Use :class:`diwire.Component` with ``typing.Annotated`` to create distinct keys.
 Example
 -------
 
-.. literalinclude:: ../../examples/ex04_components/ex01_named_components.py
-   :language: python
+See the runnable script in :doc:`howto/examples/components` (Named components section).
 
 Notes
 -----
 
 - Prefer resolving by the ``Annotated[...]`` type in application code.
 - :class:`diwire.service_key.ServiceKey` exists for low-level use, but most projects never need it directly.
-

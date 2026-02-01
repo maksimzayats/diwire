@@ -15,6 +15,4 @@ Typical setup
 Example (runnable)
 ------------------
 
-.. literalinclude:: ../../../examples/ex05_patterns/ex02_repository.py
-   :language: python
-
+See the runnable script in :doc:`../examples/patterns` (Repository / unit-of-work pattern section).
