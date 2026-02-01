@@ -104,7 +104,7 @@ await micropip.install([${escaped}])
       btn.innerHTML = spinnerSvg;
     }
     setOutputState(output, statusEl, "running", "Running...");
-    outputPre.textContent = "Loading Pyodide...";
+    outputPre.textContent = "Loading Python...";
 
     let pyodide = null;
 
