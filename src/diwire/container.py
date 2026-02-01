@@ -5,7 +5,7 @@ import contextlib
 import inspect
 import itertools
 import threading
-from collections.abc import AsyncGenerator, Callable, Coroutine, Generator
+from collections.abc import AsyncGenerator, Callable, Coroutine, Generator, Iterator, MutableMapping
 from contextlib import AsyncExitStack, ExitStack
 from types import FunctionType, MethodType
 from typing import (
@@ -22,10 +22,13 @@ from diwire.compiled_providers import (
     CompiledProvider,
     FactoryProvider,
     InstanceProvider,
+    PositionalArgsTypeProvider,
     ScopedSingletonArgsProvider,
+    ScopedSingletonPositionalArgsProvider,
     ScopedSingletonProvider,
     SingletonArgsTypeProvider,
     SingletonFactoryProvider,
+    SingletonPositionalArgsTypeProvider,
     SingletonTypeProvider,
     TypeProvider,
 )
@@ -90,6 +93,202 @@ T = TypeVar("T", bound=Any)
 _C = TypeVar("_C", bound=type)  # For class decorator
 
 
+class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
+    """View for scoped caches backed by a per-scope cache."""
+
+    __slots__ = ("_cache", "_lock", "_type_cache")
+
+    def __init__(
+        self,
+        cache: dict[ServiceKey, Any],
+        type_cache: dict[type, Any],
+        lock: threading.RLock | None,
+    ) -> None:
+        self._cache = cache
+        self._type_cache = type_cache
+        self._lock = lock
+
+    def get(self, key: ServiceKey, default: Any | None = None) -> Any | None:
+        if key.is_type_key:
+            type_cache = self._type_cache
+            cached = type_cache.get(key.value)
+            if cached is not None:
+                return cached
+            cached = self._cache.get(key)
+            if cached is not None:
+                type_cache[key.value] = cached
+                return cached
+            return default
+        return self._cache.get(key, default)
+
+    def __getitem__(self, key: ServiceKey) -> Any:
+        if key.is_type_key:
+            type_cache = self._type_cache
+            cached = type_cache.get(key.value)
+            if cached is not None:
+                return cached
+            value = self._cache[key]
+            type_cache[key.value] = value
+            return value
+        return self._cache[key]
+
+    def __setitem__(self, key: ServiceKey, value: Any) -> None:
+        if key.is_type_key:
+            self._type_cache[key.value] = value
+        self._cache[key] = value
+
+    def __delitem__(self, key: ServiceKey) -> None:
+        del self._cache[key]
+        if key.is_type_key:
+            self._type_cache.pop(key.value, None)
+
+    def __iter__(self) -> Iterator[ServiceKey]:
+        return iter(self._cache)
+
+    def __len__(self) -> int:
+        return len(self._cache)
+
+    def get_or_create(self, key: ServiceKey, factory: Callable[[], Any]) -> Any:
+        cache = self._cache
+        type_cache: dict[type, Any] | None = None
+        if key.is_type_key:
+            type_cache = self._type_cache
+            cached = type_cache.get(key.value)
+            if cached is not None:
+                return cached
+            cached = cache.get(key)
+            if cached is not None:
+                type_cache[key.value] = cached
+                return cached
+        else:
+            cached = cache.get(key)
+            if cached is not None:
+                return cached
+        if self._lock is None:
+            instance = factory()
+            cache[key] = instance
+            if type_cache is not None:
+                type_cache[key.value] = instance
+            return instance
+        with self._lock:
+            if type_cache is not None:
+                cached = type_cache.get(key.value)
+                if cached is None:
+                    cached = cache.get(key)
+                    if cached is not None:
+                        type_cache[key.value] = cached
+                        return cached
+                else:
+                    return cached
+            else:
+                cached = cache.get(key)
+                if cached is not None:
+                    return cached
+            instance = factory()
+            cache[key] = instance
+            if type_cache is not None:
+                type_cache[key.value] = instance
+            return instance
+
+    def get_or_create_positional(
+        self,
+        key: ServiceKey,
+        constructor: type,
+        providers: tuple[CompiledProvider, ...],
+        singletons: dict[ServiceKey, Any],
+    ) -> Any:
+        cache = self._cache
+        type_cache: dict[type, Any] | None = None
+        if key.is_type_key:
+            type_cache = self._type_cache
+            cached = type_cache.get(key.value)
+            if cached is not None:
+                return cached
+            cached = cache.get(key)
+            if cached is not None:
+                type_cache[key.value] = cached
+                return cached
+        else:
+            cached = cache.get(key)
+            if cached is not None:
+                return cached
+        if self._lock is None:
+            instance = constructor(*[provider(singletons, self) for provider in providers])
+            cache[key] = instance
+            if type_cache is not None:
+                type_cache[key.value] = instance
+            return instance
+        with self._lock:
+            if type_cache is not None:
+                cached = type_cache.get(key.value)
+                if cached is None:
+                    cached = cache.get(key)
+                    if cached is not None:
+                        type_cache[key.value] = cached
+                        return cached
+                else:
+                    return cached
+            else:
+                cached = cache.get(key)
+                if cached is not None:
+                    return cached
+            instance = constructor(*[provider(singletons, self) for provider in providers])
+            cache[key] = instance
+            if type_cache is not None:
+                type_cache[key.value] = instance
+            return instance
+
+    def get_or_create_kwargs(
+        self,
+        key: ServiceKey,
+        constructor: type,
+        items: tuple[tuple[str, CompiledProvider], ...],
+        singletons: dict[ServiceKey, Any],
+    ) -> Any:
+        cache = self._cache
+        type_cache: dict[type, Any] | None = None
+        if key.is_type_key:
+            type_cache = self._type_cache
+            cached = type_cache.get(key.value)
+            if cached is not None:
+                return cached
+            cached = cache.get(key)
+            if cached is not None:
+                type_cache[key.value] = cached
+                return cached
+        else:
+            cached = cache.get(key)
+            if cached is not None:
+                return cached
+        if self._lock is None:
+            args = {name: provider(singletons, self) for name, provider in items}
+            instance = constructor(**args)
+            cache[key] = instance
+            if type_cache is not None:
+                type_cache[key.value] = instance
+            return instance
+        with self._lock:
+            if type_cache is not None:
+                cached = type_cache.get(key.value)
+                if cached is None:
+                    cached = cache.get(key)
+                    if cached is not None:
+                        type_cache[key.value] = cached
+                        return cached
+                else:
+                    return cached
+            else:
+                cached = cache.get(key)
+                if cached is not None:
+                    return cached
+            args = {name: provider(singletons, self) for name, provider in items}
+            instance = constructor(**args)
+            cache[key] = instance
+            if type_cache is not None:
+                type_cache[key.value] = instance
+            return instance
+
+
 class Container:
     """Dependency injection container for registering and resolving services.
 
@@ -116,14 +315,23 @@ class Container:
         "_has_scoped_registrations",
         "_is_compiled",
         "_locks",
+        "_multithreaded",
         "_open_generic_registry",
         "_registry",
+        "_scope_cache_locks",
+        "_scope_caches",
         "_scope_exit_stacks",
+        "_scope_type_caches",
+        "_scoped_cache_views",
+        "_scoped_cache_views_nolock",
         "_scoped_compiled_providers",
-        "_scoped_instances",
+        "_scoped_compiled_providers_by_scope",
         "_scoped_open_generic_registry",
         "_scoped_registry",
+        "_scoped_type_providers",
+        "_scoped_type_providers_by_scope",
         "_singletons",
+        "_thread_id",
         "_type_providers",
         "_type_singletons",
     )
@@ -147,13 +355,18 @@ class Container:
         self._auto_compile = auto_compile
 
         self._singletons: dict[ServiceKey, Any] = {}
-        # Flat scoped instance cache: (scope_cache_key, service_key) -> instance
-        self._scoped_instances: dict[
-            tuple[tuple[tuple[str | None, int], ...], ServiceKey],
-            Any,
+        self._scoped_cache_views: dict[tuple[tuple[str | None, int], ...], _ScopedCacheView] = {}
+        self._scoped_cache_views_nolock: dict[
+            tuple[tuple[str | None, int], ...],
+            _ScopedCacheView,
         ] = {}
+        self._scope_caches: dict[tuple[tuple[str | None, int], ...], dict[ServiceKey, Any]] = {}
+        self._scope_type_caches: dict[tuple[tuple[str | None, int], ...], dict[type, Any]] = {}
+        self._scope_cache_locks: dict[tuple[tuple[str | None, int], ...], threading.RLock] = {}
         self._registry: dict[ServiceKey, Registration] = {}
         self._scoped_registry: dict[tuple[ServiceKey, str], Registration] = {}
+        self._scoped_compiled_providers_by_scope: dict[str, dict[ServiceKey, CompiledProvider]] = {}
+        self._scoped_type_providers_by_scope: dict[str, dict[type, CompiledProvider]] = {}
         self._open_generic_registry: dict[
             tuple[type, Component | None],
             _OpenGenericRegistration,
@@ -174,6 +387,7 @@ class Container:
         self._compiled_providers: dict[ServiceKey, CompiledProvider] = {}
         # Compiled scoped providers: (service_key, scope_name) -> provider
         self._scoped_compiled_providers: dict[tuple[ServiceKey, str], CompiledProvider] = {}
+        self._scoped_type_providers: dict[tuple[type, str], CompiledProvider] = {}
         self._is_compiled: bool = False
 
         # Fast type-based lookup caches (bypasses ServiceKey creation for simple types)
@@ -188,6 +402,10 @@ class Container:
 
         # Lock manager for singleton and scoped singleton resolution
         self._locks = LockManager()
+
+        # Track thread usage for locking decisions
+        self._thread_id = threading.get_ident()
+        self._multithreaded = False
 
         # Track active scopes for imperative close()
         self._active_scopes: list[ScopedContainer] = []
@@ -769,7 +987,7 @@ class Container:
         if instance is not None and scope is None:
             self._singletons[service_key] = instance
             # Also clear type cache for re-registration
-            if isinstance(service_key.value, type) and service_key.component is None:
+            if service_key.is_type_key:
                 self._type_singletons[service_key.value] = instance
 
         if scope is not None:
@@ -856,11 +1074,11 @@ class Container:
             # Only remove after successfully scheduling cleanup
             del self._async_scope_exit_stacks[scope_key]
 
-        # Remove all scoped instances with keys starting with this scope
-        # Snapshot keys to avoid RuntimeError from dict mutation during iteration
-        keys_to_remove = [k for k in list(self._scoped_instances) if k[0] == scope_key]
-        for k in keys_to_remove:
-            del self._scoped_instances[k]
+        self._scope_caches.pop(scope_key, None)
+        self._scope_type_caches.pop(scope_key, None)
+        self._scoped_cache_views.pop(scope_key, None)
+        self._scoped_cache_views_nolock.pop(scope_key, None)
+        self._scope_cache_locks.pop(scope_key, None)
         self._locks.clear_scope_locks(scope_key)
 
     def _get_scope_exit_stack(
@@ -873,6 +1091,45 @@ class Container:
             self._scope_exit_stacks[scope_key] = scope_exit_stack
         return scope_exit_stack
 
+    def _get_scoped_cache_view(
+        self,
+        scope_key: tuple[tuple[str | None, int], ...],
+        *,
+        use_lock: bool = True,
+    ) -> _ScopedCacheView:
+        if use_lock:
+            cache = self._get_scope_cache(scope_key)
+            type_cache = self._get_scope_type_cache(scope_key)
+            lock = self._get_scope_cache_lock(scope_key)
+            return self._scoped_cache_views.setdefault(
+                scope_key,
+                _ScopedCacheView(cache, type_cache, lock),
+            )
+        cache = self._get_scope_cache(scope_key)
+        type_cache = self._get_scope_type_cache(scope_key)
+        return self._scoped_cache_views_nolock.setdefault(
+            scope_key,
+            _ScopedCacheView(cache, type_cache, None),
+        )
+
+    def _get_scope_cache(
+        self,
+        scope_key: tuple[tuple[str | None, int], ...],
+    ) -> dict[ServiceKey, Any]:
+        return self._scope_caches.setdefault(scope_key, {})
+
+    def _get_scope_type_cache(
+        self,
+        scope_key: tuple[tuple[str | None, int], ...],
+    ) -> dict[type, Any]:
+        return self._scope_type_caches.setdefault(scope_key, {})
+
+    def _get_scope_cache_lock(
+        self,
+        scope_key: tuple[tuple[str | None, int], ...],
+    ) -> threading.RLock:
+        return self._scope_cache_locks.setdefault(scope_key, threading.RLock())
+
     def compile(self) -> None:
         """Compile all registered services into optimized providers.
 
@@ -882,6 +1139,9 @@ class Container:
         """
         self._compiled_providers.clear()
         self._scoped_compiled_providers.clear()
+        self._scoped_compiled_providers_by_scope.clear()
+        self._scoped_type_providers.clear()
+        self._scoped_type_providers_by_scope.clear()
         self._type_providers.clear()
         self._type_singletons.clear()
         self._async_deps_cache.clear()
@@ -892,18 +1152,37 @@ class Container:
             if provider is not None:
                 self._compiled_providers[service_key] = provider
 
+        scoped_scopes_by_key: dict[ServiceKey, set[str]] = {}
+        for service_key, scope_name in self._scoped_registry:
+            scoped_scopes_by_key.setdefault(service_key, set()).add(scope_name)
+
         # Compile scoped registrations
         for (service_key, scope_name), registration in list(self._scoped_registry.items()):
-            provider = self._compile_scoped_registration(service_key, registration, scope_name)
+            if (service_key, scope_name) in self._scoped_compiled_providers:
+                continue
+            provider = self._compile_scoped_registration(
+                service_key,
+                registration,
+                scope_name,
+                scoped_scopes_by_key,
+            )
             if provider is not None:
                 self._scoped_compiled_providers[(service_key, scope_name)] = provider
+                self._scoped_compiled_providers_by_scope.setdefault(scope_name, {})[service_key] = (
+                    provider
+                )
+                if service_key.is_type_key:
+                    self._scoped_type_providers[(service_key.value, scope_name)] = provider
+                    self._scoped_type_providers_by_scope.setdefault(scope_name, {})[
+                        service_key.value
+                    ] = provider
 
         # Build async dependency cache for faster async resolution
         self._build_async_deps_cache()
 
         # Pre-warm fast type caches for direct type lookups
         for service_key, provider in list(self._compiled_providers.items()):
-            if isinstance(service_key.value, type) and service_key.component is None:
+            if service_key.is_type_key:
                 self._type_providers[service_key.value] = provider
                 # Also cache any already-resolved singletons
                 if service_key in self._singletons:
@@ -1014,28 +1293,42 @@ class Container:
                 return SingletonTypeProvider(instantiation_type, service_key)
             return TypeProvider(instantiation_type)
 
+        positional_order = self._get_positional_dependency_order(instantiation_type, filtered_deps)
+        if positional_order is None:
+            use_positional = False
+            param_names = list(filtered_deps.keys())
+        else:
+            use_positional = True
+            param_names = list(positional_order)
+
         # Compile dependency providers
-        param_names: list[str] = []
         dep_providers: list[CompiledProvider] = []
-        for name, dep_key in filtered_deps.items():
+        for name in param_names:
+            dep_key = filtered_deps[name]
             dep_provider = self._compile_or_get_provider(dep_key)
             if dep_provider is None:
                 return None
-            param_names.append(name)
             dep_providers.append(dep_provider)
 
         if registration.lifetime == Lifetime.SINGLETON:
+            if use_positional:
+                return SingletonPositionalArgsTypeProvider(
+                    instantiation_type,
+                    service_key,
+                    tuple(dep_providers),
+                )
             return SingletonArgsTypeProvider(
                 instantiation_type,
                 service_key,
                 tuple(param_names),
                 tuple(dep_providers),
             )
-        return ArgsTypeProvider(
-            instantiation_type,
-            tuple(param_names),
-            tuple(dep_providers),
-        )
+        if use_positional:
+            return PositionalArgsTypeProvider(
+                instantiation_type,
+                tuple(dep_providers),
+            )
+        return ArgsTypeProvider(instantiation_type, tuple(param_names), tuple(dep_providers))
 
     def _make_compiled_factory_result_handler(
         self,
@@ -1052,6 +1345,63 @@ class Container:
             )
 
         return handler
+
+    def _get_positional_dependency_order(
+        self,
+        instantiation_type: type,
+        dependencies: dict[str, ServiceKey],
+    ) -> tuple[str, ...] | None:
+        if not dependencies:
+            return ()
+        signature_type = getattr(instantiation_type, "_original_class", None)
+        if not isinstance(signature_type, type):
+            signature_type = instantiation_type
+        try:
+            sig = inspect.signature(signature_type)
+        except (TypeError, ValueError):
+            return None
+
+        params = [param for param in sig.parameters.values() if param.name != "self"]
+
+        for param in params:
+            if param.kind in (
+                inspect.Parameter.VAR_POSITIONAL,
+                inspect.Parameter.VAR_KEYWORD,
+            ):
+                return None
+            if (
+                param.kind == inspect.Parameter.KEYWORD_ONLY
+                and param.default is inspect.Parameter.empty
+            ):
+                return None
+            if param.kind == inspect.Parameter.KEYWORD_ONLY and param.name in dependencies:
+                return None
+
+        positional_names = [
+            param.name
+            for param in params
+            if param.kind
+            in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            )
+        ]
+
+        if any(name not in positional_names for name in dependencies):
+            return None
+
+        included_indices = [
+            index for index, name in enumerate(positional_names) if name in dependencies
+        ]
+        if not included_indices:
+            return ()
+
+        last_index = max(included_indices)
+        for index in range(last_index + 1):
+            if positional_names[index] not in dependencies:
+                return None
+
+        return tuple(name for name in positional_names if name in dependencies)
 
     def _handle_compiled_factory_result(
         self,
@@ -1108,11 +1458,38 @@ class Container:
 
         return None
 
+    def _compile_or_get_scoped_provider(
+        self,
+        service_key: ServiceKey,
+        scope_name: str,
+        scoped_scopes_by_key: dict[ServiceKey, set[str]],
+    ) -> CompiledProvider | None:
+        """Get an existing compiled scoped provider or compile a new one."""
+        scoped_key = (service_key, scope_name)
+        existing = self._scoped_compiled_providers.get(scoped_key)
+        if existing is not None:
+            return existing
+
+        registration = self._scoped_registry.get(scoped_key)
+        if registration is None:
+            return None
+
+        provider = self._compile_scoped_registration(
+            service_key,
+            registration,
+            scope_name,
+            scoped_scopes_by_key,
+        )
+        if provider is not None:
+            self._scoped_compiled_providers[scoped_key] = provider
+        return provider
+
     def _compile_scoped_registration(
         self,
         service_key: ServiceKey,
         registration: Registration,
-        _scope_name: str,
+        scope_name: str,
+        scoped_scopes_by_key: dict[ServiceKey, set[str]],
     ) -> CompiledProvider | None:
         """Compile a scoped registration into an optimized provider.
 
@@ -1155,25 +1532,56 @@ class Container:
             filtered_deps[name] = param_info.service_key
 
         if not filtered_deps:
+            if registration.lifetime == Lifetime.TRANSIENT:
+                return TypeProvider(instantiation_type)
             # No dependencies - use simple scoped provider
             return ScopedSingletonProvider(instantiation_type, service_key)
 
-        # Skip compilation when any dependency has a scoped registration.
-        if self._scoped_registry:
-            scoped_service_keys = {scoped_key for scoped_key, _ in self._scoped_registry}
-            if any(dep_key in scoped_service_keys for dep_key in filtered_deps.values()):
-                return None
+        positional_order = self._get_positional_dependency_order(instantiation_type, filtered_deps)
+        if positional_order is None:
+            use_positional = False
+            param_names = list(filtered_deps.keys())
+        else:
+            use_positional = True
+            param_names = list(positional_order)
 
         # Compile dependency providers
-        param_names: list[str] = []
         dep_providers: list[CompiledProvider] = []
-        for name, dep_key in filtered_deps.items():
-            dep_provider = self._compile_or_get_provider(dep_key)
+        for name in param_names:
+            dep_key = filtered_deps[name]
+            dep_scopes = scoped_scopes_by_key.get(dep_key)
+            if dep_scopes:
+                if dep_scopes != {scope_name}:
+                    return None
+                dep_provider = self._compile_or_get_scoped_provider(
+                    dep_key,
+                    scope_name,
+                    scoped_scopes_by_key,
+                )
+            else:
+                dep_provider = self._compile_or_get_provider(dep_key)
             if dep_provider is None:
                 return None
-            param_names.append(name)
             dep_providers.append(dep_provider)
 
+        if registration.lifetime == Lifetime.TRANSIENT:
+            if use_positional:
+                return PositionalArgsTypeProvider(
+                    instantiation_type,
+                    tuple(dep_providers),
+                )
+            return ArgsTypeProvider(
+                instantiation_type,
+                tuple(param_names),
+                tuple(dep_providers),
+            )
+
+        if use_positional:
+            return ScopedSingletonPositionalArgsProvider(
+                instantiation_type,
+                service_key,
+                tuple(dep_providers),
+            )
         return ScopedSingletonArgsProvider(
             instantiation_type,
             service_key,
@@ -1370,28 +1778,14 @@ class Container:
         ):
             scoped_provider = self._scoped_compiled_providers.get((service_key, scoped_scope_name))
             if scoped_provider is not None:
-                # Transient: no caching, create new instance each time
-                if scoped_registration.lifetime == Lifetime.TRANSIENT:
-                    return scoped_provider(self._singletons, None)
-
-                # Scoped singleton: use cache
                 cache_scope = current_scope.get_cache_key_for_scope(scoped_scope_name)
                 if cache_scope is not None:
-                    cache_key = (cache_scope, service_key)
-                    # Check cache first
-                    cached = self._scoped_instances.get(cache_key)
-                    if cached is not None:
-                        return cached
-                    scoped_lock = self._locks.get_sync_scoped_singleton_lock(cache_key)
-                    with scoped_lock:
-                        cached = self._scoped_instances.get(cache_key)
-                        if cached is not None:  # pragma: no cover - race timing dependent
-                            return cached  # pragma: no cover - race timing dependent
-                        # Use compiled provider (pass None - we handle caching at container level)
-                        result = scoped_provider(self._singletons, None)
-                        # Store directly in flat cache
-                        self._scoped_instances[cache_key] = result
-                        return result
+                    use_lock = self._is_multithreaded()
+                    compiled_scoped_cache = self._get_scoped_cache_view(
+                        cache_scope,
+                        use_lock=use_lock,
+                    )
+                    return scoped_provider(self._singletons, compiled_scoped_cache)
 
         # Inline circular dependency tracking (avoids context manager overhead)
         stack = _get_resolution_stack()
@@ -1423,36 +1817,66 @@ class Container:
 
             # Determine the scope key to use for caching
             cache_scope = self._get_cache_scope(current_scope, registration.scope)
-            cache_key = (cache_scope, service_key) if cache_scope is not None else None  # type: ignore[assignment]
+            scoped_cache: MutableMapping[ServiceKey, Any] | None = None
+            cache_key: tuple[tuple[tuple[str | None, int], ...], ServiceKey] | None = None
+            type_cache: dict[type, Any] | None = None
+            is_type_key = service_key.is_type_key
 
             # Check scoped instance cache using flat dict (single lookup)
-            if cache_key is not None:
-                cached = self._scoped_instances.get(cache_key)
+            if cache_scope is not None:
+                if is_type_key:
+                    type_cache = self._get_scope_type_cache(cache_scope)
+                    cached = type_cache.get(service_key.value)
+                    if cached is not None:
+                        return cached
+                scoped_cache = self._get_scope_cache(cache_scope)
+                cache_key = (cache_scope, service_key)
+                cached = scoped_cache.get(service_key)
                 if cached is not None:
+                    if type_cache is not None:
+                        type_cache[service_key.value] = cached
                     return cached
 
-            scoped_lock: threading.Lock | None = None  # type: ignore[no-redef]
+            scoped_lock: threading.RLock | None = None  # type: ignore[no-redef]
+            scoped_lock_acquired = False
+            # Skip lock contention in single-threaded scenarios.
             if (
                 registration.lifetime == Lifetime.SCOPED
-                and cache_key is not None  # type: ignore[redundant-expr]
+                and scoped_cache is not None
+                and cache_key is not None
                 and registration.instance is None
+                and self._is_multithreaded()
             ):
-                scoped_lock = self._locks.get_sync_scoped_singleton_lock(cache_key)
+                scoped_lock = self._get_scope_cache_lock(cache_key[0])
                 scoped_lock.acquire()
+                scoped_lock_acquired = True
                 # Double-check cache after acquiring lock
-                cached = self._scoped_instances.get(cache_key)
+                cached = None
+                if type_cache is not None:
+                    cached = type_cache.get(service_key.value)
+                if cached is None:
+                    cached = scoped_cache.get(service_key)
                 if cached is not None:  # pragma: no cover - race timing dependent
                     scoped_lock.release()  # pragma: no cover
+                    scoped_lock_acquired = False  # pragma: no cover
+                    if type_cache is not None:
+                        type_cache[service_key.value] = cached  # pragma: no cover
                     return cached  # pragma: no cover
 
             if registration.instance is not None:
-                # Cache scoped instances in _scoped_instances, not _singletons
-                if registration.scope is not None and cache_key is not None:
-                    self._scoped_instances[cache_key] = registration.instance
+                if (
+                    registration.scope is not None
+                    and scoped_cache is not None
+                    and cache_key is not None
+                ):
+                    scoped_cache[service_key] = registration.instance
+                    if type_cache is not None:
+                        type_cache[service_key.value] = registration.instance
                 else:
                     self._singletons[service_key] = registration.instance
-                if scoped_lock is not None and scoped_lock.locked():  # type: ignore[redundant-expr] # pragma: no cover - defensive, lock only acquired when instance is None
+                if scoped_lock is not None and scoped_lock_acquired:  # pragma: no cover - defensive
                     scoped_lock.release()  # pragma: no cover
+                    scoped_lock_acquired = False  # pragma: no cover
                 return registration.instance
 
             # For singletons, use lock to prevent race conditions in threaded resolution
@@ -1503,8 +1927,14 @@ class Container:
 
                     if registration.lifetime == Lifetime.SINGLETON:
                         self._singletons[service_key] = instance
-                    elif registration.lifetime == Lifetime.SCOPED and cache_key is not None:
-                        self._scoped_instances[cache_key] = instance
+                    elif (
+                        registration.lifetime == Lifetime.SCOPED
+                        and scoped_cache is not None
+                        and cache_key is not None
+                    ):
+                        scoped_cache[service_key] = instance
+                        if type_cache is not None:
+                            type_cache[service_key.value] = instance
 
                     return instance
 
@@ -1527,17 +1957,90 @@ class Container:
 
                 if registration.lifetime == Lifetime.SINGLETON:
                     self._singletons[service_key] = instance
-                elif registration.lifetime == Lifetime.SCOPED and cache_key is not None:
-                    self._scoped_instances[cache_key] = instance
+                elif (
+                    registration.lifetime == Lifetime.SCOPED
+                    and scoped_cache is not None
+                    and cache_key is not None
+                ):
+                    scoped_cache[service_key] = instance
+                    if type_cache is not None:
+                        type_cache[service_key.value] = instance
 
                 return instance
             finally:
                 if singleton_lock is not None and singleton_lock.locked():
                     singleton_lock.release()
-                if scoped_lock is not None and scoped_lock.locked():  # type: ignore[redundant-expr]
+                if scoped_lock is not None and scoped_lock_acquired:
                     scoped_lock.release()
+                    scoped_lock_acquired = False
         finally:
             stack.pop()
+
+    def _resolve_scoped_compiled(
+        self,
+        key: Any,
+        scope_id: _ScopeId,
+    ) -> tuple[bool, Any]:
+        """Fast-path for compiled resolution within an explicit scope."""
+        if not self._is_compiled or not isinstance(key, type):
+            return False, None
+
+        named_scopes_desc = scope_id.named_scopes_desc
+
+        scoped_type_providers_by_scope = self._scoped_type_providers_by_scope
+        if scoped_type_providers_by_scope:
+            for scope_name in named_scopes_desc:
+                type_providers = scoped_type_providers_by_scope.get(scope_name)
+                if type_providers is None:
+                    continue
+                provider = type_providers.get(key)
+                if provider is not None:
+                    cache_scope = scope_id.get_cache_key_for_scope(scope_name)
+                    if cache_scope is None:  # pragma: no cover - scope_id invariant
+                        return False, None
+                    use_lock = self._is_multithreaded()
+                    scoped_cache = self._get_scoped_cache_view(
+                        cache_scope,
+                        use_lock=use_lock,
+                    )
+                    return True, provider(self._singletons, scoped_cache)
+
+        service_key = ServiceKey.from_value(key)
+        scoped_compiled_by_scope = self._scoped_compiled_providers_by_scope
+        if scoped_compiled_by_scope:
+            for scope_name in named_scopes_desc:
+                scoped_providers = scoped_compiled_by_scope.get(scope_name)
+                if scoped_providers is None:
+                    continue
+                provider = scoped_providers.get(service_key)
+                if provider is not None:
+                    cache_scope = scope_id.get_cache_key_for_scope(scope_name)
+                    if cache_scope is None:  # pragma: no cover - scope_id invariant
+                        return False, None
+                    use_lock = self._is_multithreaded()
+                    scoped_cache = self._get_scoped_cache_view(
+                        cache_scope,
+                        use_lock=use_lock,
+                    )
+                    return True, provider(self._singletons, scoped_cache)
+
+        if (
+            not self._has_scoped_registrations
+            or self._get_scoped_registration(service_key, scope_id) is None
+        ):
+            provider = self._compiled_providers.get(service_key)
+            if provider is not None:
+                return True, provider(self._singletons, None)
+
+        return False, None
+
+    def _is_multithreaded(self) -> bool:
+        if self._multithreaded:
+            return True
+        if threading.get_ident() != self._thread_id:
+            self._multithreaded = True
+            return True
+        return False
 
     @overload
     async def aresolve(self, key: type[T], *, scope: None = None) -> T: ...
@@ -1696,11 +2199,22 @@ class Container:
             # Determine the scope key to use for caching
             cache_scope = self._get_cache_scope(current_scope, registration.scope)
             cache_key = (cache_scope, service_key) if cache_scope is not None else None
+            scoped_cache: MutableMapping[ServiceKey, Any] | None = None
+            type_cache: dict[type, Any] | None = None
+            is_type_key = service_key.is_type_key
 
             # Check scoped instance cache using flat dict (single lookup)
-            if cache_key is not None:
-                cached = self._scoped_instances.get(cache_key)
+            if cache_scope is not None:
+                if is_type_key:
+                    type_cache = self._get_scope_type_cache(cache_scope)
+                    cached = type_cache.get(service_key.value)
+                    if cached is not None:
+                        return cached
+                scoped_cache = self._get_scope_cache(cache_scope)
+                cached = scoped_cache.get(service_key)
                 if cached is not None:
+                    if type_cache is not None:
+                        type_cache[service_key.value] = cached
                     return cached
 
             scoped_lock: asyncio.Lock | None = None
@@ -1712,14 +2226,26 @@ class Container:
                 scoped_lock = await self._locks.get_scoped_singleton_lock(cache_key)
                 await scoped_lock.acquire()
                 # Double-check cache after acquiring lock
-                cached = self._scoped_instances.get(cache_key)
+                cached = None
+                if type_cache is not None:
+                    cached = type_cache.get(service_key.value)
+                if cached is None and scoped_cache is not None:
+                    cached = scoped_cache.get(service_key)
                 if cached is not None:
+                    if type_cache is not None:
+                        type_cache[service_key.value] = cached
                     scoped_lock.release()
                     return cached
 
             if registration.instance is not None:
-                if registration.scope is not None and cache_key is not None:
-                    self._scoped_instances[cache_key] = registration.instance
+                if (
+                    registration.scope is not None
+                    and scoped_cache is not None
+                    and cache_key is not None
+                ):
+                    scoped_cache[service_key] = registration.instance
+                    if type_cache is not None:
+                        type_cache[service_key.value] = registration.instance
                 else:
                     self._singletons[service_key] = registration.instance
                 if (
@@ -1798,8 +2324,14 @@ class Container:
 
                     if registration.lifetime == Lifetime.SINGLETON:
                         self._singletons[service_key] = instance  # type: ignore[possibly-undefined]
-                    elif registration.lifetime == Lifetime.SCOPED and cache_key is not None:
-                        self._scoped_instances[cache_key] = instance  # type: ignore[possibly-undefined]
+                    elif (
+                        registration.lifetime == Lifetime.SCOPED
+                        and scoped_cache is not None
+                        and cache_key is not None
+                    ):
+                        scoped_cache[service_key] = instance  # type: ignore[possibly-undefined]
+                        if type_cache is not None:
+                            type_cache[service_key.value] = instance  # type: ignore[possibly-undefined]
 
                     return instance  # type: ignore[possibly-undefined]
 
@@ -1823,8 +2355,14 @@ class Container:
 
                 if registration.lifetime == Lifetime.SINGLETON:
                     self._singletons[service_key] = instance
-                elif registration.lifetime == Lifetime.SCOPED and cache_key is not None:
-                    self._scoped_instances[cache_key] = instance
+                elif (
+                    registration.lifetime == Lifetime.SCOPED
+                    and scoped_cache is not None
+                    and cache_key is not None
+                ):
+                    scoped_cache[service_key] = instance
+                    if type_cache is not None:
+                        type_cache[service_key.value] = instance
 
                 return instance
             finally:
@@ -1957,23 +2495,32 @@ class Container:
         if async_exit_stack is not None:
             await async_exit_stack.aclose()
 
-        # Remove all scoped instances with keys starting with this scope
-        # Snapshot keys to avoid RuntimeError from dict mutation during iteration
-        keys_to_remove = [k for k in list(self._scoped_instances) if k[0] == scope_key]
-        for k in keys_to_remove:
-            del self._scoped_instances[k]
+        self._scope_caches.pop(scope_key, None)
+        self._scope_type_caches.pop(scope_key, None)
+        self._scoped_cache_views.pop(scope_key, None)
+        self._scoped_cache_views_nolock.pop(scope_key, None)
+        self._scope_cache_locks.pop(scope_key, None)
         self._locks.clear_scope_locks(scope_key)
 
     def _register_active_scope(self, scope: ScopedContainer) -> None:
         """Register a scope as active for imperative close()."""
-        with self._active_scopes_lock:
-            if self._closed:
-                raise DIWireContainerClosedError
-            self._active_scopes.append(scope)
+        if self._is_multithreaded():
+            with self._active_scopes_lock:
+                if self._closed:
+                    raise DIWireContainerClosedError
+                self._active_scopes.append(scope)
+            return
+        if self._closed:
+            raise DIWireContainerClosedError
+        self._active_scopes.append(scope)
 
     def _unregister_active_scope(self, scope: ScopedContainer) -> None:
         """Unregister a scope when it is closed."""
-        with self._active_scopes_lock, contextlib.suppress(ValueError):
+        if self._is_multithreaded():
+            with self._active_scopes_lock, contextlib.suppress(ValueError):
+                self._active_scopes.remove(scope)
+            return
+        with contextlib.suppress(ValueError):
             self._active_scopes.remove(scope)
 
     def _check_not_closed(self) -> None:
@@ -2094,14 +2641,11 @@ class Container:
         Only checks the scoped registry, does not fall back to global registry.
         Uses tuple iteration instead of string split/join for performance.
         """
-        # Check from most specific to least specific
-        # Only check named scopes (skip anonymous segments where name is None)
-        for i in range(len(current_scope.segments), 0, -1):
-            name, _ = current_scope.segments[i - 1]
-            if name is not None:
-                scoped_reg = self._scoped_registry.get((service_key, name))
-                if scoped_reg is not None:
-                    return scoped_reg
+        # Check from most specific to least specific (named scopes only)
+        for name in current_scope.named_scopes_desc:
+            scoped_reg = self._scoped_registry.get((service_key, name))
+            if scoped_reg is not None:
+                return scoped_reg
         return None
 
     def _get_scoped_open_generic_registration(
@@ -2111,12 +2655,10 @@ class Container:
         current_scope: _ScopeId,
     ) -> _OpenGenericRegistration | None:
         """Get a scoped open generic registration for a matching scope, if any."""
-        for i in range(len(current_scope.segments), 0, -1):
-            name, _ = current_scope.segments[i - 1]
-            if name is not None:
-                scoped_reg = self._scoped_open_generic_registry.get((origin, component, name))
-                if scoped_reg is not None:
-                    return scoped_reg
+        for name in current_scope.named_scopes_desc:
+            scoped_reg = self._scoped_open_generic_registry.get((origin, component, name))
+            if scoped_reg is not None:
+                return scoped_reg
         return None
 
     def _validate_typevar_map(

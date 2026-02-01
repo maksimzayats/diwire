@@ -10,11 +10,16 @@ from uuid import uuid4
 import pytest
 
 from diwire.compiled_providers import (
+    ArgsTypeProvider,
     FactoryProvider,
     InstanceProvider,
+    PositionalArgsTypeProvider,
     ScopedSingletonArgsProvider,
+    ScopedSingletonPositionalArgsProvider,
     ScopedSingletonProvider,
+    SingletonArgsTypeProvider,
     SingletonFactoryProvider,
+    SingletonPositionalArgsTypeProvider,
 )
 from diwire.container import Container
 from diwire.exceptions import (
@@ -201,6 +206,79 @@ class TestScopedSingletonArgsProvider:
 
         # Without scope cache, each call creates new instance
         assert instance1 is not instance2
+
+
+class TestPositionalArgsProviders:
+    """Tests for positional compiled providers."""
+
+    def test_positional_args_provider_resolves_dependencies(self) -> None:
+        """Positional args provider resolves dependencies in order."""
+        dep_provider = InstanceProvider(ServiceA(id="dep"))
+        provider = PositionalArgsTypeProvider(ServiceB, (dep_provider,))
+
+        instance = provider({}, None)
+
+        assert isinstance(instance, ServiceB)
+        assert instance.service_a.id == "dep"
+
+    def test_singleton_positional_args_provider_caches(self) -> None:
+        """Singleton positional provider caches the instance."""
+        service_key = ServiceKey.from_value(ServiceB)
+        dep_provider = InstanceProvider(ServiceA(id="dep"))
+        provider = SingletonPositionalArgsTypeProvider(ServiceB, service_key, (dep_provider,))
+
+        singletons: dict[ServiceKey, object] = {}
+        instance1 = provider(singletons, None)
+        instance2 = provider(singletons, None)
+
+        assert instance1 is instance2
+        assert singletons[service_key] is instance1
+
+    def test_scoped_singleton_positional_args_provider_cache_hit(self) -> None:
+        """Scoped positional provider uses scoped cache."""
+        container = Container()
+        service_key = ServiceKey.from_value(ServiceB)
+        dep_provider = InstanceProvider(ServiceA(id="dep"))
+        provider = ScopedSingletonPositionalArgsProvider(ServiceB, service_key, (dep_provider,))
+
+        singletons: dict[ServiceKey, object] = {}
+        scoped_cache = container._get_scoped_cache_view((("request", 1),))
+
+        instance1 = provider(singletons, scoped_cache)
+        instance2 = provider(singletons, scoped_cache)
+
+        assert instance1 is instance2
+        assert scoped_cache[service_key] is instance1
+
+        no_scope_instance = provider(singletons, None)
+        assert no_scope_instance is not instance1
+
+
+class TestKeywordArgsProviders:
+    """Tests for keyword-based compiled providers."""
+
+    def test_args_type_provider_resolves_dependencies(self) -> None:
+        """ArgsTypeProvider resolves dependencies via kwargs."""
+        dep_provider = InstanceProvider(ServiceA(id="dep"))
+        provider = ArgsTypeProvider(ServiceB, ("service_a",), (dep_provider,))
+
+        instance = provider({}, None)
+
+        assert isinstance(instance, ServiceB)
+        assert instance.service_a.id == "dep"
+
+    def test_singleton_args_type_provider_caches(self) -> None:
+        """SingletonArgsTypeProvider caches the instance."""
+        service_key = ServiceKey.from_value(ServiceB)
+        dep_provider = InstanceProvider(ServiceA(id="dep"))
+        provider = SingletonArgsTypeProvider(ServiceB, service_key, ("service_a",), (dep_provider,))
+
+        singletons: dict[ServiceKey, object] = {}
+        instance1 = provider(singletons, None)
+        instance2 = provider(singletons, None)
+
+        assert instance1 is instance2
+        assert singletons[service_key] is instance1
 
 
 class TestSingletonFactoryProvider:
@@ -401,11 +479,12 @@ class TestCompiledProvidersCacheHit:
 
     def test_scoped_singleton_provider_cache_hit(self) -> None:
         """Test ScopedSingletonProvider returns cached instance on second call with scoped_cache."""
+        container = Container()
         service_key = ServiceKey.from_value(ServiceA)
         provider = ScopedSingletonProvider(ServiceA, service_key)
 
         singletons: dict[ServiceKey, object] = {}
-        scoped_cache: dict[ServiceKey, object] = {}
+        scoped_cache = container._get_scoped_cache_view((("request", 1),))
 
         # First call - creates and caches instance
         instance1 = provider(singletons, scoped_cache)
@@ -418,6 +497,7 @@ class TestCompiledProvidersCacheHit:
 
     def test_scoped_singleton_args_provider_cache_hit(self) -> None:
         """Test ScopedSingletonArgsProvider returns cached instance on second call with scoped_cache."""
+        container = Container()
         service_key_b = ServiceKey.from_value(ServiceB)
         service_key_a = ServiceKey.from_value(ServiceA)
 
@@ -434,7 +514,7 @@ class TestCompiledProvidersCacheHit:
         )
 
         singletons: dict[ServiceKey, object] = {}
-        scoped_cache: dict[ServiceKey, object] = {}
+        scoped_cache = container._get_scoped_cache_view((("request", 1),))
 
         # First call - creates and caches instance
         instance1 = provider(singletons, scoped_cache)
@@ -445,6 +525,9 @@ class TestCompiledProvidersCacheHit:
         instance2 = provider(singletons, scoped_cache)
         assert instance2 is instance1
         assert instance2.service_a is dep_instance
+
+        no_scope_instance = provider(singletons, None)
+        assert no_scope_instance is not instance1
 
     def test_singleton_factory_provider_cache_hit(self) -> None:
         """Test SingletonFactoryProvider returns cached instance without calling factory again."""
@@ -519,6 +602,50 @@ class TestCompiledProviderIntegration:
         # Second resolution uses fast path
         instance2 = container.resolve(ServiceA)
         assert instance1 is instance2
+
+
+class TestCompiledProviderSelection:
+    """Tests for selecting positional vs keyword providers."""
+
+    def test_compiled_uses_positional_provider_when_safe(self) -> None:
+        """Compiled provider should use positional path when signatures allow it."""
+        container = Container()
+        container.register(ServiceA, lifetime=Lifetime.TRANSIENT)
+        container.register(ServiceB, lifetime=Lifetime.TRANSIENT)
+        container.compile()
+
+        service_key = ServiceKey.from_value(ServiceB)
+        provider = container._compiled_providers.get(service_key)
+
+        assert isinstance(provider, PositionalArgsTypeProvider)
+
+    def test_compiled_falls_back_to_kwargs_when_gap(self) -> None:
+        """Keyword provider should be used when positional args would skip a parameter."""
+
+        @dataclass
+        class Dep1:
+            pass
+
+        @dataclass
+        class Dep2:
+            pass
+
+        @dataclass
+        class GapService:
+            dep1: Dep1
+            name: str = "default"
+            dep2: Dep2 = field(default_factory=Dep2)
+
+        container = Container()
+        container.register(Dep1, lifetime=Lifetime.TRANSIENT)
+        container.register(Dep2, lifetime=Lifetime.TRANSIENT)
+        container.register(GapService, lifetime=Lifetime.TRANSIENT)
+        container.compile()
+
+        service_key = ServiceKey.from_value(GapService)
+        provider = container._compiled_providers.get(service_key)
+
+        assert isinstance(provider, ArgsTypeProvider)
 
 
 class TestCompilationMissingCoverage:
