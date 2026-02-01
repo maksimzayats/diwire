@@ -114,6 +114,11 @@ exclude = [
     "examples/",
 ]
 
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+strict = false
+disable_error_code = ["valid-type", "misc"]
+
 [tool.ty.src]
 exclude = ["benchmarks/", "tests/examples/", "tmp/"]
 

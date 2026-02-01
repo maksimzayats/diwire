@@ -75,6 +75,60 @@ class TestBaseSettingsAutoRegistration:
         assert registration.factory is not None
 
 
+class TestPydanticV1BaseSettingsAutoRegistration:
+    def test_auto_registration_of_v1_base_settings_subclass(
+        self,
+        container: Container,
+    ) -> None:
+        """Pydantic v1 BaseSettings subclass is auto-registered."""
+        if pydantic_v1 is None:
+            pytest.skip("pydantic.v1 not available")
+        pydantic = cast("Any", pydantic_v1)
+
+        class MyV1Settings(pydantic.BaseSettings):  # type: ignore[misc, name-defined]
+            class Config:
+                arbitrary_types_allowed = True
+
+        instance = container.resolve(MyV1Settings)
+
+        assert isinstance(instance, MyV1Settings)
+
+    def test_v1_base_settings_creates_singleton(self, container: Container) -> None:
+        """Pydantic v1 BaseSettings creates singleton."""
+        if pydantic_v1 is None:
+            pytest.skip("pydantic.v1 not available")
+        pydantic = cast("Any", pydantic_v1)
+
+        class MySingletonV1Settings(pydantic.BaseSettings):  # type: ignore[misc, name-defined]
+            class Config:
+                arbitrary_types_allowed = True
+
+        instance1 = container.resolve(MySingletonV1Settings)
+        instance2 = container.resolve(MySingletonV1Settings)
+
+        assert instance1 is instance2
+
+    def test_v1_base_settings_uses_factory(self) -> None:
+        """Pydantic v1 BaseSettings registration uses factory."""
+        if pydantic_v1 is None:
+            pytest.skip("pydantic.v1 not available")
+        pydantic = cast("Any", pydantic_v1)
+
+        class V1Settings(pydantic.BaseSettings):  # type: ignore[misc, name-defined]
+            class Config:
+                arbitrary_types_allowed = True
+
+        registration_factory = DEFAULT_AUTOREGISTER_REGISTRATION_FACTORIES.get(  # type: ignore[arg-type]
+            pydantic.BaseSettings,
+        )
+        assert registration_factory is not None
+
+        registration = registration_factory(V1Settings)
+
+        assert registration.lifetime == Lifetime.SINGLETON
+        assert registration.factory is not None
+
+
 class DepService:
     pass
 
