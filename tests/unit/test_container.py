@@ -1532,7 +1532,6 @@ class TestCoverageEdgeCases:
     def test_compiled_scoped_provider_uses_cache(self) -> None:
         """Compiled scoped provider caches instances correctly."""
         container = Container(auto_compile=False)
-        container._scoped_instances = {}
 
         class ServiceA:
             pass
@@ -1547,15 +1546,16 @@ class TestCoverageEdgeCases:
         assert (ServiceA, "request") in container._scoped_type_providers
 
         # Enter the matching scope - compiled provider path will be used
-        with container.enter_scope("request"):
+        with container.enter_scope("request") as scope:
+            scope_key = scope._scope_id.segments
             instance1 = container.resolve(ServiceA)
             instance2 = container.resolve(ServiceA)
 
             # Should be same instance (scoped singleton cached)
             assert instance1 is instance2
 
-            # Verify it's in the scoped instances cache
-            assert any(k[1] == service_key for k in container._scoped_instances)
+            # Verify it's in the scoped cache
+            assert service_key in container._scope_caches[scope_key]
 
     def test_scoped_type_providers_skip_component_registrations(self) -> None:
         """Component-scoped registrations are not stored in _scoped_type_providers."""
@@ -1776,7 +1776,6 @@ class TestCoverageEdgeCases:
     def test_clear_scope_removes_scoped_instances_without_cache(self) -> None:
         """_clear_scope removes scoped instances even when no cache exists."""
         container = Container()
-        container._scoped_instances = {}
 
         class ServiceA:
             pass
@@ -1784,17 +1783,16 @@ class TestCoverageEdgeCases:
         with container.enter_scope("request") as scope:
             scope_key = scope._scope_id.segments
             service_key = ServiceKey.from_value(ServiceA)
-            container._scoped_instances[(scope_key, service_key)] = "value"
+            container._scope_caches[scope_key] = {service_key: "value"}
 
             scope.close()
 
-        assert (scope_key, service_key) not in container._scoped_instances
+        assert scope_key not in container._scope_caches
 
     @pytest.mark.asyncio
     async def test_aclear_scope_removes_scoped_instances_without_cache(self) -> None:
         """_aclear_scope removes scoped instances even when no cache exists."""
         container = Container()
-        container._scoped_instances = {}
 
         class ServiceA:
             pass
@@ -1802,11 +1800,11 @@ class TestCoverageEdgeCases:
         scope = container.enter_scope("request")
         scope_key = scope._scope_id.segments
         service_key = ServiceKey.from_value(ServiceA)
-        container._scoped_instances[(scope_key, service_key)] = "value"
+        container._scope_caches[scope_key] = {service_key: "value"}
 
         await scope.aclose()
 
-        assert (scope_key, service_key) not in container._scoped_instances
+        assert scope_key not in container._scope_caches
 
 
 class TestScopedCacheView:
@@ -1879,7 +1877,6 @@ class TestScopedCacheView:
     def test_scoped_cache_view_get_or_create_without_lock(self) -> None:
         """get_or_create works without a lock when requested."""
         container = Container()
-        container._scoped_instances = {}
 
         class ServiceA:
             pass
@@ -1892,7 +1889,7 @@ class TestScopedCacheView:
             instance = view.get_or_create(service_key, object)
 
             assert view.get(service_key) is instance
-            assert (scope_key, service_key) in container._scoped_instances
+            assert service_key in container._scope_caches[scope_key]
 
     def test_scoped_cache_view_get_or_create_positional(self) -> None:
         """get_or_create_positional caches and reuses constructed instances."""
@@ -1935,7 +1932,7 @@ class TestScopedCacheView:
             assert instance.left == "left"
             assert instance.right == "right"
             assert captured["cache"] is view
-            assert (scope_key, service_key) in container._scoped_instances
+            assert service_key in container._scope_caches[scope_key]
 
             calls_before = list(calls)
             assert (
@@ -1987,7 +1984,7 @@ class TestScopedCacheView:
             )
             assert instance.left == "left"
             assert instance.right == "right"
-            assert (scope_key, service_key) in container._scoped_instances
+            assert service_key in container._scope_caches[scope_key]
 
             calls_before = list(calls)
             assert (

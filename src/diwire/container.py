@@ -96,18 +96,14 @@ _C = TypeVar("_C", bound=type)  # For class decorator
 class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
     """View for scoped caches backed by a per-scope cache."""
 
-    __slots__ = ("_cache", "_instances", "_lock", "_scope_key")
+    __slots__ = ("_cache", "_lock")
 
     def __init__(
         self,
-        scope_key: tuple[tuple[str | None, int], ...],
         cache: dict[ServiceKey, Any],
-        instances: dict[tuple[tuple[tuple[str | None, int], ...], ServiceKey], Any],
         lock: threading.RLock | None,
     ) -> None:
-        self._scope_key = scope_key
         self._cache = cache
-        self._instances = instances
         self._lock = lock
 
     def get(self, key: ServiceKey, default: Any | None = None) -> Any | None:
@@ -118,11 +114,9 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
 
     def __setitem__(self, key: ServiceKey, value: Any) -> None:
         self._cache[key] = value
-        self._instances[(self._scope_key, key)] = value
 
     def __delitem__(self, key: ServiceKey) -> None:
         del self._cache[key]
-        self._instances.pop((self._scope_key, key), None)
 
     def __iter__(self) -> Iterator[ServiceKey]:
         return iter(self._cache)
@@ -132,15 +126,12 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
 
     def get_or_create(self, key: ServiceKey, factory: Callable[[], Any]) -> Any:
         cache = self._cache
-        instances = self._instances
-        scope_key = self._scope_key
         cached = cache.get(key)
         if cached is not None:
             return cached
         if self._lock is None:
             instance = factory()
             cache[key] = instance
-            instances[(scope_key, key)] = instance
             return instance
         with self._lock:
             cached = cache.get(key)
@@ -148,7 +139,6 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
                 return cached
             instance = factory()
             cache[key] = instance
-            instances[(scope_key, key)] = instance
             return instance
 
     def get_or_create_positional(
@@ -159,15 +149,12 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
         singletons: dict[ServiceKey, Any],
     ) -> Any:
         cache = self._cache
-        instances = self._instances
-        scope_key = self._scope_key
         cached = cache.get(key)
         if cached is not None:
             return cached
         if self._lock is None:
             instance = constructor(*[provider(singletons, self) for provider in providers])
             cache[key] = instance
-            instances[(scope_key, key)] = instance
             return instance
         with self._lock:
             cached = cache.get(key)
@@ -175,7 +162,6 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
                 return cached
             instance = constructor(*[provider(singletons, self) for provider in providers])
             cache[key] = instance
-            instances[(scope_key, key)] = instance
             return instance
 
     def get_or_create_kwargs(
@@ -186,8 +172,6 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
         singletons: dict[ServiceKey, Any],
     ) -> Any:
         cache = self._cache
-        instances = self._instances
-        scope_key = self._scope_key
         cached = cache.get(key)
         if cached is not None:
             return cached
@@ -195,7 +179,6 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
             args = {name: provider(singletons, self) for name, provider in items}
             instance = constructor(**args)
             cache[key] = instance
-            instances[(scope_key, key)] = instance
             return instance
         with self._lock:
             cached = cache.get(key)
@@ -204,7 +187,6 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
             args = {name: provider(singletons, self) for name, provider in items}
             instance = constructor(**args)
             cache[key] = instance
-            instances[(scope_key, key)] = instance
             return instance
 
 
@@ -243,7 +225,6 @@ class Container:
         "_scoped_cache_views",
         "_scoped_cache_views_nolock",
         "_scoped_compiled_providers",
-        "_scoped_instances",
         "_scoped_open_generic_registry",
         "_scoped_registry",
         "_scoped_type_providers",
@@ -272,11 +253,6 @@ class Container:
         self._auto_compile = auto_compile
 
         self._singletons: dict[ServiceKey, Any] = {}
-        # Flat scoped instance cache: (scope_cache_key, service_key) -> instance
-        self._scoped_instances: dict[
-            tuple[tuple[tuple[str | None, int], ...], ServiceKey],
-            Any,
-        ] = {}
         self._scoped_cache_views: dict[tuple[tuple[str | None, int], ...], _ScopedCacheView] = {}
         self._scoped_cache_views_nolock: dict[
             tuple[tuple[str | None, int], ...],
@@ -993,15 +969,7 @@ class Container:
             # Only remove after successfully scheduling cleanup
             del self._async_scope_exit_stacks[scope_key]
 
-        scope_cache = self._scope_caches.pop(scope_key, None)
-        if scope_cache is not None:
-            for service_key in scope_cache:
-                self._scoped_instances.pop((scope_key, service_key), None)
-        else:
-            # Snapshot keys to avoid RuntimeError from dict mutation during iteration
-            keys_to_remove = [k for k in list(self._scoped_instances) if k[0] == scope_key]
-            for k in keys_to_remove:
-                del self._scoped_instances[k]
+        self._scope_caches.pop(scope_key, None)
         self._scoped_cache_views.pop(scope_key, None)
         self._scoped_cache_views_nolock.pop(scope_key, None)
         self._scope_cache_locks.pop(scope_key, None)
@@ -1023,18 +991,21 @@ class Container:
         *,
         use_lock: bool = True,
     ) -> _ScopedCacheView:
-        cache = self._get_scope_cache(scope_key)
         if use_lock:
-            lock = self._get_scope_cache_lock(scope_key)
             view = self._scoped_cache_views.get(scope_key)
-            if view is None:
-                view = _ScopedCacheView(scope_key, cache, self._scoped_instances, lock)
-                self._scoped_cache_views[scope_key] = view
+            if view is not None:
+                return view
+            cache = self._get_scope_cache(scope_key)
+            lock = self._get_scope_cache_lock(scope_key)
+            view = _ScopedCacheView(cache, lock)
+            self._scoped_cache_views[scope_key] = view
             return view
         view = self._scoped_cache_views_nolock.get(scope_key)
-        if view is None:
-            view = _ScopedCacheView(scope_key, cache, self._scoped_instances, None)
-            self._scoped_cache_views_nolock[scope_key] = view
+        if view is not None:
+            return view
+        cache = self._get_scope_cache(scope_key)
+        view = _ScopedCacheView(cache, None)
+        self._scoped_cache_views_nolock[scope_key] = view
         return view
 
     def _get_scope_cache(
@@ -1768,14 +1739,12 @@ class Container:
                     return cached  # pragma: no cover
 
             if registration.instance is not None:
-                # Cache scoped instances in _scoped_instances, not _singletons
                 if (
                     registration.scope is not None
                     and scoped_cache is not None
                     and cache_key is not None
                 ):
                     scoped_cache[service_key] = registration.instance
-                    self._scoped_instances[cache_key] = registration.instance
                 else:
                     self._singletons[service_key] = registration.instance
                 if scoped_lock is not None and scoped_lock_acquired:  # pragma: no cover - defensive
@@ -1837,7 +1806,6 @@ class Container:
                         and cache_key is not None
                     ):
                         scoped_cache[service_key] = instance
-                        self._scoped_instances[cache_key] = instance
 
                     return instance
 
@@ -1866,7 +1834,6 @@ class Container:
                     and cache_key is not None
                 ):
                     scoped_cache[service_key] = instance
-                    self._scoped_instances[cache_key] = instance
 
                 return instance
             finally:
@@ -2123,7 +2090,6 @@ class Container:
                     and cache_key is not None
                 ):
                     scoped_cache[service_key] = registration.instance
-                    self._scoped_instances[cache_key] = registration.instance
                 else:
                     self._singletons[service_key] = registration.instance
                 if (
@@ -2208,7 +2174,6 @@ class Container:
                         and cache_key is not None
                     ):
                         scoped_cache[service_key] = instance  # type: ignore[possibly-undefined]
-                        self._scoped_instances[cache_key] = instance  # type: ignore[possibly-undefined]
 
                     return instance  # type: ignore[possibly-undefined]
 
@@ -2238,7 +2203,6 @@ class Container:
                     and cache_key is not None
                 ):
                     scoped_cache[service_key] = instance
-                    self._scoped_instances[cache_key] = instance
 
                 return instance
             finally:
@@ -2371,15 +2335,7 @@ class Container:
         if async_exit_stack is not None:
             await async_exit_stack.aclose()
 
-        scope_cache = self._scope_caches.pop(scope_key, None)
-        if scope_cache is not None:
-            for service_key in scope_cache:
-                self._scoped_instances.pop((scope_key, service_key), None)
-        else:
-            # Snapshot keys to avoid RuntimeError from dict mutation during iteration
-            keys_to_remove = [k for k in list(self._scoped_instances) if k[0] == scope_key]
-            for k in keys_to_remove:
-                del self._scoped_instances[k]
+        self._scope_caches.pop(scope_key, None)
         self._scoped_cache_views.pop(scope_key, None)
         self._scoped_cache_views_nolock.pop(scope_key, None)
         self._scope_cache_locks.pop(scope_key, None)
