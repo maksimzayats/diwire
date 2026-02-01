@@ -12,7 +12,10 @@ try:
 except ImportError:  # pragma: no cover - pydantic v1 not installed/incompatible
     try:
         from pydantic import BaseSettings as _PydanticV1BaseSettings  # type: ignore[assignment]
-    except (ImportError, AttributeError):  # pragma: no cover - pydantic v1 not installed/incompatible
+    except (
+        ImportError,
+        AttributeError,
+    ):  # pragma: no cover - pydantic v1 not installed/incompatible
         pass
 
 if _PydanticSettingsBaseSettings is not None:
