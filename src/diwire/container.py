@@ -1102,12 +1102,14 @@ class Container:
             type_cache = self._get_scope_type_cache(scope_key)
             lock = self._get_scope_cache_lock(scope_key)
             return self._scoped_cache_views.setdefault(
-                scope_key, _ScopedCacheView(cache, type_cache, lock),
+                scope_key,
+                _ScopedCacheView(cache, type_cache, lock),
             )
         cache = self._get_scope_cache(scope_key)
         type_cache = self._get_scope_type_cache(scope_key)
         return self._scoped_cache_views_nolock.setdefault(
-            scope_key, _ScopedCacheView(cache, type_cache, None),
+            scope_key,
+            _ScopedCacheView(cache, type_cache, None),
         )
 
     def _get_scope_cache(
