@@ -187,18 +187,6 @@ toml = [
 ]
 
 [[package]]
-name = "di"
-version = "0.79.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "graphlib2" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/bf/d3/e5ead09a065ac394bf4b16fa4e654db757db25743b83b281c7791497b7c9/di-0.79.2.tar.gz", hash = "sha256:0c65b9ccb984252dadbdcdb39743eeddef0c1f167f791c59fcd70e97bb0d3af8", size = 20495, upload-time = "2023-10-09T21:46:08.584Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ef/52/9ab18ba80b87e998c19b4087fc65a5606e8b1adf883062903537c30868c3/di-0.79.2-py3-none-any.whl", hash = "sha256:4b2ac7c46d4d9e941ca47d37c2029ba739c1f8a0e19e5288731224870f00d6e6", size = 24197, upload-time = "2023-10-09T21:46:07.116Z" },
-]
-
-[[package]]
 name = "dishka"
 version = "1.7.2"
 source = { registry = "https://pypi.org/simple" }
@@ -217,7 +205,6 @@ source = { editable = "." }
 [package.dev-dependencies]
 dev = [
     { name = "attrs" },
-    { name = "di" },
     { name = "dishka" },
     { name = "fastapi" },
     { name = "httpx" },
@@ -244,7 +231,6 @@ dev = [
 [package.metadata.requires-dev]
 dev = [
     { name = "attrs", specifier = ">=25.4.0" },
-    { name = "di", specifier = ">=0.79.2" },
     { name = "dishka", specifier = ">=1.7.2" },
     { name = "fastapi", specifier = ">=0.128.0" },
     { name = "httpx", specifier = ">=0.27.0" },
@@ -291,29 +277,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/52/08/8c8508db6c7b9aae8f7175046af41baad690771c9bcde676419965e338c7/fastapi-0.128.0.tar.gz", hash = "sha256:1cc179e1cef10a6be60ffe429f79b829dce99d8de32d7acb7e6c8dfdf7f2645a", size = 365682, upload-time = "2025-12-27T15:21:13.714Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5c/05/5cbb59154b093548acd0f4c7c474a118eda06da25aa75c616b72d8fcd92a/fastapi-0.128.0-py3-none-any.whl", hash = "sha256:aebd93f9716ee3b4f4fcfe13ffb7cf308d99c9f3ab5622d8877441072561582d", size = 103094, upload-time = "2025-12-27T15:21:12.154Z" },
-]
-
-[[package]]
-name = "graphlib2"
-version = "0.4.7"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a4/a4/0dbdce7ad4b0f9b869bb31bad4b7546d586d41879abd9b6060cb309b9368/graphlib2-0.4.7.tar.gz", hash = "sha256:a951c18cb4c2c2834eec898b4c75d3f930d6f08beb37496f0e0ce56eb3f571f5", size = 390510, upload-time = "2022-10-09T19:12:08.199Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/cd/ed/4c5254b064bf80769364855cb31dc9f6bc589ba1b6119acb2ce76111cbac/graphlib2-0.4.7-cp37-abi3-macosx_10_7_x86_64.whl", hash = "sha256:483710733215783cdc76452ccde1247af8f697685c9c1dfd9bb9ff4f52d990ee", size = 203680, upload-time = "2022-10-09T19:11:31.192Z" },
-    { url = "https://files.pythonhosted.org/packages/53/1f/5096430835c4649cf0847ec529b09a870548b0258f2e4a8bdeea78db5b57/graphlib2-0.4.7-cp37-abi3-macosx_10_9_x86_64.macosx_11_0_arm64.macosx_10_9_universal2.whl", hash = "sha256:3619c7d3c5aca95e6cbbfc283aa6bf42ffa5b59d7f39c8d0ad615bce65dc406f", size = 389025, upload-time = "2022-10-09T19:11:33.231Z" },
-    { url = "https://files.pythonhosted.org/packages/cc/f1/0966a43c48cc4747181cd1ecac32699c38ffb43566a75250b092d7ce090a/graphlib2-0.4.7-cp37-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:5b19f1b91d0f22ca3d1cfb2965478db98cf5916a5c6cea5fdc7caf4bf1bfbc33", size = 206886, upload-time = "2022-10-09T19:11:34.789Z" },
-    { url = "https://files.pythonhosted.org/packages/68/5b/b7e024a4578d7df133dfc81066e47e1dbe2e49c1771c5b6294c83d6a2011/graphlib2-0.4.7-cp37-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:624020f6808ee21ffbb2e455f8dd4196bbb37032a35aa3327f0f5b65fb6a35d1", size = 212552, upload-time = "2022-10-09T19:11:36.152Z" },
-    { url = "https://files.pythonhosted.org/packages/44/29/cfd6ff9573bf6f862d5e6e7e4824a59208eed715be185d903029d980d5f2/graphlib2-0.4.7-cp37-abi3-manylinux_2_17_ppc64.manylinux2014_ppc64.whl", hash = "sha256:6efc6a197a619a97f1b105aea14b202101241c1db9014bd100ad19cf29288cbf", size = 322389, upload-time = "2022-10-09T19:11:37.68Z" },
-    { url = "https://files.pythonhosted.org/packages/cc/5d/176f475be69d6c85e448dae141b455cac78f7bb6f46577240e065131264a/graphlib2-0.4.7-cp37-abi3-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:d7cc38b68775cb2cdfc487bbaca2f7991da0d76d42a68f412c2ca61461e6e026", size = 311704, upload-time = "2022-10-09T19:11:39.304Z" },
-    { url = "https://files.pythonhosted.org/packages/7d/51/376b2a17015adc2893fcf08f913d00137530b10d28647cabf4c3aa1be7f1/graphlib2-0.4.7-cp37-abi3-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:b06bed98d42f4e10adfe2a8332efdca06b5bac6e7c86dd1d22a4dea4de9b275a", size = 278153, upload-time = "2022-10-09T19:11:40.992Z" },
-    { url = "https://files.pythonhosted.org/packages/92/ab/604c1cd20f37fff2a53780cb61abc51319041618c606751a4fc8924dfb54/graphlib2-0.4.7-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3c9ec3a5645bdf020d8bd9196b2665e26090d60e523fd498df29628f2c5fbecc", size = 223083, upload-time = "2022-10-09T19:11:42.701Z" },
-    { url = "https://files.pythonhosted.org/packages/5a/ad/4765785902301c6bc0860953fbfe489f50d1cb9f1162ce3cc51c6f097fb4/graphlib2-0.4.7-cp37-abi3-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:824df87f767471febfd785a05a2cc77c0c973e0112a548df827763ca0aa8c126", size = 247146, upload-time = "2022-10-09T19:11:44.167Z" },
-    { url = "https://files.pythonhosted.org/packages/27/f4/73b2b48ac62f10189d9305c4ea1781638870a3cb42ffaa6a566f847b6019/graphlib2-0.4.7-cp37-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:2de5e32ca5c0b06d442d2be4b378cc0bc335c5fcbc14a7d531a621eb8294d019", size = 387551, upload-time = "2022-10-09T19:11:45.389Z" },
-    { url = "https://files.pythonhosted.org/packages/54/26/797f597ce81e2c9c4c51cdbd74df6e1c25d03e7e34a9c72ebae23ecad5af/graphlib2-0.4.7-cp37-abi3-musllinux_1_2_armv7l.whl", hash = "sha256:13a23fcf07c7bef8a5ad0e04ab826d3a2a2bcb493197005300c68b4ea7b8f581", size = 475726, upload-time = "2022-10-09T19:11:47.195Z" },
-    { url = "https://files.pythonhosted.org/packages/8b/39/977c9c8a8f77ffa4543fce6caf771c98ed94483a4cecf60b74ede49a3c2a/graphlib2-0.4.7-cp37-abi3-musllinux_1_2_i686.whl", hash = "sha256:15a8a6daa28c1fb5c518d387879f3bbe313264fbbc2fab5635b718bc71a24913", size = 419333, upload-time = "2022-10-09T19:11:48.447Z" },
-    { url = "https://files.pythonhosted.org/packages/47/80/c91604bdd85283c9d66a73a42d9d2029a6acd135d4efb206879634fe3765/graphlib2-0.4.7-cp37-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:0cb6c4449834077972c3cea4602f86513b4b75fcf2d40b12e4fe4bf1aa5c8da2", size = 394554, upload-time = "2022-10-09T19:11:50.45Z" },
-    { url = "https://files.pythonhosted.org/packages/a4/8d/bc4546928353e4e2f30ce9531ee9be2e0fde1efc112181f9de69e2a49cdd/graphlib2-0.4.7-cp37-abi3-win32.whl", hash = "sha256:31b40cea537845d80b69403ae306d7c6a68716b76f5171f68daed1804aadefec", size = 145114, upload-time = "2022-10-09T19:11:51.844Z" },
-    { url = "https://files.pythonhosted.org/packages/80/60/f17470522a9bdd43ffbdf0d067490e6b3f8083b46b5387a91551e413cea8/graphlib2-0.4.7-cp37-abi3-win_amd64.whl", hash = "sha256:d40935a9da81a046ebcaa0216ad593ef504ae8a5425a59bdbd254c0462adedc8", size = 150482, upload-time = "2022-10-09T19:11:53.536Z" },
 ]
 
 [[package]]

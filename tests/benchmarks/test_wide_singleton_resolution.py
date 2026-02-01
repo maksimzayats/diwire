@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from di import Container as DiContainer
-from di.dependent import Dependent
-from di.executors import SyncExecutor
 from dishka import Provider, Scope, make_container
 from punq import Container as PunqContainer, Scope as PunqScope
 from pytest_benchmark.fixture import BenchmarkFixture
@@ -82,19 +79,6 @@ def test_dishka_wide_singleton_resolution(benchmark: BenchmarkFixture) -> None:
         result = benchmark(container.get, WideGraphRoot)
     finally:
         container.close()
-
-    assert result is singleton
-
-
-def test_di_wide_singleton_resolution(benchmark: BenchmarkFixture) -> None:
-    container = DiContainer()
-    executor = SyncExecutor()
-    dependent = Dependent(WideGraphRoot, scope="app")
-    solved = container.solve(dependent, scopes=("app",))
-
-    with container.enter_scope("app") as state:
-        singleton = solved.execute_sync(executor, state=state)
-        result = benchmark(solved.execute_sync, executor, state=state)
 
     assert result is singleton
 
