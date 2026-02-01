@@ -1,0 +1,31 @@
+from diwire.integrations.pytest_plugin.plugin import (
+    _build_async_wrapper,
+    _build_signature_without_injected,
+    _build_sync_wrapper,
+    _diwire_state,
+    _normalize_scope,
+    _resolve_async,
+    _resolve_scope_from_config,
+    _resolve_sync,
+    diwire_container,
+    diwire_scope,
+    pytest_addoption,
+    pytest_pycollect_makeitem,
+    pytest_pyfunc_call,
+)
+
+__all__ = [
+    "_build_async_wrapper",
+    "_build_signature_without_injected",
+    "_build_sync_wrapper",
+    "_diwire_state",
+    "_normalize_scope",
+    "_resolve_async",
+    "_resolve_scope_from_config",
+    "_resolve_sync",
+    "diwire_container",
+    "diwire_scope",
+    "pytest_addoption",
+    "pytest_pycollect_makeitem",
+    "pytest_pyfunc_call",
+]
