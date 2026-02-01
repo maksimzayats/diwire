@@ -103,7 +103,7 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
         scope_key: tuple[tuple[str | None, int], ...],
         cache: dict[ServiceKey, Any],
         instances: dict[tuple[tuple[tuple[str | None, int], ...], ServiceKey], Any],
-        lock: threading.RLock,
+        lock: threading.RLock | None,
     ) -> None:
         self._scope_key = scope_key
         self._cache = cache
@@ -131,21 +131,24 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
         return len(self._cache)
 
     def get_or_create(self, key: ServiceKey, factory: Callable[[], Any]) -> Any:
-        cached = self._cache.get(key)
+        cache = self._cache
+        instances = self._instances
+        scope_key = self._scope_key
+        cached = cache.get(key)
         if cached is not None:
             return cached
-        if threading.active_count() == 1:
+        if self._lock is None:
             instance = factory()
-            self._cache[key] = instance
-            self._instances[(self._scope_key, key)] = instance
+            cache[key] = instance
+            instances[(scope_key, key)] = instance
             return instance
         with self._lock:
-            cached = self._cache.get(key)
+            cached = cache.get(key)
             if cached is not None:
                 return cached
             instance = factory()
-            self._cache[key] = instance
-            self._instances[(self._scope_key, key)] = instance
+            cache[key] = instance
+            instances[(scope_key, key)] = instance
             return instance
 
 
@@ -181,6 +184,7 @@ class Container:
         "_scope_caches",
         "_scope_exit_stacks",
         "_scoped_cache_views",
+        "_scoped_cache_views_nolock",
         "_scoped_compiled_providers",
         "_scoped_instances",
         "_scoped_open_generic_registry",
@@ -215,6 +219,10 @@ class Container:
             Any,
         ] = {}
         self._scoped_cache_views: dict[tuple[tuple[str | None, int], ...], _ScopedCacheView] = {}
+        self._scoped_cache_views_nolock: dict[
+            tuple[tuple[str | None, int], ...],
+            _ScopedCacheView,
+        ] = {}
         self._scope_caches: dict[tuple[tuple[str | None, int], ...], dict[ServiceKey, Any]] = {}
         self._scope_cache_locks: dict[tuple[tuple[str | None, int], ...], threading.RLock] = {}
         self._registry: dict[ServiceKey, Registration] = {}
@@ -921,13 +929,17 @@ class Container:
             # Only remove after successfully scheduling cleanup
             del self._async_scope_exit_stacks[scope_key]
 
-        # Remove all scoped instances with keys starting with this scope
-        # Snapshot keys to avoid RuntimeError from dict mutation during iteration
-        keys_to_remove = [k for k in list(self._scoped_instances) if k[0] == scope_key]
-        for k in keys_to_remove:
-            del self._scoped_instances[k]
+        scope_cache = self._scope_caches.pop(scope_key, None)
+        if scope_cache is not None:
+            for service_key in scope_cache:
+                self._scoped_instances.pop((scope_key, service_key), None)
+        else:
+            # Snapshot keys to avoid RuntimeError from dict mutation during iteration
+            keys_to_remove = [k for k in list(self._scoped_instances) if k[0] == scope_key]
+            for k in keys_to_remove:
+                del self._scoped_instances[k]
         self._scoped_cache_views.pop(scope_key, None)
-        self._scope_caches.pop(scope_key, None)
+        self._scoped_cache_views_nolock.pop(scope_key, None)
         self._scope_cache_locks.pop(scope_key, None)
         self._locks.clear_scope_locks(scope_key)
 
@@ -944,13 +956,21 @@ class Container:
     def _get_scoped_cache_view(
         self,
         scope_key: tuple[tuple[str | None, int], ...],
+        *,
+        use_lock: bool = True,
     ) -> _ScopedCacheView:
         cache = self._get_scope_cache(scope_key)
-        lock = self._get_scope_cache_lock(scope_key)
-        view = self._scoped_cache_views.get(scope_key)
+        if use_lock:
+            lock = self._get_scope_cache_lock(scope_key)
+            view = self._scoped_cache_views.get(scope_key)
+            if view is None:
+                view = _ScopedCacheView(scope_key, cache, self._scoped_instances, lock)
+                self._scoped_cache_views[scope_key] = view
+            return view
+        view = self._scoped_cache_views_nolock.get(scope_key)
         if view is None:
-            view = _ScopedCacheView(scope_key, cache, self._scoped_instances, lock)
-            self._scoped_cache_views[scope_key] = view
+            view = _ScopedCacheView(scope_key, cache, self._scoped_instances, None)
+            self._scoped_cache_views_nolock[scope_key] = view
         return view
 
     def _get_scope_cache(
@@ -1612,7 +1632,11 @@ class Container:
             if scoped_provider is not None:
                 cache_scope = current_scope.get_cache_key_for_scope(scoped_scope_name)
                 if cache_scope is not None:
-                    compiled_scoped_cache = self._get_scoped_cache_view(cache_scope)
+                    use_lock = threading.active_count() > 1
+                    compiled_scoped_cache = self._get_scoped_cache_view(
+                        cache_scope,
+                        use_lock=use_lock,
+                    )
                     return scoped_provider(self._singletons, compiled_scoped_cache)
 
         # Inline circular dependency tracking (avoids context manager overhead)
@@ -1805,7 +1829,11 @@ class Container:
                     cache_scope = scope_id.get_cache_key_for_scope(scope_name)
                     if cache_scope is None:  # pragma: no cover - scope_id invariant
                         return False, None
-                    scoped_cache = self._get_scoped_cache_view(cache_scope)
+                    use_lock = threading.active_count() > 1
+                    scoped_cache = self._get_scoped_cache_view(
+                        cache_scope,
+                        use_lock=use_lock,
+                    )
                     return True, provider(self._singletons, scoped_cache)
 
         if (
@@ -2253,13 +2281,17 @@ class Container:
         if async_exit_stack is not None:
             await async_exit_stack.aclose()
 
-        # Remove all scoped instances with keys starting with this scope
-        # Snapshot keys to avoid RuntimeError from dict mutation during iteration
-        keys_to_remove = [k for k in list(self._scoped_instances) if k[0] == scope_key]
-        for k in keys_to_remove:
-            del self._scoped_instances[k]
+        scope_cache = self._scope_caches.pop(scope_key, None)
+        if scope_cache is not None:
+            for service_key in scope_cache:
+                self._scoped_instances.pop((scope_key, service_key), None)
+        else:
+            # Snapshot keys to avoid RuntimeError from dict mutation during iteration
+            keys_to_remove = [k for k in list(self._scoped_instances) if k[0] == scope_key]
+            for k in keys_to_remove:
+                del self._scoped_instances[k]
         self._scoped_cache_views.pop(scope_key, None)
-        self._scope_caches.pop(scope_key, None)
+        self._scoped_cache_views_nolock.pop(scope_key, None)
         self._scope_cache_locks.pop(scope_key, None)
         self._locks.clear_scope_locks(scope_key)
 

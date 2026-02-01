@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable, MutableMapping
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 if TYPE_CHECKING:
     from diwire.service_key import ServiceKey
@@ -27,6 +27,10 @@ class CompiledProvider(Protocol):
 
 
 FactoryResultHandler = Callable[[Any], Any]
+
+
+class _ScopedCache(Protocol):
+    def get_or_create(self, key: ServiceKey, factory: Callable[[], Any]) -> Any: ...
 
 
 class TypeProvider:
@@ -218,15 +222,8 @@ class ScopedSingletonProvider:
         scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         if scoped_cache is not None:
-            get_or_create = getattr(scoped_cache, "get_or_create", None)
-            if get_or_create is not None:
-                return get_or_create(self._key, self._type)
-            cached = scoped_cache.get(self._key)
-            if cached is not None:
-                return cached
-            instance = self._type()
-            scoped_cache[self._key] = instance
-            return instance
+            cache = cast("_ScopedCache", scoped_cache)
+            return cache.get_or_create(self._key, self._type)
         return self._type()
 
 
@@ -255,21 +252,13 @@ class ScopedSingletonArgsProvider:
     ) -> Any:
         items = self._items
         if scoped_cache is not None:
-            get_or_create = getattr(scoped_cache, "get_or_create", None)
-            if get_or_create is not None:
+            cache = cast("_ScopedCache", scoped_cache)
 
-                def factory() -> Any:
-                    args = {name: provider(singletons, scoped_cache) for name, provider in items}
-                    return self._type(**args)
+            def factory() -> Any:
+                args = {name: provider(singletons, scoped_cache) for name, provider in items}
+                return self._type(**args)
 
-                return get_or_create(self._key, factory)
-            cached = scoped_cache.get(self._key)
-            if cached is not None:
-                return cached
-            args = {name: provider(singletons, scoped_cache) for name, provider in items}
-            instance = self._type(**args)
-            scoped_cache[self._key] = instance
-            return instance
+            return cache.get_or_create(self._key, factory)
         args = {name: provider(singletons, scoped_cache) for name, provider in items}
         return self._type(**args)
 
@@ -296,21 +285,14 @@ class ScopedSingletonPositionalArgsProvider:
     ) -> Any:
         providers = self._dep_providers
         if scoped_cache is not None:
-            get_or_create = getattr(scoped_cache, "get_or_create", None)
-            if get_or_create is not None:
+            cache = cast("_ScopedCache", scoped_cache)
 
-                def factory() -> Any:
-                    return self._type(
-                        *[provider(singletons, scoped_cache) for provider in providers],
-                    )
+            def factory() -> Any:
+                return self._type(
+                    *[provider(singletons, scoped_cache) for provider in providers],
+                )
 
-                return get_or_create(self._key, factory)
-            cached = scoped_cache.get(self._key)
-            if cached is not None:
-                return cached
-            instance = self._type(*[provider(singletons, scoped_cache) for provider in providers])
-            scoped_cache[self._key] = instance
-            return instance
+            return cache.get_or_create(self._key, factory)
         return self._type(*[provider(singletons, scoped_cache) for provider in providers])
 
 

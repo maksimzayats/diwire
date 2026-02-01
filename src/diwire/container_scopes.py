@@ -30,14 +30,25 @@ class _ScopeId:
     _named_scopes_desc: tuple[str, ...] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
+        segments = self.segments
+        if len(segments) == 1:
+            name, _ = segments[0]
+            if name is None:
+                object.__setattr__(self, "_scope_key_by_name", {})
+                object.__setattr__(self, "_named_scopes_desc", ())
+                return
+            object.__setattr__(self, "_scope_key_by_name", {name: segments})
+            object.__setattr__(self, "_named_scopes_desc", (name,))
+            return
+
         scope_key_by_name: dict[str, tuple[tuple[str | None, int], ...]] = {}
         named_scopes_desc: list[str] = []
-        for index, (name, _) in enumerate(self.segments):
+        for index, (name, _) in enumerate(segments):
             if name is None:
                 continue
             if name not in scope_key_by_name:
-                scope_key_by_name[name] = self.segments[: index + 1]
-        for name, _ in reversed(self.segments):
+                scope_key_by_name[name] = segments[: index + 1]
+        for name, _ in reversed(segments):
             if name is not None:
                 named_scopes_desc.append(name)
         object.__setattr__(self, "_scope_key_by_name", scope_key_by_name)

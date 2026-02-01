@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated, Any, ClassVar, get_args, get_origin
 
 
@@ -15,6 +15,7 @@ class ServiceKey:
 
     value: Any
     component: Component | None = None
+    _hash: int = field(init=False, repr=False, compare=False)
 
     # Cache for ServiceKey instances to avoid repeated object creation
     _cache: ClassVar[dict[Any, "ServiceKey"]] = {}
@@ -52,3 +53,9 @@ class ServiceKey:
         key = cls(value=inner_type)
         cls._cache[value] = key
         return key
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "_hash", hash((self.value, self.component)))
+
+    def __hash__(self) -> int:
+        return self._hash

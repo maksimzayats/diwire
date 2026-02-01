@@ -1531,6 +1531,7 @@ class TestCoverageEdgeCases:
     def test_compiled_scoped_provider_uses_cache(self) -> None:
         """Compiled scoped provider caches instances correctly."""
         container = Container(auto_compile=False)
+        container._scoped_instances = {}
 
         class ServiceA:
             pass
@@ -1697,6 +1698,41 @@ class TestCoverageEdgeCases:
             with pytest.raises(DIWireServiceNotRegisteredError):
                 scope.resolve(ServiceA)
 
+    def test_clear_scope_removes_scoped_instances_without_cache(self) -> None:
+        """_clear_scope removes scoped instances even when no cache exists."""
+        container = Container()
+        container._scoped_instances = {}
+
+        class ServiceA:
+            pass
+
+        with container.enter_scope("request") as scope:
+            scope_key = scope._scope_id.segments
+            service_key = ServiceKey.from_value(ServiceA)
+            container._scoped_instances[(scope_key, service_key)] = "value"
+
+            scope.close()
+
+        assert (scope_key, service_key) not in container._scoped_instances
+
+    @pytest.mark.asyncio
+    async def test_aclear_scope_removes_scoped_instances_without_cache(self) -> None:
+        """_aclear_scope removes scoped instances even when no cache exists."""
+        container = Container()
+        container._scoped_instances = {}
+
+        class ServiceA:
+            pass
+
+        scope = container.enter_scope("request")
+        scope_key = scope._scope_id.segments
+        service_key = ServiceKey.from_value(ServiceA)
+        container._scoped_instances[(scope_key, service_key)] = "value"
+
+        await scope.aclose()
+
+        assert (scope_key, service_key) not in container._scoped_instances
+
 
 class TestScopedCacheView:
     """Tests for scoped cache view behavior."""
@@ -1764,6 +1800,24 @@ class TestScopedCacheView:
 
             assert len(results) == 2
             assert results[0] is results[1]
+
+    def test_scoped_cache_view_get_or_create_without_lock(self) -> None:
+        """get_or_create works without a lock when requested."""
+        container = Container()
+        container._scoped_instances = {}
+
+        class ServiceA:
+            pass
+
+        with container.enter_scope("request") as scope:
+            scope_key = scope._scope_id.segments
+            view = container._get_scoped_cache_view(scope_key, use_lock=False)
+            service_key = ServiceKey.from_value(ServiceA)
+
+            instance = view.get_or_create(service_key, object)
+
+            assert view.get(service_key) is instance
+            assert (scope_key, service_key) in container._scoped_instances
 
     @pytest.mark.asyncio
     async def test_aresolve_type_singleton_fast_path_cache_hit(self) -> None:

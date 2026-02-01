@@ -236,12 +236,13 @@ class TestPositionalArgsProviders:
 
     def test_scoped_singleton_positional_args_provider_cache_hit(self) -> None:
         """Scoped positional provider uses scoped cache."""
+        container = Container()
         service_key = ServiceKey.from_value(ServiceB)
         dep_provider = InstanceProvider(ServiceA(id="dep"))
         provider = ScopedSingletonPositionalArgsProvider(ServiceB, service_key, (dep_provider,))
 
         singletons: dict[ServiceKey, object] = {}
-        scoped_cache: dict[ServiceKey, object] = {}
+        scoped_cache = container._get_scoped_cache_view((("request", 1),))
 
         instance1 = provider(singletons, scoped_cache)
         instance2 = provider(singletons, scoped_cache)
@@ -478,11 +479,12 @@ class TestCompiledProvidersCacheHit:
 
     def test_scoped_singleton_provider_cache_hit(self) -> None:
         """Test ScopedSingletonProvider returns cached instance on second call with scoped_cache."""
+        container = Container()
         service_key = ServiceKey.from_value(ServiceA)
         provider = ScopedSingletonProvider(ServiceA, service_key)
 
         singletons: dict[ServiceKey, object] = {}
-        scoped_cache: dict[ServiceKey, object] = {}
+        scoped_cache = container._get_scoped_cache_view((("request", 1),))
 
         # First call - creates and caches instance
         instance1 = provider(singletons, scoped_cache)
@@ -495,6 +497,7 @@ class TestCompiledProvidersCacheHit:
 
     def test_scoped_singleton_args_provider_cache_hit(self) -> None:
         """Test ScopedSingletonArgsProvider returns cached instance on second call with scoped_cache."""
+        container = Container()
         service_key_b = ServiceKey.from_value(ServiceB)
         service_key_a = ServiceKey.from_value(ServiceA)
 
@@ -511,7 +514,7 @@ class TestCompiledProvidersCacheHit:
         )
 
         singletons: dict[ServiceKey, object] = {}
-        scoped_cache: dict[ServiceKey, object] = {}
+        scoped_cache = container._get_scoped_cache_view((("request", 1),))
 
         # First call - creates and caches instance
         instance1 = provider(singletons, scoped_cache)
