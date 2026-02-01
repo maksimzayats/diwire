@@ -1249,10 +1249,10 @@ class Container:
                 # Direct usage:
                 injected = container.resolve(my_func, scope="request")
 
+
                 # Decorator usage:
                 @container.resolve(scope="request")
-                async def handler(service: Annotated[Service, Injected()]) -> dict:
-                    ...
+                async def handler(service: Annotated[Service, Injected()]) -> dict: ...
 
         """
         self._check_not_closed()

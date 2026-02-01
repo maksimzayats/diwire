@@ -48,9 +48,9 @@ intersphinx_mapping = {
 
 html_title = "diwire: type-driven dependency injection for Python"
 
-# If you set a base URL (e.g. on ReadTheDocs / GitHub Pages), we'll emit a sitemap.
-# Keep it opt-in so `make docs` works out of the box for contributors.
-html_baseurl = os.environ.get("DIWIRE_DOCS_BASEURL", "")
+# If you set a base URL, we'll emit a sitemap and robots.txt (see docs/_extensions/diwire_sitemap.py).
+# Default to the canonical docs domain, but allow contributors to disable by setting DIWIRE_DOCS_BASEURL="".
+html_baseurl = os.environ.get("DIWIRE_DOCS_BASEURL", "https://docs.diwire.dev").strip()
 if html_baseurl:
     extensions.append("diwire_sitemap")
 

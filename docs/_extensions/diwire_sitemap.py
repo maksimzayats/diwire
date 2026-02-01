@@ -6,10 +6,13 @@ dependencies into the library.
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
+
+from sphinx.errors import ExtensionError
 
 
 class _SphinxConfig(Protocol):
@@ -58,7 +61,9 @@ def _build_entries(outdir: Path, *, baseurl: str) -> list[_SitemapEntry]:
     for html_path in _iter_html_files(outdir):
         rel = html_path.relative_to(outdir).as_posix()
         loc = base + rel
-        lastmod = datetime.fromtimestamp(html_path.stat().st_mtime, tz=timezone.utc).date().isoformat()
+        lastmod = (
+            datetime.fromtimestamp(html_path.stat().st_mtime, tz=timezone.utc).date().isoformat()
+        )
         entries.append(_SitemapEntry(loc=loc, lastmod=lastmod))
     return entries
 
@@ -118,8 +123,9 @@ def _build_finished(app: _SphinxApp, exc: Exception | None) -> None:
 
 def setup(app: _SphinxApp) -> dict[str, Any]:
     # We use the built-in `html_baseurl` config as the canonical site URL.
-    # Sphinx 8 doesn't define it by default, so register it to be explicit.
-    app.add_config_value("html_baseurl", default="", rebuild="html")
+    # Some Sphinx versions predefine it; treat that as OK.
+    with contextlib.suppress(ExtensionError):
+        app.add_config_value("html_baseurl", default="", rebuild="html")
     app.connect("build-finished", _build_finished)
 
     return {

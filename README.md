@@ -6,6 +6,7 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/diwire.svg)](https://pypi.org/project/diwire/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![codecov](https://codecov.io/gh/MaksimZayats/diwire/graph/badge.svg)](https://codecov.io/gh/MaksimZayats/diwire)
+[![Docs](https://img.shields.io/badge/docs-diwire.dev-blue)](https://docs.diwire.dev)
 
 diwire is a dependency injection container for Python 3.10+ that builds your object graph from type hints alone. It
 supports scoped lifetimes, async-first resolution, generator-based cleanup,
@@ -515,8 +516,10 @@ No adapters or plugins needed — diwire extracts dependencies from type hints a
 
 ## Examples & Documentation
 
-See [`examples/README.md`](examples/README.md) for a guided tour of patterns, async usage, FastAPI integration, and
-error handling.
+Documentation: https://docs.diwire.dev
+
+Examples: [`examples/README.md`](examples/README.md) (guided tour of patterns, async usage, FastAPI integration, and
+error handling).
 
 ## Contributing
 

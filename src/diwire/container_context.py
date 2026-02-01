@@ -400,8 +400,8 @@ class _ContainerContextProxy:
 
                 # Decorator usage (container looked up at call time):
                 @container_context.resolve(scope="request")
-                async def handler(service: Annotated[Service, Injected()]) -> dict:
-                    ...
+                async def handler(service: Annotated[Service, Injected()]) -> dict: ...
+
 
                 # Direct resolution:
                 service = container_context.resolve(Service)
