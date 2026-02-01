@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from diwire.service_key import ServiceKey
 
 _DEFAULT_SCOPE = "test_function"
+_INVALID_SCOPE_MARKER_MESSAGE = "diwire_scope marker expects a string or None"
 
 
 @lru_cache(maxsize=1)
@@ -83,6 +84,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers",
+        "diwire_scope(scope): override diwire injection scope for a test",
+    )
+
+
 @pytest.fixture()
 def diwire_container() -> Container:
     return _get_container_cls()()
@@ -93,6 +101,18 @@ def _resolve_scope_from_config(pytestconfig: pytest.Config) -> str | None:
     if scope is None:
         scope = cast("str | None", pytestconfig.getini("diwire_scope"))
     return _normalize_scope(scope)
+
+
+def _resolve_scope_override(pyfuncitem: pytest.Function) -> tuple[bool, str | None]:
+    marker = pyfuncitem.get_closest_marker("diwire_scope")
+    if marker is None:
+        return False, None
+    raw_scope = marker.args[0] if marker.args else marker.kwargs.get("scope")
+    if raw_scope is None:
+        return True, None
+    if isinstance(raw_scope, str):
+        return True, _normalize_scope(raw_scope)
+    raise TypeError(_INVALID_SCOPE_MARKER_MESSAGE)
 
 
 @pytest.fixture()
@@ -190,6 +210,9 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> Iterator[None]:
     item = cast("Any", pyfuncitem)
     container = cast("Container", item.diwire_container)
     scope_name = cast("str | None", item.diwire_scope)
+    has_override, marker_scope = _resolve_scope_override(pyfuncitem)
+    if has_override:
+        scope_name = marker_scope
     original = pyfuncitem.obj
     is_async = inspect.iscoroutinefunction(original)
 

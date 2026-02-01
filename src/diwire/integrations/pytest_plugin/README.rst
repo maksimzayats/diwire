@@ -27,11 +27,12 @@ Then annotate parameters:
 Configuration
 -------------
 
-Scope for injected values can be configured in three ways (highest priority first):
+Scope for injected values can be configured in four ways (highest priority first):
 
-1. CLI option: ``--diwire-scope my_scope``
-2. ``diwire_scope`` fixture override (per-test module)
-3. ``diwire_scope`` ini value (default is ``test_function``)
+1. ``@pytest.mark.diwire_scope("my_scope")`` on the test function
+2. CLI option: ``--diwire-scope my_scope``
+3. ``diwire_scope`` fixture override (per-test module)
+4. ``diwire_scope`` ini value (default is ``test_function``)
 
 Example (ini):
 
@@ -49,6 +50,16 @@ To disable scoping entirely for injection:
     @pytest.fixture()
     def diwire_scope() -> str | None:
         return None
+
+You can also disable scope for a single test:
+
+.. code-block:: python
+
+    import pytest
+
+    @pytest.mark.diwire_scope(None)
+    def test_without_scope(service: Annotated[Service, Injected()]) -> None:
+        ...
 
 Fixtures
 --------
