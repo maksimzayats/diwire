@@ -32,6 +32,22 @@ FactoryResultHandler = Callable[[Any], Any]
 class _ScopedCache(Protocol):
     def get_or_create(self, key: ServiceKey, factory: Callable[[], Any]) -> Any: ...
 
+    def get_or_create_positional(
+        self,
+        key: ServiceKey,
+        constructor: type,
+        providers: tuple[CompiledProvider, ...],
+        singletons: dict[ServiceKey, Any],
+    ) -> Any: ...
+
+    def get_or_create_kwargs(
+        self,
+        key: ServiceKey,
+        constructor: type,
+        items: tuple[tuple[str, CompiledProvider], ...],
+        singletons: dict[ServiceKey, Any],
+    ) -> Any: ...
+
 
 class TypeProvider:
     """Provider for types with no dependencies - direct instantiation."""
@@ -250,15 +266,10 @@ class ScopedSingletonArgsProvider:
         singletons: dict[ServiceKey, Any],
         scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
-        items = self._items
         if scoped_cache is not None:
             cache = cast("_ScopedCache", scoped_cache)
-
-            def factory() -> Any:
-                args = {name: provider(singletons, scoped_cache) for name, provider in items}
-                return self._type(**args)
-
-            return cache.get_or_create(self._key, factory)
+            return cache.get_or_create_kwargs(self._key, self._type, self._items, singletons)
+        items = self._items
         args = {name: provider(singletons, scoped_cache) for name, provider in items}
         return self._type(**args)
 
@@ -283,16 +294,15 @@ class ScopedSingletonPositionalArgsProvider:
         singletons: dict[ServiceKey, Any],
         scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
-        providers = self._dep_providers
         if scoped_cache is not None:
             cache = cast("_ScopedCache", scoped_cache)
-
-            def factory() -> Any:
-                return self._type(
-                    *[provider(singletons, scoped_cache) for provider in providers],
-                )
-
-            return cache.get_or_create(self._key, factory)
+            return cache.get_or_create_positional(
+                self._key,
+                self._type,
+                self._dep_providers,
+                singletons,
+            )
+        providers = self._dep_providers
         return self._type(*[provider(singletons, scoped_cache) for provider in providers])
 
 

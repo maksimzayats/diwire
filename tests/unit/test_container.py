@@ -1,10 +1,10 @@
 import threading
 import uuid
-from collections.abc import AsyncGenerator, Callable, Generator
+from collections.abc import AsyncGenerator, Callable, Generator, MutableMapping
 from dataclasses import dataclass, field
 from functools import partial
 from inspect import signature
-from typing import Annotated
+from typing import Annotated, cast
 
 import pytest
 
@@ -23,10 +23,11 @@ from diwire.container_injection import (
     _InjectedFunction,
     _ScopedInjectedFunction,
 )
-from diwire.container_scopes import _current_scope, _ScopeId
+from diwire.container_scopes import ScopedContainer, _current_scope, _ScopeId
 from diwire.dependencies import DependenciesExtractor
 from diwire.exceptions import (
     DIWireCircularDependencyError,
+    DIWireContainerClosedError,
     DIWireGeneratorFactoryDidNotYieldError,
     DIWireGeneratorFactoryUnsupportedLifetimeError,
     DIWireIgnoredServiceError,
@@ -35,7 +36,7 @@ from diwire.exceptions import (
     DIWireServiceNotRegisteredError,
 )
 from diwire.registry import Registration
-from diwire.service_key import ServiceKey
+from diwire.service_key import Component, ServiceKey
 from diwire.types import Injected, Lifetime
 
 
@@ -1543,6 +1544,7 @@ class TestCoverageEdgeCases:
         # Verify compiled scoped provider exists
         service_key = ServiceKey.from_value(ServiceA)
         assert (service_key, "request") in container._scoped_compiled_providers
+        assert (ServiceA, "request") in container._scoped_type_providers
 
         # Enter the matching scope - compiled provider path will be used
         with container.enter_scope("request"):
@@ -1554,6 +1556,25 @@ class TestCoverageEdgeCases:
 
             # Verify it's in the scoped instances cache
             assert any(k[1] == service_key for k in container._scoped_instances)
+
+    def test_scoped_type_providers_skip_component_registrations(self) -> None:
+        """Component-scoped registrations are not stored in _scoped_type_providers."""
+        container = Container(auto_compile=False, autoregister=False)
+
+        class ServiceA:
+            pass
+
+        annotated = Annotated[ServiceA, Component("component")]
+
+        @container.register(annotated, scope="request", lifetime=Lifetime.SCOPED)
+        class ServiceAImpl(ServiceA):
+            pass
+
+        container.compile()
+
+        service_key = ServiceKey.from_value(annotated)
+        assert (service_key, "request") in container._scoped_compiled_providers
+        assert (ServiceA, "request") not in container._scoped_type_providers
 
     def test_scoped_resolution_skips_lock_single_thread(
         self,
@@ -1574,11 +1595,65 @@ class TestCoverageEdgeCases:
             raise AssertionError("unexpected scoped lock acquisition")
 
         monkeypatch.setattr(Container, "_get_scope_cache_lock", fail_lock)
-        monkeypatch.setattr(threading, "active_count", lambda: 1)
+        monkeypatch.setattr(Container, "_is_multithreaded", lambda _self: False)
 
         with container.enter_scope("request"):
             instance = container.resolve(ServiceA)
             assert instance is container.resolve(ServiceA)
+
+    def test_is_multithreaded_flags_on_thread_change(self) -> None:
+        """_is_multithreaded flips once a different thread id is seen."""
+        container = Container()
+        assert not container._is_multithreaded()
+
+        container._thread_id = -1
+        assert container._is_multithreaded()
+        assert container._multithreaded
+
+    def test_register_active_scope_multithreaded_closed_raises(self) -> None:
+        """_register_active_scope raises when closed in multi-threaded mode."""
+        container = Container()
+        container._multithreaded = True
+        container._closed = True
+
+        with pytest.raises(DIWireContainerClosedError):
+            container._register_active_scope(cast("ScopedContainer", object()))
+
+    def test_scoped_type_providers_avoid_service_key_in_fast_path(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Compiled scoped resolution bypasses ServiceKey.from_value for type keys."""
+        container = Container(auto_compile=False, autoregister=False)
+
+        class ServiceA:
+            pass
+
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
+        container.compile()
+
+        monkeypatch.setattr(
+            ServiceKey,
+            "from_value",
+            lambda _value: (_ for _ in ()).throw(RuntimeError),
+        )
+
+        with container.enter_scope("request") as scope:
+            assert isinstance(scope.resolve(ServiceA), ServiceA)
+
+    def test_scoped_compiled_provider_falls_back_without_type_cache(self) -> None:
+        """Compiled scoped resolution falls back to ServiceKey when type cache is empty."""
+        container = Container(auto_compile=False, autoregister=False)
+
+        class ServiceA:
+            pass
+
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
+        container.compile()
+        container._scoped_type_providers.clear()
+
+        with container.enter_scope("request") as scope:
+            assert isinstance(scope.resolve(ServiceA), ServiceA)
 
     def test_scoped_container_compiled_fast_path_scoped_provider(
         self,
@@ -1818,6 +1893,113 @@ class TestScopedCacheView:
 
             assert view.get(service_key) is instance
             assert (scope_key, service_key) in container._scoped_instances
+
+    def test_scoped_cache_view_get_or_create_positional(self) -> None:
+        """get_or_create_positional caches and reuses constructed instances."""
+        container = Container()
+
+        class ServiceA:
+            def __init__(self, left: str, right: str) -> None:
+                self.left = left
+                self.right = right
+
+        calls: list[str] = []
+        captured: dict[str, object] = {}
+
+        def provider_left(
+            singletons: dict[ServiceKey, object],
+            scoped_cache: MutableMapping[ServiceKey, object] | None,
+        ) -> str:
+            calls.append("left")
+            captured["cache"] = scoped_cache
+            return "left"
+
+        def provider_right(
+            singletons: dict[ServiceKey, object],
+            scoped_cache: MutableMapping[ServiceKey, object] | None,
+        ) -> str:
+            calls.append("right")
+            return "right"
+
+        with container.enter_scope("request") as scope:
+            scope_key = scope._scope_id.segments
+            view = container._get_scoped_cache_view(scope_key, use_lock=False)
+            service_key = ServiceKey.from_value(ServiceA)
+
+            instance = view.get_or_create_positional(
+                service_key,
+                ServiceA,
+                (provider_left, provider_right),
+                container._singletons,
+            )
+            assert instance.left == "left"
+            assert instance.right == "right"
+            assert captured["cache"] is view
+            assert (scope_key, service_key) in container._scoped_instances
+
+            calls_before = list(calls)
+            assert (
+                view.get_or_create_positional(
+                    service_key,
+                    ServiceA,
+                    (provider_left, provider_right),
+                    container._singletons,
+                )
+                is instance
+            )
+            assert calls == calls_before
+
+    def test_scoped_cache_view_get_or_create_kwargs(self) -> None:
+        """get_or_create_kwargs caches and reuses constructed instances."""
+        container = Container()
+
+        class ServiceA:
+            def __init__(self, *, left: str, right: str) -> None:
+                self.left = left
+                self.right = right
+
+        calls: list[str] = []
+
+        def provider_left(
+            singletons: dict[ServiceKey, object],
+            scoped_cache: MutableMapping[ServiceKey, object] | None,
+        ) -> str:
+            calls.append("left")
+            return "left"
+
+        def provider_right(
+            singletons: dict[ServiceKey, object],
+            scoped_cache: MutableMapping[ServiceKey, object] | None,
+        ) -> str:
+            calls.append("right")
+            return "right"
+
+        with container.enter_scope("request") as scope:
+            scope_key = scope._scope_id.segments
+            view = container._get_scoped_cache_view(scope_key, use_lock=False)
+            service_key = ServiceKey.from_value(ServiceA)
+
+            instance = view.get_or_create_kwargs(
+                service_key,
+                ServiceA,
+                (("left", provider_left), ("right", provider_right)),
+                container._singletons,
+            )
+            assert instance.left == "left"
+            assert instance.right == "right"
+            assert (scope_key, service_key) in container._scoped_instances
+
+            calls_before = list(calls)
+            assert (
+                view.get_or_create_kwargs(
+                    service_key,
+                    ServiceA,
+                    (("left", provider_left), ("right", provider_right)),
+                    container._singletons,
+                )
+                is instance
+            )
+            assert calls == calls_before
 
     @pytest.mark.asyncio
     async def test_aresolve_type_singleton_fast_path_cache_hit(self) -> None:

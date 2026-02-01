@@ -151,6 +151,62 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
             instances[(scope_key, key)] = instance
             return instance
 
+    def get_or_create_positional(
+        self,
+        key: ServiceKey,
+        constructor: type,
+        providers: tuple[CompiledProvider, ...],
+        singletons: dict[ServiceKey, Any],
+    ) -> Any:
+        cache = self._cache
+        instances = self._instances
+        scope_key = self._scope_key
+        cached = cache.get(key)
+        if cached is not None:
+            return cached
+        if self._lock is None:
+            instance = constructor(*[provider(singletons, self) for provider in providers])
+            cache[key] = instance
+            instances[(scope_key, key)] = instance
+            return instance
+        with self._lock:
+            cached = cache.get(key)
+            if cached is not None:
+                return cached
+            instance = constructor(*[provider(singletons, self) for provider in providers])
+            cache[key] = instance
+            instances[(scope_key, key)] = instance
+            return instance
+
+    def get_or_create_kwargs(
+        self,
+        key: ServiceKey,
+        constructor: type,
+        items: tuple[tuple[str, CompiledProvider], ...],
+        singletons: dict[ServiceKey, Any],
+    ) -> Any:
+        cache = self._cache
+        instances = self._instances
+        scope_key = self._scope_key
+        cached = cache.get(key)
+        if cached is not None:
+            return cached
+        if self._lock is None:
+            args = {name: provider(singletons, self) for name, provider in items}
+            instance = constructor(**args)
+            cache[key] = instance
+            instances[(scope_key, key)] = instance
+            return instance
+        with self._lock:
+            cached = cache.get(key)
+            if cached is not None:
+                return cached
+            args = {name: provider(singletons, self) for name, provider in items}
+            instance = constructor(**args)
+            cache[key] = instance
+            instances[(scope_key, key)] = instance
+            return instance
+
 
 class Container:
     """Dependency injection container for registering and resolving services.
@@ -178,6 +234,7 @@ class Container:
         "_has_scoped_registrations",
         "_is_compiled",
         "_locks",
+        "_multithreaded",
         "_open_generic_registry",
         "_registry",
         "_scope_cache_locks",
@@ -189,7 +246,9 @@ class Container:
         "_scoped_instances",
         "_scoped_open_generic_registry",
         "_scoped_registry",
+        "_scoped_type_providers",
         "_singletons",
+        "_thread_id",
         "_type_providers",
         "_type_singletons",
     )
@@ -247,6 +306,7 @@ class Container:
         self._compiled_providers: dict[ServiceKey, CompiledProvider] = {}
         # Compiled scoped providers: (service_key, scope_name) -> provider
         self._scoped_compiled_providers: dict[tuple[ServiceKey, str], CompiledProvider] = {}
+        self._scoped_type_providers: dict[tuple[type, str], CompiledProvider] = {}
         self._is_compiled: bool = False
 
         # Fast type-based lookup caches (bypasses ServiceKey creation for simple types)
@@ -261,6 +321,10 @@ class Container:
 
         # Lock manager for singleton and scoped singleton resolution
         self._locks = LockManager()
+
+        # Track thread usage for locking decisions
+        self._thread_id = threading.get_ident()
+        self._multithreaded = False
 
         # Track active scopes for imperative close()
         self._active_scopes: list[ScopedContainer] = []
@@ -1002,6 +1066,7 @@ class Container:
         """
         self._compiled_providers.clear()
         self._scoped_compiled_providers.clear()
+        self._scoped_type_providers.clear()
         self._type_providers.clear()
         self._type_singletons.clear()
         self._async_deps_cache.clear()
@@ -1028,6 +1093,8 @@ class Container:
             )
             if provider is not None:
                 self._scoped_compiled_providers[(service_key, scope_name)] = provider
+                if isinstance(service_key.value, type) and service_key.component is None:
+                    self._scoped_type_providers[(service_key.value, scope_name)] = provider
 
         # Build async dependency cache for faster async resolution
         self._build_async_deps_cache()
@@ -1632,7 +1699,7 @@ class Container:
             if scoped_provider is not None:
                 cache_scope = current_scope.get_cache_key_for_scope(scoped_scope_name)
                 if cache_scope is not None:
-                    use_lock = threading.active_count() > 1
+                    use_lock = self._is_multithreaded()
                     compiled_scoped_cache = self._get_scoped_cache_view(
                         cache_scope,
                         use_lock=use_lock,
@@ -1688,7 +1755,7 @@ class Container:
                 and scoped_cache is not None
                 and cache_key is not None
                 and registration.instance is None
-                and threading.active_count() > 1
+                and self._is_multithreaded()
             ):
                 scoped_lock = self._get_scope_cache_lock(cache_key[0])
                 scoped_lock.acquire()
@@ -1820,6 +1887,21 @@ class Container:
         if not self._is_compiled or not isinstance(key, type):
             return False, None
 
+        scoped_type_providers = self._scoped_type_providers
+        if scoped_type_providers:
+            for scope_name in scope_id.named_scopes_desc:
+                provider = scoped_type_providers.get((key, scope_name))
+                if provider is not None:
+                    cache_scope = scope_id.get_cache_key_for_scope(scope_name)
+                    if cache_scope is None:  # pragma: no cover - scope_id invariant
+                        return False, None
+                    use_lock = self._is_multithreaded()
+                    scoped_cache = self._get_scoped_cache_view(
+                        cache_scope,
+                        use_lock=use_lock,
+                    )
+                    return True, provider(self._singletons, scoped_cache)
+
         service_key = ServiceKey.from_value(key)
         scoped_compiled = self._scoped_compiled_providers
         if scoped_compiled:
@@ -1829,7 +1911,7 @@ class Container:
                     cache_scope = scope_id.get_cache_key_for_scope(scope_name)
                     if cache_scope is None:  # pragma: no cover - scope_id invariant
                         return False, None
-                    use_lock = threading.active_count() > 1
+                    use_lock = self._is_multithreaded()
                     scoped_cache = self._get_scoped_cache_view(
                         cache_scope,
                         use_lock=use_lock,
@@ -1845,6 +1927,14 @@ class Container:
                 return True, provider(self._singletons, None)
 
         return False, None
+
+    def _is_multithreaded(self) -> bool:
+        if self._multithreaded:
+            return True
+        if threading.get_ident() != self._thread_id:
+            self._multithreaded = True
+            return True
+        return False
 
     @overload
     async def aresolve(self, key: type[T], *, scope: None = None) -> T: ...
@@ -2297,14 +2387,23 @@ class Container:
 
     def _register_active_scope(self, scope: ScopedContainer) -> None:
         """Register a scope as active for imperative close()."""
-        with self._active_scopes_lock:
-            if self._closed:
-                raise DIWireContainerClosedError
-            self._active_scopes.append(scope)
+        if self._is_multithreaded():
+            with self._active_scopes_lock:
+                if self._closed:
+                    raise DIWireContainerClosedError
+                self._active_scopes.append(scope)
+            return
+        if self._closed:
+            raise DIWireContainerClosedError
+        self._active_scopes.append(scope)
 
     def _unregister_active_scope(self, scope: ScopedContainer) -> None:
         """Unregister a scope when it is closed."""
-        with self._active_scopes_lock, contextlib.suppress(ValueError):
+        if self._is_multithreaded():
+            with self._active_scopes_lock, contextlib.suppress(ValueError):
+                self._active_scopes.remove(scope)
+            return
+        with contextlib.suppress(ValueError):
             self._active_scopes.remove(scope)
 
     def _check_not_closed(self) -> None:
