@@ -45,6 +45,7 @@ def test_async_wrapper_resolves_dependencies() -> None:
     container.register(AsyncService, lifetime=Lifetime.SINGLETON)
     injected = {"service": ServiceKey.from_value(AsyncService)}
     wrapper = _build_async_wrapper(_async_handler, container, None, injected)
+
     async def _run_wrapper() -> AsyncService:
         return await wrapper()
 
