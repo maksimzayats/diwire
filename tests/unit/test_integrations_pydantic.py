@@ -1,14 +1,27 @@
 """Tests for Pydantic integration."""
 
-from typing import Any
+import sys
+from typing import Any, cast
 
 import pydantic.dataclasses as pdc
+import pytest
 from pydantic import BaseModel, ConfigDict, create_model
 
 from diwire.container import Container
 from diwire.defaults import DEFAULT_AUTOREGISTER_REGISTRATION_FACTORIES
 from diwire.integrations.pydantic import BaseSettings
 from diwire.types import Lifetime
+
+pydantic_v1: Any | None
+if sys.version_info >= (3, 14):
+    pydantic_v1 = None
+else:
+    try:
+        import pydantic.v1 as _pydantic_v1
+    except ImportError:  # pragma: no cover - pydantic v1 only
+        pydantic_v1 = None
+    else:
+        pydantic_v1 = _pydantic_v1
 
 
 class TestBaseSettingsImport:
@@ -199,6 +212,66 @@ class TestPydanticDataclassResolution:
         assert isinstance(result, NestedPydanticDC)
         assert isinstance(result.model, PydanticDCWithDep)
         assert isinstance(result.model.dep, DepService)
+
+
+class TestPydanticV1Resolution:
+    def test_resolve_pydantic_v1_model(self, container: Container) -> None:
+        """Pydantic v1 BaseModel resolves correctly."""
+        if pydantic_v1 is None:
+            pytest.skip("pydantic.v1 not available")
+        pydantic = cast("Any", pydantic_v1)
+        base_model = cast("type", pydantic.BaseModel)
+
+        class V1Model(base_model):
+            class Config:
+                arbitrary_types_allowed = True
+
+            dep: DepService
+            name: str = "default"
+
+        result: Any = container.resolve(V1Model)
+
+        assert isinstance(result, V1Model)
+        result_any: Any = result
+        assert isinstance(result_any.dep, DepService)
+        assert result_any.name == "default"
+
+    def test_resolve_pydantic_v1_create_model(self, container: Container) -> None:
+        """Pydantic v1 create_model resolves correctly."""
+        if pydantic_v1 is None:
+            pytest.skip("pydantic.v1 not available")
+        pydantic = cast("Any", pydantic_v1)
+        dynamic_model = pydantic.create_model(
+            "V1DynamicModel",
+            __config__=type("Config", (), {"arbitrary_types_allowed": True}),
+            dep=(DepService, ...),
+            name=(str, "default"),
+        )
+
+        result: Any = container.resolve(dynamic_model)
+
+        assert isinstance(result, dynamic_model)
+        result_any: Any = result
+        assert isinstance(result_any.dep, DepService)
+        assert result_any.name == "default"
+
+    def test_resolve_pydantic_v1_dataclass(self, container: Container) -> None:
+        """Pydantic v1 dataclass resolves correctly."""
+        if pydantic_v1 is None:
+            pytest.skip("pydantic.v1 not available")
+        pydantic = cast("Any", pydantic_v1)
+        v1_dataclass = pydantic.dataclasses.dataclass(
+            config=type("Config", (), {"arbitrary_types_allowed": True}),
+        )
+
+        @v1_dataclass
+        class V1Dataclass:
+            dep: DepService
+
+        result = container.resolve(V1Dataclass)
+
+        assert isinstance(result, V1Dataclass)
+        assert isinstance(result.dep, DepService)
 
     def test_resolve_regular_class_depending_on_pydantic_dataclass(
         self,
