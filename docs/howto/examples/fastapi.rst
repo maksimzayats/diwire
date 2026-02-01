@@ -186,7 +186,6 @@ Key concepts:
    from typing import Annotated
 
    from fastapi import FastAPI, Request
-   from fastapi.params import Query
 
    from diwire import Container, Injected, container_context
 
@@ -228,19 +227,6 @@ Key concepts:
            print("Closing service")
 
 
-   class Handler:
-       """Handler class demonstrating method-based endpoints."""
-
-       @container_context.resolve(scope="request")
-       async def handle(
-           self,
-           name: Annotated[str, Query()],
-           service: Annotated[Service, Injected()],
-       ) -> dict[str, str | int]:
-           print(f"Handler.handle: processing request for {name}")
-           return {"message": service.greet(name), "request_id": service.get_request_id()}
-
-
    def setup_container() -> None:
        """Configure the global container. Call this at app startup."""
        container = Container()
@@ -253,14 +239,9 @@ Key concepts:
    @app.get("/greet")
    @container_context.resolve(scope="request")
    async def greet(
-       name: Annotated[str, Query()],
+       name: str,
        service: Annotated[Service, Injected()],
    ) -> dict[str, str | int]:
        """Endpoint using container_context for dependency resolution."""
        print(f"greet: processing request for {name}")
        return {"message": service.greet(name), "request_id": service.get_request_id()}
-
-
-   # Class-based handler route
-   app.get("/greet/v2")(Handler().handle)
-

@@ -84,9 +84,10 @@ def test_docs_fastapi_examples_are_correct(capsys: Any) -> None:
         assert response.status_code == 200
         assert "Alice" in response.json()["message"]
 
-        response2 = client3.get("/greet/v2?name=Bob")
+        response2 = client3.get("/greet?name=Bob")
         assert response2.status_code == 200
-        assert "request_id" in response2.json()
+        assert "Bob" in response2.json()["message"]
+        assert response2.json()["request_id"] != response.json()["request_id"]
 
         captured = capsys.readouterr()
         assert "Closing service" in captured.out

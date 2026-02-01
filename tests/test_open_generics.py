@@ -349,6 +349,37 @@ def test_scoped_open_generic_registration_skips_anonymous_scope(
     assert result is None
 
 
+def test_scoped_open_generic_registration_falls_back_to_parent_scope(container: Container) -> None:
+    @dataclass
+    class ScopedBox(Generic[T]):
+        value: str
+
+    if TYPE_CHECKING:
+        scoped_key = ScopedBox[Any]
+    else:
+        scoped_key = ScopedBox[T]
+
+    decorator = cast(
+        "Callable[[Callable[..., object]], Callable[..., object]]",
+        container.register(
+            scoped_key,
+            lifetime=Lifetime.SCOPED,
+            scope="request",
+        ),
+    )
+
+    def create_box(type_arg: type[T]) -> ScopedBox[T]:
+        return ScopedBox(value=type_arg.__name__)
+
+    decorator(create_box)
+
+    with container.enter_scope("request") as request_scope:
+        # Nested scope name doesn't have an open generic registration, so the resolver must
+        # fall back to the nearest parent scope ("request").
+        with request_scope.enter_scope("handler") as handler_scope:
+            assert handler_scope.resolve(ScopedBox[int]).value == "int"
+
+
 def test_open_generic_scoped_singleton(container: Container) -> None:
     @dataclass
     class ScopedBox(Generic[T]):
