@@ -1,0 +1,28 @@
+:root {
+  --diwire-sidebar-meta-gap: 0.5rem;
+}
+
+.sidebar-brand-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-brand-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--diwire-sidebar-meta-gap);
+  padding: 0.15rem 1rem 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-foreground-muted);
+}
+
+.sidebar-version {
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar-repo svg {
+  width: 1rem;
+  height: 1rem;
+  vertical-align: middle;
+  fill: currentColor;
+}

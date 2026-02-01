@@ -30,10 +30,10 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/MaksimZayats/diwire"
+Homepage = "https://github.com/maksimzayats/diwire"
 Documentation = "https://docs.diwire.dev"
-Repository = "https://github.com/MaksimZayats/diwire"
-Issues = "https://github.com/MaksimZayats/diwire/issues"
+Repository = "https://github.com/maksimzayats/diwire"
+Issues = "https://github.com/maksimzayats/diwire/issues"
 
 
 [dependency-groups]
