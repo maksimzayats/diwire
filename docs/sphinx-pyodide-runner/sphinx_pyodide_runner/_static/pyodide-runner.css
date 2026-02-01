@@ -1,0 +1,91 @@
+/* --- Pyodide Runner: Run & Edit buttons --- */
+
+.py-run {
+  position: relative;
+}
+
+/* Base button style — matches sphinx-copybutton aesthetic */
+.py-runner-btn {
+  position: absolute;
+  top: 0.3em;
+  z-index: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.6em;
+  height: 1.6em;
+  padding: 0;
+  border: none;
+  border-radius: 0.25em;
+  background: none;
+  color: var(--color-foreground-secondary, #6c6c6c);
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+
+.py-runner-btn:hover {
+  opacity: 1;
+  color: var(--color-foreground-primary, #333);
+  background: var(--color-background-secondary, rgba(0, 0, 0, 0.05));
+}
+
+.py-runner-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Show buttons on hover — same as copy button */
+.py-run:hover .py-runner-btn {
+  display: flex;
+}
+
+/* Positioning: edit | run | copy (copy is at right: 0.3em by sphinx-copybutton) */
+.py-runner-run {
+  right: 2.3em;
+}
+
+.py-runner-edit {
+  right: 4.3em;
+}
+
+/* Active edit mode indicator */
+.py-runner-edit.active {
+  opacity: 1;
+  color: var(--color-brand-primary, #2962ff);
+}
+
+/* Editable pre styling */
+.py-run pre.py-runner-editable {
+  cursor: text;
+}
+
+.py-run pre.py-runner-editable:focus {
+  outline: 1px solid var(--color-foreground-border, #ccc);
+  outline-offset: 2px;
+}
+
+/* Output block */
+.py-runner-output {
+  margin-top: 0.5rem;
+  display: none;
+}
+
+.py-runner-output.is-visible {
+  display: block;
+}
+
+.py-runner-output pre {
+  margin: 0;
+}
+
+/* Spinner animation */
+@keyframes pyodide-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pyodide-spinner {
+  animation: pyodide-spin 0.7s linear infinite;
+}
