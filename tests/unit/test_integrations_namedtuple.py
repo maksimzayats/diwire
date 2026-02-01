@@ -1,5 +1,6 @@
 """Tests for NamedTuple integration."""
 
+import collections
 from typing import NamedTuple
 
 from diwire.container import Container
@@ -71,3 +72,13 @@ class TestNamedTupleResolution:
         assert isinstance(result, RegularDependent)
         assert isinstance(result.model, NamedTupleModelWithDep)
         assert isinstance(result.model.dep, DepService)
+
+    def test_resolve_collections_namedtuple(self, container: Container) -> None:
+        """collections.namedtuple classes resolve correctly."""
+        legacy_tuple = collections.namedtuple("legacy_tuple", ["dep"])  # noqa: PYI024
+        legacy_tuple.__annotations__ = {"dep": DepService}
+
+        result = container.resolve(legacy_tuple)
+
+        assert isinstance(result, legacy_tuple)
+        assert isinstance(result.dep, DepService)

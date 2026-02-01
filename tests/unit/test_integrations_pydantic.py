@@ -1,7 +1,9 @@
 """Tests for Pydantic integration."""
 
+from typing import Any
+
 import pydantic.dataclasses as pdc
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, create_model
 
 from diwire.container import Container
 from diwire.defaults import DEFAULT_AUTOREGISTER_REGISTRATION_FACTORIES
@@ -129,6 +131,22 @@ class TestPydanticBaseModelResolution:
         assert isinstance(result, RegularDependent)
         assert isinstance(result.model, PydanticModelWithDep)
         assert isinstance(result.model.dep, DepService)
+
+    def test_resolve_pydantic_create_model(self, container: Container) -> None:
+        """Pydantic create_model classes resolve correctly."""
+        dynamic_model = create_model(
+            "DynamicModel",
+            __config__=ConfigDict(arbitrary_types_allowed=True),
+            dep=(DepService, ...),
+            name=(str, "default"),
+        )
+
+        result: Any = container.resolve(dynamic_model)
+
+        assert isinstance(result, dynamic_model)
+        result_any: Any = result
+        assert isinstance(result_any.dep, DepService)
+        assert result_any.name == "default"
 
 
 @pdc.dataclass(config={"arbitrary_types_allowed": True})
