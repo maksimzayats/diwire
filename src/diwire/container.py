@@ -1098,23 +1098,17 @@ class Container:
         use_lock: bool = True,
     ) -> _ScopedCacheView:
         if use_lock:
-            view = self._scoped_cache_views.get(scope_key)
-            if view is not None:
-                return view
             cache = self._get_scope_cache(scope_key)
             type_cache = self._get_scope_type_cache(scope_key)
             lock = self._get_scope_cache_lock(scope_key)
-            view = _ScopedCacheView(cache, type_cache, lock)
-            self._scoped_cache_views[scope_key] = view
-            return view
-        view = self._scoped_cache_views_nolock.get(scope_key)
-        if view is not None:
-            return view
+            return self._scoped_cache_views.setdefault(
+                scope_key, _ScopedCacheView(cache, type_cache, lock),
+            )
         cache = self._get_scope_cache(scope_key)
         type_cache = self._get_scope_type_cache(scope_key)
-        view = _ScopedCacheView(cache, type_cache, None)
-        self._scoped_cache_views_nolock[scope_key] = view
-        return view
+        return self._scoped_cache_views_nolock.setdefault(
+            scope_key, _ScopedCacheView(cache, type_cache, None),
+        )
 
     def _get_scope_cache(
         self,
