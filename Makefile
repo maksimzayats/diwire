@@ -12,7 +12,6 @@ lint:
 
 test:
 	uv run pytest tests/ --benchmark-skip --cov=src/diwire --cov-report=term-missing
-	uv run pytest tests/ --cov=src/diwire --cov-report=term-missing
 
 docs:
 	rm -rf docs/_build
