@@ -1,1 +1,0 @@
-"""Async dependency injection examples."""

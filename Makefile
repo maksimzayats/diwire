@@ -1,3 +1,5 @@
+.PHONY: format lint test docs benchmark
+
 format:
 	uv run ruff format .
 	uv run ruff check --fix-only .
@@ -10,6 +12,9 @@ lint:
 
 test:
 	uv run pytest tests/ --cov=src/diwire --cov-report=term-missing
+
+docs:
+	uv run sphinx-build -b html docs docs/_build/html
 
 # === Benchmark Commands ===
 

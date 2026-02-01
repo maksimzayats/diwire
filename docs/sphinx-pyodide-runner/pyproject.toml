@@ -1,0 +1,12 @@
+[project]
+name = "sphinx-pyodide-runner"
+version = "0.1.0"
+description = "Sphinx extension that adds Run and Edit buttons to code blocks using Pyodide"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = ["sphinx>=8.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
