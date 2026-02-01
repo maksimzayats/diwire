@@ -26,6 +26,10 @@ from diwire.service_key import ServiceKey
 from diwire.types import Injected, Lifetime
 
 
+def _scope_key_has_name(scope_key: tuple[tuple[str | None, int], ...], name: str) -> bool:
+    return any(segment_name == name for segment_name, _ in scope_key)
+
+
 @dataclass
 class Session:
     """A session with a unique ID for testing scoped singletons."""
@@ -119,24 +123,17 @@ class TestStartScope:
             assert isinstance(instance_id, int)
 
     def test_enter_scope_cleans_up_scoped_instances(self, container: Container) -> None:
-        """Scoped instances are cleaned up when scope exits."""
+        """Scoped caches are cleaned up when scope exits."""
         container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
         with container.enter_scope("test"):
             container.resolve(Session)
-
-            # Check that a scope with "test" exists in _scoped_instances
-            # Keys are now (scope_segments_tuple, service_key)
-            def has_test_scope(
-                key: tuple[tuple[tuple[str | None, int], ...], object],
-            ) -> bool:
-                scope_segments, _ = key
-                return any(name == "test" for name, _ in scope_segments)
-
-            assert any(has_test_scope(k) for k in container._scoped_instances)
+            scope = _current_scope.get()
+            assert scope is not None
+            assert scope.segments in container._scope_caches
 
         # After scope exits, that key should be cleaned up
-        assert len(container._scoped_instances) == 0
+        assert len(container._scope_caches) == 0
 
 
 class TestScopedContainer:
@@ -570,7 +567,7 @@ class TestScopedInstanceRegistration:
             assert session.id != "specific-1234"
 
     def test_scoped_instance_not_cached_in_global_singletons(self, container: Container) -> None:
-        """Scoped instance should be cached in _scoped_instances, not _singletons."""
+        """Scoped instance should be cached in scope cache, not _singletons."""
         specific_session = Session(id="scoped-instance")
         container.register(
             Session,
@@ -585,15 +582,10 @@ class TestScopedInstanceRegistration:
             container.resolve(Session)
             # Should be in scoped instances, not global singletons
             assert service_key not in container._singletons
-            # Check that the service is in the scoped instances cache
-            # Keys are now (scope_segments, service_key) tuples
-            matching_keys = [
-                k
-                for k in container._scoped_instances
-                if any(name == "test" for name, _ in k[0])  # k[0] is scope_segments
-            ]
-            assert len(matching_keys) == 1
-            assert matching_keys[0][1] == service_key  # k[1] is service_key
+            scope = _current_scope.get()
+            assert scope is not None
+            scope_cache = container._scope_caches[scope.segments]
+            assert service_key in scope_cache
 
     def test_different_scopes_different_instances(self, container: Container) -> None:
         """Different scopes can have different registered instances."""
@@ -691,21 +683,13 @@ class TestScopeCleanup:
         with container.enter_scope("parent") as parent:
             with parent.enter_scope("child"):
                 container.resolve(Session)
-
-                # Check for scope containing "child"
-                # Keys are (scope_segments, service_key) tuples
-                def has_child_scope(
-                    key: tuple[tuple[tuple[str | None, int], ...], object],
-                ) -> bool:
-                    scope_segments, _ = key
-                    return any(name == "child" for name, _ in scope_segments)
-
-                child_scope_keys = [k for k in container._scoped_instances if has_child_scope(k)]
-                assert len(child_scope_keys) == 1
+                scope = _current_scope.get()
+                assert scope is not None
+                scope_key = scope.segments
+                assert scope_key in container._scope_caches
 
             # Child scope cleaned up
-            child_scope_keys = [k for k in container._scoped_instances if has_child_scope(k)]
-            assert len(child_scope_keys) == 0
+            assert scope_key not in container._scope_caches
 
     def test_scope_cleanup_on_exception(self, container: Container) -> None:
         """Scopes clean up even when exceptions occur."""
@@ -718,7 +702,7 @@ class TestScopeCleanup:
         except ValueError:
             pass
 
-        assert len(container._scoped_instances) == 0
+        assert len(container._scope_caches) == 0
         assert _current_scope.get() is None
 
 
@@ -1532,7 +1516,7 @@ class TestScopeErrorRecovery:
 
         # The scope should be cleared after normal exit
         # Check that no keys have matching scope segments
-        assert not any(k[0] == scope_id.segments for k in container._scoped_instances)
+        assert scope_id.segments not in container._scope_caches
 
         # Manually calling clear_scope again should be idempotent (no error)
         container._clear_scope(scope_id)
@@ -1551,7 +1535,7 @@ class TestScopeErrorRecovery:
             _current_scope.reset(scoped._token)
 
         # Despite reset failure, cleanup should complete
-        assert len(container._scoped_instances) == 0
+        assert len(container._scope_caches) == 0
         assert scoped._exited is True
         assert scoped not in container._active_scopes
 
@@ -1565,7 +1549,7 @@ class TestScopeErrorRecovery:
             _current_scope.reset(scoped._token)
 
         # Despite reset failure, cleanup should complete
-        assert len(container._scoped_instances) == 0
+        assert len(container._scope_caches) == 0
         assert scoped._exited is True
         assert scoped not in container._active_scopes
 
@@ -1661,8 +1645,7 @@ class TestConcurrentScopeEdgeCases:
         def disposer() -> None:
             for _ in range(100):
                 try:
-                    for key in list(container._scoped_instances.keys()):
-                        scope_segments, _ = key
+                    for scope_segments in list(container._scope_caches):
                         if scope_segments and scope_segments[0][0] == "test":
                             container._clear_scope(_ScopeId(segments=scope_segments))
                 except expected_race_errors:  # noqa: PERF203
@@ -2005,7 +1988,7 @@ class TestMemoryAndReferenceEdgeCases:
     """Tests for memory and reference edge cases."""
 
     def test_many_scopes_created_disposed_no_leak(self, container: Container) -> None:
-        """1000 scopes created/disposed: _scoped_instances empty."""
+        """1000 scopes created/disposed: scope caches empty."""
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         for _ in range(1000):
@@ -2013,27 +1996,22 @@ class TestMemoryAndReferenceEdgeCases:
                 container.resolve(Session)
 
         # All scopes should be cleaned up
-        assert len(container._scoped_instances) == 0
+        assert len(container._scope_caches) == 0
 
     def test_scope_disposal_releases_cached_instances(self, container: Container) -> None:
         """Scoped instances are removed from cache after scope exit."""
         container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
-        def has_test_scope(
-            key: tuple[tuple[tuple[str | None, int], ...], object],
-        ) -> bool:
-            scope_segments, _ = key
-            return any(name == "test" for name, _ in scope_segments)
-
         with container.enter_scope("test"):
             container.resolve(Session)
+            scope = _current_scope.get()
+            assert scope is not None
+            scope_key = scope.segments
             # Verify the instance is cached while scope is active
-            test_scopes = [k for k in container._scoped_instances if has_test_scope(k)]
-            assert len(test_scopes) == 1
+            assert scope_key in container._scope_caches
 
         # After scope exit, the cache should be cleared
-        test_scopes = [k for k in container._scoped_instances if has_test_scope(k)]
-        assert len(test_scopes) == 0
+        assert scope_key not in container._scope_caches
 
     def test_no_reference_retention_after_clear(self, container: Container) -> None:
         """After clear_scope: no refs in container for that scope."""
@@ -2041,11 +2019,14 @@ class TestMemoryAndReferenceEdgeCases:
 
         with container.enter_scope("test"):
             container.resolve(Session)
+            scope = _current_scope.get()
+            assert scope is not None
+            scope_key = scope.segments
             # Instance should be in cache during scope
-            assert len(container._scoped_instances) == 1
+            assert scope_key in container._scope_caches
 
         # After scope exit, the scope should be cleared
-        assert len(container._scoped_instances) == 0
+        assert scope_key not in container._scope_caches
 
     def test_large_scoped_instance_cleanup(self, container: Container) -> None:
         """Large objects in scope: cache is properly cleaned up on scope exit."""
@@ -2057,22 +2038,17 @@ class TestMemoryAndReferenceEdgeCases:
 
         container.register(LargeObject, scope="test", lifetime=Lifetime.SCOPED)
 
-        def has_test_scope(
-            key: tuple[tuple[tuple[str | None, int], ...], object],
-        ) -> bool:
-            scope_segments, _ = key
-            return any(name == "test" for name, _ in scope_segments)
-
         for _ in range(5):
             with container.enter_scope("test"):
                 container.resolve(LargeObject)
+                scope = _current_scope.get()
+                assert scope is not None
+                scope_key = scope.segments
                 # Verify instance is cached during scope
-                test_scopes = [k for k in container._scoped_instances if has_test_scope(k)]
-                assert len(test_scopes) == 1
+                assert scope_key in container._scope_caches
 
             # Verify cache is cleaned after each scope exit
-            test_scopes = [k for k in container._scoped_instances if has_test_scope(k)]
-            assert len(test_scopes) == 0
+            assert scope_key not in container._scope_caches
 
 
 # ============================================================================
@@ -2737,12 +2713,12 @@ class TestImperativeScopeManagement:
         container.resolve(Session)
 
         assert not scope._exited
-        assert len(container._scoped_instances) > 0
+        assert len(container._scope_caches) > 0
 
         scope.close()
 
         assert scope._exited
-        assert len(container._scoped_instances) == 0  # type: ignore[unreachable]
+        assert len(container._scope_caches) == 0  # type: ignore[unreachable]
 
     def test_individual_scope_aclose(self, container: Container) -> None:
         """ScopedContainer.aclose() closes a specific scope asynchronously."""
@@ -3359,17 +3335,17 @@ class TestImperativeScopeResourceCleanup:
         asyncio.run(run_test())
 
     def test_scoped_instances_cleared_on_close(self, container: Container) -> None:
-        """_scoped_instances is empty after close()."""
+        """Scope caches are empty after close()."""
         container.register(Session, scope="test", lifetime=Lifetime.SCOPED)
 
         container.enter_scope("test")
         container.resolve(Session)
 
-        assert len(container._scoped_instances) > 0
+        assert len(container._scope_caches) > 0
 
         container.close()
 
-        assert len(container._scoped_instances) == 0
+        assert len(container._scope_caches) == 0
 
 
 class TestImperativeScopeConcurrency:

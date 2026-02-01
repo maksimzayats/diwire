@@ -122,6 +122,8 @@ class LockManager:
         scope_key: tuple[tuple[str | None, int], ...],
     ) -> None:
         """Remove all locks associated with a scope key."""
+        if not self._sync_scoped_singleton_locks and not self._scoped_singleton_locks:
+            return
         # Snapshot keys to avoid RuntimeError from dict mutation during iteration
         scoped_lock_keys = [k for k in list(self._sync_scoped_singleton_locks) if k[0] == scope_key]
         for k in scoped_lock_keys:

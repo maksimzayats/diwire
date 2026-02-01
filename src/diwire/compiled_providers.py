@@ -7,8 +7,8 @@ eliminating runtime reflection and minimizing dict lookups.
 from __future__ import annotations
 
 import threading
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Protocol
+from collections.abc import Callable, MutableMapping
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 if TYPE_CHECKING:
     from diwire.service_key import ServiceKey
@@ -20,13 +20,33 @@ class CompiledProvider(Protocol):
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         """Resolve and return an instance."""
         ...
 
 
 FactoryResultHandler = Callable[[Any], Any]
+
+
+class _ScopedCache(Protocol):
+    def get_or_create(self, key: ServiceKey, factory: Callable[[], Any]) -> Any: ...
+
+    def get_or_create_positional(
+        self,
+        key: ServiceKey,
+        constructor: type,
+        providers: tuple[CompiledProvider, ...],
+        singletons: dict[ServiceKey, Any],
+    ) -> Any: ...
+
+    def get_or_create_kwargs(
+        self,
+        key: ServiceKey,
+        constructor: type,
+        items: tuple[tuple[str, CompiledProvider], ...],
+        singletons: dict[ServiceKey, Any],
+    ) -> Any: ...
 
 
 class TypeProvider:
@@ -40,7 +60,7 @@ class TypeProvider:
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         return self._type()
 
@@ -63,7 +83,7 @@ class SingletonTypeProvider:
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         if self._instance is not None:
             return self._instance
@@ -80,7 +100,7 @@ class SingletonTypeProvider:
 class ArgsTypeProvider:
     """Provider for types with dependencies - uses pre-compiled callback chain."""
 
-    __slots__ = ("_dep_providers", "_param_names", "_type")
+    __slots__ = ("_dep_providers", "_items", "_param_names", "_type")
 
     def __init__(
         self,
@@ -91,17 +111,38 @@ class ArgsTypeProvider:
         self._type = t
         self._param_names = param_names
         self._dep_providers = dep_providers
+        self._items = tuple(zip(param_names, dep_providers, strict=True))
 
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
-        args = {
-            name: provider(singletons, scoped_cache)
-            for name, provider in zip(self._param_names, self._dep_providers, strict=True)
-        }
+        items = self._items
+        args = {name: provider(singletons, scoped_cache) for name, provider in items}
         return self._type(**args)
+
+
+class PositionalArgsTypeProvider:
+    """Provider for types with dependencies using positional arguments."""
+
+    __slots__ = ("_dep_providers", "_type")
+
+    def __init__(
+        self,
+        t: type,
+        dep_providers: tuple[CompiledProvider, ...],
+    ) -> None:
+        self._type = t
+        self._dep_providers = dep_providers
+
+    def __call__(
+        self,
+        singletons: dict[ServiceKey, Any],
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
+    ) -> Any:
+        providers = self._dep_providers
+        return self._type(*[provider(singletons, scoped_cache) for provider in providers])
 
 
 class SingletonArgsTypeProvider:
@@ -111,7 +152,7 @@ class SingletonArgsTypeProvider:
     Uses double-check locking for thread safety.
     """
 
-    __slots__ = ("_dep_providers", "_instance", "_key", "_lock", "_param_names", "_type")
+    __slots__ = ("_dep_providers", "_instance", "_items", "_key", "_lock", "_param_names", "_type")
 
     def __init__(
         self,
@@ -124,13 +165,14 @@ class SingletonArgsTypeProvider:
         self._key = key
         self._param_names = param_names
         self._dep_providers = dep_providers
+        self._items = tuple(zip(param_names, dep_providers, strict=True))
         self._instance: Any = None
         self._lock = threading.Lock()
 
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         if self._instance is not None:
             return self._instance
@@ -138,11 +180,44 @@ class SingletonArgsTypeProvider:
             # Double-check: another thread may have created the instance while we waited
             if self._instance is not None:  # pragma: no cover - race timing dependent
                 return self._instance  # type: ignore[unreachable]
-            args = {
-                name: provider(singletons, scoped_cache)
-                for name, provider in zip(self._param_names, self._dep_providers, strict=True)
-            }
+            items = self._items
+            args = {name: provider(singletons, scoped_cache) for name, provider in items}
             instance = self._type(**args)
+            self._instance = instance
+            singletons[self._key] = instance
+            return instance
+
+
+class SingletonPositionalArgsTypeProvider:
+    """Provider for singleton types with positional dependencies."""
+
+    __slots__ = ("_dep_providers", "_instance", "_key", "_lock", "_type")
+
+    def __init__(
+        self,
+        t: type,
+        key: ServiceKey,
+        dep_providers: tuple[CompiledProvider, ...],
+    ) -> None:
+        self._type = t
+        self._key = key
+        self._dep_providers = dep_providers
+        self._instance: Any = None
+        self._lock = threading.Lock()
+
+    def __call__(
+        self,
+        singletons: dict[ServiceKey, Any],
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
+    ) -> Any:
+        if self._instance is not None:
+            return self._instance
+        with self._lock:
+            # Double-check: another thread may have created the instance while we waited
+            if self._instance is not None:  # pragma: no cover - race timing dependent
+                return self._instance  # type: ignore[unreachable]
+            providers = self._dep_providers
+            instance = self._type(*[provider(singletons, scoped_cache) for provider in providers])
             self._instance = instance
             singletons[self._key] = instance
             return instance
@@ -160,22 +235,18 @@ class ScopedSingletonProvider:
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         if scoped_cache is not None:
-            cached = scoped_cache.get(self._key)
-            if cached is not None:
-                return cached
-            instance = self._type()
-            scoped_cache[self._key] = instance
-            return instance
+            cache = cast("_ScopedCache", scoped_cache)
+            return cache.get_or_create(self._key, self._type)
         return self._type()
 
 
 class ScopedSingletonArgsProvider:
     """Provider for scoped singletons with dependencies."""
 
-    __slots__ = ("_dep_providers", "_key", "_param_names", "_type")
+    __slots__ = ("_dep_providers", "_items", "_key", "_param_names", "_type")
 
     def __init__(
         self,
@@ -188,28 +259,51 @@ class ScopedSingletonArgsProvider:
         self._key = key
         self._param_names = param_names
         self._dep_providers = dep_providers
+        self._items = tuple(zip(param_names, dep_providers, strict=True))
 
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         if scoped_cache is not None:
-            cached = scoped_cache.get(self._key)
-            if cached is not None:
-                return cached
-            args = {
-                name: provider(singletons, scoped_cache)
-                for name, provider in zip(self._param_names, self._dep_providers, strict=True)
-            }
-            instance = self._type(**args)
-            scoped_cache[self._key] = instance
-            return instance
-        args = {
-            name: provider(singletons, scoped_cache)
-            for name, provider in zip(self._param_names, self._dep_providers, strict=True)
-        }
+            cache = cast("_ScopedCache", scoped_cache)
+            return cache.get_or_create_kwargs(self._key, self._type, self._items, singletons)
+        items = self._items
+        args = {name: provider(singletons, scoped_cache) for name, provider in items}
         return self._type(**args)
+
+
+class ScopedSingletonPositionalArgsProvider:
+    """Provider for scoped singletons with positional dependencies."""
+
+    __slots__ = ("_dep_providers", "_key", "_type")
+
+    def __init__(
+        self,
+        t: type,
+        key: ServiceKey,
+        dep_providers: tuple[CompiledProvider, ...],
+    ) -> None:
+        self._type = t
+        self._key = key
+        self._dep_providers = dep_providers
+
+    def __call__(
+        self,
+        singletons: dict[ServiceKey, Any],
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
+    ) -> Any:
+        if scoped_cache is not None:
+            cache = cast("_ScopedCache", scoped_cache)
+            return cache.get_or_create_positional(
+                self._key,
+                self._type,
+                self._dep_providers,
+                singletons,
+            )
+        providers = self._dep_providers
+        return self._type(*[provider(singletons, scoped_cache) for provider in providers])
 
 
 class InstanceProvider:
@@ -223,7 +317,7 @@ class InstanceProvider:
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         return self._instance
 
@@ -244,7 +338,7 @@ class FactoryProvider:
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         factory = self._factory_provider(singletons, scoped_cache)
         result = factory()
@@ -277,7 +371,7 @@ class SingletonFactoryProvider:
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         if self._instance is not None:
             return self._instance
