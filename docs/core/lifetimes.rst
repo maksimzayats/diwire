@@ -15,7 +15,7 @@ diwire supports three lifetimes:
 Transient vs singleton
 ----------------------
 
-See the runnable script in :doc:`howto/examples/basics` (Lifetimes section).
+See the runnable script in :doc:`/howto/examples/basics` (Lifetimes section).
 
 .. code-block:: python
 

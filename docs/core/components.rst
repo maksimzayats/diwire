@@ -15,7 +15,7 @@ Use :class:`diwire.Component` with ``typing.Annotated`` to create distinct keys.
 Example
 -------
 
-See the runnable script in :doc:`howto/examples/components` (Named components section).
+See the runnable script in :doc:`/howto/examples/components` (Named components section).
 
 Notes
 -----

@@ -11,14 +11,14 @@ Creating a scope
 
 Use :meth:`diwire.Container.enter_scope` as a context manager:
 
-See the runnable scripts in :doc:`howto/examples/scopes` (Scope basics section).
+See the runnable scripts in :doc:`/howto/examples/scopes` (Scope basics section).
 
 Scoped lifetime
 ---------------
 
 To share an instance *within* a scope, register it as ``Lifetime.SCOPED`` and provide a scope name:
 
-See the runnable scripts in :doc:`howto/examples/scopes` (SCOPED lifetime section).
+See the runnable scripts in :doc:`/howto/examples/scopes` (SCOPED lifetime section).
 
 Generator factories (deterministic cleanup)
 ----------------------------------------------
@@ -26,14 +26,14 @@ Generator factories (deterministic cleanup)
 When you need cleanup (close a session, release a lock, return a connection to a pool), use a generator factory.
 diwire will close the generator when the scope exits, running your ``finally`` block.
 
-See the runnable scripts in :doc:`howto/examples/scopes` (Generator factories section).
+See the runnable scripts in :doc:`/howto/examples/scopes` (Generator factories section).
 
 Nested scopes
 -------------
 
 Scopes can be nested. A nested scope can still access services registered for its parent scopes.
 
-See the runnable scripts in :doc:`howto/examples/scopes` (Nested scopes section).
+See the runnable scripts in :doc:`/howto/examples/scopes` (Nested scopes section).
 
 Imperative close
 ----------------

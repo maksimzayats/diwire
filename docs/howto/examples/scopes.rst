@@ -228,7 +228,7 @@ from parent scopes.
        main()
 
 Generator factories (cleanup on scope exit)
-------------------------------------------
+-------------------------------------------
 
 Demonstrates generator factory support:
 
@@ -298,4 +298,3 @@ Demonstrates generator factory support:
 
    if __name__ == "__main__":
        main()
-

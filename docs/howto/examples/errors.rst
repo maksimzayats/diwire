@@ -188,7 +188,7 @@ Demonstrates ``DIWireScopeMismatchError`` when trying to resolve from an exited 
        main()
 
 Scoped resolved outside scope (auto-register safety)
----------------------------------------------------
+----------------------------------------------------
 
 Demonstrates ``DIWireScopeMismatchError`` when:
 
@@ -232,4 +232,3 @@ This prevents the container from silently auto-registering a second, unscoped in
 
    if __name__ == "__main__":
        main()
-

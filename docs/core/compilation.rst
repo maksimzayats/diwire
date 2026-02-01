@@ -49,7 +49,7 @@ Basic usage
 Runnable example
 ----------------
 
-See the runnable script in :doc:`howto/examples/basics` (Compilation section).
+See the runnable script in :doc:`/howto/examples/basics` (Compilation section).
 
 Notes and limitations
 ---------------------

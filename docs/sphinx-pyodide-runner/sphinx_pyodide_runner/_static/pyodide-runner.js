@@ -95,12 +95,14 @@ await micropip.install([${escaped}])
     statusEl.textContent = message;
   }
 
-  async function runCode(codeBlock, output, statusEl, outputPre, runBtn) {
+  async function runCode(codeBlock, output, statusEl, outputPre, runButtons) {
     const pre = codeBlock.querySelector("pre");
     const code = pre ? pre.textContent ?? "" : codeBlock.textContent ?? "";
 
-    runBtn.disabled = true;
-    runBtn.innerHTML = spinnerSvg;
+    for (const btn of runButtons) {
+      btn.disabled = true;
+      btn.innerHTML = spinnerSvg;
+    }
     setOutputState(output, statusEl, "running", "Running...");
     outputPre.textContent = "Loading Pyodide...";
 
@@ -159,13 +161,17 @@ with redirect_stdout(_stdout), redirect_stderr(_stderr):
       const combined = stdout + (stderr ? `\n${stderr}` : "");
       outputPre.textContent = combined.trim() ? combined : NO_OUTPUT;
 
-      runBtn.disabled = false;
-      showSuccess(runBtn, playSvg);
+      for (const btn of runButtons) {
+        btn.disabled = false;
+        showSuccess(btn, playSvg);
+      }
       setOutputState(output, statusEl, "ok", "Executed");
     } catch (error) {
       outputPre.textContent = String(error);
-      runBtn.disabled = false;
-      runBtn.innerHTML = playSvg;
+      for (const btn of runButtons) {
+        btn.disabled = false;
+        btn.innerHTML = playSvg;
+      }
       setOutputState(output, statusEl, "error", "Error");
     } finally {
       if (pyodide) {
@@ -186,12 +192,18 @@ with redirect_stdout(_stdout), redirect_stderr(_stderr):
 
     const pre = codeBlock.querySelector("pre");
 
-    // Run button (play icon)
-    const runBtn = document.createElement("button");
-    runBtn.type = "button";
-    runBtn.className = "py-runner-btn py-runner-run o-tooltip--left";
-    runBtn.setAttribute("data-tooltip", "Run");
-    runBtn.innerHTML = playSvg;
+    // Run buttons (play icon): show both on the code block and in the output panel.
+    const runBtnMain = document.createElement("button");
+    runBtnMain.type = "button";
+    runBtnMain.className = "py-runner-btn py-runner-run o-tooltip--left";
+    runBtnMain.setAttribute("data-tooltip", "Run");
+    runBtnMain.innerHTML = playSvg;
+
+    const runBtnOutput = document.createElement("button");
+    runBtnOutput.type = "button";
+    runBtnOutput.className = "py-runner-btn py-runner-run o-tooltip--left";
+    runBtnOutput.setAttribute("data-tooltip", "Run");
+    runBtnOutput.innerHTML = playSvg;
 
     // Edit button (pencil icon)
     const editBtn = document.createElement("button");
@@ -223,7 +235,7 @@ with redirect_stdout(_stdout), redirect_stderr(_stderr):
 
     const actions = document.createElement("div");
     actions.className = "py-runner-output-actions";
-    actions.appendChild(runBtn);
+    actions.appendChild(runBtnOutput);
 
     toolbar.appendChild(label);
     toolbar.appendChild(actions);
@@ -240,13 +252,16 @@ with redirect_stdout(_stdout), redirect_stderr(_stderr):
     // The output panel should only show Run.
     const highlight = codeBlock.querySelector(".highlight") || codeBlock;
     highlight.appendChild(editBtn);
+    highlight.appendChild(runBtnMain);
 
     codeBlock.insertAdjacentElement("afterend", output);
 
     if (pre) {
       editBtn.addEventListener("click", () => toggleEditing(pre, editBtn));
     }
-    runBtn.addEventListener("click", () => runCode(codeBlock, output, status, outputPre, runBtn));
+    const runButtons = [runBtnMain, runBtnOutput];
+    runBtnMain.addEventListener("click", () => runCode(codeBlock, output, status, outputPre, runButtons));
+    runBtnOutput.addEventListener("click", () => runCode(codeBlock, output, status, outputPre, runButtons));
   }
 
   document.addEventListener("DOMContentLoaded", () => {

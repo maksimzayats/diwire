@@ -243,7 +243,7 @@ Decorator registration
 
 More scoped patterns and cleanup are in :doc:`scopes`.
 Async factories and async generator cleanup are in :doc:`async`.
-``container_context`` is covered in :doc:`../../core/container-context` and :doc:`patterns`.
+``container_context`` is covered in :doc:`/core/container-context` and :doc:`patterns`.
 
 Class decorators
 ^^^^^^^^^^^^^^^^

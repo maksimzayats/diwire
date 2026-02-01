@@ -21,7 +21,7 @@ Installation
 
    pip install diwire
 
-Quick start (30 seconds)
+Quick start
 ------------------------
 
 Define your classes. Resolve the top-level one. diwire figures out the rest.
@@ -59,7 +59,6 @@ What to read next
 - :doc:`core/index` - the non-optional concepts you will use everywhere
 - :doc:`howto/index` - a cookbook of real-world scenarios (frameworks, patterns, testing)
 - :doc:`reference/index` - API reference for the public surface area
-- :doc:`interactive` - run small snippets in your browser (Pyodide)
 
 .. toctree::
    :hidden:
@@ -74,6 +73,3 @@ What to read next
 .. toctree::
    :hidden:
    :maxdepth: 1
-   :caption: Playground
-
-   interactive

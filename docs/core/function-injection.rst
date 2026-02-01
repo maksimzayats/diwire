@@ -17,14 +17,14 @@ Basic injection with ``Injected()``
 Mark injectable parameters using ``Annotated[T, Injected()]``.
 All other parameters remain caller-provided.
 
-See the runnable scripts in :doc:`howto/examples/function-injection` (Injected marker section).
+See the runnable scripts in :doc:`/howto/examples/function-injection` (Injected marker section).
 
 Per-call scopes for request handlers
 ------------------------------------
 
 If your function needs scoped services (for example a request-scoped DB session), resolve the function with a scope:
 
-See the runnable scripts in :doc:`howto/examples/function-injection` (Per-call scope section).
+See the runnable scripts in :doc:`/howto/examples/function-injection` (Per-call scope section).
 
 Decorator style
 ---------------

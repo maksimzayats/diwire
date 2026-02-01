@@ -22,7 +22,7 @@ The three direct registration forms:
 
 Full runnable example:
 
-See :doc:`howto/examples/basics` (Registration methods section).
+See :doc:`/howto/examples/basics` (Registration methods section).
 
 Decorator registration
 ----------------------
@@ -36,7 +36,7 @@ Decorator registration
 
 Selected patterns (see the full example for more):
 
-See :doc:`howto/examples/basics` (Decorator registration section).
+See :doc:`/howto/examples/basics` (Decorator registration section).
 
 Interface/protocol binding
 --------------------------

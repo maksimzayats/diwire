@@ -14,6 +14,7 @@ test:
 	uv run pytest tests/ --cov=src/diwire --cov-report=term-missing
 
 docs:
+	rm -rf docs/_build
 	uv run sphinx-build -b html docs docs/_build/html
 
 # === Benchmark Commands ===
