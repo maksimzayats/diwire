@@ -497,6 +497,7 @@ Set `auto_compile=False` on the container to control compilation timing manually
 diwire works out of the box with classes that use generated `__init__` methods:
 
 - **dataclasses** — standard library
+- **namedtuple** — `typing.NamedTuple`
 - **[pydantic](https://docs.pydantic.dev/)** — `BaseModel` and `@pydantic.dataclasses.dataclass`
 - **[attrs](https://www.attrs.org/)** — `@attrs.define`
 - **[msgspec](https://jcristharif.com/msgspec/)** — `msgspec.Struct`

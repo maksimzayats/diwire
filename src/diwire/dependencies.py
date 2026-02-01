@@ -82,6 +82,10 @@ class DependenciesExtractor:
         """Get which parameters have default values."""
         value = service_key.value
 
+        if self._is_namedtuple_class(value):
+            field_defaults = getattr(value, "_field_defaults", {})
+            return {name: name in field_defaults for name in value._fields}
+
         # Handle dataclasses
         if dataclasses.is_dataclass(value) and isinstance(value, type):
             defaults: dict[str, bool] = {}
@@ -180,6 +184,10 @@ class DependenciesExtractor:
         value = service_key.value
         init_func = self._get_init_func(service_key)
 
+        if self._is_namedtuple_class(value):
+            class_hints = get_type_hints(value, include_extras=True)
+            return {name: class_hints[name] for name in value._fields if name in class_hints}
+
         # For classes with __signature__ (e.g. pydantic), init hints may fail due to
         # generated __init__ with unresolvable forward refs — that's expected, we fall through.
         # For other callables, let the error propagate normally.
@@ -227,3 +235,14 @@ class DependenciesExtractor:
             return service_key.value
 
         return getattr(service_key.value, "__init__", service_key.value)
+
+    @staticmethod
+    def _is_namedtuple_class(value: Any) -> bool:
+        if not isinstance(value, type):
+            return False
+        if not issubclass(value, tuple):
+            return False
+        fields = getattr(value, "_fields", None)
+        if not isinstance(fields, tuple):
+            return False
+        return all(isinstance(field, str) for field in fields)

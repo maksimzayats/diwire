@@ -22,7 +22,7 @@ Recommended order
 9. :doc:`container-context` - global context container for framework integration
 10. :doc:`compilation` - precomputing the graph for speed
 11. :doc:`errors` - common error modes and how to debug them
-12. :doc:`integrations` - dataclasses/pydantic/attrs/msgspec notes
+12. :doc:`integrations` - dataclasses/namedtuple/pydantic/attrs/msgspec notes
 
 .. toctree::
    :maxdepth: 2

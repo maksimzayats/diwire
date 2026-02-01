@@ -1,5 +1,5 @@
 .. meta::
-   :description: Integrations and compatibility notes for diwire: dataclasses, pydantic, attrs, msgspec, pydantic-settings BaseSettings auto-registration, and an optional pytest plugin.
+   :description: Integrations and compatibility notes for diwire: dataclasses, namedtuple, pydantic, attrs, msgspec, pydantic-settings BaseSettings auto-registration, and an optional pytest plugin.
 
 Integrations
 ============
@@ -12,6 +12,7 @@ Tested integrations
 These work out of the box (no adapters required):
 
 - ``dataclasses`` (stdlib)
+- ``namedtuple`` (``typing.NamedTuple``)
 - Pydantic ``BaseModel`` and ``@pydantic.dataclasses.dataclass``
 - ``attrs`` (``@attrs.define``)
 - ``msgspec`` (``msgspec.Struct``)
