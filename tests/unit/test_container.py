@@ -1710,12 +1710,28 @@ class TestCoverageEdgeCases:
         class ServiceA:
             pass
 
-        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
+        container.register(ServiceA, scope="outer", lifetime=Lifetime.SCOPED)
         container.compile()
         container._scoped_type_providers.clear()
+        container._scoped_type_providers_by_scope.clear()
 
-        with container.enter_scope("request") as scope:
-            assert isinstance(scope.resolve(ServiceA), ServiceA)
+        with container.enter_scope("outer"):
+            with container.enter_scope("inner") as scope:
+                assert isinstance(scope.resolve(ServiceA), ServiceA)
+
+    def test_scoped_type_providers_skip_missing_scope_name(self) -> None:
+        """Scoped type providers skip missing scope names and resolve from parents."""
+        container = Container(auto_compile=False, autoregister=False)
+
+        class ServiceA:
+            pass
+
+        container.register(ServiceA, scope="outer", lifetime=Lifetime.SCOPED)
+        container.compile()
+
+        with container.enter_scope("outer"):
+            with container.enter_scope("inner") as scope:
+                assert isinstance(scope.resolve(ServiceA), ServiceA)
 
     def test_scoped_container_compiled_fast_path_scoped_provider(
         self,

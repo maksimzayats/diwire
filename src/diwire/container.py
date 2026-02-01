@@ -109,12 +109,12 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
         self._lock = lock
 
     def get(self, key: ServiceKey, default: Any | None = None) -> Any | None:
-        if key.component is None and isinstance(key.value, type):
+        if key.is_type_key:
             return self._type_cache.get(key.value, default)
         return self._cache.get(key, default)
 
     def __getitem__(self, key: ServiceKey) -> Any:
-        if key.component is None and isinstance(key.value, type):
+        if key.is_type_key:
             try:
                 return self._type_cache[key.value]
             except KeyError:
@@ -124,13 +124,13 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
         return self._cache[key]
 
     def __setitem__(self, key: ServiceKey, value: Any) -> None:
-        if key.component is None and isinstance(key.value, type):
+        if key.is_type_key:
             self._type_cache[key.value] = value
         self._cache[key] = value
 
     def __delitem__(self, key: ServiceKey) -> None:
         del self._cache[key]
-        if key.component is None and isinstance(key.value, type):
+        if key.is_type_key:
             self._type_cache.pop(key.value, None)
 
     def __iter__(self) -> Iterator[ServiceKey]:
@@ -141,7 +141,7 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
 
     def get_or_create(self, key: ServiceKey, factory: Callable[[], Any]) -> Any:
         cache = self._cache
-        if key.component is None and isinstance(key.value, type):
+        if key.is_type_key:
             type_cache = self._type_cache
             cached = type_cache.get(key.value)
             if cached is not None:
@@ -153,11 +153,11 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
         if self._lock is None:
             instance = factory()
             cache[key] = instance
-            if key.component is None and isinstance(key.value, type):
+            if key.is_type_key:
                 self._type_cache[key.value] = instance
             return instance
         with self._lock:
-            if key.component is None and isinstance(key.value, type):
+            if key.is_type_key:
                 cached = self._type_cache.get(key.value)
                 if cached is not None:
                     return cached
@@ -167,7 +167,7 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
                     return cached
             instance = factory()
             cache[key] = instance
-            if key.component is None and isinstance(key.value, type):
+            if key.is_type_key:
                 self._type_cache[key.value] = instance
             return instance
 
@@ -179,7 +179,7 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
         singletons: dict[ServiceKey, Any],
     ) -> Any:
         cache = self._cache
-        if key.component is None and isinstance(key.value, type):
+        if key.is_type_key:
             type_cache = self._type_cache
             cached = type_cache.get(key.value)
             if cached is not None:
@@ -191,11 +191,11 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
         if self._lock is None:
             instance = constructor(*[provider(singletons, self) for provider in providers])
             cache[key] = instance
-            if key.component is None and isinstance(key.value, type):
+            if key.is_type_key:
                 self._type_cache[key.value] = instance
             return instance
         with self._lock:
-            if key.component is None and isinstance(key.value, type):
+            if key.is_type_key:
                 cached = self._type_cache.get(key.value)
                 if cached is not None:
                     return cached
@@ -205,7 +205,7 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
                     return cached
             instance = constructor(*[provider(singletons, self) for provider in providers])
             cache[key] = instance
-            if key.component is None and isinstance(key.value, type):
+            if key.is_type_key:
                 self._type_cache[key.value] = instance
             return instance
 
@@ -217,7 +217,7 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
         singletons: dict[ServiceKey, Any],
     ) -> Any:
         cache = self._cache
-        if key.component is None and isinstance(key.value, type):
+        if key.is_type_key:
             type_cache = self._type_cache
             cached = type_cache.get(key.value)
             if cached is not None:
@@ -230,11 +230,11 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
             args = {name: provider(singletons, self) for name, provider in items}
             instance = constructor(**args)
             cache[key] = instance
-            if key.component is None and isinstance(key.value, type):
+            if key.is_type_key:
                 self._type_cache[key.value] = instance
             return instance
         with self._lock:
-            if key.component is None and isinstance(key.value, type):
+            if key.is_type_key:
                 cached = self._type_cache.get(key.value)
                 if cached is not None:
                     return cached
@@ -245,7 +245,7 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
             args = {name: provider(singletons, self) for name, provider in items}
             instance = constructor(**args)
             cache[key] = instance
-            if key.component is None and isinstance(key.value, type):
+            if key.is_type_key:
                 self._type_cache[key.value] = instance
             return instance
 
@@ -286,9 +286,11 @@ class Container:
         "_scoped_cache_views",
         "_scoped_cache_views_nolock",
         "_scoped_compiled_providers",
+        "_scoped_compiled_providers_by_scope",
         "_scoped_open_generic_registry",
         "_scoped_registry",
         "_scoped_type_providers",
+        "_scoped_type_providers_by_scope",
         "_singletons",
         "_thread_id",
         "_type_providers",
@@ -324,6 +326,8 @@ class Container:
         self._scope_cache_locks: dict[tuple[tuple[str | None, int], ...], threading.RLock] = {}
         self._registry: dict[ServiceKey, Registration] = {}
         self._scoped_registry: dict[tuple[ServiceKey, str], Registration] = {}
+        self._scoped_compiled_providers_by_scope: dict[str, dict[ServiceKey, CompiledProvider]] = {}
+        self._scoped_type_providers_by_scope: dict[str, dict[type, CompiledProvider]] = {}
         self._open_generic_registry: dict[
             tuple[type, Component | None],
             _OpenGenericRegistration,
@@ -944,7 +948,7 @@ class Container:
         if instance is not None and scope is None:
             self._singletons[service_key] = instance
             # Also clear type cache for re-registration
-            if isinstance(service_key.value, type) and service_key.component is None:
+            if service_key.is_type_key:
                 self._type_singletons[service_key.value] = instance
 
         if scope is not None:
@@ -1112,7 +1116,9 @@ class Container:
         """
         self._compiled_providers.clear()
         self._scoped_compiled_providers.clear()
+        self._scoped_compiled_providers_by_scope.clear()
         self._scoped_type_providers.clear()
+        self._scoped_type_providers_by_scope.clear()
         self._type_providers.clear()
         self._type_singletons.clear()
         self._async_deps_cache.clear()
@@ -1139,15 +1145,21 @@ class Container:
             )
             if provider is not None:
                 self._scoped_compiled_providers[(service_key, scope_name)] = provider
-                if isinstance(service_key.value, type) and service_key.component is None:
+                self._scoped_compiled_providers_by_scope.setdefault(scope_name, {})[service_key] = (
+                    provider
+                )
+                if service_key.is_type_key:
                     self._scoped_type_providers[(service_key.value, scope_name)] = provider
+                    self._scoped_type_providers_by_scope.setdefault(scope_name, {})[
+                        service_key.value
+                    ] = provider
 
         # Build async dependency cache for faster async resolution
         self._build_async_deps_cache()
 
         # Pre-warm fast type caches for direct type lookups
         for service_key, provider in list(self._compiled_providers.items()):
-            if isinstance(service_key.value, type) and service_key.component is None:
+            if service_key.is_type_key:
                 self._type_providers[service_key.value] = provider
                 # Also cache any already-resolved singletons
                 if service_key in self._singletons:
@@ -1785,7 +1797,7 @@ class Container:
             scoped_cache: MutableMapping[ServiceKey, Any] | None = None
             cache_key: tuple[tuple[tuple[str | None, int], ...], ServiceKey] | None = None
             type_cache: dict[type, Any] | None = None
-            is_type_key = isinstance(service_key.value, type) and service_key.component is None
+            is_type_key = service_key.is_type_key
 
             # Check scoped instance cache using flat dict (single lookup)
             if cache_scope is not None:
@@ -1950,10 +1962,15 @@ class Container:
         if not self._is_compiled or not isinstance(key, type):
             return False, None
 
-        scoped_type_providers = self._scoped_type_providers
-        if scoped_type_providers:
-            for scope_name in scope_id.named_scopes_desc:
-                provider = scoped_type_providers.get((key, scope_name))
+        named_scopes_desc = scope_id.named_scopes_desc
+
+        scoped_type_providers_by_scope = self._scoped_type_providers_by_scope
+        if scoped_type_providers_by_scope:
+            for scope_name in named_scopes_desc:
+                type_providers = scoped_type_providers_by_scope.get(scope_name)
+                if type_providers is None:
+                    continue
+                provider = type_providers.get(key)
                 if provider is not None:
                     cache_scope = scope_id.get_cache_key_for_scope(scope_name)
                     if cache_scope is None:  # pragma: no cover - scope_id invariant
@@ -1966,10 +1983,13 @@ class Container:
                     return True, provider(self._singletons, scoped_cache)
 
         service_key = ServiceKey.from_value(key)
-        scoped_compiled = self._scoped_compiled_providers
-        if scoped_compiled:
-            for scope_name in scope_id.named_scopes_desc:
-                provider = scoped_compiled.get((service_key, scope_name))
+        scoped_compiled_by_scope = self._scoped_compiled_providers_by_scope
+        if scoped_compiled_by_scope:
+            for scope_name in named_scopes_desc:
+                scoped_providers = scoped_compiled_by_scope.get(scope_name)
+                if scoped_providers is None:
+                    continue
+                provider = scoped_providers.get(service_key)
                 if provider is not None:
                     cache_scope = scope_id.get_cache_key_for_scope(scope_name)
                     if cache_scope is None:  # pragma: no cover - scope_id invariant
@@ -2158,7 +2178,7 @@ class Container:
             cache_key = (cache_scope, service_key) if cache_scope is not None else None
             scoped_cache: MutableMapping[ServiceKey, Any] | None = None
             type_cache: dict[type, Any] | None = None
-            is_type_key = isinstance(service_key.value, type) and service_key.component is None
+            is_type_key = service_key.is_type_key
 
             # Check scoped instance cache using flat dict (single lookup)
             if cache_scope is not None:

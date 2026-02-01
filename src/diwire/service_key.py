@@ -16,6 +16,7 @@ class ServiceKey:
     value: Any
     component: Component | None = None
     _hash: int = field(init=False, repr=False, compare=False)
+    _is_type_key: bool = field(init=False, repr=False, compare=False)
 
     # Cache for ServiceKey instances to avoid repeated object creation
     _cache: ClassVar[dict[Any, "ServiceKey"]] = {}
@@ -56,6 +57,16 @@ class ServiceKey:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "_hash", hash((self.value, self.component)))
+        object.__setattr__(
+            self,
+            "_is_type_key",
+            self.component is None and isinstance(self.value, type),
+        )
 
     def __hash__(self) -> int:
         return self._hash
+
+    @property
+    def is_type_key(self) -> bool:
+        """Return True for type keys without components."""
+        return self._is_type_key
