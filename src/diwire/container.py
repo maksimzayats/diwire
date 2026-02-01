@@ -1120,31 +1120,19 @@ class Container:
         self,
         scope_key: tuple[tuple[str | None, int], ...],
     ) -> dict[ServiceKey, Any]:
-        cache = self._scope_caches.get(scope_key)
-        if cache is None:
-            cache = {}
-            self._scope_caches[scope_key] = cache
-        return cache
+        return self._scope_caches.setdefault(scope_key, {})
 
     def _get_scope_type_cache(
         self,
         scope_key: tuple[tuple[str | None, int], ...],
     ) -> dict[type, Any]:
-        cache = self._scope_type_caches.get(scope_key)
-        if cache is None:
-            cache = {}
-            self._scope_type_caches[scope_key] = cache
-        return cache
+        return self._scope_type_caches.setdefault(scope_key, {})
 
     def _get_scope_cache_lock(
         self,
         scope_key: tuple[tuple[str | None, int], ...],
     ) -> threading.RLock:
-        lock = self._scope_cache_locks.get(scope_key)
-        if lock is None:
-            lock = threading.RLock()
-            self._scope_cache_locks[scope_key] = lock
-        return lock
+        return self._scope_cache_locks.setdefault(scope_key, threading.RLock())
 
     def compile(self) -> None:
         """Compile all registered services into optimized providers.
