@@ -127,7 +127,11 @@ def _extract_from_file(path: Path) -> list[RstCodeBlock]:
         lang = match.group("lang")
         i += 1
 
-        classes, i = _parse_directive_options(lines=lines, start=i, directive_indent=directive_indent)
+        classes, i = _parse_directive_options(
+            lines=lines,
+            start=i,
+            directive_indent=directive_indent,
+        )
 
         # Capture directive content (indented block).
         content_start = i

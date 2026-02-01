@@ -42,10 +42,15 @@ def test_docs_fastapi_examples_are_correct(capsys: Any) -> None:
         [b for b in blocks if b.path == fastapi_doc and "diwire-example" in b.classes],
         key=lambda b: b.lineno,
     )
-    assert len(fastapi_blocks) == 3, "Expected 3 FastAPI examples in docs/howto/examples/fastapi.rst"
+    assert len(fastapi_blocks) == 3, (
+        "Expected 3 FastAPI examples in docs/howto/examples/fastapi.rst"
+    )
 
     # Example 1: Basic integration.
-    ns1 = _exec_block(code=fastapi_blocks[0].code, filename=f"{fastapi_blocks[0].path}:{fastapi_blocks[0].lineno}")
+    ns1 = _exec_block(
+        code=fastapi_blocks[0].code,
+        filename=f"{fastapi_blocks[0].path}:{fastapi_blocks[0].lineno}",
+    )
     app1 = ns1["app"]
     client1 = TestClient(app1)
     response = client1.get("/greet")
@@ -58,7 +63,10 @@ def test_docs_fastapi_examples_are_correct(capsys: Any) -> None:
     assert "Closing service" in captured.out
 
     # Example 2: Decorator-based layering.
-    ns2 = _exec_block(code=fastapi_blocks[1].code, filename=f"{fastapi_blocks[1].path}:{fastapi_blocks[1].lineno}")
+    ns2 = _exec_block(
+        code=fastapi_blocks[1].code,
+        filename=f"{fastapi_blocks[1].path}:{fastapi_blocks[1].lineno}",
+    )
     app2 = ns2["app"]
     client2 = TestClient(app2)
     response = client2.get("/greet?name=TestUser")
@@ -71,7 +79,10 @@ def test_docs_fastapi_examples_are_correct(capsys: Any) -> None:
     assert "Closing service" in captured.out
 
     # Example 3: container_context + middleware-managed request context.
-    ns3 = _exec_block(code=fastapi_blocks[2].code, filename=f"{fastapi_blocks[2].path}:{fastapi_blocks[2].lineno}")
+    ns3 = _exec_block(
+        code=fastapi_blocks[2].code,
+        filename=f"{fastapi_blocks[2].path}:{fastapi_blocks[2].lineno}",
+    )
     app3 = ns3["app"]
     setup_container = ns3["setup_container"]
 

@@ -39,7 +39,9 @@ def test_docs_runnable_examples_execute() -> None:
     blocks = iter_rst_code_blocks(docs_dir=docs_dir)
 
     example_blocks = [b for b in blocks if "diwire-example" in b.classes]
-    assert example_blocks, "No docs examples found (expected code blocks with :class: diwire-example)"
+    assert example_blocks, (
+        "No docs examples found (expected code blocks with :class: diwire-example)"
+    )
 
     failures: list[str] = []
     for block in example_blocks:
