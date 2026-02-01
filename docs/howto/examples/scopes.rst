@@ -298,3 +298,10 @@ Demonstrates generator factory support:
 
    if __name__ == "__main__":
        main()
+
+Read more
+---------
+
+- :doc:`../../core/scopes`
+- :doc:`../../core/lifetimes`
+- :doc:`../../core/errors`

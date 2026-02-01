@@ -245,3 +245,9 @@ Key concepts:
        """Endpoint using container_context for dependency resolution."""
        print(f"greet: processing request for {name}")
        return {"message": service.greet(name), "request_id": service.get_request_id()}
+
+Read more
+---------
+
+- :doc:`../../core/container-context`
+- :doc:`../web/fastapi`

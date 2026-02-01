@@ -324,3 +324,8 @@ Use ``concrete_class=...`` to bind a Protocol/ABC to an implementation.
    if __name__ == "__main__":
        main()
 
+Read more
+---------
+
+- :doc:`../../core/registration`
+- :doc:`../patterns/index`

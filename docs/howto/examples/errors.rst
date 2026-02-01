@@ -232,3 +232,10 @@ This prevents the container from silently auto-registering a second, unscoped in
 
    if __name__ == "__main__":
        main()
+
+Read more
+---------
+
+- :doc:`../../core/errors`
+- :doc:`../../core/scopes`
+- :doc:`../../reference/exceptions`

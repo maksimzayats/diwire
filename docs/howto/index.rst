@@ -6,13 +6,8 @@ How-to guides
 
 This section is a cookbook: pick the scenario closest to your app and copy the pattern.
 
-If you're new to the library, start with :doc:`../core/index` first.
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Examples (Runnable)
-
-   examples/index
+If you're new to diwire, start with the :doc:`examples/index` tutorial first and come back here when you need a
+specific integration or pattern. When you want the deeper mental model, see :doc:`../core/index`.
 
 .. toctree::
    :maxdepth: 2
@@ -37,4 +32,3 @@ If you're new to the library, start with :doc:`../core/index` first.
    :caption: Advanced
 
    advanced/index
-

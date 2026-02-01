@@ -339,3 +339,8 @@ Web frameworks
 
 For end-to-end web-framework integrations, see :doc:`fastapi`.
 
+Read more
+---------
+
+- :doc:`../../core/async`
+- :doc:`../../core/scopes`

@@ -138,3 +138,9 @@ Use ``Annotated[Database, Component("...")]`` to inject a specific implementatio
 
    if __name__ == "__main__":
        main()
+
+Read more
+---------
+
+- :doc:`../../core/components`
+- :doc:`../../core/registration`

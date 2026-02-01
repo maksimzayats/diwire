@@ -239,3 +239,8 @@ where each call needs its own scope.
    if __name__ == "__main__":
        main()
 
+Read more
+---------
+
+- :doc:`../../core/function-injection`
+- :doc:`../../core/scopes`

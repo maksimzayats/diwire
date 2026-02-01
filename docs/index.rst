@@ -56,7 +56,8 @@ Define your classes. Resolve the top-level one. diwire figures out the rest.
 What to read next
 -----------------
 
-- :doc:`core/index` - the non-optional concepts you will use everywhere
+- :doc:`howto/examples/index` - a step-by-step tutorial you can run and copy-paste
+- :doc:`core/index` - the concepts behind the tutorial (the "why it works")
 - :doc:`howto/index` - a cookbook of real-world scenarios (frameworks, patterns, testing)
 - :doc:`reference/index` - API reference for the public surface area
 
@@ -66,10 +67,7 @@ What to read next
    :caption: Learn
 
    why-diwire
+   howto/examples/index
    core/index
    howto/index
    reference/index
-
-.. toctree::
-   :hidden:
-   :maxdepth: 1

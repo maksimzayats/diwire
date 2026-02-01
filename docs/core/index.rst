@@ -4,7 +4,9 @@
 Core concepts
 =============
 
-This section is the "learning path" for diwire. If you read it top-to-bottom, you'll have the full mental model.
+This section is the mental model behind diwire.
+If you prefer learning by doing, start with the :doc:`../howto/examples/index` tutorial and use these pages as the
+"why it works" reference.
 
 Recommended order
 -----------------
@@ -37,4 +39,3 @@ Recommended order
    compilation
    errors
    integrations
-

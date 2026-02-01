@@ -513,3 +513,12 @@ Demonstrates:
 
    if __name__ == "__main__":
        main()
+
+Read more
+---------
+
+- :doc:`../../core/container`
+- :doc:`../../core/registration`
+- :doc:`../../core/lifetimes`
+- :doc:`../../core/open-generics`
+- :doc:`../../core/compilation`

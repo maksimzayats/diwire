@@ -50,8 +50,7 @@ If you're new to DI
 
 The recommended path is:
 
-1. :doc:`core/container` (how resolution works)
-2. :doc:`core/registration` (when and how to register explicitly)
-3. :doc:`core/lifetimes` and :doc:`core/scopes` (how object sharing and cleanup works)
-4. :doc:`howto/index` (framework and real-world patterns)
-
+1. :doc:`howto/examples/index` (run the tutorial examples in order)
+2. :doc:`core/index` (the mental model behind what you just ran)
+3. :doc:`howto/index` (frameworks, testing, and real-world patterns)
+4. :doc:`reference/index` (API reference)
