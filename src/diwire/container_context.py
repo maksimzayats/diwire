@@ -466,6 +466,28 @@ class _ContainerContextProxy:
     @overload
     def register(
         self,
+        key: type,
+        /,
+        *,
+        lifetime: Lifetime = ...,
+        scope: str | None = ...,
+        is_async: bool | None = ...,
+    ) -> Callable[[T], T]: ...
+
+    @overload
+    def register(
+        self,
+        key: str,
+        /,
+        *,
+        lifetime: Lifetime = ...,
+        scope: str | None = ...,
+        is_async: bool | None = ...,
+    ) -> Callable[[T], T]: ...
+
+    @overload
+    def register(
+        self,
         key: Any,
         /,
         factory: Factory | None = ...,

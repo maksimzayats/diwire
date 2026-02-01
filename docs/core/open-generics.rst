@@ -26,9 +26,3 @@ How it works
   1. matches the closed generic to the registered open generic
   2. validates the concrete type arguments against TypeVar bounds/constraints
   3. calls your factory and passes the concrete type argument(s) (for example ``type[int]``) as parameters
-
-Notes for type checkers
------------------------
-
-Some type checkers don't love runtime TypeVar usage. The example uses a ``TYPE_CHECKING`` guard so static tooling sees
-``AnyBox[Any]`` while runtime code uses ``AnyBox[T]``.

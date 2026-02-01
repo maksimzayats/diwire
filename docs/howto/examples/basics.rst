@@ -394,7 +394,7 @@ it for any concrete type argument (``Box[int]``, ``Box[str]``, ...).
    :class: diwire-example py-run
 
    from dataclasses import dataclass
-   from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
+   from typing import Generic, TypeVar
 
    from diwire import Container
 
@@ -408,14 +408,7 @@ it for any concrete type argument (``Box[int]``, ``Box[str]``, ...).
 
    container = Container()
 
-   # Use TYPE_CHECKING guard to satisfy type checkers while using TypeVars at runtime.
-   if TYPE_CHECKING:
-       box_key: Any = Box[Any]
-   else:
-       box_key = Box[T]
-
-
-   @cast("Any", container.register(box_key))
+   @container.register(Box[T])
    def create_box(type_arg: type[T]) -> Box[T]:
        return Box(value=f"Box[{type_arg.__name__}]")
 
@@ -432,7 +425,7 @@ diwire validates TypeVar bounds/constraints at runtime.
    :class: diwire-example py-run
 
    from dataclasses import dataclass
-   from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
+   from typing import Generic, TypeVar
 
    from diwire import Container
    from diwire.exceptions import DIWireInvalidGenericTypeArgumentError
@@ -456,13 +449,7 @@ diwire validates TypeVar bounds/constraints at runtime.
 
    container = Container()
 
-   if TYPE_CHECKING:
-       model_box_key: Any = ModelBox[Any]
-   else:
-       model_box_key = ModelBox[M]
-
-
-   @cast("Any", container.register(model_box_key))
+   @container.register(ModelBox[M])
    def create_model_box(model_cls: type[M]) -> ModelBox[M]:
        return ModelBox(model=model_cls())
 
