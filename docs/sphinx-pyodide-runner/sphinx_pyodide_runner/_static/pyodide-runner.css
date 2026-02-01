@@ -1,0 +1,192 @@
+/* --- Pyodide Runner: Run & Edit buttons --- */
+
+/*
+ * Base button style — identical to .highlight button.copybtn as styled by
+ * Furo (furo-extensions.css) so that Run / Edit / Copy look the same.
+ */
+.py-runner-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  width: 1.25em;
+  height: 1.25em;
+  padding: 0;
+  border: none;
+  outline: none;
+  border-radius: 0.4em;
+  background-color: var(--color-code-background);
+  color: var(--color-code-foreground);
+  opacity: 1;
+  transition: color .3s, opacity .3s;
+}
+
+.py-runner-btn svg {
+  stroke: currentColor;
+  width: 1.5em;
+  height: 1.5em;
+  padding: 0;
+}
+
+.py-runner-btn:hover {
+  background-color: var(--color-code-background);
+  color: var(--color-brand-content);
+}
+
+.py-runner-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Show on success even without hover */
+.py-runner-btn.success {
+  opacity: 1;
+  color: #22863a;
+  transition: color 0s;
+}
+
+/* Overlay positioning (optional): edit | run | copy (copy is at right: .5rem via Furo) */
+.py-run .highlight .py-runner-btn {
+  position: absolute;
+  top: .625rem;
+}
+
+.py-run .highlight .py-runner-run {
+  right: 2.25rem;
+}
+
+.py-run .highlight .py-runner-edit {
+  right: 4rem;
+}
+
+/* Active edit mode indicator */
+.py-runner-edit.active {
+  opacity: 1;
+  color: #22863a;
+}
+
+/* Tooltip — same as copybutton o-tooltip--left */
+.py-runner-btn.o-tooltip--left:after {
+  opacity: 0;
+  visibility: hidden;
+  position: absolute;
+  content: attr(data-tooltip);
+  padding: .2em;
+  font-size: .8em;
+  left: -.2em;
+  background: grey;
+  color: white;
+  white-space: nowrap;
+  z-index: 2;
+  border-radius: 2px;
+  transform: translateX(-102%) translateY(0);
+  transition: opacity 0.2s cubic-bezier(0.64, 0.09, 0.08, 1), transform 0.2s cubic-bezier(0.64, 0.09, 0.08, 1);
+}
+
+.py-runner-btn.o-tooltip--left:hover:after {
+  display: block;
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-100%) translateY(0);
+  transition: opacity 0.2s cubic-bezier(0.64, 0.09, 0.08, 1), transform 0.2s cubic-bezier(0.64, 0.09, 0.08, 1);
+  transition-delay: .5s;
+}
+
+/* Editable pre styling */
+.py-run pre.py-runner-editable {
+  cursor: text;
+}
+
+.py-run pre.py-runner-editable:focus {
+  outline: 1px solid var(--color-foreground-border, #ccc);
+  outline-offset: 2px;
+}
+
+/* Output block */
+.py-runner-output {
+  margin-top: 0.5rem;
+  display: block;
+  background-color: var(--color-code-background);
+  color: var(--color-code-foreground);
+  border: 1px solid var(--color-background-border);
+  border-radius: 0.4em;
+}
+
+.py-runner-output pre {
+  margin: 0;
+}
+
+.py-runner-output-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem 0;
+  font-family: var(--font-stack);
+  font-size: var(--font-size--small--2);
+  color: var(--color-foreground-muted);
+}
+
+.py-runner-output-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.py-runner-output-status {
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-background-border);
+  color: var(--color-foreground-muted);
+  font-size: var(--font-size--small--3);
+}
+
+.py-runner-output-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.py-runner-output-pre {
+  overflow-x: auto;
+  padding: 0.5rem 0.75rem 0.75rem;
+  font-family: var(--font-stack--monospace);
+  font-size: var(--code-font-size);
+}
+
+.py-runner-output[data-py-runner-state="idle"] .py-runner-output-pre {
+  color: var(--color-foreground-muted);
+  font-style: italic;
+}
+
+.py-runner-output[data-py-runner-state="running"] .py-runner-output-status {
+  color: var(--color-foreground-primary);
+}
+
+.py-runner-output[data-py-runner-state="error"] .py-runner-output-status {
+  color: #b31d28;
+  border-color: rgba(179, 29, 40, 0.35);
+}
+
+/* Spinner animation */
+@keyframes pyodide-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pyodide-spinner {
+  animation: pyodide-spin 0.7s linear infinite;
+}
+
+/* Hide buttons in print */
+@media print {
+  .py-runner-btn {
+    display: none;
+  }
+}
+
+/* On interactive blocks, also show the copy button without needing hover (helps on touch devices). */
+.py-run .highlight button.copybtn {
+  opacity: 1;
+}

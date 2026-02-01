@@ -1,3 +1,5 @@
+.PHONY: format lint test docs benchmark
+
 format:
 	uv run ruff format .
 	uv run ruff check --fix-only .
@@ -10,6 +12,12 @@ lint:
 
 test:
 	uv run pytest tests/ --benchmark-skip --cov=src/diwire --cov-report=term-missing
+
+docs:
+	rm -rf docs/_build
+	uv run sphinx-build -b html docs docs/_build/html
+
+# === Benchmark Commands ===
 
 benchmark:
 	uv run pytest tests/benchmarks/test_singleton_resolution.py --benchmark-only --benchmark-columns=ops -q

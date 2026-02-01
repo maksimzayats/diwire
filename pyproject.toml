@@ -30,9 +30,10 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/MaksimZayats/diwire"
-Repository = "https://github.com/MaksimZayats/diwire"
-Issues = "https://github.com/MaksimZayats/diwire/issues"
+Homepage = "https://github.com/maksimzayats/diwire"
+Documentation = "https://docs.diwire.dev"
+Repository = "https://github.com/maksimzayats/diwire"
+Issues = "https://github.com/maksimzayats/diwire/issues"
 
 
 [dependency-groups]
@@ -62,6 +63,13 @@ dev = [
     "pyinstrument>=5.1.2",
 ]
 
+docs = [
+    "furo>=2025.12.19",
+    "sphinx>=8.1.3",
+    "sphinx-copybutton>=0.5.2",
+    "sphinx-pyodide-runner",
+]
+
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
@@ -75,6 +83,9 @@ style = "pep440"
 
 [tool.uv]
 cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
+
+[tool.uv.sources]
+sphinx-pyodide-runner = { path = "docs/sphinx-pyodide-runner", editable = true }
 
 [tool.mypy]
 python_version = "3.10"

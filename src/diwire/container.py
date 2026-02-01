@@ -1652,13 +1652,15 @@ class Container:
                    returns a ScopedInjected that creates a new scope per call.
 
         Examples:
-            # Direct usage:
-            injected = container.resolve(my_func, scope="request")
+            .. code-block:: python
 
-            # Decorator usage:
-            @container.resolve(scope="request")
-            async def handler(service: Annotated[Service, Injected()]) -> dict:
-                ...
+                # Direct usage:
+                injected = container.resolve(my_func, scope="request")
+
+
+                # Decorator usage:
+                @container.resolve(scope="request")
+                async def handler(service: Annotated[Service, Injected()]) -> dict: ...
 
         """
         self._check_not_closed()

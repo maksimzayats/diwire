@@ -7,7 +7,7 @@ import inspect
 import threading
 import uuid
 from dataclasses import dataclass, field
-from typing import Annotated, Any, cast
+from typing import Annotated, Any
 
 import pytest
 
@@ -76,6 +76,9 @@ class TestDIWireContainerNotSetError:
         proxy = _ContainerContextProxy()
         # Ensure no container is set
         token = _current_container.set(None)
+        saved = getattr(_thread_local_fallback, "container", _sentinel := object())
+        if hasattr(_thread_local_fallback, "container"):
+            del _thread_local_fallback.container
         try:
             with pytest.raises(DIWireContainerNotSetError) as exc_info:
                 proxy.get_current()
@@ -84,16 +87,23 @@ class TestDIWireContainerNotSetError:
             assert "set_current" in str(exc_info.value)
         finally:
             _current_container.reset(token)
+            if saved is not _sentinel:
+                _thread_local_fallback.container = saved
 
     def test_resolve_type_without_container_raises_error(self) -> None:
         """resolve(SomeType) raises DIWireContainerNotSetError when no container set."""
         proxy = _ContainerContextProxy()
         token = _current_container.set(None)
+        saved = getattr(_thread_local_fallback, "container", _sentinel := object())
+        if hasattr(_thread_local_fallback, "container"):
+            del _thread_local_fallback.container
         try:
             with pytest.raises(DIWireContainerNotSetError):
                 proxy.resolve(ServiceA)
         finally:
             _current_container.reset(token)
+            if saved is not _sentinel:
+                _thread_local_fallback.container = saved
 
 
 # ============================================================================
@@ -2718,7 +2728,7 @@ class TestDeferredRegistrationWithTypeKey:
                 pass
 
             # Register with interface key and non-default params (deferred)
-            @cast("Any", container_context.register(IDatabase, lifetime=Lifetime.SINGLETON))
+            @container_context.register(IDatabase, lifetime=Lifetime.SINGLETON)
             class PostgresDBImpl(IDatabase):  # type: ignore[misc]
                 pass
 
@@ -2775,7 +2785,7 @@ class TestDeferredRegistrationWithTypeKey:
             token = container_context.set_current(container)
             try:
                 # Apply decorator - should delegate to container
-                @cast("Any", decorator)
+                @decorator
                 class MyImpl(MyInterface):  # type: ignore[misc]
                     pass
 

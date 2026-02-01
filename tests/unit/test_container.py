@@ -2336,6 +2336,32 @@ class TestScopedCacheView:
             assert container._scope_type_caches[scope_key][ServiceA] is instance
 
     @pytest.mark.asyncio
+    async def test_aresolve_scoped_component_factory_skips_type_cache(self) -> None:
+        """Async scoped resolution with Component key via factory skips type_cache."""
+        container = Container(auto_compile=False, autoregister=False)
+
+        class ServiceA:
+            pass
+
+        def create_service_a() -> ServiceA:
+            return ServiceA()
+
+        annotated = Annotated[ServiceA, Component("named")]
+        container.register(
+            annotated,
+            factory=create_service_a,
+            scope="request",
+            lifetime=Lifetime.SCOPED,
+        )
+
+        async with container.enter_scope("request") as scope:
+            result = await container.aresolve(annotated)
+            assert isinstance(result, ServiceA)
+            scope_key = scope._scope_id.segments
+            type_cache = container._scope_type_caches.get(scope_key)
+            assert type_cache is None or ServiceA not in type_cache
+
+    @pytest.mark.asyncio
     async def test_aresolve_scoped_lock_reuses_component_cached_instance(self) -> None:
         """Async scoped lock path reuses cached component instances."""
         container = Container(auto_compile=False, autoregister=False)

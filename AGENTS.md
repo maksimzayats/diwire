@@ -39,7 +39,8 @@ the current public API.
 
 - Library source: `src/diwire/`
 - Tests: `tests/`
-- Examples (not API docs): `examples/`
+- Docs: `docs/`
+- Runnable examples (embedded in docs): `docs/howto/examples/`
 
 ## Style and formatting
 
@@ -84,7 +85,7 @@ the current public API.
 
 - Ruff enforces many docstring rules, but D100/D103/etc. are ignored.
 - Public APIs should still include clear docstrings.
-- Example code in `examples/` can be lighter-weight and may include prints.
+- Example code in `docs/howto/examples/` can be lighter-weight and may include prints.
 
 ## Testing guidelines
 
@@ -105,7 +106,7 @@ the current public API.
 
 - `select = ["ALL"]` with targeted ignores.
 - Tests allow `assert`, unused args, and some pytest patterns.
-- `examples/` allows prints, commented code, and relaxed security rules.
+- Documentation examples live under `docs/howto/examples/`.
 - `container.py` has intentional complexity exemptions.
 
 ## Agent behavior
