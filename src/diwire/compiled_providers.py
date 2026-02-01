@@ -7,7 +7,7 @@ eliminating runtime reflection and minimizing dict lookups.
 from __future__ import annotations
 
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, MutableMapping
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
@@ -20,7 +20,7 @@ class CompiledProvider(Protocol):
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         """Resolve and return an instance."""
         ...
@@ -40,7 +40,7 @@ class TypeProvider:
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         return self._type()
 
@@ -63,7 +63,7 @@ class SingletonTypeProvider:
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         if self._instance is not None:
             return self._instance
@@ -96,7 +96,7 @@ class ArgsTypeProvider:
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         items = self._items
         args = {name: provider(singletons, scoped_cache) for name, provider in items}
@@ -119,7 +119,7 @@ class PositionalArgsTypeProvider:
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         providers = self._dep_providers
         return self._type(*[provider(singletons, scoped_cache) for provider in providers])
@@ -152,7 +152,7 @@ class SingletonArgsTypeProvider:
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         if self._instance is not None:
             return self._instance
@@ -188,7 +188,7 @@ class SingletonPositionalArgsTypeProvider:
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         if self._instance is not None:
             return self._instance
@@ -215,9 +215,12 @@ class ScopedSingletonProvider:
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         if scoped_cache is not None:
+            get_or_create = getattr(scoped_cache, "get_or_create", None)
+            if get_or_create is not None:
+                return get_or_create(self._key, self._type)
             cached = scoped_cache.get(self._key)
             if cached is not None:
                 return cached
@@ -248,10 +251,18 @@ class ScopedSingletonArgsProvider:
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         items = self._items
         if scoped_cache is not None:
+            get_or_create = getattr(scoped_cache, "get_or_create", None)
+            if get_or_create is not None:
+
+                def factory() -> Any:
+                    args = {name: provider(singletons, scoped_cache) for name, provider in items}
+                    return self._type(**args)
+
+                return get_or_create(self._key, factory)
             cached = scoped_cache.get(self._key)
             if cached is not None:
                 return cached
@@ -281,10 +292,19 @@ class ScopedSingletonPositionalArgsProvider:
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         providers = self._dep_providers
         if scoped_cache is not None:
+            get_or_create = getattr(scoped_cache, "get_or_create", None)
+            if get_or_create is not None:
+
+                def factory() -> Any:
+                    return self._type(
+                        *[provider(singletons, scoped_cache) for provider in providers],
+                    )
+
+                return get_or_create(self._key, factory)
             cached = scoped_cache.get(self._key)
             if cached is not None:
                 return cached
@@ -305,7 +325,7 @@ class InstanceProvider:
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         return self._instance
 
@@ -326,7 +346,7 @@ class FactoryProvider:
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         factory = self._factory_provider(singletons, scoped_cache)
         result = factory()
@@ -359,7 +379,7 @@ class SingletonFactoryProvider:
     def __call__(
         self,
         singletons: dict[ServiceKey, Any],
-        scoped_cache: dict[ServiceKey, Any] | None,
+        scoped_cache: MutableMapping[ServiceKey, Any] | None,
     ) -> Any:
         if self._instance is not None:
             return self._instance

@@ -1,3 +1,4 @@
+import threading
 import uuid
 from collections.abc import AsyncGenerator, Callable, Generator
 from dataclasses import dataclass, field
@@ -8,6 +9,8 @@ from typing import Annotated
 import pytest
 
 from diwire.compiled_providers import (
+    ArgsTypeProvider,
+    PositionalArgsTypeProvider,
     ScopedSingletonArgsProvider,
     ScopedSingletonPositionalArgsProvider,
     SingletonArgsTypeProvider,
@@ -29,6 +32,7 @@ from diwire.exceptions import (
     DIWireIgnoredServiceError,
     DIWireMissingDependenciesError,
     DIWireScopeMismatchError,
+    DIWireServiceNotRegisteredError,
 )
 from diwire.registry import Registration
 from diwire.service_key import ServiceKey
@@ -1234,9 +1238,98 @@ class TestCoverageEdgeCases:
             scope="request",
         )
 
-        provider = container._compile_scoped_registration(service_key_b, registration, "request")
+        provider = container._compile_scoped_registration(
+            service_key_b,
+            registration,
+            "request",
+            {},
+        )
 
         assert isinstance(provider, ScopedSingletonPositionalArgsProvider)
+
+    def test_compile_or_get_scoped_provider_missing_registration_returns_none(self) -> None:
+        """Missing scoped registration returns None."""
+        container = Container(auto_compile=False, autoregister=False)
+
+        class ServiceA:
+            pass
+
+        service_key = ServiceKey.from_value(ServiceA)
+        provider = container._compile_or_get_scoped_provider(service_key, "request", {})
+
+        assert provider is None
+
+    def test_compile_or_get_scoped_provider_uncompilable_returns_none(self) -> None:
+        """Uncompilable scoped registration returns None."""
+        container = Container(auto_compile=False, autoregister=False)
+
+        class ServiceA:
+            def __init__(self, name: str) -> None:
+                self.name = name
+
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
+
+        service_key = ServiceKey.from_value(ServiceA)
+        provider = container._compile_or_get_scoped_provider(service_key, "request", {})
+
+        assert provider is None
+
+    def test_compile_scoped_transient_positional_provider(self) -> None:
+        """Scoped transient compilation can use positional provider."""
+        container = Container(auto_compile=False, autoregister=False)
+
+        @dataclass
+        class DepA:
+            pass
+
+        @dataclass
+        class DepB:
+            pass
+
+        @dataclass
+        class ScopedTransient:
+            dep_a: DepA
+            dep_b: DepB
+
+        container.register(DepA, lifetime=Lifetime.TRANSIENT)
+        container.register(DepB, lifetime=Lifetime.TRANSIENT)
+        container.register(ScopedTransient, scope="request", lifetime=Lifetime.TRANSIENT)
+
+        container.compile()
+
+        service_key = ServiceKey.from_value(ScopedTransient)
+        provider = container._scoped_compiled_providers.get((service_key, "request"))
+
+        assert isinstance(provider, PositionalArgsTypeProvider)
+
+    def test_compile_scoped_transient_gap_uses_keyword_provider(self) -> None:
+        """Scoped transient compilation falls back to keyword provider."""
+        container = Container(auto_compile=False, autoregister=False)
+
+        @dataclass
+        class Dep1:
+            pass
+
+        @dataclass
+        class Dep2:
+            pass
+
+        @dataclass
+        class GapService:
+            dep1: Dep1
+            name: str = "default"
+            dep2: Dep2 = field(default_factory=Dep2)
+
+        container.register(Dep1, lifetime=Lifetime.TRANSIENT)
+        container.register(Dep2, lifetime=Lifetime.TRANSIENT)
+        container.register(GapService, scope="request", lifetime=Lifetime.TRANSIENT)
+
+        container.compile()
+
+        service_key = ServiceKey.from_value(GapService)
+        provider = container._scoped_compiled_providers.get((service_key, "request"))
+
+        assert isinstance(provider, ArgsTypeProvider)
 
     def test_compile_singleton_registration_gap_uses_keyword_provider(self) -> None:
         """Singleton compilation falls back to keyword provider when positional args are unsafe."""
@@ -1295,6 +1388,11 @@ class TestCoverageEdgeCases:
         provider = container._scoped_compiled_providers.get((service_key, "request"))
 
         assert isinstance(provider, ScopedSingletonArgsProvider)
+
+        with container.enter_scope("request"):
+            instance1 = container.resolve(GapService)
+            instance2 = container.resolve(GapService)
+            assert instance1 is instance2
 
     def test_compile_auto_registration_returns_none(self) -> None:
         """_compile_or_get_provider auto-registers but compilation fails."""
@@ -1365,8 +1463,8 @@ class TestCoverageEdgeCases:
         service_key_b = ServiceKey.from_value(ServiceB)
         assert (service_key_b, "request") not in container._scoped_compiled_providers
 
-    def test_compile_scoped_registration_skips_scoped_dependency(self) -> None:
-        """Scoped compilation skips when dependencies have scoped registrations."""
+    def test_compile_scoped_registration_skips_scoped_dependency_other_scope(self) -> None:
+        """Scoped compilation skips when dependencies have other scoped registrations."""
         container = Container(auto_compile=False, autoregister=False)
 
         class ServiceA:
@@ -1378,13 +1476,20 @@ class TestCoverageEdgeCases:
                 self.a = a
 
         global_instance = ServiceA(name="global")
-        scoped_instance = ServiceA(name="scoped")
+        request_instance = ServiceA(name="scoped")
+        session_instance = ServiceA(name="session")
 
         container.register(ServiceA, instance=global_instance, lifetime=Lifetime.SINGLETON)
         container.register(
             ServiceA,
-            instance=scoped_instance,
+            instance=request_instance,
             scope="request",
+            lifetime=Lifetime.SCOPED,
+        )
+        container.register(
+            ServiceA,
+            instance=session_instance,
+            scope="session",
             lifetime=Lifetime.SCOPED,
         )
         container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED)
@@ -1396,7 +1501,32 @@ class TestCoverageEdgeCases:
 
         with container.enter_scope("request"):
             resolved = container.resolve(ServiceB)
-            assert resolved.a is scoped_instance
+            assert resolved.a is request_instance
+
+    def test_compile_scoped_registration_with_same_scope_dependency(self) -> None:
+        """Scoped compilation succeeds when dependencies share the same scope."""
+        container = Container(auto_compile=False, autoregister=False)
+
+        class ServiceA:
+            pass
+
+        class ServiceB:
+            def __init__(self, a: ServiceA) -> None:
+                self.a = a
+
+        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED)
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
+
+        container.compile()
+
+        service_key_b = ServiceKey.from_value(ServiceB)
+        assert (service_key_b, "request") in container._scoped_compiled_providers
+
+        with container.enter_scope("request"):
+            resolved1 = container.resolve(ServiceB)
+            resolved2 = container.resolve(ServiceB)
+            assert resolved1 is resolved2
+            assert resolved1.a is resolved2.a
 
     def test_compiled_scoped_provider_uses_cache(self) -> None:
         """Compiled scoped provider caches instances correctly."""
@@ -1423,6 +1553,217 @@ class TestCoverageEdgeCases:
 
             # Verify it's in the scoped instances cache
             assert any(k[1] == service_key for k in container._scoped_instances)
+
+    def test_scoped_resolution_skips_lock_single_thread(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Scoped resolution skips locking when only one thread is active."""
+        container = Container(auto_compile=False, autoregister=False)
+
+        class ServiceA:
+            pass
+
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
+
+        def fail_lock(
+            _self: Container,
+            _scope_key: tuple[tuple[str | None, int], ...],
+        ) -> threading.RLock:
+            raise AssertionError("unexpected scoped lock acquisition")
+
+        monkeypatch.setattr(Container, "_get_scope_cache_lock", fail_lock)
+        monkeypatch.setattr(threading, "active_count", lambda: 1)
+
+        with container.enter_scope("request"):
+            instance = container.resolve(ServiceA)
+            assert instance is container.resolve(ServiceA)
+
+    def test_scoped_container_compiled_fast_path_scoped_provider(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """ScopedContainer resolves via compiled scoped providers without fallback."""
+        container = Container(auto_compile=False, autoregister=False)
+
+        class ServiceA:
+            pass
+
+        container.register(ServiceA, scope="request", lifetime=Lifetime.SCOPED)
+        container.compile()
+
+        def fail_resolve(*_args: object, **_kwargs: object) -> None:
+            raise AssertionError("fallback resolve called")
+
+        monkeypatch.setattr(Container, "resolve", fail_resolve)
+
+        with container.enter_scope("request") as scope:
+            instance = scope.resolve(ServiceA)
+            assert isinstance(instance, ServiceA)
+
+    def test_scoped_container_compiled_fast_path_global_provider_without_scoped_regs(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Global compiled providers are used when no scoped registrations exist."""
+        container = Container(auto_compile=False, autoregister=False)
+
+        class ServiceA:
+            pass
+
+        container.register(ServiceA, lifetime=Lifetime.SINGLETON)
+        container.compile()
+
+        def fail_resolve(*_args: object, **_kwargs: object) -> None:
+            raise AssertionError("fallback resolve called")
+
+        monkeypatch.setattr(Container, "resolve", fail_resolve)
+
+        with container.enter_scope("request") as scope:
+            instance = scope.resolve(ServiceA)
+            assert isinstance(instance, ServiceA)
+
+    def test_scoped_container_compiled_fast_path_global_provider_with_scoped_regs(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Global compiled providers are used when scoped registrations don't match."""
+        container = Container(auto_compile=False, autoregister=False)
+
+        class ServiceA:
+            pass
+
+        class ScopedService:
+            pass
+
+        container.register(ServiceA, lifetime=Lifetime.SINGLETON)
+        container.register(ScopedService, scope="request", lifetime=Lifetime.SCOPED)
+        container.compile()
+
+        def fail_resolve(*_args: object, **_kwargs: object) -> None:
+            raise AssertionError("fallback resolve called")
+
+        monkeypatch.setattr(Container, "resolve", fail_resolve)
+
+        with container.enter_scope("request") as scope:
+            instance = scope.resolve(ServiceA)
+            assert isinstance(instance, ServiceA)
+
+    def test_scoped_container_compiled_fast_path_falls_back_for_uncompiled_scoped(self) -> None:
+        """ScopedContainer falls back when compiled scoped providers are missing."""
+        container = Container(auto_compile=False, autoregister=False)
+
+        class ServiceA:
+            def __init__(self, name: str) -> None:
+                self.name = name
+
+        class ServiceB:
+            def __init__(self, a: ServiceA) -> None:
+                self.a = a
+
+        global_instance = ServiceA(name="global")
+        request_instance = ServiceA(name="scoped")
+        session_instance = ServiceA(name="session")
+
+        container.register(ServiceA, instance=global_instance, lifetime=Lifetime.SINGLETON)
+        container.register(
+            ServiceA,
+            instance=request_instance,
+            scope="request",
+            lifetime=Lifetime.SCOPED,
+        )
+        container.register(
+            ServiceA,
+            instance=session_instance,
+            scope="session",
+            lifetime=Lifetime.SCOPED,
+        )
+        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED)
+        container.compile()
+
+        with container.enter_scope("request") as scope:
+            resolved = scope.resolve(ServiceB)
+            assert resolved.a is request_instance
+
+    def test_scoped_container_compiled_fast_path_missing_provider_falls_through(self) -> None:
+        """Missing compiled providers fall through to normal resolution."""
+        container = Container(auto_compile=False, autoregister=False)
+        container.compile()
+
+        class ServiceA:
+            pass
+
+        with container.enter_scope("request") as scope:
+            with pytest.raises(DIWireServiceNotRegisteredError):
+                scope.resolve(ServiceA)
+
+
+class TestScopedCacheView:
+    """Tests for scoped cache view behavior."""
+
+    def test_scoped_cache_view_mapping_methods(self) -> None:
+        """Scoped cache view supports basic mapping operations."""
+        container = Container()
+
+        class ServiceA:
+            pass
+
+        with container.enter_scope("request") as scope:
+            scope_key = scope._scope_id.segments
+            view = container._get_scoped_cache_view(scope_key)
+            service_key = ServiceKey.from_value(ServiceA)
+
+            view[service_key] = "value"
+            assert view.get(service_key) == "value"
+            assert view[service_key] == "value"
+            child = scope.enter_scope("child")
+            child_view = container._get_scoped_cache_view(child._scope_id.segments)
+            child_view[ServiceKey.from_value(int)] = "other"
+            assert list(view) == [service_key]
+            assert len(view) == 1
+            child.close()
+
+            del view[service_key]
+            assert len(view) == 0
+
+    def test_scoped_cache_view_get_or_create_double_check(self) -> None:
+        """get_or_create returns cached value after lock acquisition."""
+        container = Container()
+
+        class ServiceA:
+            pass
+
+        with container.enter_scope("request") as scope:
+            scope_key = scope._scope_id.segments
+            view = container._get_scoped_cache_view(scope_key)
+            service_key = ServiceKey.from_value(ServiceA)
+
+            factory_started = threading.Event()
+            allow_finish = threading.Event()
+            results: list[object] = []
+
+            def factory() -> object:
+                factory_started.set()
+                allow_finish.wait(timeout=1)
+                return object()
+
+            def worker() -> None:
+                results.append(view.get_or_create(service_key, factory))
+
+            t1 = threading.Thread(target=worker)
+            t2 = threading.Thread(target=worker)
+            t1.start()
+            assert factory_started.wait(timeout=1), "factory did not start"
+            t2.start()
+            allow_finish.set()
+            t1.join(timeout=1)
+            t2.join(timeout=1)
+
+            assert not t1.is_alive()
+            assert not t2.is_alive()
+
+            assert len(results) == 2
+            assert results[0] is results[1]
 
     @pytest.mark.asyncio
     async def test_aresolve_type_singleton_fast_path_cache_hit(self) -> None:

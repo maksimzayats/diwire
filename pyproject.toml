@@ -58,6 +58,7 @@ dev = [
     "pydantic>=2.12.5",
     "attrs>=25.4.0",
     "msgspec>=0.20.0",
+    "pyinstrument>=5.1.2",
 ]
 
 [build-system]
