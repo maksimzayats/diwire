@@ -1,4 +1,5 @@
 from diwire.integrations.pytest_plugin.plugin import (
+    DIWireInvalidScopeMarkerError,
     _build_async_wrapper,
     _build_signature_without_injected,
     _build_sync_wrapper,
@@ -17,6 +18,7 @@ from diwire.integrations.pytest_plugin.plugin import (
 )
 
 __all__ = [
+    "DIWireInvalidScopeMarkerError",
     "_build_async_wrapper",
     "_build_signature_without_injected",
     "_build_sync_wrapper",

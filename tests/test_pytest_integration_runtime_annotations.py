@@ -7,6 +7,7 @@ import pytest
 
 from diwire.container import Container
 from diwire.integrations.pytest_plugin import (
+    DIWireInvalidScopeMarkerError,
     _build_async_wrapper,
     _resolve_async,
     _resolve_scope_override,
@@ -165,5 +166,5 @@ def test_scope_override_invalid_type() -> None:
         def get_closest_marker(self, name: str) -> DummyMarker:
             return self._marker
 
-    with pytest.raises(TypeError, match="diwire_scope marker expects"):
+    with pytest.raises(DIWireInvalidScopeMarkerError, match="diwire_scope marker expects"):
         _resolve_scope_override(cast("Any", DummyItem(DummyMarker((123,), {}))))

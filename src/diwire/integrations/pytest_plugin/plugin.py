@@ -18,6 +18,13 @@ _DEFAULT_SCOPE = "test_function"
 _INVALID_SCOPE_MARKER_MESSAGE = "diwire_scope marker expects a string or None"
 
 
+class DIWireInvalidScopeMarkerError(Exception):
+    """Invalid scope marker specified for pytest integration."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
 @lru_cache(maxsize=1)
 def _get_dependencies_extractor() -> DependenciesExtractor:
     module = importlib.import_module("diwire.dependencies")
@@ -112,7 +119,7 @@ def _resolve_scope_override(pyfuncitem: pytest.Function) -> tuple[bool, str | No
         return True, None
     if isinstance(raw_scope, str):
         return True, _normalize_scope(raw_scope)
-    raise TypeError(_INVALID_SCOPE_MARKER_MESSAGE)
+    raise DIWireInvalidScopeMarkerError(_INVALID_SCOPE_MARKER_MESSAGE)
 
 
 @pytest.fixture()
