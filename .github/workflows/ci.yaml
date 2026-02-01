@@ -31,7 +31,7 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --group dev --group docs
 
       - name: Check formatting
         run: uv run ruff format --check .
