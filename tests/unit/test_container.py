@@ -2348,7 +2348,10 @@ class TestScopedCacheView:
 
         annotated = Annotated[ServiceA, Component("named")]
         container.register(
-            annotated, factory=create_service_a, scope="request", lifetime=Lifetime.SCOPED,
+            annotated,
+            factory=create_service_a,
+            scope="request",
+            lifetime=Lifetime.SCOPED,
         )
 
         async with container.enter_scope("request") as scope:
