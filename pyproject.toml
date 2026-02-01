@@ -115,7 +115,7 @@ exclude = [
 ]
 
 [tool.ty.src]
-exclude = ["benchmarks/", "tests/examples/", "tmp/"]
+exclude = ["benchmarks/", "tests/examples/", "tmp/", "docs/"]
 
 [tool.ty.rules]
 unused-ignore-comment = "ignore"
