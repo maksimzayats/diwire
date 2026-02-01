@@ -168,12 +168,14 @@ def _build_async_wrapper(
     async def wrapped(**kwargs: Any) -> Any:
         if scope_name is None:
             resolved = await _resolve_async(container, injected_deps)
-        else:
-            async with container.enter_scope(scope_name):
-                resolved = await _resolve_async(container, injected_deps)
-        for name, value in resolved.items():
-            kwargs.setdefault(name, value)
-        return await original(**kwargs)
+            for name, value in resolved.items():
+                kwargs.setdefault(name, value)
+            return await original(**kwargs)
+        async with container.enter_scope(scope_name):
+            resolved = await _resolve_async(container, injected_deps)
+            for name, value in resolved.items():
+                kwargs.setdefault(name, value)
+            return await original(**kwargs)
 
     return wrapped
 
@@ -188,12 +190,14 @@ def _build_sync_wrapper(
     def wrapped(**kwargs: Any) -> Any:
         if scope_name is None:
             resolved = _resolve_sync(container, injected_deps)
-        else:
-            with container.enter_scope(scope_name):
-                resolved = _resolve_sync(container, injected_deps)
-        for name, value in resolved.items():
-            kwargs.setdefault(name, value)
-        return original(**kwargs)
+            for name, value in resolved.items():
+                kwargs.setdefault(name, value)
+            return original(**kwargs)
+        with container.enter_scope(scope_name):
+            resolved = _resolve_sync(container, injected_deps)
+            for name, value in resolved.items():
+                kwargs.setdefault(name, value)
+            return original(**kwargs)
 
     return wrapped
 
