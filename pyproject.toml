@@ -120,7 +120,7 @@ strict = false
 disable_error_code = ["valid-type", "misc"]
 
 [tool.ty.src]
-exclude = ["benchmarks/", "tests/examples/", "tmp/"]
+exclude = ["benchmarks/", "tests/", "tmp/"]
 
 [tool.ty.rules]
 unused-ignore-comment = "ignore"
