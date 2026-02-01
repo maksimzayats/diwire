@@ -1,11 +1,26 @@
 from __future__ import annotations
 
+from typing import Annotated
+
+from di import Container as DiContainer
+from di.dependent import Dependent, Marker
+from di.executors import SyncExecutor
 from dishka import Provider, Scope, make_container
 from pytest_benchmark.fixture import BenchmarkFixture
 from rodi import Container as RodiContainer
 
 from diwire import Container, Lifetime
 from tests.benchmarks.shared import ScopedGraphRoot, ScopedService, SingletonService
+
+APP_SCOPE = "app"
+REQUEST_SCOPE = "request"
+
+
+def build_di_scoped_graph_root(
+    singleton: Annotated[SingletonService, Marker(scope=APP_SCOPE)],
+    scoped: Annotated[ScopedService, Marker(scope=REQUEST_SCOPE)],
+) -> ScopedGraphRoot:
+    return ScopedGraphRoot(singleton=singleton, scoped=scoped)
 
 
 def test_diwire_request_scoped_resolution(benchmark: BenchmarkFixture) -> None:
@@ -59,6 +74,32 @@ def test_dishka_request_scoped_resolution(benchmark: BenchmarkFixture) -> None:
         result = benchmark(resolve_in_scope)
     finally:
         container.close()
+
+    assert isinstance(result, ScopedGraphRoot)
+
+
+def test_di_request_scoped_resolution(benchmark: BenchmarkFixture) -> None:
+    container = DiContainer()
+    executor = SyncExecutor()
+    dependent = Dependent(build_di_scoped_graph_root, scope=REQUEST_SCOPE)
+    solved = container.solve(dependent, scopes=(APP_SCOPE, REQUEST_SCOPE))
+
+    with container.enter_scope(APP_SCOPE) as app_state:
+        with app_state.enter_scope(REQUEST_SCOPE) as request_state:
+            first = solved.execute_sync(executor, state=request_state)
+            second = solved.execute_sync(executor, state=request_state)
+            assert first is second
+
+        with app_state.enter_scope(REQUEST_SCOPE) as request_state:
+            other = solved.execute_sync(executor, state=request_state)
+
+        assert other is not first
+
+        def resolve_in_scope() -> ScopedGraphRoot:
+            with app_state.enter_scope(REQUEST_SCOPE) as request_state:
+                return solved.execute_sync(executor, state=request_state)
+
+        result = benchmark(resolve_in_scope)
 
     assert isinstance(result, ScopedGraphRoot)
 

@@ -16,7 +16,7 @@ from diwire.compiled_providers import (
     ScopedSingletonPositionalArgsProvider,
     SingletonArgsTypeProvider,
 )
-from diwire.container import Container
+from diwire.container import Container, _ScopedCacheView
 from diwire.container_helpers import _is_async_factory
 from diwire.container_injection import (
     _AsyncInjectedFunction,
@@ -2009,6 +2009,108 @@ class TestScopedCacheView:
             assert view.get(service_key) is instance
             assert service_key in container._scope_caches[scope_key]
             assert container._scope_type_caches[scope_key][ServiceA] is instance
+
+    def test_scoped_cache_view_get_falls_back_to_cache(self) -> None:
+        """get repopulates type cache from scoped cache."""
+        container = Container()
+
+        class ServiceA:
+            pass
+
+        with container.enter_scope("request") as scope:
+            scope_key = scope._scope_id.segments
+            view = container._get_scoped_cache_view(scope_key, use_lock=False)
+            service_key = ServiceKey.from_value(ServiceA)
+            instance = ServiceA()
+            container._scope_caches[scope_key][service_key] = instance
+
+            assert view.get(service_key) is instance
+            assert container._scope_type_caches[scope_key][ServiceA] is instance
+
+    def test_scoped_cache_view_get_returns_default(self) -> None:
+        """get returns default when caches are empty."""
+        container = Container()
+
+        class ServiceA:
+            pass
+
+        with container.enter_scope("request") as scope:
+            scope_key = scope._scope_id.segments
+            view = container._get_scoped_cache_view(scope_key, use_lock=False)
+            service_key = ServiceKey.from_value(ServiceA)
+
+            assert view.get(service_key, "default") == "default"
+            assert ServiceA not in container._scope_type_caches[scope_key]
+
+    def test_scoped_cache_view_get_or_create_falls_back_without_lock(self) -> None:
+        """get_or_create reuses cache when type cache is empty."""
+        container = Container()
+
+        class ServiceA:
+            pass
+
+        with container.enter_scope("request") as scope:
+            scope_key = scope._scope_id.segments
+            view = container._get_scoped_cache_view(scope_key, use_lock=False)
+            service_key = ServiceKey.from_value(ServiceA)
+            instance = ServiceA()
+            container._scope_caches[scope_key][service_key] = instance
+
+            factory_called = False
+
+            def factory() -> ServiceA:
+                nonlocal factory_called
+                factory_called = True
+                return ServiceA()
+
+            assert view.get_or_create(service_key, factory) is instance
+            assert not factory_called
+            assert container._scope_type_caches[scope_key][ServiceA] is instance
+
+    def test_scoped_cache_view_get_or_create_falls_back_with_lock(self) -> None:
+        """get_or_create repopulates type cache inside lock path."""
+
+        class ServiceA:
+            pass
+
+        class TrackingCache(dict[ServiceKey, object]):
+            def __init__(self) -> None:
+                super().__init__()
+                self.precheck = threading.Event()
+                self.allow_cache = threading.Event()
+
+            def get(self, key: ServiceKey, default: object | None = None) -> object | None:
+                if not self.allow_cache.is_set():
+                    self.precheck.set()
+                    return default
+                return super().get(key, default)
+
+        cache = TrackingCache()
+        type_cache: dict[type, object] = {}
+        lock = threading.RLock()
+        view = _ScopedCacheView(cache, type_cache, lock)
+        service_key = ServiceKey.from_value(ServiceA)
+        instance = ServiceA()
+        cache[service_key] = instance
+
+        def factory() -> ServiceA:
+            raise AssertionError("factory should not be called")
+
+        results: list[object] = []
+        lock.acquire()
+        try:
+            worker = threading.Thread(
+                target=lambda: results.append(view.get_or_create(service_key, factory)),
+            )
+            worker.start()
+            assert cache.precheck.wait(timeout=1), "cache precheck did not run"
+            cache.allow_cache.set()
+        finally:
+            lock.release()
+        worker.join(timeout=1)
+        assert not worker.is_alive()
+        assert results[0] is instance
+        assert type_cache[ServiceA] is instance
 
     def test_scoped_cache_view_get_or_create_positional(self) -> None:
         """get_or_create_positional caches and reuses constructed instances."""

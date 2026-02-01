@@ -59,6 +59,7 @@ dev = [
     "attrs>=25.4.0",
     "msgspec>=0.20.0",
     "pyinstrument>=5.1.2",
+    "di>=0.79.2",
 ]
 
 [build-system]

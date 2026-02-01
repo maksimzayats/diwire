@@ -110,17 +110,26 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
 
     def get(self, key: ServiceKey, default: Any | None = None) -> Any | None:
         if key.is_type_key:
-            return self._type_cache.get(key.value, default)
+            type_cache = self._type_cache
+            cached = type_cache.get(key.value)
+            if cached is not None:
+                return cached
+            cached = self._cache.get(key)
+            if cached is not None:
+                type_cache[key.value] = cached
+                return cached
+            return default
         return self._cache.get(key, default)
 
     def __getitem__(self, key: ServiceKey) -> Any:
         if key.is_type_key:
-            try:
-                return self._type_cache[key.value]
-            except KeyError:
-                value = self._cache[key]
-                self._type_cache[key.value] = value
-                return value
+            type_cache = self._type_cache
+            cached = type_cache.get(key.value)
+            if cached is not None:
+                return cached
+            value = self._cache[key]
+            type_cache[key.value] = value
+            return value
         return self._cache[key]
 
     def __setitem__(self, key: ServiceKey, value: Any) -> None:
@@ -141,10 +150,15 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
 
     def get_or_create(self, key: ServiceKey, factory: Callable[[], Any]) -> Any:
         cache = self._cache
+        type_cache: dict[type, Any] | None = None
         if key.is_type_key:
             type_cache = self._type_cache
             cached = type_cache.get(key.value)
             if cached is not None:
+                return cached
+            cached = cache.get(key)
+            if cached is not None:
+                type_cache[key.value] = cached
                 return cached
         else:
             cached = cache.get(key)
@@ -153,13 +167,18 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
         if self._lock is None:
             instance = factory()
             cache[key] = instance
-            if key.is_type_key:
-                self._type_cache[key.value] = instance
+            if type_cache is not None:
+                type_cache[key.value] = instance
             return instance
         with self._lock:
-            if key.is_type_key:
-                cached = self._type_cache.get(key.value)
-                if cached is not None:
+            if type_cache is not None:
+                cached = type_cache.get(key.value)
+                if cached is None:
+                    cached = cache.get(key)
+                    if cached is not None:
+                        type_cache[key.value] = cached
+                        return cached
+                else:
                     return cached
             else:
                 cached = cache.get(key)
@@ -167,8 +186,8 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
                     return cached
             instance = factory()
             cache[key] = instance
-            if key.is_type_key:
-                self._type_cache[key.value] = instance
+            if type_cache is not None:
+                type_cache[key.value] = instance
             return instance
 
     def get_or_create_positional(
@@ -179,10 +198,15 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
         singletons: dict[ServiceKey, Any],
     ) -> Any:
         cache = self._cache
+        type_cache: dict[type, Any] | None = None
         if key.is_type_key:
             type_cache = self._type_cache
             cached = type_cache.get(key.value)
             if cached is not None:
+                return cached
+            cached = cache.get(key)
+            if cached is not None:
+                type_cache[key.value] = cached
                 return cached
         else:
             cached = cache.get(key)
@@ -191,13 +215,18 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
         if self._lock is None:
             instance = constructor(*[provider(singletons, self) for provider in providers])
             cache[key] = instance
-            if key.is_type_key:
-                self._type_cache[key.value] = instance
+            if type_cache is not None:
+                type_cache[key.value] = instance
             return instance
         with self._lock:
-            if key.is_type_key:
-                cached = self._type_cache.get(key.value)
-                if cached is not None:
+            if type_cache is not None:
+                cached = type_cache.get(key.value)
+                if cached is None:
+                    cached = cache.get(key)
+                    if cached is not None:
+                        type_cache[key.value] = cached
+                        return cached
+                else:
                     return cached
             else:
                 cached = cache.get(key)
@@ -205,8 +234,8 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
                     return cached
             instance = constructor(*[provider(singletons, self) for provider in providers])
             cache[key] = instance
-            if key.is_type_key:
-                self._type_cache[key.value] = instance
+            if type_cache is not None:
+                type_cache[key.value] = instance
             return instance
 
     def get_or_create_kwargs(
@@ -217,10 +246,15 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
         singletons: dict[ServiceKey, Any],
     ) -> Any:
         cache = self._cache
+        type_cache: dict[type, Any] | None = None
         if key.is_type_key:
             type_cache = self._type_cache
             cached = type_cache.get(key.value)
             if cached is not None:
+                return cached
+            cached = cache.get(key)
+            if cached is not None:
+                type_cache[key.value] = cached
                 return cached
         else:
             cached = cache.get(key)
@@ -230,13 +264,18 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
             args = {name: provider(singletons, self) for name, provider in items}
             instance = constructor(**args)
             cache[key] = instance
-            if key.is_type_key:
-                self._type_cache[key.value] = instance
+            if type_cache is not None:
+                type_cache[key.value] = instance
             return instance
         with self._lock:
-            if key.is_type_key:
-                cached = self._type_cache.get(key.value)
-                if cached is not None:
+            if type_cache is not None:
+                cached = type_cache.get(key.value)
+                if cached is None:
+                    cached = cache.get(key)
+                    if cached is not None:
+                        type_cache[key.value] = cached
+                        return cached
+                else:
                     return cached
             else:
                 cached = cache.get(key)
@@ -245,8 +284,8 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
             args = {name: provider(singletons, self) for name, provider in items}
             instance = constructor(**args)
             cache[key] = instance
-            if key.is_type_key:
-                self._type_cache[key.value] = instance
+            if type_cache is not None:
+                type_cache[key.value] = instance
             return instance
 
 
