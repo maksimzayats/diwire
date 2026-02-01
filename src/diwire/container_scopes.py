@@ -22,6 +22,37 @@ class _ScopeId:
     """
 
     segments: tuple[tuple[str | None, int], ...]
+    _scope_key_by_name: dict[str, tuple[tuple[str | None, int], ...]] = field(
+        init=False,
+        repr=False,
+        compare=False,
+    )
+    _named_scopes_desc: tuple[str, ...] = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        segments = self.segments
+        if len(segments) == 1:
+            name, _ = segments[0]
+            if name is None:
+                object.__setattr__(self, "_scope_key_by_name", {})
+                object.__setattr__(self, "_named_scopes_desc", ())
+                return
+            object.__setattr__(self, "_scope_key_by_name", {name: segments})
+            object.__setattr__(self, "_named_scopes_desc", (name,))
+            return
+
+        scope_key_by_name: dict[str, tuple[tuple[str | None, int], ...]] = {}
+        named_scopes_desc: list[str] = []
+        for index, (name, _) in enumerate(segments):
+            if name is None:
+                continue
+            if name not in scope_key_by_name:
+                scope_key_by_name[name] = segments[: index + 1]
+        for name, _ in reversed(segments):
+            if name is not None:
+                named_scopes_desc.append(name)
+        object.__setattr__(self, "_scope_key_by_name", scope_key_by_name)
+        object.__setattr__(self, "_named_scopes_desc", tuple(named_scopes_desc))
 
     @property
     def path(self) -> str:
@@ -33,17 +64,19 @@ class _ScopeId:
 
     def contains_scope(self, scope_name: str) -> bool:
         """Check if this scope contains the given scope name."""
-        return any(name == scope_name for name, _ in self.segments)
+        return scope_name in self._scope_key_by_name
 
     def get_cache_key_for_scope(self, scope_name: str) -> tuple[tuple[str | None, int], ...] | None:
         """Get the tuple key up to and including the specified scope segment.
 
         Returns None if the scope is not found.
         """
-        for i, (name, _) in enumerate(self.segments):
-            if name == scope_name:
-                return self.segments[: i + 1]
-        return None
+        return self._scope_key_by_name.get(scope_name)
+
+    @property
+    def named_scopes_desc(self) -> tuple[str, ...]:
+        """Return named scopes from most specific to least specific."""
+        return self._named_scopes_desc
 
 
 # Context variable for current scope
@@ -90,6 +123,12 @@ class ScopedContainer:
                 self._scope_id.path,
                 current.path if current else None,
             )
+        handled, result = self._container._resolve_scoped_compiled(  # noqa: SLF001
+            key,
+            self._scope_id,
+        )
+        if handled:
+            return result
         return self._container.resolve(key)
 
     async def aresolve(self, key: Any) -> Any:
