@@ -4,13 +4,11 @@
  * Base button style — identical to .highlight button.copybtn as styled by
  * Furo (furo-extensions.css) so that Run / Edit / Copy look the same.
  */
-.highlight .py-runner-btn {
-  position: absolute;
+.py-runner-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  top: .625rem;
   width: 1.25em;
   height: 1.25em;
   padding: 0;
@@ -23,41 +21,46 @@
   transition: color .3s, opacity .3s;
 }
 
-.highlight .py-runner-btn svg {
+.py-runner-btn svg {
   stroke: currentColor;
   width: 1.5em;
   height: 1.5em;
   padding: 0;
 }
 
-.highlight .py-runner-btn:hover {
+.py-runner-btn:hover {
   background-color: var(--color-code-background);
   color: var(--color-brand-content);
 }
 
-.highlight .py-runner-btn:disabled {
+.py-runner-btn:disabled {
   opacity: 0.4;
   cursor: default;
 }
 
 /* Show on success even without hover */
-.highlight .py-runner-btn.success {
+.py-runner-btn.success {
   opacity: 1;
   color: #22863a;
   transition: color 0s;
 }
 
-/* Positioning: edit | run | copy (copy is at right: .5rem via Furo) */
-.py-runner-run {
+/* Overlay positioning (optional): edit | run | copy (copy is at right: .5rem via Furo) */
+.py-run .highlight .py-runner-btn {
+  position: absolute;
+  top: .625rem;
+}
+
+.py-run .highlight .py-runner-run {
   right: 2.25rem;
 }
 
-.py-runner-edit {
+.py-run .highlight .py-runner-edit {
   right: 4rem;
 }
 
 /* Active edit mode indicator */
-.highlight .py-runner-edit.active {
+.py-runner-edit.active {
   opacity: 1;
   color: #22863a;
 }
@@ -102,15 +105,67 @@
 /* Output block */
 .py-runner-output {
   margin-top: 0.5rem;
-  display: none;
-}
-
-.py-runner-output.is-visible {
   display: block;
+  background-color: var(--color-code-background);
+  color: var(--color-code-foreground);
+  border: 1px solid var(--color-background-border);
+  border-radius: 0.4em;
 }
 
 .py-runner-output pre {
   margin: 0;
+}
+
+.py-runner-output-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem 0;
+  font-family: var(--font-stack);
+  font-size: var(--font-size--small--2);
+  color: var(--color-foreground-muted);
+}
+
+.py-runner-output-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.py-runner-output-status {
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-background-border);
+  color: var(--color-foreground-muted);
+  font-size: var(--font-size--small--3);
+}
+
+.py-runner-output-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.py-runner-output-pre {
+  overflow-x: auto;
+  padding: 0.5rem 0.75rem 0.75rem;
+  font-family: var(--font-stack--monospace);
+  font-size: var(--code-font-size);
+}
+
+.py-runner-output[data-py-runner-state="idle"] .py-runner-output-pre {
+  color: var(--color-foreground-muted);
+  font-style: italic;
+}
+
+.py-runner-output[data-py-runner-state="running"] .py-runner-output-status {
+  color: var(--color-foreground-primary);
+}
+
+.py-runner-output[data-py-runner-state="error"] .py-runner-output-status {
+  color: #b31d28;
+  border-color: rgba(179, 29, 40, 0.35);
 }
 
 /* Spinner animation */

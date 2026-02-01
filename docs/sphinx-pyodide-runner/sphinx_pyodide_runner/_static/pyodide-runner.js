@@ -1,6 +1,8 @@
 (() => {
   let pyodideReady = null;
   let packagesInstalled = false;
+  const NOT_EXECUTED_OUTPUT = "Not executed. Click Run to execute this example.";
+  const NO_OUTPUT = "(no output)";
 
   async function loadPyodideOnce() {
     if (!pyodideReady) {
@@ -88,13 +90,18 @@ await micropip.install([${escaped}])
     }
   }
 
-  async function runCode(codeBlock, output, outputPre, runBtn) {
+  function setOutputState(output, statusEl, state, message) {
+    output.dataset.pyRunnerState = state;
+    statusEl.textContent = message;
+  }
+
+  async function runCode(codeBlock, output, statusEl, outputPre, runBtn) {
     const pre = codeBlock.querySelector("pre");
     const code = pre ? pre.textContent ?? "" : codeBlock.textContent ?? "";
 
     runBtn.disabled = true;
     runBtn.innerHTML = spinnerSvg;
-    output.classList.add("is-visible");
+    setOutputState(output, statusEl, "running", "Running...");
     outputPre.textContent = "Loading Pyodide...";
 
     let pyodide = null;
@@ -149,14 +156,17 @@ with redirect_stdout(_stdout), redirect_stderr(_stderr):
         stdout = String(result);
       }
 
-      outputPre.textContent = stdout + (stderr ? `\n${stderr}` : "");
+      const combined = stdout + (stderr ? `\n${stderr}` : "");
+      outputPre.textContent = combined.trim() ? combined : NO_OUTPUT;
 
       runBtn.disabled = false;
       showSuccess(runBtn, playSvg);
+      setOutputState(output, statusEl, "ok", "Executed");
     } catch (error) {
       outputPre.textContent = String(error);
       runBtn.disabled = false;
       runBtn.innerHTML = playSvg;
+      setOutputState(output, statusEl, "error", "Error");
     } finally {
       if (pyodide) {
         try {
@@ -191,20 +201,52 @@ with redirect_stdout(_stdout), redirect_stderr(_stderr):
     editBtn.innerHTML = pencilSvg;
 
     const output = document.createElement("div");
-    output.className = "highlight py-runner-output";
+    output.className = "py-runner-output";
+    output.dataset.pyRunnerState = "idle";
+
+    const toolbar = document.createElement("div");
+    toolbar.className = "py-runner-output-toolbar";
+
+    const label = document.createElement("div");
+    label.className = "py-runner-output-label";
+
+    const title = document.createElement("span");
+    title.className = "py-runner-output-title";
+    title.textContent = "Output";
+
+    const status = document.createElement("span");
+    status.className = "py-runner-output-status";
+    status.textContent = "Not executed";
+
+    label.appendChild(title);
+    label.appendChild(status);
+
+    const actions = document.createElement("div");
+    actions.className = "py-runner-output-actions";
+    actions.appendChild(runBtn);
+
+    toolbar.appendChild(label);
+    toolbar.appendChild(actions);
+
     const outputPre = document.createElement("pre");
+    outputPre.className = "py-runner-output-pre";
+    outputPre.textContent = NOT_EXECUTED_OUTPUT;
+    outputPre.setAttribute("aria-live", "polite");
+
+    output.appendChild(toolbar);
     output.appendChild(outputPre);
 
-    // Place buttons inside .highlight (same container as copybutton)
+    // Keep the Edit button attached to the code block itself.
+    // The output panel should only show Run.
     const highlight = codeBlock.querySelector(".highlight") || codeBlock;
     highlight.appendChild(editBtn);
-    highlight.appendChild(runBtn);
+
     codeBlock.insertAdjacentElement("afterend", output);
 
     if (pre) {
       editBtn.addEventListener("click", () => toggleEditing(pre, editBtn));
     }
-    runBtn.addEventListener("click", () => runCode(codeBlock, output, outputPre, runBtn));
+    runBtn.addEventListener("click", () => runCode(codeBlock, output, status, outputPre, runBtn));
   }
 
   document.addEventListener("DOMContentLoaded", () => {
