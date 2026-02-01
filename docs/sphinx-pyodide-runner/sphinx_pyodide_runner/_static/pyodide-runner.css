@@ -1,58 +1,97 @@
 /* --- Pyodide Runner: Run & Edit buttons --- */
 
-.py-run {
-  position: relative;
-}
-
-/* Base button style — matches sphinx-copybutton aesthetic */
-.py-runner-btn {
+/*
+ * Base button style — identical to .highlight button.copybtn as styled by
+ * Furo (furo-extensions.css) so that Run / Edit / Copy look the same.
+ */
+.highlight .py-runner-btn {
   position: absolute;
-  top: 0.3em;
-  z-index: 1;
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.6em;
-  height: 1.6em;
+  cursor: pointer;
+  top: .625rem;
+  width: 1.25em;
+  height: 1.25em;
   padding: 0;
   border: none;
-  border-radius: 0.25em;
-  background: none;
-  color: var(--color-foreground-secondary, #6c6c6c);
-  cursor: pointer;
-  opacity: 0.5;
-  transition: opacity 0.15s, color 0.15s, background 0.15s;
+  outline: none;
+  border-radius: 0.4em;
+  background-color: var(--color-code-background);
+  color: var(--color-background-item);
+  opacity: 0;
+  transition: color .3s, opacity .3s;
 }
 
-.py-runner-btn:hover {
+.highlight .py-runner-btn svg {
+  stroke: currentColor;
+  width: 1.5em;
+  height: 1.5em;
+  padding: 0;
+}
+
+.highlight:hover .py-runner-btn {
   opacity: 1;
-  color: var(--color-foreground-primary, #333);
-  background: var(--color-background-secondary, rgba(0, 0, 0, 0.05));
+  color: var(--color-code-foreground);
 }
 
-.py-runner-btn:disabled {
+.highlight .py-runner-btn:hover {
+  background-color: var(--color-code-background);
+  color: var(--color-brand-content);
+}
+
+.highlight .py-runner-btn:disabled {
   opacity: 0.4;
   cursor: default;
 }
 
-/* Show buttons on hover — same as copy button */
-.py-run:hover .py-runner-btn {
-  display: flex;
+/* Show on success even without hover */
+.highlight .py-runner-btn.success {
+  opacity: 1;
+  color: #22863a;
+  transition: color 0s;
 }
 
-/* Positioning: edit | run | copy (copy is at right: 0.3em by sphinx-copybutton) */
+/* Positioning: edit | run | copy (copy is at right: .5rem via Furo) */
 .py-runner-run {
-  right: 2.3em;
+  right: 2.25rem;
 }
 
 .py-runner-edit {
-  right: 4.3em;
+  right: 4rem;
 }
 
 /* Active edit mode indicator */
-.py-runner-edit.active {
+.highlight .py-runner-edit.active {
   opacity: 1;
-  color: var(--color-brand-primary, #2962ff);
+  color: #22863a;
+}
+
+/* Tooltip — same as copybutton o-tooltip--left */
+.py-runner-btn.o-tooltip--left:after {
+  opacity: 0;
+  visibility: hidden;
+  position: absolute;
+  content: attr(data-tooltip);
+  padding: .2em;
+  font-size: .8em;
+  left: -.2em;
+  background: grey;
+  color: white;
+  white-space: nowrap;
+  z-index: 2;
+  border-radius: 2px;
+  transform: translateX(-102%) translateY(0);
+  transition: opacity 0.2s cubic-bezier(0.64, 0.09, 0.08, 1), transform 0.2s cubic-bezier(0.64, 0.09, 0.08, 1);
+}
+
+.py-runner-btn.o-tooltip--left:hover:after {
+  display: block;
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-100%) translateY(0);
+  transition: opacity 0.2s cubic-bezier(0.64, 0.09, 0.08, 1), transform 0.2s cubic-bezier(0.64, 0.09, 0.08, 1);
+  transition-delay: .5s;
 }
 
 /* Editable pre styling */
@@ -88,4 +127,11 @@
 
 .pyodide-spinner {
   animation: pyodide-spin 0.7s linear infinite;
+}
+
+/* Hide buttons in print */
+@media print {
+  .py-runner-btn {
+    display: none;
+  }
 }

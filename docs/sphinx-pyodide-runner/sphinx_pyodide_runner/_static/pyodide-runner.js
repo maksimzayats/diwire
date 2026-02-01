@@ -28,10 +28,20 @@ await micropip.install([${escaped}])
     packagesInstalled = true;
   }
 
-  // SVG icons
-  const playSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
-  const pencilSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`;
-  const spinnerSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="pyodide-spinner"><path d="M12 2a10 10 0 0 1 10 10h-2a8 8 0 0 0-8-8V2z"/></svg>`;
+  // Tabler icons — same SVG structure as sphinx-copybutton's icon
+  const playSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-player-play" width="44" height="44" viewBox="0 0 24 24" stroke-width="1.5" stroke="#000000" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M7 4v16l13-8z"/></svg>`;
+  const pencilSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-pencil" width="44" height="44" viewBox="0 0 24 24" stroke-width="1.5" stroke="#000000" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M4 20h4l10.5-10.5a2.121 2.121 0 0 0-3-3l-10.5 10.5v4"/><path d="M13.5 6.5l3 3"/></svg>`;
+  const checkSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-check" width="44" height="44" viewBox="0 0 24 24" stroke-width="1.5" stroke="#000000" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M5 12l5 5l10-10"/></svg>`;
+  const spinnerSvg = `<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-loader-2 pyodide-spinner" width="44" height="44" viewBox="0 0 24 24" stroke-width="1.5" stroke="#000000" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 3a9 9 0 1 0 9 9"/></svg>`;
+
+  function showSuccess(btn, originalSvg) {
+    btn.innerHTML = checkSvg;
+    btn.classList.add("success");
+    setTimeout(() => {
+      btn.innerHTML = originalSvg;
+      btn.classList.remove("success");
+    }, 2000);
+  }
 
   function enableEditing(pre) {
     if (!pre || pre.dataset.pyRunnerEditable === "1") {
@@ -72,6 +82,7 @@ await micropip.install([${escaped}])
   function toggleEditing(pre, editBtn) {
     if (pre.dataset.pyRunnerEditable === "1") {
       disableEditing(pre, editBtn);
+      showSuccess(editBtn, pencilSvg);
     } else {
       enableEditing(pre);
       editBtn.classList.add("active");
@@ -83,7 +94,6 @@ await micropip.install([${escaped}])
     const code = pre ? pre.textContent ?? "" : codeBlock.textContent ?? "";
 
     runBtn.disabled = true;
-    const prevHtml = runBtn.innerHTML;
     runBtn.innerHTML = spinnerSvg;
     output.classList.add("is-visible");
     outputPre.textContent = "Loading Pyodide...";
@@ -126,8 +136,13 @@ with redirect_stdout(_stdout), redirect_stderr(_stderr):
       }
 
       outputPre.textContent = stdout + (stderr ? `\n${stderr}` : "");
+
+      runBtn.disabled = false;
+      showSuccess(runBtn, playSvg);
     } catch (error) {
       outputPre.textContent = String(error);
+      runBtn.disabled = false;
+      runBtn.innerHTML = playSvg;
     } finally {
       if (pyodide) {
         try {
@@ -136,8 +151,6 @@ with redirect_stdout(_stdout), redirect_stderr(_stderr):
           // Best effort cleanup.
         }
       }
-      runBtn.disabled = false;
-      runBtn.innerHTML = prevHtml;
     }
   }
 
@@ -152,15 +165,15 @@ with redirect_stdout(_stdout), redirect_stderr(_stderr):
     // Run button (play icon)
     const runBtn = document.createElement("button");
     runBtn.type = "button";
-    runBtn.className = "py-runner-btn py-runner-run";
-    runBtn.title = "Run code";
+    runBtn.className = "py-runner-btn py-runner-run o-tooltip--left";
+    runBtn.setAttribute("data-tooltip", "Run");
     runBtn.innerHTML = playSvg;
 
     // Edit button (pencil icon)
     const editBtn = document.createElement("button");
     editBtn.type = "button";
-    editBtn.className = "py-runner-btn py-runner-edit";
-    editBtn.title = "Toggle editing";
+    editBtn.className = "py-runner-btn py-runner-edit o-tooltip--left";
+    editBtn.setAttribute("data-tooltip", "Edit");
     editBtn.innerHTML = pencilSvg;
 
     const output = document.createElement("div");
@@ -168,8 +181,10 @@ with redirect_stdout(_stdout), redirect_stderr(_stderr):
     const outputPre = document.createElement("pre");
     output.appendChild(outputPre);
 
-    codeBlock.appendChild(editBtn);
-    codeBlock.appendChild(runBtn);
+    // Place buttons inside .highlight (same container as copybutton)
+    const highlight = codeBlock.querySelector(".highlight") || codeBlock;
+    highlight.appendChild(editBtn);
+    highlight.appendChild(runBtn);
     codeBlock.insertAdjacentElement("afterend", output);
 
     if (pre) {
