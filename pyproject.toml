@@ -34,6 +34,7 @@ Homepage = "https://github.com/MaksimZayats/diwire"
 Repository = "https://github.com/MaksimZayats/diwire"
 Issues = "https://github.com/MaksimZayats/diwire/issues"
 
+
 [dependency-groups]
 dev = [
     "mypy>=1.19.1",
