@@ -1566,7 +1566,7 @@ class TestCoverageEdgeCases:
 
         annotated = Annotated[ServiceA, Component("component")]
 
-        @container.register(annotated, scope="request", lifetime=Lifetime.SCOPED)
+        @container.register(annotated, scope="request", lifetime=Lifetime.SCOPED)  # type: ignore[call-non-callable]
         class ServiceAImpl(ServiceA):
             pass
 
