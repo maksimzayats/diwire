@@ -1,5 +1,5 @@
 .. meta::
-   :description: Integrations and compatibility notes for diwire: dataclasses, pydantic, attrs, msgspec, and pydantic-settings BaseSettings auto-registration.
+   :description: Integrations and compatibility notes for diwire: dataclasses, pydantic, attrs, msgspec, pydantic-settings BaseSettings auto-registration, and an optional pytest plugin.
 
 Integrations
 ============
@@ -40,3 +40,10 @@ Example:
    container = Container()
    settings = container.resolve(Settings)  # auto-registered singleton
 
+pytest
+------
+
+diwire includes an optional pytest plugin that can resolve parameters annotated as
+``Annotated[T, Injected()]`` directly in test functions.
+
+See :doc:`/howto/testing/pytest`.
