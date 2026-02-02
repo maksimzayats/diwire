@@ -1,22 +1,16 @@
+from contextlib import suppress
 from typing import Any, cast
 
 _PydanticSettingsBaseSettings: type[Any] | None = None
-try:
+with suppress(ImportError):  # pragma: no cover
     from pydantic_settings import BaseSettings as _PydanticSettingsBaseSettings
-except ImportError:  # pragma: no cover
-    pass
 
 _PydanticV1BaseSettings: type[Any] | None = None
 try:
     from pydantic.v1 import BaseSettings as _PydanticV1BaseSettings  # type: ignore[assignment]
 except ImportError:  # pragma: no cover - pydantic v1 not installed/incompatible
-    try:
+    with suppress(ImportError, AttributeError):  # pragma: no cover - pydantic v1 not installed/incompatible
         from pydantic import BaseSettings as _PydanticV1BaseSettings  # type: ignore[assignment]
-    except (
-        ImportError,
-        AttributeError,
-    ):  # pragma: no cover - pydantic v1 not installed/incompatible
-        pass
 
 if _PydanticSettingsBaseSettings is not None:
     BaseSettings: type[Any] = cast("type[Any]", _PydanticSettingsBaseSettings)
