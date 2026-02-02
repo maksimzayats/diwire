@@ -1,26 +1,32 @@
-from contextlib import suppress
-from typing import Any, cast
+import sys
+from typing import Any
 
-_PydanticSettingsBaseSettings: type[Any] | None = None
-with suppress(ImportError):  # pragma: no cover
-    from pydantic_settings import BaseSettings as _PydanticSettingsBaseSettings
-
-_PydanticV1BaseSettings: type[Any] | None = None
 try:
-    from pydantic.v1 import BaseSettings as _PydanticV1BaseSettings  # type: ignore[assignment]
-except ImportError:  # pragma: no cover - pydantic v1 not installed/incompatible
-    with suppress(
-        ImportError, AttributeError,
-    ):  # pragma: no cover - pydantic v1 not installed/incompatible
-        from pydantic import BaseSettings as _PydanticV1BaseSettings  # type: ignore[assignment]
+    from pydantic_settings import BaseSettings as _PydanticSettingsBaseSettings
+except ImportError:  # pragma: no cover
+    _PydanticSettingsBaseSettings = None  # type: ignore[assignment]
+
+if sys.version_info >= (3, 14):  # pragma: no cover - pydantic v1 incompatible
+    _PydanticV1BaseSettings = None
+else:
+    try:  # pragma: no cover
+        from pydantic.v1 import BaseSettings as _PydanticV1BaseSettings  # pragma: no cover
+    except ImportError:  # pragma: no cover - pydantic v1 not installed/incompatible
+        try:
+            from pydantic import BaseSettings as _PydanticV1BaseSettings
+        except (
+            ImportError,
+            AttributeError,
+        ):  # pragma: no cover - pydantic v1 not installed/incompatible
+            _PydanticV1BaseSettings = None  # type: ignore[assignment]
 
 if _PydanticSettingsBaseSettings is not None:
-    BaseSettings: type[Any] = cast("type[Any]", _PydanticSettingsBaseSettings)
-elif _PydanticV1BaseSettings is not None:  # pragma: no cover
-    BaseSettings = cast("type[Any]", _PydanticV1BaseSettings)
+    BaseSettings: type[Any] = _PydanticSettingsBaseSettings  # type: ignore[assignment]
+elif _PydanticV1BaseSettings is not None:  # type: ignore[unreachable] # pragma: no cover
+    BaseSettings = _PydanticV1BaseSettings  # type: ignore[assignment]
 else:
 
-    class BaseSettings:  # type: ignore[no-redef]  # noqa: D101  # pragma: no cover
+    class BaseSettings:  # type: ignore[no-redef] # noqa: D101 # pragma: no cover
         pass
 
 
