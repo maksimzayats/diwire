@@ -9,8 +9,8 @@ A "request scope" is the most common unit of work for DI in web apps.
 The pattern
 -----------
 
-1. Pick a scope name (commonly ``"request"``).
-2. Register request-local services with ``lifetime=Lifetime.SCOPED`` and ``scope="request"``.
+1. Pick a scope name (commonly ``Scope.REQUEST``).
+2. Register request-local services with ``lifetime=Lifetime.SCOPED`` and ``scope=Scope.REQUEST``.
 3. Enter the scope for each request and resolve your handler/service graph inside it.
 
 Example (runnable)

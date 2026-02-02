@@ -15,7 +15,7 @@ Async factories are auto-detected (no special configuration needed).
 
    import asyncio
 
-   from diwire import Container, Lifetime
+   from diwire import Container, Lifetime, Scope
 
 
    class Database:
@@ -56,7 +56,7 @@ The cleanup code in the ``finally`` block runs automatically when the scope exit
 
    import asyncio
 
-   from diwire import Container, Lifetime
+   from diwire import Container, Lifetime, Scope
 
 
    class DatabaseSession:
@@ -85,10 +85,10 @@ The cleanup code in the ``finally`` block runs automatically when the scope exit
            DatabaseSession,
            factory=create_session,
            lifetime=Lifetime.SCOPED,
-           scope="request",
+           scope=Scope.REQUEST,
        )
 
-       async with container.enter_scope("request"):
+       async with container.enter_scope(Scope.REQUEST):
            session1 = await container.aresolve(DatabaseSession)
            session2 = await container.aresolve(DatabaseSession)
            print(f"same instance: {session1 is session2}")
@@ -152,7 +152,7 @@ Async scoped injection
 ----------------------
 
 Demonstrates ``AsyncScopedInjected``: resolving an async function with
-``scope="request"`` creates a new scope per invocation.
+``scope=Scope.REQUEST`` creates a new scope per invocation.
 
 .. code-block:: python
    :class: diwire-example py-run
@@ -160,7 +160,7 @@ Demonstrates ``AsyncScopedInjected``: resolving an async function with
    import asyncio
    from typing import Annotated
 
-   from diwire import Container, Injected, Lifetime
+   from diwire import Container, Injected, Lifetime, Scope
 
 
    class RequestContext:
@@ -184,10 +184,10 @@ Demonstrates ``AsyncScopedInjected``: resolving an async function with
        container.register(
            RequestContext,
            lifetime=Lifetime.SCOPED,
-           scope="request",
+           scope=Scope.REQUEST,
        )
 
-       per_request = await container.aresolve(handler, scope="request")
+       per_request = await container.aresolve(handler, scope=Scope.REQUEST)
        print(await per_request(payload={"n": "1"}))
        print(await per_request(payload={"n": "2"}))
 
@@ -305,7 +305,9 @@ Raised when a sync ``resolve()`` hits an async dependency.
 ``DIWireAsyncGeneratorFactoryWithoutScopeError``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Raised when an async generator factory is used without a scope for cleanup.
+Raised when an async generator factory is resolved without any active scope for cleanup.
+Because ``Container()`` starts with an initial app scope, you will typically only see
+this if you resolve outside of an active scope in custom integrations or tests.
 
 .. code-block:: python
    :class: diwire-example py-run
@@ -314,6 +316,7 @@ Raised when an async generator factory is used without a scope for cleanup.
 
    from diwire import Container, Lifetime
    from diwire.exceptions import DIWireAsyncGeneratorFactoryWithoutScopeError
+   from diwire.container_scopes import _current_scope
 
 
    async def session_factory():
@@ -324,11 +327,15 @@ Raised when an async generator factory is used without a scope for cleanup.
        container = Container()
        container.register("Session", factory=session_factory, lifetime=Lifetime.TRANSIENT)
 
+       token = _current_scope.set(None)
        try:
-           await container.aresolve("Session")
-       except DIWireAsyncGeneratorFactoryWithoutScopeError as e:
-           print(f"Caught: {type(e).__name__}")
-           print(f"Message: {e}")
+           try:
+               await container.aresolve("Session")
+           except DIWireAsyncGeneratorFactoryWithoutScopeError as e:
+               print(f"Caught: {type(e).__name__}")
+               print(f"Message: {e}")
+       finally:
+           _current_scope.reset(token)
 
 
    if __name__ == "__main__":

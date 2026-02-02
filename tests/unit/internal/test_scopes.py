@@ -5,6 +5,7 @@ import threading
 import uuid
 from collections.abc import AsyncGenerator, Generator
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import Context
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -16,6 +17,7 @@ from diwire.container_scopes import ScopedContainer, _current_scope, _ScopeId
 from diwire.exceptions import (
     DIWireAsyncCleanupWithoutEventLoopError,
     DIWireGeneratorFactoryWithoutScopeError,
+    DIWireInitialScopeCloseError,
     DIWireMissingDependenciesError,
     DIWireScopedWithoutScopeError,
     DIWireScopeMismatchError,
@@ -28,6 +30,21 @@ from diwire.types import Injected, Lifetime
 
 def _scope_key_has_name(scope_key: tuple[tuple[str | None, int], ...], name: str) -> bool:
     return any(segment_name == name for segment_name, _ in scope_key)
+
+
+def _assert_app_scope_active() -> _ScopeId:
+    scope = _current_scope.get()
+    assert scope is not None
+    assert scope.contains_scope("app")
+    return scope
+
+
+def _thread_with_empty_context(*, target: Any, args: tuple[Any, ...]) -> threading.Thread:
+    """Create a thread with an empty ContextVar context when supported."""
+    try:
+        return threading.Thread(target=target, args=args, context=Context())  # type: ignore[call-arg]
+    except TypeError:
+        return threading.Thread(target=target, args=args)
 
 
 @dataclass
@@ -100,25 +117,31 @@ class TestLifetimeScoped:
 class TestStartScope:
     """Tests for container.enter_scope()."""
 
+    def test_initial_scope_active_by_default(self, container: Container) -> None:
+        """Container starts with an active app scope."""
+        scope = _assert_app_scope_active()
+        assert container._initial_scope._scope_id == scope
+
     def test_enter_scope_sets_current_scope(self, container: Container) -> None:
         """enter_scope sets the current scope context variable."""
-        assert _current_scope.get() is None
+        _assert_app_scope_active()
 
         with container.enter_scope("test_scope"):
             scope = _current_scope.get()
             assert scope is not None
             assert scope.contains_scope("test_scope")
+            assert scope.contains_scope("app")
 
-        assert _current_scope.get() is None
+        _assert_app_scope_active()
 
     def test_enter_scope_with_auto_generated_name(self, container: Container) -> None:
         """enter_scope generates unique ID if no name provided."""
         with container.enter_scope() as scoped:
             scope_id = _current_scope.get()
             assert scope_id is not None
-            # Should have segments with None name and integer ID
-            assert len(scope_id.segments) == 1
-            name, instance_id = scope_id.segments[0]
+            # Should have last segment with None name and integer ID
+            assert len(scope_id.segments) == 2
+            name, instance_id = scope_id.segments[-1]
             assert name is None
             assert isinstance(instance_id, int)
 
@@ -152,12 +175,14 @@ class TestScopedContainer:
         with container.enter_scope("parent") as parent:
             parent_scope = _current_scope.get()
             assert parent_scope is not None
+            assert parent_scope.contains_scope("app")
             assert parent_scope.contains_scope("parent")
 
             with parent.enter_scope("child") as child:
                 child_scope = _current_scope.get()
                 assert child_scope is not None
                 # Child scope should contain parent scope and "child" segment
+                assert child_scope.contains_scope("app")
                 assert child_scope.contains_scope("parent")
                 assert child_scope.contains_scope("child")
                 # Child should have more segments than parent
@@ -172,10 +197,11 @@ class TestScopedContainer:
                 scope = _current_scope.get()
                 assert scope is not None
                 # Check hierarchy: segments contain a, b, c
+                assert scope.contains_scope("app")
                 assert scope.contains_scope("a")
                 assert scope.contains_scope("b")
                 assert scope.contains_scope("c")
-                assert len(scope.segments) == 3
+                assert len(scope.segments) == 4
 
 
 class TestScopedInjected:
@@ -259,7 +285,7 @@ class TestScopeValidation:
             container.resolve(Session)
 
     def test_scoped_service_not_found_without_scope(self) -> None:
-        """Resolving scoped service with no active scope raises DIWireServiceNotRegisteredError."""
+        """Resolving scoped service outside its scope raises DIWireServiceNotRegisteredError."""
         container = Container(autoregister=False)
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
@@ -285,30 +311,26 @@ class TestScopeValidation:
         error = exc_info.value
         assert error.registered_scope == "request"
         assert error.current_scope is not None
-        assert error.current_scope.startswith("wrong/")
+        assert "/wrong/" in error.current_scope
 
-    def test_autoregister_raises_error_when_scoped_registration_exists(self) -> None:
-        """Auto-registration raises DIWireScopeMismatchError when a scoped registration exists."""
+    def test_autoregister_succeeds_when_scoped_registration_exists_in_app_scope(self) -> None:
+        """Auto-registration succeeds when resolving within the app scope."""
         container = Container(autoregister=True)
         container.register(Session, scope="app", lifetime=Lifetime.SCOPED)
 
-        with pytest.raises(DIWireScopeMismatchError) as exc_info:
-            container.resolve(Session)
-
-        error = exc_info.value
-        assert error.registered_scope == "app"
-        assert error.current_scope is None
+        result = container.resolve(Session)
+        assert isinstance(result, Session)
 
     def test_autoregister_raises_error_in_wrong_scope(self) -> None:
         """Auto-registration raises DIWireScopeMismatchError when resolved in wrong scope."""
         container = Container(autoregister=True)
-        container.register(Session, scope="app", lifetime=Lifetime.SCOPED)
+        container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         with pytest.raises(DIWireScopeMismatchError) as exc_info, container.enter_scope("other"):
             container.resolve(Session)
 
         error = exc_info.value
-        assert error.registered_scope == "app"
+        assert error.registered_scope == "request"
         assert error.current_scope is not None
 
     def test_autoregister_still_works_for_unregistered_types(self) -> None:
@@ -703,7 +725,7 @@ class TestScopeCleanup:
             pass
 
         assert len(container._scope_caches) == 0
-        assert _current_scope.get() is None
+        _assert_app_scope_active()
 
 
 class TestCaptiveDependency:
@@ -1010,7 +1032,7 @@ class TestScopeContextVariableIsolation:
             except Exception as e:
                 errors.append(e)
 
-        threads = [threading.Thread(target=worker, args=(f"t{i}",)) for i in range(3)]
+        threads = [_thread_with_empty_context(target=worker, args=(f"t{i}",)) for i in range(3)]
         for t in threads:
             t.start()
         for t in threads:
@@ -1393,16 +1415,46 @@ class TestFactoryEdgeCasesWithScopes:
 
         assert cleanup_events == ["closed"]
 
-    def test_generator_factory_without_scope_raises(self, container: Container) -> None:
-        """Generator factory requires an active scope."""
+    def test_generator_factory_without_scope_defaults_to_initial_scope(
+        self,
+        container: Container,
+    ) -> None:
+        """Generator factory without explicit scope uses the initial scope."""
+        cleanup_events: list[str] = []
+
+        def session_factory() -> Generator[Session, None, None]:
+            try:
+                yield Session(id="generated")
+            finally:
+                cleanup_events.append("closed")
+
+        container.register(Session, factory=session_factory, lifetime=Lifetime.TRANSIENT)
+
+        session = container.resolve(Session)
+        assert session.id == "generated"
+        assert cleanup_events == []
+
+        container.close()
+
+        assert cleanup_events == ["closed"]
+
+    def test_generator_factory_without_scope_raises_without_current_scope(
+        self,
+        container: Container,
+    ) -> None:
+        """Generator factory still requires an active scope to resolve."""
 
         def session_factory() -> Generator[Session, None, None]:
             yield Session(id="generated")
 
         container.register(Session, factory=session_factory, lifetime=Lifetime.TRANSIENT)
 
-        with pytest.raises(DIWireGeneratorFactoryWithoutScopeError):
-            container.resolve(Session)
+        token = _current_scope.set(None)
+        try:
+            with pytest.raises(DIWireGeneratorFactoryWithoutScopeError):
+                container.resolve(Session)
+        finally:
+            _current_scope.reset(token)
 
     def test_generator_factories_close_in_nested_scopes(self, container: Container) -> None:
         """Nested scopes close generator factories in the right order."""
@@ -1475,7 +1527,7 @@ class TestScopeErrorRecovery:
 
     def test_exception_in_scope_exit_still_resets_context(self, container: Container) -> None:
         """Exception during scope exit: context still reset."""
-        assert _current_scope.get() is None
+        _assert_app_scope_active()
 
         # We can't easily make clear_scope raise without modifying the container
         # So we test that normal exception handling still cleans up context
@@ -1488,7 +1540,7 @@ class TestScopeErrorRecovery:
         except RuntimeError:
             pass
 
-        assert _current_scope.get() is None
+        _assert_app_scope_active()
 
     def test_resolve_from_manually_cleared_scope(self, container: Container) -> None:
         """Manual clear_scope then resolve: creates new instance (cache cleared)."""
@@ -1521,8 +1573,8 @@ class TestScopeErrorRecovery:
         # Manually calling clear_scope again should be idempotent (no error)
         container._clear_scope(scope_id)
 
-        # Still no error and scope context is None
-        assert _current_scope.get() is None
+        # Still no error and scope context is app
+        _assert_app_scope_active()
 
     def test_close_sync_continues_when_reset_fails(self, container: Container) -> None:
         """_close_sync completes cleanup even if ContextVar reset fails."""
@@ -2612,16 +2664,17 @@ class TestImperativeScopeManagement:
 
     def test_enter_scope_activates_immediately(self, container: Container) -> None:
         """enter_scope() activates the scope immediately."""
-        assert _current_scope.get() is None
+        _assert_app_scope_active()
 
         scope = container.enter_scope("test")
         # Scope should be active immediately
         current = _current_scope.get()
         assert current is not None
         assert current.contains_scope("test")
+        assert current.contains_scope("app")
 
         scope.close()
-        assert _current_scope.get() is None
+        _assert_app_scope_active()
 
     def test_imperative_scope_sync_resolve(self, container: Container) -> None:
         """Imperative scope works with sync resolve."""
@@ -2658,7 +2711,7 @@ class TestImperativeScopeManagement:
             assert _current_scope.get() is not None
 
         # Context manager exit should close the scope
-        assert _current_scope.get() is None
+        _assert_app_scope_active()
 
     def test_nested_imperative_scopes(self, container: Container) -> None:
         """Nested imperative scopes work correctly."""
@@ -2668,22 +2721,25 @@ class TestImperativeScopeManagement:
         parent_scope = container.enter_scope("parent")
         current = _current_scope.get()
         assert current is not None
+        assert current.contains_scope("app")
         assert current.contains_scope("parent")
 
         child_scope = container.enter_scope("child")
         current = _current_scope.get()
         assert current is not None
+        assert current.contains_scope("app")
         assert current.contains_scope("parent")
         assert current.contains_scope("child")
 
         child_scope.close()
         current = _current_scope.get()
         assert current is not None
+        assert current.contains_scope("app")
         assert current.contains_scope("parent")
         assert not current.contains_scope("child")
 
         parent_scope.close()
-        assert _current_scope.get() is None
+        _assert_app_scope_active()
 
     def test_container_close_closes_all_scopes_lifo(self, container: Container) -> None:
         """container.close() closes all scopes in LIFO order."""
@@ -2811,6 +2867,32 @@ class TestImperativeScopeManagement:
         container.close()
         assert container._closed
 
+    def test_initial_scope_cannot_close_directly(self, container: Container) -> None:
+        """Initial scope cannot be closed explicitly."""
+        with pytest.raises(DIWireInitialScopeCloseError):
+            container._initial_scope.close()
+
+    def test_close_scope_on_initial_scope_raises(self, container: Container) -> None:
+        """close_scope('app') does not close the initial scope."""
+        with pytest.raises(DIWireInitialScopeCloseError):
+            container.close_scope("app")
+
+    def test_initial_scope_aclose_raises(self, container: Container) -> None:
+        """Initial scope cannot be closed explicitly (async)."""
+
+        async def run_test() -> None:
+            with pytest.raises(DIWireInitialScopeCloseError):
+                await container._initial_scope.aclose()
+
+        asyncio.run(run_test())
+
+    def test_container_close_closes_initial_scope(self, container: Container) -> None:
+        """container.close() closes the initial scope."""
+        initial_scope = container._initial_scope
+        container.close()
+        assert initial_scope._exited
+        assert initial_scope not in container._active_scopes
+
     def test_mixed_imperative_and_context_manager(self, container: Container) -> None:
         """Imperative and context manager usage can be mixed."""
         container.register(Session, scope="outer", lifetime=Lifetime.SCOPED)
@@ -2821,17 +2903,19 @@ class TestImperativeScopeManagement:
         with container.enter_scope("inner"):
             current = _current_scope.get()
             assert current is not None
+            assert current.contains_scope("app")
             assert current.contains_scope("outer")
             assert current.contains_scope("inner")
 
         # Inner scope is closed by context manager
         current = _current_scope.get()
         assert current is not None
+        assert current.contains_scope("app")
         assert current.contains_scope("outer")
         assert not current.contains_scope("inner")
 
         outer_scope.close()
-        assert _current_scope.get() is None
+        _assert_app_scope_active()
 
     def test_close_scope_closes_named_scope(self, container: Container) -> None:
         """close_scope() closes a scope by name."""
@@ -2850,19 +2934,16 @@ class TestImperativeScopeManagement:
         container.register(Service, scope="session", lifetime=Lifetime.SCOPED)
 
         # Create hierarchy: app -> session -> request
-        app_scope = container.enter_scope("app")
         session_scope = container.enter_scope("session")
         request_scope = container.enter_scope("request")
 
         # All scopes should be active
-        assert not app_scope._exited
         assert not session_scope._exited
         assert not request_scope._exited
 
         # Close "session" should close both "session" and "request" (child)
         container.close_scope("session")
 
-        assert not app_scope._exited  # app should still be open
         assert session_scope._exited  # session should be closed
         assert request_scope._exited  # type: ignore[unreachable]  # request (child) closed
 
@@ -2871,8 +2952,6 @@ class TestImperativeScopeManagement:
         assert current is not None
         assert current.contains_scope("app")
         assert not current.contains_scope("session")
-
-        app_scope.close()
 
     def test_close_scope_leaves_unrelated_scopes_open(self, container: Container) -> None:
         """close_scope() does not affect scopes without the specified name."""
@@ -2934,7 +3013,6 @@ class TestImperativeScopeManagement:
         )
 
         async def run_test() -> None:
-            app_scope = container.enter_scope("app")
             session_scope = container.enter_scope("session")
             await container.aresolve(Session)
             request_scope = container.enter_scope("request")
@@ -2945,11 +3023,8 @@ class TestImperativeScopeManagement:
 
             # Request (child) should be cleaned up before session (parent)
             assert cleanup_order == ["request", "session"]
-            assert not app_scope._exited
             assert session_scope._exited
             assert request_scope._exited
-
-            app_scope.close()
 
         asyncio.run(run_test())
 
@@ -3025,15 +3100,15 @@ class TestImperativeScopeManagement:
         from unittest.mock import patch
 
         scope = container.enter_scope("test")
-        assert len(container._active_scopes) == 1
+        assert len(container._active_scopes) == 2
 
         with patch.object(scope, "close", side_effect=RuntimeError("close failed")):
             with pytest.raises(RuntimeError, match="close failed"):
                 container.close()
 
         # Scope should remain in _active_scopes after failure
-        assert len(container._active_scopes) == 1
-        assert container._active_scopes[0] is scope
+        assert len(container._active_scopes) == 2
+        assert container._active_scopes[-1] is scope
 
         # Cleanup: properly close the scope to reset _current_scope
         scope.close()
@@ -3044,7 +3119,7 @@ class TestImperativeScopeManagement:
 
         async def run_test() -> None:
             scope = container.enter_scope("test")
-            assert len(container._active_scopes) == 1
+            assert len(container._active_scopes) == 2
 
             mock_aclose = AsyncMock(side_effect=RuntimeError("aclose failed"))
             with patch.object(scope, "aclose", mock_aclose):
@@ -3052,8 +3127,8 @@ class TestImperativeScopeManagement:
                     await container.aclose()
 
             # Scope should remain in _active_scopes after failure
-            assert len(container._active_scopes) == 1
-            assert container._active_scopes[0] is scope
+            assert len(container._active_scopes) == 2
+            assert container._active_scopes[-1] is scope
 
             # Cleanup: properly close the scope to reset _current_scope
             await scope.aclose()
@@ -3069,7 +3144,7 @@ class TestImperativeScopeManagement:
 
             # Mark container as closed without draining scopes
             container._closed = True
-            assert len(container._active_scopes) == 2
+            assert len(container._active_scopes) == 3
 
             # aclose() should still drain remaining scopes
             await container.aclose()
@@ -3121,7 +3196,7 @@ class TestImperativeScopeManagement:
     def test_close_pops_scope_when_unregister_skipped(self, container: Container) -> None:
         """close() pops scope when _unregister_active_scope doesn't remove it."""
         scope = container.enter_scope("test")
-        assert len(container._active_scopes) == 1
+        assert len(container._active_scopes) == 2
 
         # Override _close_sync to skip _unregister_active_scope
         # This simulates scenario where Container.close() needs to pop
@@ -3149,7 +3224,7 @@ class TestImperativeScopeManagement:
 
         async def run_test() -> None:
             scope = container.enter_scope("test")
-            assert len(container._active_scopes) == 1
+            assert len(container._active_scopes) == 2
 
             # Override _close_async to skip _unregister_active_scope
             async def aclose_without_unregister() -> None:

@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator, Generator
 import pytest
 
 from diwire.container import Container
+from diwire.container_scopes import _current_scope
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
     DIWireAsyncGeneratorFactoryDidNotYieldError,
@@ -276,8 +277,12 @@ class TestAsyncExceptions:
 
         container.register(ServiceA, factory=async_gen_factory)
 
-        with pytest.raises(DIWireAsyncGeneratorFactoryWithoutScopeError) as exc_info:
-            await container.aresolve(ServiceA)
+        token = _current_scope.set(None)
+        try:
+            with pytest.raises(DIWireAsyncGeneratorFactoryWithoutScopeError) as exc_info:
+                await container.aresolve(ServiceA)
+        finally:
+            _current_scope.reset(token)
 
         assert exc_info.value.service_key.value is ServiceA
 

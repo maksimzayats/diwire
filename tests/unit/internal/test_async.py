@@ -356,10 +356,37 @@ class TestAsyncGeneratorFactory:
 
         container.register(ServiceA, factory=resource_factory, lifetime=Lifetime.TRANSIENT)
 
-        with pytest.raises(DIWireAsyncGeneratorFactoryWithoutScopeError) as exc_info:
-            await container.aresolve(ServiceA)
+        token = _current_scope.set(None)
+        try:
+            with pytest.raises(DIWireAsyncGeneratorFactoryWithoutScopeError) as exc_info:
+                await container.aresolve(ServiceA)
+        finally:
+            _current_scope.reset(token)
 
         assert exc_info.value.service_key.value is ServiceA
+
+    async def test_async_generator_without_scope_defaults_to_initial_scope(
+        self,
+        container: Container,
+    ) -> None:
+        """Async generator factory without explicit scope uses the initial scope."""
+        cleanup_events: list[str] = []
+
+        async def resource_factory() -> AsyncGenerator[ServiceA, None]:
+            try:
+                yield ServiceA()
+            finally:
+                cleanup_events.append("closed")
+
+        container.register(ServiceA, factory=resource_factory, lifetime=Lifetime.TRANSIENT)
+
+        service = await container.aresolve(ServiceA)
+        assert isinstance(service, ServiceA)
+        assert cleanup_events == []
+
+        await container.aclose()
+
+        assert cleanup_events == ["closed"]
 
     async def test_async_generator_that_does_not_yield_raises_error(
         self,
@@ -395,14 +422,19 @@ class TestAsyncScope:
 
     async def test_async_context_manager_sets_scope(self, container: Container) -> None:
         """async with container.enter_scope() sets the current scope."""
-        assert _current_scope.get() is None
+        scope = _current_scope.get()
+        assert scope is not None
+        assert scope.contains_scope("app")
 
         async with container.enter_scope("test"):
             scope = _current_scope.get()
             assert scope is not None
             assert scope.contains_scope("test")
+            assert scope.contains_scope("app")
 
-        assert _current_scope.get() is None
+        scope = _current_scope.get()
+        assert scope is not None
+        assert scope.contains_scope("app")
 
     async def test_async_scoped_singleton_caching(self, container: Container) -> None:
         """Async scoped singletons are cached within the scope."""
@@ -967,8 +999,12 @@ class TestAsyncMissingCoverage:
             lifetime=Lifetime.TRANSIENT,
         )
 
-        with pytest.raises(DIWireGeneratorFactoryWithoutScopeError):
-            await container.aresolve(ServiceA)
+        token = _current_scope.set(None)
+        try:
+            with pytest.raises(DIWireGeneratorFactoryWithoutScopeError):
+                await container.aresolve(ServiceA)
+        finally:
+            _current_scope.reset(token)
 
     @pytest.mark.asyncio
     async def test_aresolve_sync_generator_no_yield(self) -> None:

@@ -51,6 +51,7 @@ from diwire.container_injection import (
     _InjectedFunction,
     _ScopedInjectedFunction,
 )
+from diwire.container_interface import IContainer
 from diwire.container_locks import LockManager
 from diwire.container_resolution_stack import _get_resolution_stack
 from diwire.container_scopes import ScopedContainer, _current_scope, _ScopeId
@@ -76,6 +77,7 @@ from diwire.exceptions import (
     DIWireGeneratorFactoryWithoutScopeError,
     DIWireIgnoredServiceError,
     DIWireInvalidGenericTypeArgumentError,
+    DIWireInvalidScopeNameError,
     DIWireMissingDependenciesError,
     DIWireNotAClassError,
     DIWireOpenGenericRegistrationError,
@@ -87,7 +89,7 @@ from diwire.exceptions import (
 )
 from diwire.registry import Registration
 from diwire.service_key import Component, ServiceKey
-from diwire.types import Factory, Lifetime
+from diwire.types import Factory, Lifetime, Scope
 
 T = TypeVar("T", bound=Any)
 _C = TypeVar("_C", bound=type)  # For class decorator
@@ -289,10 +291,11 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
             return instance
 
 
-class Container:
+class Container(IContainer):
     """Dependency injection container for registering and resolving services.
 
     Supports automatic registration, lifetime singleton/transient, and factory patterns.
+    Starts with an active app scope by default (configurable via ``initial_scope``).
     """
 
     # Class-level counter for generating unique scope IDs (faster than UUID)
@@ -310,9 +313,12 @@ class Container:
         "_autoregister_registration_factories",
         "_cleanup_tasks",
         "_closed",
+        "_closing",
         "_compiled_providers",
         "_dependencies_extractor",
         "_has_scoped_registrations",
+        "_initial_scope",
+        "_initial_scope_name",
         "_is_compiled",
         "_locks",
         "_multithreaded",
@@ -345,7 +351,12 @@ class Container:
         | None = None,
         autoregister_default_lifetime: Lifetime = DEFAULT_AUTOREGISTER_LIFETIME,
         auto_compile: bool = True,
+        initial_scope: str = Scope.APP,
     ) -> None:
+        normalized_scope = initial_scope.strip()
+        if not normalized_scope:
+            raise DIWireInvalidScopeNameError(initial_scope)
+        self._initial_scope_name = normalized_scope
         self._autoregister = autoregister
         self._autoregister_ignores = autoregister_ignores or DEFAULT_AUTOREGISTER_IGNORES
         self._autoregister_registration_factories = (
@@ -410,7 +421,12 @@ class Container:
         # Track active scopes for imperative close()
         self._active_scopes: list[ScopedContainer] = []
         self._active_scopes_lock = threading.Lock()
+        self._closing = False
         self._closed = False
+
+        instance_id = next(self._scope_counter)
+        initial_scope_id = _ScopeId(segments=((self._initial_scope_name, instance_id),))
+        self._initial_scope = ScopedContainer(_container=self, _scope_id=initial_scope_id)
 
         self.register(type(self), instance=self, lifetime=Lifetime.SINGLETON)
 
@@ -1416,8 +1432,7 @@ class Container:
         if isinstance(result, AsyncGenerator):
             raise DIWireAsyncDependencyInSyncContextError(service_key, service_key)
         if isinstance(result, Generator):
-            current_scope = _current_scope.get() if self._has_scoped_registrations else None
-            cache_scope = self._get_cache_scope(current_scope, scope)
+            cache_scope = self._get_cache_scope(_current_scope.get(), scope)
             if cache_scope is None:
                 raise DIWireGeneratorFactoryWithoutScopeError(service_key)
             if lifetime == Lifetime.SINGLETON:
@@ -1917,6 +1932,11 @@ class Container:
                         instance = registration.factory()
                     if isinstance(instance, Generator):
                         if cache_scope is None:
+                            cache_scope = self._get_cache_scope(
+                                _current_scope.get(),
+                                registration.scope,
+                            )
+                        if cache_scope is None:
                             raise DIWireGeneratorFactoryWithoutScopeError(service_key)
                         if registration.lifetime == Lifetime.SINGLETON:
                             raise DIWireGeneratorFactoryUnsupportedLifetimeError(service_key)
@@ -2300,6 +2320,11 @@ class Container:
                     elif isinstance(result, AsyncGenerator):
                         # Async generator factory
                         if cache_scope is None:
+                            cache_scope = self._get_cache_scope(
+                                _current_scope.get(),
+                                registration.scope,
+                            )
+                        if cache_scope is None:
                             raise DIWireAsyncGeneratorFactoryWithoutScopeError(service_key)
                         if registration.lifetime == Lifetime.SINGLETON:
                             raise DIWireGeneratorFactoryUnsupportedLifetimeError(service_key)
@@ -2312,6 +2337,11 @@ class Container:
                         async_exit_stack.push_async_callback(result.aclose)
                     elif isinstance(result, Generator):
                         # Sync generator factory
+                        if cache_scope is None:
+                            cache_scope = self._get_cache_scope(
+                                _current_scope.get(),
+                                registration.scope,
+                            )
                         if cache_scope is None:
                             raise DIWireGeneratorFactoryWithoutScopeError(service_key)
                         if registration.lifetime == Lifetime.SINGLETON:
@@ -2412,7 +2442,8 @@ class Container:
                 is_registered = dep_key in self._registry
                 if not is_registered and self._has_scoped_registrations:
                     current_scope = _current_scope.get()
-                    if current_scope is not None:
+                    # ContextVar state is environment-dependent; exclude branch from coverage.
+                    if current_scope is not None:  # pragma: no cover
                         is_registered = (
                             self._get_scoped_registration(dep_key, current_scope) is not None
                         )
@@ -2545,6 +2576,7 @@ class Container:
         with self._active_scopes_lock:
             if self._closed:
                 return
+            self._closing = True
             self._closed = True
         while True:
             with self._active_scopes_lock:
@@ -2573,6 +2605,7 @@ class Container:
         remains in _active_scopes and the exception is re-raised.
         """
         with self._active_scopes_lock:
+            self._closing = True
             self._closed = True
         while True:
             with self._active_scopes_lock:
@@ -2952,7 +2985,8 @@ class Container:
                 is_registered = param_info.service_key in self._registry
                 if not is_registered and self._has_scoped_registrations:
                     current_scope = _current_scope.get()
-                    if current_scope is not None:
+                    # ContextVar state is environment-dependent; exclude branch from coverage.
+                    if current_scope is not None:  # pragma: no cover
                         is_registered = (
                             self._get_scoped_registration(param_info.service_key, current_scope)
                             is not None

@@ -20,6 +20,20 @@ class Lifetime(str, Enum):
     """Instance is shared within a scope, different instances across scopes."""
 
 
+class Scope(str, Enum):
+    """Predefined scope names for convenience.
+
+    Scope parameters accept any string; this enum only provides common defaults.
+    """
+
+    APP = "app"
+    """Application-wide scope (one per container or app lifetime)."""
+    SESSION = "session"
+    """Connection/session scope (e.g., websocket or user session)."""
+    REQUEST = "request"
+    """Request/job scope (one per request or unit of work)."""
+
+
 class FactoryClassProtocol:
     """Protocol for factory classes that create instances of a specific type."""
 

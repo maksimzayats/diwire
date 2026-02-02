@@ -156,16 +156,9 @@ where each call needs its own scope.
 
    import random
    from dataclasses import dataclass
-   from enum import Enum
    from typing import Annotated
 
-   from diwire import Container, Injected, Lifetime
-
-
-   class Scope(str, Enum):
-       """Application scope definitions."""
-
-       REQUEST = "request"
+   from diwire import Container, Injected, Lifetime, Scope
 
 
    @dataclass

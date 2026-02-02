@@ -22,6 +22,7 @@ from diwire.compiled_providers import (
     SingletonPositionalArgsTypeProvider,
 )
 from diwire.container import Container
+from diwire.container_scopes import _current_scope
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
     DIWireGeneratorFactoryWithoutScopeError,
@@ -380,8 +381,12 @@ class TestCompiledFactoryGeneratorHandling:
         service_key = ServiceKey.from_value(ServiceA)
         assert service_key in container._compiled_providers
 
-        with pytest.raises(DIWireGeneratorFactoryWithoutScopeError):
-            container.resolve(ServiceA)
+        token = _current_scope.set(None)
+        try:
+            with pytest.raises(DIWireGeneratorFactoryWithoutScopeError):
+                container.resolve(ServiceA)
+        finally:
+            _current_scope.reset(token)
 
     def test_compiled_singleton_factory_generator_without_scope_does_not_cache(self) -> None:
         """Singleton compiled factory returning a generator without scope is not cached."""
@@ -398,8 +403,12 @@ class TestCompiledFactoryGeneratorHandling:
         provider = container._compiled_providers.get(service_key)
         assert isinstance(provider, SingletonFactoryProvider)
 
-        with pytest.raises(DIWireGeneratorFactoryWithoutScopeError):
-            container.resolve(ServiceA)
+        token = _current_scope.set(None)
+        try:
+            with pytest.raises(DIWireGeneratorFactoryWithoutScopeError):
+                container.resolve(ServiceA)
+        finally:
+            _current_scope.reset(token)
 
         assert service_key not in container._singletons
         assert provider._instance is None

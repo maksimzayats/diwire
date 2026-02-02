@@ -1,4 +1,5 @@
 import asyncio
+import contextvars
 import threading
 import uuid
 from collections.abc import AsyncGenerator, Callable, Generator, MutableMapping
@@ -9,6 +10,7 @@ from typing import Annotated, cast
 
 import pytest
 
+from diwire import container as container_module
 from diwire.compiled_providers import (
     ArgsTypeProvider,
     PositionalArgsTypeProvider,
@@ -32,13 +34,14 @@ from diwire.exceptions import (
     DIWireGeneratorFactoryDidNotYieldError,
     DIWireGeneratorFactoryUnsupportedLifetimeError,
     DIWireIgnoredServiceError,
+    DIWireInvalidScopeNameError,
     DIWireMissingDependenciesError,
     DIWireScopeMismatchError,
     DIWireServiceNotRegisteredError,
 )
 from diwire.registry import Registration
 from diwire.service_key import Component, ServiceKey
-from diwire.types import Injected, Lifetime
+from diwire.types import Injected, Lifetime, Scope
 
 
 # Module-level classes for circular dependency tests
@@ -62,6 +65,76 @@ class _AsyncCircularA:
 class _AsyncCircularB:
     def __init__(self, a: _AsyncCircularA) -> None:
         self.a = a
+
+
+class _IgnoredType:
+    pass
+
+
+class _ServiceWithIgnoredType:
+    def __init__(self, value: _IgnoredType) -> None:
+        self.value = value
+
+
+def test_initial_scope_requires_name() -> None:
+    with pytest.raises(DIWireInvalidScopeNameError):
+        Container(initial_scope="   ")
+
+
+def test_get_resolved_dependencies_checks_scoped_registration_for_ignored_type(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    container = Container(autoregister=False)
+    container._autoregister_ignores = {_IgnoredType}
+    ignored_key = ServiceKey.from_value(_IgnoredType)
+    ignored_instance = _IgnoredType()
+    container._scoped_registry[(ignored_key, "app")] = Registration(
+        service_key=ignored_key,
+        instance=ignored_instance,
+        lifetime=Lifetime.SCOPED,
+        scope="app",
+    )
+    container._has_scoped_registrations = True
+    service_key = ServiceKey.from_value(_ServiceWithIgnoredType)
+    scope_id = _ScopeId(segments=(("app", 0),))
+
+    class DummyScopeVar:
+        def get(self) -> _ScopeId:
+            return scope_id
+
+    monkeypatch.setattr(container_module, "_current_scope", DummyScopeVar())
+    resolved = container._get_resolved_dependencies(service_key)
+    assert resolved.dependencies["value"] is ignored_instance
+
+
+def test_aget_resolved_dependencies_checks_scoped_registration_for_ignored_type(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    container = Container(autoregister=False)
+    container._autoregister_ignores = {_IgnoredType}
+    ignored_key = ServiceKey.from_value(_IgnoredType)
+    ignored_instance = _IgnoredType()
+    container._scoped_registry[(ignored_key, "app")] = Registration(
+        service_key=ignored_key,
+        instance=ignored_instance,
+        lifetime=Lifetime.SCOPED,
+        scope="app",
+    )
+    container._has_scoped_registrations = True
+    service_key = ServiceKey.from_value(_ServiceWithIgnoredType)
+    scope_id = _ScopeId(segments=(("app", 0),))
+
+    def run_in_context() -> None:
+        resolved = asyncio.run(container._aget_resolved_dependencies(service_key))
+        assert resolved.dependencies["value"] is ignored_instance
+
+    class DummyScopeVar:
+        def get(self) -> _ScopeId:
+            return scope_id
+
+    monkeypatch.setattr(container_module, "_current_scope", DummyScopeVar())
+
+    contextvars.Context().run(run_in_context)
 
 
 def test_auto_registers_class(container: Container) -> None:
@@ -716,7 +789,7 @@ class TestCompilationEdgeCases:
                 self.a = a
 
         container.register(ServiceA, lifetime=Lifetime.TRANSIENT)
-        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED)
+        container.register(ServiceB, scope=Scope.REQUEST, lifetime=Lifetime.SCOPED)
 
         container.compile()
 
@@ -1052,7 +1125,7 @@ class TestAsyncResolutionEdgeCases:
             return b
 
         # resolve should work without crashing on nested scope detection
-        injected = container.resolve(handler, scope="request")
+        injected = container.resolve(handler, scope=Scope.REQUEST)
 
         # Verify it's a ScopedInjected (scope was detected from ServiceB registration)
         assert isinstance(injected, _ScopedInjectedFunction)

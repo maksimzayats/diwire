@@ -5,6 +5,8 @@ Resources (cleanup)
 ===================
 
 When a dependency needs cleanup (close/dispose/release), register it as a scoped service using a generator factory.
+If you omit a scope, the generator is attached to the initial app scope and cleaned up
+when you call ``container.close()`` or ``container.aclose()``.
 
 Sync cleanup (generator)
 ------------------------

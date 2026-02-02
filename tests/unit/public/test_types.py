@@ -5,7 +5,7 @@ from typing import Annotated, Any, cast, get_args, get_origin
 
 from diwire.exceptions import DIWireInjectedInstantiationError
 from diwire.service_key import Component
-from diwire.types import Injected, Lifetime, _InjectedMarker
+from diwire.types import Injected, Lifetime, Scope, _InjectedMarker
 
 
 class TestLifetime:
@@ -71,6 +71,32 @@ class TestInjected:
         assert args[0] is ServiceA
         assert any(isinstance(arg, Component) for arg in args[1:])
         assert any(isinstance(arg, _InjectedMarker) for arg in args[1:])
+
+
+class TestScope:
+    def test_scope_app_value(self) -> None:
+        """APP has value 'app'."""
+        assert Scope.APP.value == "app"
+
+    def test_scope_session_value(self) -> None:
+        """SESSION has value 'session'."""
+        assert Scope.SESSION.value == "session"
+
+    def test_scope_request_value(self) -> None:
+        """REQUEST has value 'request'."""
+        assert Scope.REQUEST.value == "request"
+
+    def test_scope_is_enum(self) -> None:
+        """Scope is an Enum."""
+        assert issubclass(Scope, Enum)
+
+    def test_scope_enum_members(self) -> None:
+        """Scope has exactly three members."""
+        members = list(Scope)
+        assert len(members) == 3
+        assert Scope.APP in members
+        assert Scope.SESSION in members
+        assert Scope.REQUEST in members
 
 
 class TestFactoryProtocol:

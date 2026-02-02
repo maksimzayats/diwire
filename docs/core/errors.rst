@@ -33,6 +33,14 @@ Scope-related errors typically happen when:
 
 - you try to resolve a scoped service outside of its scope
 - you keep a reference to a scope and use it after it has exited
+- you resolve a generator factory when no scope is active (sync or async)
+
+By default, ``Container()`` starts with an active app scope, so generator factories
+registered without an explicit scope will use that initial scope and be cleaned up on
+``container.close()`` or ``container.aclose()``. If you see a
+``DIWireGeneratorFactoryWithoutScopeError`` or
+``DIWireAsyncGeneratorFactoryWithoutScopeError``, it usually means you're resolving in
+a context where no scope is active.
 
 See the runnable scripts in :doc:`/howto/examples/errors` (Scope mismatch section).
 

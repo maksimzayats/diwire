@@ -13,15 +13,7 @@ Scopes allow grouping related service resolutions together.
 .. code-block:: python
    :class: diwire-example py-run
 
-   from enum import Enum
-
-   from diwire import Container
-
-
-   class Scope(str, Enum):
-       """Application scope definitions."""
-
-       REQUEST = "request"
+   from diwire import Container, Scope
 
 
    class RequestContext:
@@ -37,6 +29,7 @@ Scopes allow grouping related service resolutions together.
    def main() -> None:
        container = Container()
        container.register(RequestContext)
+       # Container starts with an active app scope by default.
 
        # Using enter_scope() with an Enum value
        print("Scope usage with context manager:\n")
@@ -79,15 +72,7 @@ Demonstrates ``SCOPED``:
 .. code-block:: python
    :class: diwire-example py-run
 
-   from enum import Enum
-
-   from diwire import Container, Lifetime
-
-
-   class Scope(str, Enum):
-       """Application scope definitions."""
-
-       REQUEST = "request"
+   from diwire import Container, Lifetime, Scope
 
 
    class Session:
@@ -156,16 +141,9 @@ from parent scopes.
 .. code-block:: python
    :class: diwire-example py-run
 
-   from enum import Enum
+   from diwire import Container, Lifetime, Scope
 
-   from diwire import Container, Lifetime
-
-
-   class Scope(str, Enum):
-       """Application scope definitions."""
-
-       REQUEST = "request"
-       HANDLER = "handler"
+   HANDLER = "handler"
 
 
    class RequestContext:
@@ -193,7 +171,7 @@ from parent scopes.
        container.register(
            HandlerContext,
            lifetime=Lifetime.SCOPED,
-           scope=Scope.HANDLER,
+           scope=HANDLER,
        )
 
        print("Nested scopes demonstration:\n")
@@ -203,7 +181,7 @@ from parent scopes.
            print(f"Request scope - RequestContext id: {request_ctx.request_id}")
 
            # Create nested handler scopes
-           with request_scope.enter_scope(Scope.HANDLER) as handler_scope1:
+           with request_scope.enter_scope(HANDLER) as handler_scope1:
                handler_ctx1 = handler_scope1.resolve(HandlerContext)
                # Parent's RequestContext is accessible from child
                inherited_request_ctx = handler_scope1.resolve(RequestContext)
@@ -213,7 +191,7 @@ from parent scopes.
                print(f"    RequestContext id: {inherited_request_ctx.request_id}")
                print(f"    Same request context: {inherited_request_ctx is request_ctx}")
 
-           with request_scope.enter_scope(Scope.HANDLER) as handler_scope2:
+           with request_scope.enter_scope(HANDLER) as handler_scope2:
                handler_ctx2 = handler_scope2.resolve(HandlerContext)
                inherited_request_ctx2 = handler_scope2.resolve(RequestContext)
 
@@ -235,21 +213,16 @@ Demonstrates generator factory support:
 - the yielded instance is used by the container
 - the generator is closed on scope exit
 
+If you omit a scope in ``register()``, the generator is attached to the initial app
+scope and cleaned up when you call ``container.close()`` or ``container.aclose()``.
+
 .. code-block:: python
    :class: diwire-example py-run
 
    from __future__ import annotations
 
    from collections.abc import Generator
-   from enum import Enum
-
-   from diwire import Container, Lifetime
-
-
-   class Scope(str, Enum):
-       """Application scope definitions."""
-
-       REQUEST = "request"
+   from diwire import Container, Lifetime, Scope
 
 
    class Session:

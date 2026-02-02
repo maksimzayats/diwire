@@ -22,7 +22,7 @@ Minimal sketch
    from starlette.requests import Request
    from starlette.responses import JSONResponse
 
-   from diwire import Container, Injected, container_context
+   from diwire import Container, Injected, Scope, container_context
 
    request_var: ContextVar[Request] = ContextVar("request_var")
    app = Starlette()
@@ -41,10 +41,10 @@ Minimal sketch
    container = Container()
    container_context.set_current(container)
 
-   container.register(Request, factory=request_var.get, scope="request")
+   container.register(Request, factory=request_var.get, scope=Scope.REQUEST)
 
 
-   @container_context.resolve(scope="request")
+   @container_context.resolve(scope=Scope.REQUEST)
    async def handler(
        request: Request,
        service: Injected["Service"],

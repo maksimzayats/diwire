@@ -11,19 +11,14 @@ Demonstrates a common web pattern:
 
 - each request gets its own scope
 - multiple services share a request-scoped context
-- the handler is resolved via ``container.resolve(..., scope="request")``
+- the handler is resolved via ``container.resolve(..., scope=Scope.REQUEST)``
 
 .. code-block:: python
    :class: diwire-example py-run
 
-   from enum import Enum
    from typing import Annotated
 
-   from diwire import Container, Injected, Lifetime
-
-
-   class Scope(str, Enum):
-       REQUEST = "request"
+   from diwire import Container, Injected, Lifetime, Scope
 
 
    class RequestContext:
@@ -96,7 +91,7 @@ Per-call unit of work (ScopedInjected)
    from diwire import Container, Injected, Lifetime
 
 
-   class Scope(str, Enum):
+   class UnitOfWorkScope(str, Enum):
        UNIT_OF_WORK = "unit_of_work"
 
 
@@ -132,10 +127,10 @@ Per-call unit of work (ScopedInjected)
 
    def main() -> None:
        container = Container()
-       container.register(Session, lifetime=Lifetime.SCOPED, scope=Scope.UNIT_OF_WORK)
+       container.register(Session, lifetime=Lifetime.SCOPED, scope=UnitOfWorkScope.UNIT_OF_WORK)
        container.register(UserRepository)
 
-       handler = container.resolve(create_user, scope=Scope.UNIT_OF_WORK)
+       handler = container.resolve(create_user, scope=UnitOfWorkScope.UNIT_OF_WORK)
        print(handler(username="alice"))
        print(handler(username="bob"))
 
@@ -157,7 +152,7 @@ Use ``enter_scope()`` when you want to manage the scope explicitly.
    from diwire import Container, Lifetime
 
 
-   class Scope(str, Enum):
+   class UnitOfWorkScope(str, Enum):
        UNIT_OF_WORK = "unit_of_work"
 
 
@@ -176,10 +171,10 @@ Use ``enter_scope()`` when you want to manage the scope explicitly.
 
    def main() -> None:
        container = Container()
-       container.register(Session, lifetime=Lifetime.SCOPED, scope=Scope.UNIT_OF_WORK)
+       container.register(Session, lifetime=Lifetime.SCOPED, scope=UnitOfWorkScope.UNIT_OF_WORK)
        container.register(UserRepository)
 
-       with container.enter_scope(Scope.UNIT_OF_WORK) as scope:
+       with container.enter_scope(UnitOfWorkScope.UNIT_OF_WORK) as scope:
            repo1 = scope.resolve(UserRepository)
            repo2 = scope.resolve(UserRepository)
            session = scope.resolve(Session)

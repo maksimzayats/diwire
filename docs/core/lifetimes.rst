@@ -41,6 +41,8 @@ Scoped
 ------
 
 Scoped lifetimes are covered in :doc:`scopes` because scopes also define *cleanup*.
+Generator factories without an explicit scope are attached to the initial app scope and
+cleaned up when you call ``container.close()`` or ``container.aclose()``.
 
 One important rule of thumb:
 

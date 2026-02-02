@@ -22,6 +22,8 @@ Async cleanup with async generators
 
 Use an **async generator** when you need to ``await`` cleanup (closing connections, sessions, etc.).
 The ``finally`` block runs when the scope exits.
+If you register an async generator factory without specifying a scope, it is attached to
+the initial app scope and cleaned up when you call ``container.aclose()``.
 
 See the runnable scripts in :doc:`/howto/examples/async` (Async generator cleanup section).
 
