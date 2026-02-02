@@ -29,12 +29,12 @@ integration:
 
    from fastapi import FastAPI, Request
 
-   from diwire import Container, Injected
+   from diwire import Container, Injected, Scope
    from diwire.integrations.fastapi import setup_diwire
 
    app = FastAPI()
    container = Container()
-   setup_diwire(app, container=container, scope="request")
+   setup_diwire(app, container=container, scope=Scope.REQUEST)
 
 
    @dataclass
@@ -63,7 +63,7 @@ integration:
        return {"message": service.greet(), "request_id": id(request)}
 
 
-   container.register(Service, factory=get_service, scope="request")
+   container.register(Service, factory=get_service, scope=Scope.REQUEST)
 
 
    @app.get("/greet")
@@ -80,7 +80,7 @@ This example demonstrates a 3-layer architecture:
 Key points:
 
 - all layers share the same scoped instances within a request
-- ``@container.resolve(scope="request")`` integrates cleanly with ``@app.get()``
+- ``@container.resolve(scope=Scope.REQUEST)`` integrates cleanly with ``@app.get()``
 - dependencies are resolved automatically via type hints
 
 .. code-block:: python
@@ -95,7 +95,7 @@ Key points:
    from fastapi import FastAPI
    from fastapi.params import Query
 
-   from diwire import Container, Injected
+   from diwire import Container, Injected, Scope
 
    app = FastAPI()
    container = Container()
@@ -145,12 +145,12 @@ Key points:
            print("Closing service")
 
 
-   container.register(Repository, factory=get_repository, scope="request")
-   container.register(Service, factory=get_service, scope="request")
+   container.register(Repository, factory=get_repository, scope=Scope.REQUEST)
+   container.register(Service, factory=get_service, scope=Scope.REQUEST)
 
 
    @app.get("/greet")
-   @container.resolve(scope="request")
+   @container.resolve(scope=Scope.REQUEST)
    async def greet(
        name: Annotated[str, Query()],
        service: Injected[Service],
@@ -187,7 +187,7 @@ Key concepts:
 
    from fastapi import FastAPI, Request
 
-   from diwire import Container, Injected, container_context
+   from diwire import Container, Injected, Scope, container_context
 
    app = FastAPI()
    request_context: ContextVar[Request] = ContextVar("request_context")
@@ -232,12 +232,12 @@ Key concepts:
        container = Container()
        container_context.set_current(container)
 
-       container.register(Request, factory=request_context.get, scope="request")
-       container.register(Service, factory=get_service, scope="request")
+       container.register(Request, factory=request_context.get, scope=Scope.REQUEST)
+       container.register(Service, factory=get_service, scope=Scope.REQUEST)
 
 
    @app.get("/greet")
-   @container_context.resolve(scope="request")
+   @container_context.resolve(scope=Scope.REQUEST)
    async def greet(
        name: str,
        service: Injected[Service],

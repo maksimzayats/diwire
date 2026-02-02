@@ -38,7 +38,7 @@ from diwire.exceptions import (
 )
 from diwire.registry import Registration
 from diwire.service_key import Component, ServiceKey
-from diwire.types import Injected, Lifetime
+from diwire.types import Injected, Lifetime, Scope
 
 
 # Module-level classes for circular dependency tests
@@ -716,7 +716,7 @@ class TestCompilationEdgeCases:
                 self.a = a
 
         container.register(ServiceA, lifetime=Lifetime.TRANSIENT)
-        container.register(ServiceB, scope="request", lifetime=Lifetime.SCOPED)
+        container.register(ServiceB, scope=Scope.REQUEST, lifetime=Lifetime.SCOPED)
 
         container.compile()
 
@@ -1052,7 +1052,7 @@ class TestAsyncResolutionEdgeCases:
             return b
 
         # resolve should work without crashing on nested scope detection
-        injected = container.resolve(handler, scope="request")
+        injected = container.resolve(handler, scope=Scope.REQUEST)
 
         # Verify it's a ScopedInjected (scope was detected from ServiceB registration)
         assert isinstance(injected, _ScopedInjectedFunction)

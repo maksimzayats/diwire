@@ -15,7 +15,7 @@ Async factories are auto-detected (no special configuration needed).
 
    import asyncio
 
-   from diwire import Container, Lifetime
+   from diwire import Container, Lifetime, Scope
 
 
    class Database:
@@ -56,7 +56,7 @@ The cleanup code in the ``finally`` block runs automatically when the scope exit
 
    import asyncio
 
-   from diwire import Container, Lifetime
+   from diwire import Container, Lifetime, Scope
 
 
    class DatabaseSession:
@@ -85,10 +85,10 @@ The cleanup code in the ``finally`` block runs automatically when the scope exit
            DatabaseSession,
            factory=create_session,
            lifetime=Lifetime.SCOPED,
-           scope="request",
+           scope=Scope.REQUEST,
        )
 
-       async with container.enter_scope("request"):
+       async with container.enter_scope(Scope.REQUEST):
            session1 = await container.aresolve(DatabaseSession)
            session2 = await container.aresolve(DatabaseSession)
            print(f"same instance: {session1 is session2}")
@@ -152,7 +152,7 @@ Async scoped injection
 ----------------------
 
 Demonstrates ``AsyncScopedInjected``: resolving an async function with
-``scope="request"`` creates a new scope per invocation.
+``scope=Scope.REQUEST`` creates a new scope per invocation.
 
 .. code-block:: python
    :class: diwire-example py-run
@@ -160,7 +160,7 @@ Demonstrates ``AsyncScopedInjected``: resolving an async function with
    import asyncio
    from typing import Annotated
 
-   from diwire import Container, Injected, Lifetime
+   from diwire import Container, Injected, Lifetime, Scope
 
 
    class RequestContext:
@@ -184,10 +184,10 @@ Demonstrates ``AsyncScopedInjected``: resolving an async function with
        container.register(
            RequestContext,
            lifetime=Lifetime.SCOPED,
-           scope="request",
+           scope=Scope.REQUEST,
        )
 
-       per_request = await container.aresolve(handler, scope="request")
+       per_request = await container.aresolve(handler, scope=Scope.REQUEST)
        print(await per_request(payload={"n": "1"}))
        print(await per_request(payload={"n": "2"}))
 

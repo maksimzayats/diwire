@@ -131,16 +131,8 @@ Demonstrates ``DIWireScopeMismatchError`` when trying to resolve from an exited 
 .. code-block:: python
    :class: diwire-example py-run
 
-   from enum import Enum
-
-   from diwire import Container, Lifetime
+   from diwire import Container, Lifetime, Scope
    from diwire.exceptions import DIWireScopeMismatchError
-
-
-   class Scope(str, Enum):
-       """Application scope definitions."""
-
-       REQUEST = "request"
 
 
    class RequestSession:
@@ -202,7 +194,7 @@ This prevents the container from silently auto-registering a second, unscoped in
 
    from dataclasses import dataclass
 
-   from diwire import Container, Lifetime
+   from diwire import Container, Lifetime, Scope
    from diwire.exceptions import DIWireScopeMismatchError
 
 
@@ -213,7 +205,7 @@ This prevents the container from silently auto-registering a second, unscoped in
 
    def main() -> None:
        container = Container(autoregister=True)
-       container.register(Session, lifetime=Lifetime.SCOPED, scope="request")
+       container.register(Session, lifetime=Lifetime.SCOPED, scope=Scope.REQUEST)
 
        print("Resolving a SCOPED service outside its scope:\n")
        try:
@@ -225,7 +217,7 @@ This prevents the container from silently auto-registering a second, unscoped in
            print(f"  current_scope: {e.current_scope}")
 
        print("\nResolving inside the correct scope:")
-       with container.enter_scope("request") as scope:
+       with container.enter_scope(Scope.REQUEST) as scope:
            session = scope.resolve(Session)
            print(f"  session.active={session.active}")
 

@@ -26,12 +26,12 @@ resolves the injected dependencies when the endpoint is called.
 
       from fastapi import FastAPI
 
-      from diwire import Container
+      from diwire import Container, Scope
       from diwire.integrations.fastapi import setup_diwire
 
       app = FastAPI()
       container = Container()
-      setup_diwire(app, container=container, scope="request")
+      setup_diwire(app, container=container, scope=Scope.REQUEST)
 
 2. Define routes normally (no explicit diwire decorator needed):
 
@@ -46,7 +46,7 @@ resolves the injected dependencies when the endpoint is called.
       async def health(service: Injected["Service"]) -> dict[str, str]:
           return {"status": service.ok()}
 
-3. Register request-scoped services (``Lifetime.SCOPED``, ``scope="request"``) and any request-specific objects
+3. Register request-scoped services (``Lifetime.SCOPED``, ``scope=Scope.REQUEST``) and any request-specific objects
    (like ``fastapi.Request``) via factories/contextvars.
 
 Router-level control
@@ -75,7 +75,7 @@ If you prefer to be explicit (or want to avoid the integration), you can wrap en
 
    from fastapi import FastAPI
 
-   from diwire import Container
+   from diwire import Container, Scope
 
    app = FastAPI()
    container = Container()
@@ -85,7 +85,7 @@ If you prefer to be explicit (or want to avoid the integration), you can wrap en
 
    app.add_api_route(
        "/path",
-       container.resolve(handler, scope="request"),
+       container.resolve(handler, scope=Scope.REQUEST),
        methods=["GET"],
    )
 
@@ -93,13 +93,13 @@ Or use decorator-based wrapping:
 
 .. code-block:: python
 
-   from diwire import Container
+   from diwire import Container, Scope
 
    container = Container()
 
 
    @app.get("/path")
-   @container.resolve(scope="request")
+   @container.resolve(scope=Scope.REQUEST)
    async def handler() -> dict: ...
 
 For larger applications, ``container_context`` can be used to avoid passing the container
@@ -107,10 +107,10 @@ everywhere:
 
 .. code-block:: python
 
-   from diwire import container_context
+   from diwire import Scope, container_context
 
    @app.get("/path")
-   @container_context.resolve(scope="request")
+   @container_context.resolve(scope=Scope.REQUEST)
    async def handler() -> dict: ...
 
 Runnable examples

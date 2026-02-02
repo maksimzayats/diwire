@@ -12,7 +12,7 @@ Recommended pattern
 1. Create a global container at startup (for example in an app config or a module imported on startup).
 2. Add a Django middleware that:
 
-   - enters a ``"request"`` scope at the start of the request
+   - enters a ``Scope.REQUEST`` scope at the start of the request
    - closes it in a ``finally`` block
    - optionally stores the scope on the request object for manual resolution
 
@@ -28,11 +28,11 @@ Minimal sketch
 
    from django.http import HttpRequest
 
-   from diwire import Container, Injected, Lifetime
+   from diwire import Container, Injected, Lifetime, Scope
 
    container = Container()
    request_var: ContextVar[HttpRequest] = ContextVar("request_var")
-   container.register(HttpRequest, factory=request_var.get, scope="request")
+   container.register(HttpRequest, factory=request_var.get, scope=Scope.REQUEST)
 
 
    class DiwireMiddleware:
@@ -41,7 +41,7 @@ Minimal sketch
 
        def __call__(self, request):
            token = request_var.set(request)
-           scope = container.enter_scope("request")
+           scope = container.enter_scope(Scope.REQUEST)
            try:
                request.diwire_scope = scope  # optional: manual resolution from deep in the stack
                return self.get_response(request)
@@ -54,7 +54,7 @@ Minimal sketch
        ...
 
 
-   container.register(Service, lifetime=Lifetime.SCOPED, scope="request")
+   container.register(Service, lifetime=Lifetime.SCOPED, scope=Scope.REQUEST)
 
 
    @container.resolve()

@@ -18,6 +18,9 @@ Scoped lifetime
 
 To share an instance *within* a scope, register it as ``Lifetime.SCOPED`` and provide a scope name:
 
+You can use predefined scope names like ``Scope.REQUEST`` (``app``, ``session``, ``request``) or provide any
+custom string name.
+
 See the runnable scripts in :doc:`/howto/examples/scopes` (SCOPED lifetime section).
 
 Generator factories (deterministic cleanup)

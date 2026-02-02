@@ -11,7 +11,7 @@ Recommended pattern
 -------------------
 
 1. Create a global container at app startup.
-2. Enter a ``"request"`` scope in ``before_request`` and close it in ``teardown_request``.
+2. Enter a ``Scope.REQUEST`` scope in ``before_request`` and close it in ``teardown_request``.
 3. Use ``container.resolve()`` (or ``container_context.resolve()``) to inject services into view functions.
 
 Minimal sketch
@@ -22,7 +22,7 @@ Minimal sketch
    from flask import Flask, g
    from typing import Annotated
 
-   from diwire import Container, Injected, Lifetime
+   from diwire import Container, Injected, Lifetime, Scope
 
    app = Flask(__name__)
    container = Container()
@@ -30,7 +30,7 @@ Minimal sketch
 
    @app.before_request
    def _enter_request_scope() -> None:
-       g.diwire_scope = container.enter_scope("request")
+       g.diwire_scope = container.enter_scope(Scope.REQUEST)
 
 
    @app.teardown_request
@@ -44,7 +44,7 @@ Minimal sketch
        ...
 
 
-   container.register(Service, lifetime=Lifetime.SCOPED, scope="request")
+   container.register(Service, lifetime=Lifetime.SCOPED, scope=Scope.REQUEST)
 
 
    @app.get("/health")
@@ -52,5 +52,5 @@ Minimal sketch
    def health(service: Injected[Service]) -> dict[str, bool]:
        return {"ok": True}
 
-If you'd rather have the wrapper create the scope per call, pass ``scope="request"`` to ``resolve()``, but the
+If you'd rather have the wrapper create the scope per call, pass ``scope=Scope.REQUEST`` to ``resolve()``, but the
 hook-based approach is usually a better match for Flask apps.

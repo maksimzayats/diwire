@@ -3,7 +3,7 @@ from diwire.container_context import container_context
 from diwire.container_interface import IContainer
 from diwire.container_scopes import ScopedContainer
 from diwire.service_key import Component
-from diwire.types import Injected, Lifetime
+from diwire.types import Injected, Lifetime, Scope
 
 __all__ = [
     "Component",
@@ -11,6 +11,7 @@ __all__ = [
     "IContainer",
     "Injected",
     "Lifetime",
+    "Scope",
     "ScopedContainer",
     "container_context",
 ]

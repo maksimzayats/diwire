@@ -7,6 +7,12 @@ Lifetime
 .. autoclass:: diwire.Lifetime
    :members:
 
+Scope
+-----
+
+.. autoclass:: diwire.Scope
+   :members:
+
 Injected
 --------
 
