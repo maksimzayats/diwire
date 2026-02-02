@@ -1406,8 +1406,34 @@ class TestFactoryEdgeCasesWithScopes:
 
         assert cleanup_events == ["closed"]
 
-    def test_generator_factory_without_scope_raises(self, container: Container) -> None:
-        """Generator factory requires an active scope."""
+    def test_generator_factory_without_scope_defaults_to_initial_scope(
+        self,
+        container: Container,
+    ) -> None:
+        """Generator factory without explicit scope uses the initial scope."""
+        cleanup_events: list[str] = []
+
+        def session_factory() -> Generator[Session, None, None]:
+            try:
+                yield Session(id="generated")
+            finally:
+                cleanup_events.append("closed")
+
+        container.register(Session, factory=session_factory, lifetime=Lifetime.TRANSIENT)
+
+        session = container.resolve(Session)
+        assert session.id == "generated"
+        assert cleanup_events == []
+
+        container.close()
+
+        assert cleanup_events == ["closed"]
+
+    def test_generator_factory_without_scope_raises_without_current_scope(
+        self,
+        container: Container,
+    ) -> None:
+        """Generator factory still requires an active scope to resolve."""
 
         def session_factory() -> Generator[Session, None, None]:
             yield Session(id="generated")

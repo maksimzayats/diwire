@@ -365,6 +365,29 @@ class TestAsyncGeneratorFactory:
 
         assert exc_info.value.service_key.value is ServiceA
 
+    async def test_async_generator_without_scope_defaults_to_initial_scope(
+        self,
+        container: Container,
+    ) -> None:
+        """Async generator factory without explicit scope uses the initial scope."""
+        cleanup_events: list[str] = []
+
+        async def resource_factory() -> AsyncGenerator[ServiceA, None]:
+            try:
+                yield ServiceA()
+            finally:
+                cleanup_events.append("closed")
+
+        container.register(ServiceA, factory=resource_factory, lifetime=Lifetime.TRANSIENT)
+
+        service = await container.aresolve(ServiceA)
+        assert isinstance(service, ServiceA)
+        assert cleanup_events == []
+
+        await container.aclose()
+
+        assert cleanup_events == ["closed"]
+
     async def test_async_generator_that_does_not_yield_raises_error(
         self,
         container: Container,

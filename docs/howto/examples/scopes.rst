@@ -212,6 +212,8 @@ Demonstrates generator factory support:
 
 - the yielded instance is used by the container
 - the generator is closed on scope exit
+If you omit a scope in ``register()``, the generator is attached to the initial app
+scope and cleaned up when you call ``container.close()`` or ``container.aclose()``.
 
 .. code-block:: python
    :class: diwire-example py-run

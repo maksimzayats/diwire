@@ -36,6 +36,9 @@ Generator factories (deterministic cleanup)
 
 When you need cleanup (close a session, release a lock, return a connection to a pool), use a generator factory.
 diwire will close the generator when the scope exits, running your ``finally`` block.
+If you register a generator factory without specifying a scope, it is attached to the
+initial app scope and cleaned up when you call ``container.close()`` or
+``container.aclose()``.
 
 See the runnable scripts in :doc:`/howto/examples/scopes` (Generator factories section).
 

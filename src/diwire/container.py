@@ -1432,8 +1432,7 @@ class Container(IContainer):
         if isinstance(result, AsyncGenerator):
             raise DIWireAsyncDependencyInSyncContextError(service_key, service_key)
         if isinstance(result, Generator):
-            current_scope = _current_scope.get() if self._has_scoped_registrations else None
-            cache_scope = self._get_cache_scope(current_scope, scope)
+            cache_scope = self._get_cache_scope(_current_scope.get(), scope)
             if cache_scope is None:
                 raise DIWireGeneratorFactoryWithoutScopeError(service_key)
             if lifetime == Lifetime.SINGLETON:
@@ -1933,6 +1932,11 @@ class Container(IContainer):
                         instance = registration.factory()
                     if isinstance(instance, Generator):
                         if cache_scope is None:
+                            cache_scope = self._get_cache_scope(
+                                _current_scope.get(),
+                                registration.scope,
+                            )
+                        if cache_scope is None:
                             raise DIWireGeneratorFactoryWithoutScopeError(service_key)
                         if registration.lifetime == Lifetime.SINGLETON:
                             raise DIWireGeneratorFactoryUnsupportedLifetimeError(service_key)
@@ -2316,6 +2320,11 @@ class Container(IContainer):
                     elif isinstance(result, AsyncGenerator):
                         # Async generator factory
                         if cache_scope is None:
+                            cache_scope = self._get_cache_scope(
+                                _current_scope.get(),
+                                registration.scope,
+                            )
+                        if cache_scope is None:
                             raise DIWireAsyncGeneratorFactoryWithoutScopeError(service_key)
                         if registration.lifetime == Lifetime.SINGLETON:
                             raise DIWireGeneratorFactoryUnsupportedLifetimeError(service_key)
@@ -2328,6 +2337,11 @@ class Container(IContainer):
                         async_exit_stack.push_async_callback(result.aclose)
                     elif isinstance(result, Generator):
                         # Sync generator factory
+                        if cache_scope is None:
+                            cache_scope = self._get_cache_scope(
+                                _current_scope.get(),
+                                registration.scope,
+                            )
                         if cache_scope is None:
                             raise DIWireGeneratorFactoryWithoutScopeError(service_key)
                         if registration.lifetime == Lifetime.SINGLETON:
