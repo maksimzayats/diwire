@@ -34,6 +34,7 @@ from diwire.exceptions import (
     DIWireGeneratorFactoryDidNotYieldError,
     DIWireGeneratorFactoryUnsupportedLifetimeError,
     DIWireIgnoredServiceError,
+    DIWireInvalidScopeNameError,
     DIWireMissingDependenciesError,
     DIWireScopeMismatchError,
     DIWireServiceNotRegisteredError,
@@ -76,7 +77,7 @@ class _ServiceWithIgnoredType:
 
 
 def test_initial_scope_requires_name() -> None:
-    with pytest.raises(ValueError, match="initial_scope must be a non-empty scope name"):
+    with pytest.raises(DIWireInvalidScopeNameError):
         Container(initial_scope="   ")
 
 

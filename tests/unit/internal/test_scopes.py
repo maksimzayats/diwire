@@ -313,7 +313,7 @@ class TestScopeValidation:
         assert error.current_scope is not None
         assert "/wrong/" in error.current_scope
 
-    def test_autoregister_raises_error_when_scoped_registration_exists(self) -> None:
+    def test_autoregister_succeeds_when_scoped_registration_exists_in_app_scope(self) -> None:
         """Auto-registration succeeds when resolving within the app scope."""
         container = Container(autoregister=True)
         container.register(Session, scope="app", lifetime=Lifetime.SCOPED)

@@ -77,6 +77,7 @@ from diwire.exceptions import (
     DIWireGeneratorFactoryWithoutScopeError,
     DIWireIgnoredServiceError,
     DIWireInvalidGenericTypeArgumentError,
+    DIWireInvalidScopeNameError,
     DIWireMissingDependenciesError,
     DIWireNotAClassError,
     DIWireOpenGenericRegistrationError,
@@ -354,8 +355,7 @@ class Container(IContainer):
     ) -> None:
         normalized_scope = initial_scope.strip()
         if not normalized_scope:
-            message = "initial_scope must be a non-empty scope name."
-            raise ValueError(message)
+            raise DIWireInvalidScopeNameError(initial_scope)
         self._initial_scope_name = normalized_scope
         self._autoregister = autoregister
         self._autoregister_ignores = autoregister_ignores or DEFAULT_AUTOREGISTER_IGNORES
