@@ -29,4 +29,3 @@ container_context and threadpools
 
 Web frameworks sometimes run sync handlers in a threadpool. diwire's :data:`diwire.container_context` uses
 ``contextvars`` and also includes a thread-local fallback for cases where the execution context is not copied.
-

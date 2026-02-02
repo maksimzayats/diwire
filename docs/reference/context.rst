@@ -7,4 +7,3 @@ in ``contextvars``.
 .. autoclass:: diwire.container_context._ContainerContextProxy
    :members: set_current, get_current, reset, register, resolve, aresolve, close, aclose, close_scope, aclose_scope
    :member-order: bysource
-

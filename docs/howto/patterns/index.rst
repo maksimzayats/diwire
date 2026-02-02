@@ -14,4 +14,3 @@ These pages describe patterns you can apply across frameworks and architectures.
    resources
    interfaces
    handler-classes
-

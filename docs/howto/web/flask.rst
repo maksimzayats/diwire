@@ -54,4 +54,3 @@ Minimal sketch
 
 If you'd rather have the wrapper create the scope per call, pass ``scope="request"`` to ``resolve()``, but the
 hook-based approach is usually a better match for Flask apps.
-

@@ -52,4 +52,3 @@ Minimal sketch
        return JSONResponse({"ok": True})
 
 The exact routing API differs between frameworks, but the DI pieces stay the same.
-
