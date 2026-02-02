@@ -20,8 +20,6 @@ Then annotate parameters:
 
 .. code-block:: python
 
-   from typing import Annotated
-
    from diwire import Injected
 
 

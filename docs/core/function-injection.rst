@@ -8,7 +8,7 @@ In addition to constructor injection, diwire can inject dependencies into functi
 
 The building blocks are:
 
-- :class:`diwire.Injected` - a marker used inside ``typing.Annotated``
+- :class:`diwire.Injected` - a type wrapper used as ``Injected[T]`` to mark injected parameters
 - :meth:`diwire.Container.resolve` - when given a function, returns an injected callable wrapper
 
 Basic injection with ``Injected[T]``
@@ -33,7 +33,6 @@ You can also use ``resolve()`` as a decorator:
 
 .. code-block:: python
 
-   from typing import Annotated
    from diwire import Container, Injected
 
    container = Container()

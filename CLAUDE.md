@@ -7,10 +7,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 # Setup
 uv sync --group dev
+# Docs (optional)
+uv sync --group dev --group docs
 
 # Development workflow
 make format    # Format with ruff, auto-fix issues
-make lint      # Run all checks: ruff, ty, pyrefly, mypy (strict)
+make lint      # Run all checks: ruff, mypy (strict)
 make test      # Run tests with 100% coverage requirement
 
 # Single test execution
@@ -31,7 +33,7 @@ diwire is a type-driven dependency injection container with zero runtime depende
 - `container_context.py` - Global context proxy for lazy container resolution via ContextVar
 - `dependencies.py` - Type hint extraction with caching
 - `exceptions.py` - 15+ custom exception types with detailed error messages
-- `types.py` - `Lifetime` enum, `Injected` marker, `Factory` type alias
+- `types.py` - `Lifetime`/`Scope` enums, `Injected[T]` type wrapper, `Factory` type alias
 
 **Resolution flow**: Service request → check caches → get/auto-register → extract dependencies → resolve recursively → instantiate → cache by lifetime
 
@@ -69,6 +71,7 @@ Test layout:
 Main exports from `diwire`:
 - `Container` - DI container
 - `Lifetime` - TRANSIENT, SINGLETON, SCOPED
-- `Injected` - Mark function parameters for injection
+- `Scope` - APP, SESSION, REQUEST
+- `Injected` - Mark function parameters for injection (`Injected[T]`)
 - `Component` - Named component registration
 - `container_context` - Global context for lazy resolution

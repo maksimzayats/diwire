@@ -1026,12 +1026,12 @@ class Container(IContainer):
         """Start a new scope for resolving SCOPED dependencies.
 
         The scope is activated immediately upon creation, allowing imperative usage:
-            scope = container.enter_scope("request")
+            scope = container.enter_scope(Scope.REQUEST)
             # ... use the scope ...
             scope.close()  # or container.close() to close all scopes
 
         Context manager usage is also supported:
-            with container.enter_scope("request") as scope:
+            with container.enter_scope(Scope.REQUEST) as scope:
                 # ... use the scope ...
 
         Args:
@@ -1670,11 +1670,11 @@ class Container(IContainer):
             .. code-block:: python
 
                 # Direct usage:
-                injected = container.resolve(my_func, scope="request")
+                injected = container.resolve(my_func, scope=Scope.REQUEST)
 
 
                 # Decorator usage:
-                @container.resolve(scope="request")
+                @container.resolve(scope=Scope.REQUEST)
                 async def handler(service: Injected[Service]) -> dict: ...
 
         """
@@ -2113,7 +2113,7 @@ class Container(IContainer):
 
         Examples:
             # Direct usage:
-            injected = await container.aresolve(my_func, scope="request")
+            injected = await container.aresolve(my_func, scope=Scope.REQUEST)
 
         """
         self._check_not_closed()

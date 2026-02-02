@@ -176,7 +176,7 @@ Scopes manage per-request lifetimes. Generator factories clean up automatically 
 
 ```python
 from collections.abc import Generator
-from diwire import Container, Lifetime
+from diwire import Container, Lifetime, Scope
 
 
 class DBSession:
@@ -196,9 +196,9 @@ def session_factory() -> Generator[DBSession, None, None]:
 
 
 container = Container()
-container.register(DBSession, factory=session_factory, lifetime=Lifetime.SCOPED, scope="request")
+container.register(DBSession, factory=session_factory, lifetime=Lifetime.SCOPED, scope=Scope.REQUEST)
 
-with container.enter_scope("request") as scope:
+with container.enter_scope(Scope.REQUEST) as scope:
     session = scope.resolve(DBSession)
     print(session.closed)  # => False
 
@@ -214,7 +214,7 @@ expect a scoped service but accidentally resolve it outside the correct scope.
 ```python
 from dataclasses import dataclass
 
-from diwire import Container, Lifetime
+from diwire import Container, Lifetime, Scope
 
 
 @dataclass
@@ -223,13 +223,13 @@ class Session:
 
 
 container = Container(autoregister=True)
-container.register(Session, lifetime=Lifetime.SCOPED, scope="request")
+container.register(Session, lifetime=Lifetime.SCOPED, scope=Scope.REQUEST)
 
 # Resolving outside any scope raises — no silent fallback
 # container.resolve(Session)  # => DIWireScopeMismatchError
 
 # Resolving inside the correct scope works
-with container.enter_scope("request") as scope:
+with container.enter_scope(Scope.REQUEST) as scope:
     session = scope.resolve(Session)
     print(session.active)  # => True
 
@@ -250,7 +250,7 @@ print(container.resolve(Logger).level)  # => INFO
 import asyncio
 from collections.abc import AsyncGenerator
 
-from diwire import Container, Lifetime
+from diwire import Container, Lifetime, Scope
 
 
 class AsyncClient:
@@ -279,10 +279,10 @@ async def main() -> None:
         AsyncClient,
         factory=client_factory,
         lifetime=Lifetime.SCOPED,
-        scope="request",
+        scope=Scope.REQUEST,
     )
 
-    async with container.enter_scope("request") as scope:
+    async with container.enter_scope(Scope.REQUEST) as scope:
         client = await scope.aresolve(AsyncClient)
         print(client.connected)  # => True
 
@@ -294,11 +294,11 @@ asyncio.run(main())
 
 ### Function Injection
 
-Mark parameters with `Injected()` to inject dependencies while keeping other parameters caller-provided.
+Mark parameters with `Injected[T]` to inject dependencies while keeping other parameters caller-provided.
 
 ```python
 from dataclasses import dataclass
-from typing import Annotated
+
 from diwire import Container, Injected
 
 
@@ -313,7 +313,7 @@ class EmailService:
 def send_email(
     to: str,
     *,
-    mailer: Annotated[EmailService, Injected()],
+    mailer: Injected[EmailService],
 ) -> str:
     return mailer.send(to=to, subject="Hello!")
 
@@ -440,7 +440,7 @@ print(container.resolve(ModelBox[Model]))  # => ModelBox(model=<Model ...>)
 
 ```python
 from dataclasses import dataclass
-from typing import Annotated
+
 from diwire import Container, Injected, container_context
 
 
@@ -451,7 +451,7 @@ class Service:
 
 
 @container_context.resolve()
-def greet(service: Annotated[Service, Injected()]) -> str:
+def greet(service: Injected[Service]) -> str:
     return f"hello {service.name}"
 
 
@@ -510,7 +510,8 @@ No adapters or plugins needed — diwire extracts dependencies from type hints a
 |---------------------|------------------------------------------------------------------------------------------------------------------------------|
 | `Container`         | DI container — `register`, `resolve`, `aresolve`, `enter_scope`, `close_scope`, `aclose_scope`, `compile`, `close`, `aclose` |
 | `Lifetime`          | `TRANSIENT`, `SINGLETON`, `SCOPED`                                                                                           |
-| `Injected`          | Parameter marker — `Annotated[T, Injected()]`                                                                                |
+| `Scope`             | `APP`, `SESSION`, `REQUEST`                                                                                                  |
+| `Injected`          | Parameter marker — `Injected[T]`                                                                                             |
 | `Component`         | Named component key — `Annotated[T, Component("name")]`                                                                      |
 | `container_context` | Context-local global container — `set_current`, `register`, `resolve`                                                        |
 | `ScopedContainer`   | Scoped container returned by `enter_scope()`                                                                                 |

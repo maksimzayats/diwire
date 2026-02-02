@@ -21,7 +21,6 @@ Basic usage
 .. code-block:: python
 
    from dataclasses import dataclass
-   from typing import Annotated
 
    from diwire import Container, Injected, Lifetime, container_context
 
