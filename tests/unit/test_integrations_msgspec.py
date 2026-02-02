@@ -1,5 +1,7 @@
 """Tests for msgspec integration."""
 
+from typing import Any
+
 import msgspec
 
 from diwire.container import Container
@@ -68,3 +70,17 @@ class TestMsgspecResolution:
         assert isinstance(result, RegularDependent)
         assert isinstance(result.model, MsgspecModelWithDep)
         assert isinstance(result.model.dep, DepService)
+
+    def test_resolve_msgspec_defstruct(self, container: Container) -> None:
+        """msgspec.defstruct models resolve correctly."""
+        dynamic_struct = msgspec.defstruct(
+            "DynamicStruct",
+            [("dep", DepService), ("name", str, "default")],
+        )
+
+        result: Any = container.resolve(dynamic_struct)
+
+        assert isinstance(result, dynamic_struct)
+        result_any: Any = result
+        assert isinstance(result_any.dep, DepService)
+        assert result_any.name == "default"

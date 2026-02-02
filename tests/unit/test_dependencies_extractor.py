@@ -3,7 +3,7 @@
 import inspect
 import types
 from dataclasses import dataclass, field
-from typing import Annotated, Generic, TypeVar, Union
+from typing import Annotated, Generic, NamedTuple, TypeVar, Union
 
 from diwire.dependencies import DependenciesExtractor
 from diwire.service_key import ServiceKey
@@ -51,6 +51,21 @@ class TestGetDependencies:
         )
 
         assert deps == {"service_a": ServiceKey.from_value(DataServiceA)}
+
+    def test_get_dependencies_namedtuple(
+        self,
+        dependencies_extractor: DependenciesExtractor,
+    ) -> None:
+        """Get dependencies from NamedTuple."""
+
+        class NamedTupleService(NamedTuple):
+            service_a: ServiceA
+
+        deps = dependencies_extractor.get_dependencies(
+            ServiceKey.from_value(NamedTupleService),
+        )
+
+        assert deps == {"service_a": ServiceKey.from_value(ServiceA)}
 
     def test_get_dependencies_function(
         self,
@@ -479,6 +494,23 @@ class TestGetDependenciesWithDefaults:
         assert "name" in result
         assert result["name"].service_key == ServiceKey.from_value(str)
         assert result["name"].has_default is True
+
+    def test_get_dependencies_with_defaults_namedtuple(
+        self,
+        dependencies_extractor: DependenciesExtractor,
+    ) -> None:
+        """NamedTuple field defaults are detected."""
+
+        class NamedTupleWithDefault(NamedTuple):
+            required: str
+            optional: int = 42
+
+        result = dependencies_extractor.get_dependencies_with_defaults(
+            ServiceKey.from_value(NamedTupleWithDefault),
+        )
+
+        assert result["required"].has_default is False
+        assert result["optional"].has_default is True
 
     def test_get_dependencies_with_defaults_dataclass_factory(
         self,

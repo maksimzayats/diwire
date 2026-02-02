@@ -42,8 +42,6 @@ dev = [
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "ruff>=0.14.13",
-    "ty>=0.0.13",
-    "pyrefly>=0.49.0",
     # Integration testing
     "pydantic-settings>=2.12.0",
     "fastapi>=0.128.0",
@@ -114,15 +112,14 @@ exclude = [
     "examples/",
 ]
 
-[tool.ty.src]
-exclude = ["benchmarks/", "tests/examples/", "tmp/"]
+[[tool.mypy.overrides]]
+module = ["diwire.integrations.pydantic"]
+disable_error_code = ["misc", "no-redef"]
 
-[tool.ty.rules]
-unused-ignore-comment = "ignore"
-
-[tool.pyrefly]
-project-excludes = ["benchmarks/**", "benchmarks/", "examples/**", "tests/examples/**", "tmp/**", "tmp/"]
-search-path = ["."]
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+strict = false
+disable_error_code = ["valid-type", "misc"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
