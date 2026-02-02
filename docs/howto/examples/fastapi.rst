@@ -11,10 +11,11 @@ FastAPI
 Basic integration
 -----------------
 
-This example shows the simplest way to integrate diwire with FastAPI:
+This example shows the simplest way to integrate diwire with FastAPI using the built-in
+integration:
 
 - request-scoped service with automatic cleanup
-- manual route registration with ``container.resolve(..., scope="request")``
+- no explicit diwire decorators on endpoints (routes are auto-wrapped)
 - service lifecycle management via an async generator factory
 
 .. code-block:: python
@@ -29,9 +30,11 @@ This example shows the simplest way to integrate diwire with FastAPI:
    from fastapi import FastAPI, Request
 
    from diwire import Container, Injected
+   from diwire.integrations.fastapi import setup_diwire
 
    app = FastAPI()
    container = Container()
+   setup_diwire(app, container=container, scope="request")
 
 
    @dataclass
@@ -62,13 +65,10 @@ This example shows the simplest way to integrate diwire with FastAPI:
 
    container.register(Service, factory=get_service, scope="request")
 
-   app.add_api_route(
-       "/greet",
-       # Manually resolve the handler with request scope
-       # Check next example for decorator-based approach
-       container.resolve(handler, scope="request"),
-       methods=["GET"],
-   )
+
+   @app.get("/greet")
+   async def greet(request: Request, service: Annotated[Service, Injected()]) -> dict:
+       return await handler(request, service)
 
 Decorator-based layering
 ------------------------

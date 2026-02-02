@@ -48,3 +48,11 @@ diwire includes an optional pytest plugin that can resolve parameters annotated 
 ``Annotated[T, Injected()]`` directly in test functions.
 
 See :doc:`/howto/testing/pytest`.
+
+FastAPI
+-------
+
+diwire includes an optional FastAPI integration that auto-wraps endpoints with
+``Injected`` parameters so FastAPI only sees request inputs.
+
+See :doc:`/howto/web/fastapi`.

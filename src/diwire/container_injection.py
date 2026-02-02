@@ -44,6 +44,7 @@ class _InjectedFunction(Generic[T]):
         # Build signature at decoration time by detecting Injected in annotations
         # This works even with string annotations from PEP 563
         self.__signature__ = _build_signature_without_injected(func)
+        self.__diwire_wrapped__ = True
 
     def _ensure_initialized(self) -> None:
         """Lazily extract dependencies on first call."""
@@ -112,6 +113,7 @@ class _ScopedInjectedFunction(Generic[T]):
         # Build signature at decoration time by detecting Injected in annotations
         # This works even with string annotations from PEP 563
         self.__signature__ = _build_signature_without_injected(func)
+        self.__diwire_wrapped__ = True
 
     def _ensure_initialized(self) -> None:
         """Lazily extract dependencies on first call."""
@@ -177,6 +179,7 @@ class _AsyncInjectedFunction(Generic[T]):
         # Build signature at decoration time by detecting Injected in annotations
         # This works even with string annotations from PEP 563
         self.__signature__ = _build_signature_without_injected(func)
+        self.__diwire_wrapped__ = True
 
     def _ensure_initialized(self) -> None:
         """Lazily extract dependencies on first call."""
@@ -250,6 +253,7 @@ class _AsyncScopedInjectedFunction(Generic[T]):
         # Build signature at decoration time by detecting Injected in annotations
         # This works even with string annotations from PEP 563
         self.__signature__ = _build_signature_without_injected(func)
+        self.__diwire_wrapped__ = True
 
     def _ensure_initialized(self) -> None:
         """Lazily extract dependencies on first call."""

@@ -91,6 +91,7 @@ class _ContextInjected:
         # Build signature at decoration time by detecting Injected in annotations
         # This allows frameworks like FastAPI to correctly identify parameters
         self.__signature__ = _build_signature_without_injected(func)
+        self.__diwire_wrapped__ = True
 
     def _get_injected(self) -> Any:
         """Get the Injected wrapper from the current container."""
@@ -133,6 +134,7 @@ class _ContextScopedInjected:
         # Build signature at decoration time by detecting Injected in annotations
         # This allows frameworks like FastAPI to correctly identify parameters
         self.__signature__ = _build_signature_without_injected(func)
+        self.__diwire_wrapped__ = True
 
     def _get_scoped_injected(self) -> Any:
         """Get the ScopedInjected wrapper from the current container."""
@@ -173,6 +175,7 @@ class _AsyncContextInjected:
         # Build signature at decoration time by detecting Injected in annotations
         # This allows frameworks like FastAPI to correctly identify parameters
         self.__signature__ = _build_signature_without_injected(func)
+        self.__diwire_wrapped__ = True
 
     def _get_async_injected(self) -> Any:
         """Get the AsyncInjected wrapper from the current container."""
@@ -215,6 +218,7 @@ class _AsyncContextScopedInjected:
         # Build signature at decoration time by detecting Injected in annotations
         # This allows frameworks like FastAPI to correctly identify parameters
         self.__signature__ = _build_signature_without_injected(func)
+        self.__diwire_wrapped__ = True
 
     def _get_async_scoped_injected(self) -> Any:
         """Get the AsyncScopedInjected wrapper from the current container."""
