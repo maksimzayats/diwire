@@ -42,7 +42,7 @@ def _assert_app_scope_active() -> _ScopeId:
 def _thread_with_empty_context(*, target: Any, args: tuple[Any, ...]) -> threading.Thread:
     """Create a thread with an empty ContextVar context when supported."""
     try:
-        return threading.Thread(target=target, args=args, context=Context())
+        return threading.Thread(target=target, args=args, context=Context())  # type: ignore[call-arg]
     except TypeError:
         return threading.Thread(target=target, args=args)
 
@@ -1032,9 +1032,7 @@ class TestScopeContextVariableIsolation:
             except Exception as e:
                 errors.append(e)
 
-        threads = [
-            _thread_with_empty_context(target=worker, args=(f"t{i}",)) for i in range(3)
-        ]
+        threads = [_thread_with_empty_context(target=worker, args=(f"t{i}",)) for i in range(3)]
         for t in threads:
             t.start()
         for t in threads:
