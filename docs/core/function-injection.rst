@@ -12,7 +12,7 @@ The building blocks are:
 - :meth:`diwire.Container.resolve` - when given a function, returns an injected callable wrapper
 
 Basic injection with ``Injected[T]``
------------------------------------
+------------------------------------
 
 Mark injectable parameters using ``Injected[T]``.
 All other parameters remain caller-provided.
