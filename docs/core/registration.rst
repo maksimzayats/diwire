@@ -20,6 +20,11 @@ The three direct registration forms:
 - **Factory**: ``container.register(Database, factory=create_database)``
 - **Instance**: ``container.register(Config, instance=Config(...))``
 
+Generator factories are supported for cleanup. If you omit a scope, the generator is
+attached to the initial app scope and cleaned up when you call ``container.close()``
+or ``container.aclose()``. Use ``Lifetime.SCOPED`` with a named scope to tie cleanup
+to a specific scope.
+
 Full runnable example:
 
 See :doc:`/howto/examples/basics` (Registration methods section).

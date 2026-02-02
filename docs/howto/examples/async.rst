@@ -305,7 +305,9 @@ Raised when a sync ``resolve()`` hits an async dependency.
 ``DIWireAsyncGeneratorFactoryWithoutScopeError``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Raised when an async generator factory is used without a scope for cleanup.
+Raised when an async generator factory is resolved without any active scope for cleanup.
+Because ``Container()`` starts with an initial app scope, you will typically only see
+this if you resolve outside of an active scope in custom integrations or tests.
 
 .. code-block:: python
    :class: diwire-example py-run
@@ -314,6 +316,7 @@ Raised when an async generator factory is used without a scope for cleanup.
 
    from diwire import Container, Lifetime
    from diwire.exceptions import DIWireAsyncGeneratorFactoryWithoutScopeError
+   from diwire.container_scopes import _current_scope
 
 
    async def session_factory():
@@ -324,11 +327,15 @@ Raised when an async generator factory is used without a scope for cleanup.
        container = Container()
        container.register("Session", factory=session_factory, lifetime=Lifetime.TRANSIENT)
 
+       token = _current_scope.set(None)
        try:
-           await container.aresolve("Session")
-       except DIWireAsyncGeneratorFactoryWithoutScopeError as e:
-           print(f"Caught: {type(e).__name__}")
-           print(f"Message: {e}")
+           try:
+               await container.aresolve("Session")
+           except DIWireAsyncGeneratorFactoryWithoutScopeError as e:
+               print(f"Caught: {type(e).__name__}")
+               print(f"Message: {e}")
+       finally:
+           _current_scope.reset(token)
 
 
    if __name__ == "__main__":
