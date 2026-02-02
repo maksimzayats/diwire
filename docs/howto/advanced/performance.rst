@@ -31,4 +31,3 @@ If a factory does expensive setup, consider:
 - turning it into a singleton
 - moving expensive work to app startup
 - using an async factory and resolving via ``aresolve()``
-

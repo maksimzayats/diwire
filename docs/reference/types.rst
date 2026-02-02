@@ -16,4 +16,3 @@ Component
 ---------
 
 .. autoclass:: diwire.Component
-

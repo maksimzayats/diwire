@@ -57,4 +57,3 @@ Framework integration
 - you want handler signatures to stay "framework-friendly"
 
 See: :doc:`../howto/web/fastapi`
-
