@@ -46,10 +46,33 @@ class TestPrimitiveTypesExplicitRegistration:
         result = container.resolve(Service)
         assert result.value == 42
 
+    def test_registered_int_scoped_is_resolved_sync(self, container: Container) -> None:
+        """Sync: scoped registered int should be injected in app scope."""
+        container.register(int, instance=42, scope="app", lifetime=Lifetime.SCOPED)
+
+        class Service:
+            def __init__(self, value: int) -> None:
+                self.value = value
+
+        result = container.resolve(Service)
+        assert result.value == 42
+
     @pytest.mark.asyncio
     async def test_registered_int_is_resolved_async(self, container: Container) -> None:
         """Async: registered int should be injected."""
         container.register(int, instance=42)
+
+        class Service:
+            def __init__(self, value: int) -> None:
+                self.value = value
+
+        result = await container.aresolve(Service)
+        assert result.value == 42
+
+    @pytest.mark.asyncio
+    async def test_registered_int_scoped_is_resolved_async(self, container: Container) -> None:
+        """Async: scoped registered int should be injected in app scope."""
+        container.register(int, instance=42, scope="app", lifetime=Lifetime.SCOPED)
 
         class Service:
             def __init__(self, value: int) -> None:

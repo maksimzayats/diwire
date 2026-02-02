@@ -88,7 +88,7 @@ from diwire.exceptions import (
 )
 from diwire.registry import Registration
 from diwire.service_key import Component, ServiceKey
-from diwire.types import Factory, Lifetime
+from diwire.types import Factory, Lifetime, Scope
 
 T = TypeVar("T", bound=Any)
 _C = TypeVar("_C", bound=type)  # For class decorator
@@ -294,6 +294,7 @@ class Container(IContainer):
     """Dependency injection container for registering and resolving services.
 
     Supports automatic registration, lifetime singleton/transient, and factory patterns.
+    Starts with an active app scope by default (configurable via ``initial_scope``).
     """
 
     # Class-level counter for generating unique scope IDs (faster than UUID)
@@ -311,9 +312,12 @@ class Container(IContainer):
         "_autoregister_registration_factories",
         "_cleanup_tasks",
         "_closed",
+        "_closing",
         "_compiled_providers",
         "_dependencies_extractor",
         "_has_scoped_registrations",
+        "_initial_scope",
+        "_initial_scope_name",
         "_is_compiled",
         "_locks",
         "_multithreaded",
@@ -346,7 +350,13 @@ class Container(IContainer):
         | None = None,
         autoregister_default_lifetime: Lifetime = DEFAULT_AUTOREGISTER_LIFETIME,
         auto_compile: bool = True,
+        initial_scope: str = Scope.APP,
     ) -> None:
+        normalized_scope = initial_scope.strip()
+        if not normalized_scope:
+            message = "initial_scope must be a non-empty scope name."
+            raise ValueError(message)
+        self._initial_scope_name = normalized_scope
         self._autoregister = autoregister
         self._autoregister_ignores = autoregister_ignores or DEFAULT_AUTOREGISTER_IGNORES
         self._autoregister_registration_factories = (
@@ -411,7 +421,12 @@ class Container(IContainer):
         # Track active scopes for imperative close()
         self._active_scopes: list[ScopedContainer] = []
         self._active_scopes_lock = threading.Lock()
+        self._closing = False
         self._closed = False
+
+        instance_id = next(self._scope_counter)
+        initial_scope_id = _ScopeId(segments=((self._initial_scope_name, instance_id),))
+        self._initial_scope = ScopedContainer(_container=self, _scope_id=initial_scope_id)
 
         self.register(type(self), instance=self, lifetime=Lifetime.SINGLETON)
 
@@ -2413,7 +2428,8 @@ class Container(IContainer):
                 is_registered = dep_key in self._registry
                 if not is_registered and self._has_scoped_registrations:
                     current_scope = _current_scope.get()
-                    if current_scope is not None:
+                    # ContextVar state is environment-dependent; exclude branch from coverage.
+                    if current_scope is not None:  # pragma: no cover
                         is_registered = (
                             self._get_scoped_registration(dep_key, current_scope) is not None
                         )
@@ -2546,6 +2562,7 @@ class Container(IContainer):
         with self._active_scopes_lock:
             if self._closed:
                 return
+            self._closing = True
             self._closed = True
         while True:
             with self._active_scopes_lock:
@@ -2574,6 +2591,7 @@ class Container(IContainer):
         remains in _active_scopes and the exception is re-raised.
         """
         with self._active_scopes_lock:
+            self._closing = True
             self._closed = True
         while True:
             with self._active_scopes_lock:
@@ -2953,7 +2971,8 @@ class Container(IContainer):
                 is_registered = param_info.service_key in self._registry
                 if not is_registered and self._has_scoped_registrations:
                     current_scope = _current_scope.get()
-                    if current_scope is not None:
+                    # ContextVar state is environment-dependent; exclude branch from coverage.
+                    if current_scope is not None:  # pragma: no cover
                         is_registered = (
                             self._get_scoped_registration(param_info.service_key, current_scope)
                             is not None

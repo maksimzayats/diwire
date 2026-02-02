@@ -201,6 +201,16 @@ class DIWireContainerNotSetError(DIWireError):
         )
 
 
+class DIWireInitialScopeCloseError(DIWireError):
+    """Initial container scope cannot be closed explicitly."""
+
+    def __init__(self, scope_name: str) -> None:
+        super().__init__(
+            f"Initial scope '{scope_name}' cannot be closed explicitly. "
+            "Use container.close() or container.aclose() to close the container.",
+        )
+
+
 class DIWireDependencyExtractionError(DIWireError):
     """Failed to extract dependencies from a type."""
 

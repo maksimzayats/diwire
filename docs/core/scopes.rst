@@ -13,6 +13,14 @@ Use :meth:`diwire.Container.enter_scope` as a context manager:
 
 See the runnable scripts in :doc:`/howto/examples/scopes` (Scope basics section).
 
+Initial app scope
+-----------------
+
+By default, ``Container()`` starts with an active app scope (``Scope.APP``).
+Calling ``enter_scope()`` creates a nested scope under that app scope.
+Close the initial app scope by calling ``container.close()`` or
+``container.aclose()``.
+
 Scoped lifetime
 ---------------
 

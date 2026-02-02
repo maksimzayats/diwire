@@ -236,7 +236,9 @@ class TestScopedCircularDependencies:
             lifetime=Lifetime.SCOPED,
         )
 
-        assert _current_scope.get() is None
+        scope = _current_scope.get()
+        assert scope is not None
+        assert scope.contains_scope("app")
 
         try:
             with container.enter_scope("request"):
@@ -245,7 +247,9 @@ class TestScopedCircularDependencies:
             pass
 
         # Scope context should be cleaned up after exception
-        assert _current_scope.get() is None
+        scope = _current_scope.get()
+        assert scope is not None
+        assert scope.contains_scope("app")
 
 
 # Module-level classes for async circular dependency tests
@@ -311,7 +315,9 @@ class TestAsyncCircularDependencies:
             lifetime=Lifetime.SCOPED,
         )
 
-        assert _current_scope.get() is None
+        scope = _current_scope.get()
+        assert scope is not None
+        assert scope.contains_scope("app")
 
         try:
             async with container.enter_scope("request"):
@@ -320,7 +326,9 @@ class TestAsyncCircularDependencies:
             pass
 
         # Scope context should be cleaned up
-        assert _current_scope.get() is None
+        scope = _current_scope.get()
+        assert scope is not None
+        assert scope.contains_scope("app")
 
     async def test_circular_dependency_async_non_compiled(self) -> None:
         """Circular dependency detected in aresolve without compilation.

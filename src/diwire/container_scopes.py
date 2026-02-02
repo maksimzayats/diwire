@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from diwire.container_interface import IContainer
-from diwire.exceptions import DIWireScopeMismatchError
+from diwire.exceptions import DIWireInitialScopeCloseError, DIWireScopeMismatchError
 from diwire.service_key import ServiceKey
 from diwire.types import Factory, Lifetime
 
@@ -199,6 +199,8 @@ class ScopedContainer(IContainer):
         """Close the scope synchronously."""
         if self._exited:
             return
+        if self is self._container._initial_scope and not self._container._closing:  # noqa: SLF001
+            raise DIWireInitialScopeCloseError(self._container._initial_scope_name)  # noqa: SLF001
         with contextlib.suppress(ValueError, RuntimeError):
             _current_scope.reset(self._token)
         self._container._clear_scope(self._scope_id)  # noqa: SLF001
@@ -209,6 +211,8 @@ class ScopedContainer(IContainer):
         """Close the scope asynchronously."""
         if self._exited:
             return
+        if self is self._container._initial_scope and not self._container._closing:  # noqa: SLF001
+            raise DIWireInitialScopeCloseError(self._container._initial_scope_name)  # noqa: SLF001
         with contextlib.suppress(ValueError, RuntimeError):
             _current_scope.reset(self._token)
         await self._container._aclear_scope(self._scope_id)  # noqa: SLF001

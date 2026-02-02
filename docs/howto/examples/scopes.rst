@@ -29,6 +29,7 @@ Scopes allow grouping related service resolutions together.
    def main() -> None:
        container = Container()
        container.register(RequestContext)
+       # Container starts with an active app scope by default.
 
        # Using enter_scope() with an Enum value
        print("Scope usage with context manager:\n")
