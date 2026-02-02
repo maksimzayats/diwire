@@ -18,7 +18,7 @@ Define your classes. Resolve the top-level one. diwire figures out the rest.
 
 ```python
 from dataclasses import dataclass
-from diwire import Container, Lifetime
+from diwire import Container, Lifetime, Scope
 
 
 @dataclass
@@ -63,7 +63,7 @@ Dependencies are resolved from type hints — no manual wiring required.
 
 ```python
 from dataclasses import dataclass
-from diwire import Container
+from diwire import Container, Scope
 
 
 @dataclass
@@ -97,7 +97,7 @@ Use `@container.register` as a decorator on classes, factory functions, and stat
 from dataclasses import dataclass
 from typing import Annotated, Protocol
 
-from diwire import Container, Lifetime, Component
+from diwire import Container, Lifetime, Scope, Component
 
 
 class IDatabase(Protocol):
@@ -150,7 +150,7 @@ Control how instances are created and shared.
 
 ```python
 from dataclasses import dataclass
-from diwire import Container, Lifetime
+from diwire import Container, Lifetime, Scope
 
 
 @dataclass
@@ -299,7 +299,7 @@ Mark parameters with `Injected[T]` to inject dependencies while keeping other pa
 ```python
 from dataclasses import dataclass
 
-from diwire import Container, Injected
+from diwire import Container, Injected, Scope
 
 
 @dataclass
@@ -331,7 +331,7 @@ Register a protocol or abstract base class and resolve it to a concrete implemen
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
-from diwire import Container, Lifetime
+from diwire import Container, Lifetime, Scope
 
 
 class Clock(Protocol):
@@ -358,7 +358,7 @@ Use `Component` to register multiple implementations of the same interface.
 ```python
 from dataclasses import dataclass
 from typing import Annotated, Protocol
-from diwire import Container, Component
+from diwire import Container, Scope, Component
 
 
 class Cache(Protocol):
@@ -396,7 +396,7 @@ are enforced at resolution time.
 ```python
 from dataclasses import dataclass
 from typing import Generic, TypeVar
-from diwire import Container
+from diwire import Container, Scope
 
 
 class Model:
@@ -441,7 +441,7 @@ print(container.resolve(ModelBox[Model]))  # => ModelBox(model=<Model ...>)
 ```python
 from dataclasses import dataclass
 
-from diwire import Container, Injected, container_context
+from diwire import Container, Injected, Scope, container_context
 
 
 @container_context.register()
@@ -468,7 +468,7 @@ lookups. The container auto-compiles on first resolve by default.
 
 ```python
 from dataclasses import dataclass
-from diwire import Container, Lifetime
+from diwire import Container, Lifetime, Scope
 
 
 @dataclass
