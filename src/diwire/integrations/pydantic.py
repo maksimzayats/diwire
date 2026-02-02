@@ -9,7 +9,9 @@ _PydanticV1BaseSettings: type[Any] | None = None
 try:
     from pydantic.v1 import BaseSettings as _PydanticV1BaseSettings  # type: ignore[assignment]
 except ImportError:  # pragma: no cover - pydantic v1 not installed/incompatible
-    with suppress(ImportError, AttributeError):  # pragma: no cover - pydantic v1 not installed/incompatible
+    with suppress(
+        ImportError, AttributeError,
+    ):  # pragma: no cover - pydantic v1 not installed/incompatible
         from pydantic import BaseSettings as _PydanticV1BaseSettings  # type: ignore[assignment]
 
 if _PydanticSettingsBaseSettings is not None:
