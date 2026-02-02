@@ -44,6 +44,42 @@ Recommended pattern
 3. Register request-scoped services (``Lifetime.SCOPED``, ``scope="request"``) and any request-specific objects
    (like ``fastapi.Request``) via factories/contextvars.
 
+First-party integration (auto-wrapping)
+---------------------------------------
+
+If you want FastAPI to auto-wrap endpoints that use ``Injected`` parameters, use the
+FastAPI integration:
+
+.. code-block:: python
+
+   from typing import Annotated
+   from fastapi import FastAPI
+
+   from diwire import Container, Injected
+   from diwire.integrations.fastapi import setup_diwire
+
+   app = FastAPI()
+   container = Container()
+   setup_diwire(app, container=container, scope="request")
+
+
+   @app.get("/health")
+   async def health(service: Annotated["Service", Injected()]) -> dict[str, str]:
+       return {"status": service.ok()}
+
+Call ``setup_diwire`` before registering routes that use ``Injected``. It returns a
+context token if you want to reset the container later.
+
+For router-level control, use ``DIWireRoute`` on a router:
+
+.. code-block:: python
+
+   from fastapi import APIRouter
+
+   from diwire.integrations.fastapi import DIWireRoute
+
+   router = APIRouter(route_class=DIWireRoute)
+
 Runnable examples
 -----------------
 
