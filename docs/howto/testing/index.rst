@@ -1,5 +1,5 @@
 .. meta::
-   :description: Testing with diwire: override registrations, create per-test containers, and use the optional pytest plugin for Injected() parameter injection.
+   :description: Testing with diwire: override registrations, create per-test containers, and use the optional pytest plugin for Injected[T] parameter injection.
 
 Testing
 =======

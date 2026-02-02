@@ -119,7 +119,7 @@ class TestDependenciesEdgeCases:
         class ServiceA:
             pass
 
-        annotated_with_fromdi = Annotated[ServiceA, Injected()]
+        annotated_with_fromdi = Injected[ServiceA]
         result = dependencies_extractor._extract_injected_type(annotated_with_fromdi)
         assert result is ServiceA
 
@@ -141,7 +141,7 @@ class TestDependenciesEdgeCases:
         class ServiceA:
             pass
 
-        def func_with_injected(dep: Annotated[ServiceA, Injected()]) -> None:
+        def func_with_injected(dep: Injected[ServiceA]) -> None:
             pass
 
         service_key = ServiceKey.from_value(func_with_injected)
@@ -182,7 +182,7 @@ class TestDependenciesEdgeCases:
         class ServiceA:
             pass
 
-        def func_with_injected(dep: Annotated[ServiceA, Injected()]) -> None:
+        def func_with_injected(dep: Injected[ServiceA]) -> None:
             pass
 
         service_key = ServiceKey.from_value(func_with_injected)
@@ -216,7 +216,7 @@ class TestDependenciesEdgeCases:
         class ServiceA:
             pass
 
-        def func_with_injected(dep: Annotated[ServiceA, Injected()]) -> None:
+        def func_with_injected(dep: Injected[ServiceA]) -> None:
             pass
 
         service_key = ServiceKey.from_value(func_with_injected)

@@ -2,7 +2,7 @@ diwire pytest integration
 =========================
 
 This integration lets pytest inject dependencies into test functions when parameters are
-annotated as ``Annotated[T, Injected()]``. The plugin removes injected parameters from the
+annotated as ``Injected[T]``. The plugin removes injected parameters from the
 pytest signature, resolves them from a DI container, and calls the test with those values.
 
 Quick start
@@ -18,10 +18,9 @@ Then annotate parameters:
 
 .. code-block:: python
 
-    from typing import Annotated
     from diwire.types import Injected
 
-    def test_example(service: Annotated[Service, Injected()]) -> None:
+    def test_example(service: Injected[Service]) -> None:
         assert isinstance(service, Service)
 
 Configuration
@@ -58,7 +57,7 @@ You can also disable scope for a single test:
     import pytest
 
     @pytest.mark.diwire_scope(None)
-    def test_without_scope(service: Annotated[Service, Injected()]) -> None:
+    def test_without_scope(service: Injected[Service]) -> None:
         ...
 
 Fixtures

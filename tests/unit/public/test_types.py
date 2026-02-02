@@ -1,9 +1,11 @@
 """Tests for types module (Lifetime, Injected, Factory)."""
 
 from enum import Enum
-from typing import Annotated, get_args, get_origin
+from typing import Annotated, Any, cast, get_args, get_origin
 
-from diwire.types import Injected, Lifetime
+from diwire.exceptions import DIWireInjectedInstantiationError
+from diwire.service_key import Component
+from diwire.types import Injected, Lifetime, _InjectedMarker
 
 
 class TestLifetime:
@@ -34,30 +36,41 @@ class TestLifetime:
 
 class TestInjected:
     def test_injected_instantiation(self) -> None:
-        """Injected can be instantiated."""
-        marker = Injected()
-        assert isinstance(marker, Injected)
-
-    def test_injected_multiple_instances(self) -> None:
-        """Multiple Injected instances are independent."""
-        marker1 = Injected()
-        marker2 = Injected()
-
-        # They are different objects
-        assert marker1 is not marker2
+        """Injected is not instantiable."""
+        try:
+            injected_cls = cast("Any", Injected)
+            injected_cls()
+        except DIWireInjectedInstantiationError:
+            pass
+        else:  # pragma: no cover - should always raise
+            raise AssertionError("Injected() should raise DIWireInjectedInstantiationError")
 
     def test_injected_usable_in_annotated(self) -> None:
-        """Injected can be used in Annotated."""
+        """Injected[T] produces Annotated with injected metadata."""
 
         class ServiceA:
             pass
 
-        annotated = Annotated[ServiceA, Injected()]
+        annotated = Injected[ServiceA]
 
         assert get_origin(annotated) is Annotated
         args = get_args(annotated)
         assert args[0] is ServiceA
-        assert isinstance(args[1], Injected)
+        assert any(isinstance(arg, _InjectedMarker) for arg in args[1:])
+
+    def test_injected_flattens_annotated(self) -> None:
+        """Injected[Annotated[T, Component(...]]] preserves metadata."""
+
+        class ServiceA:
+            pass
+
+        annotated = Injected[Annotated[ServiceA, Component("primary")]]
+
+        assert get_origin(annotated) is Annotated
+        args = get_args(annotated)
+        assert args[0] is ServiceA
+        assert any(isinstance(arg, Component) for arg in args[1:])
+        assert any(isinstance(arg, _InjectedMarker) for arg in args[1:])
 
 
 class TestFactoryProtocol:

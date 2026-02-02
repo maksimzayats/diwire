@@ -1,6 +1,10 @@
 from collections.abc import Callable, Generator
 from enum import Enum
-from typing import Any, TypeAlias
+from typing import TYPE_CHECKING, Annotated, Any, TypeAlias, TypeVar, Union, get_args, get_origin
+
+from typing_extensions import Self
+
+from diwire.exceptions import DIWireInjectedInstantiationError
 
 
 class Lifetime(str, Enum):
@@ -32,14 +36,43 @@ FactoryFunction: TypeAlias = Callable[..., FactoryReturn]
 Factory: TypeAlias = type[FactoryClassProtocol] | FactoryFunction
 """A type alias for either a factory class or a factory function."""
 
+T = TypeVar("T")
 
-class Injected:
-    """Marker to indicate a parameter should be injected from the DI container.
 
-    Usage:
-        def my_function(service: Annotated[ServiceA, Injected()], value: int) -> None:
-            ...
+class _InjectedMarker:
+    """Internal marker used to tag injected parameters in Annotated metadata."""
 
-    For type checkers, Annotated[T, Injected()] is equivalent to T.
-    At runtime, parameters marked with Injected will be automatically injected.
-    """
+
+def _build_annotated(params: tuple[object, ...]) -> Any:
+    """Return Annotated[...] with a pre-built params tuple (Py 3.10+ compatible)."""
+    try:
+        return Annotated.__class_getitem__(params)  # type: ignore[attr-defined]
+    except AttributeError:
+        return Annotated.__getitem__(params)  # type: ignore[attr-defined]
+
+
+if TYPE_CHECKING:
+    Injected = Union[T, T]  # noqa: UP007,PYI016
+else:
+
+    class Injected:
+        """Type wrapper to indicate a parameter should be injected from the DI container.
+
+        Usage:
+            def my_function(service: Injected[ServiceA], value: int) -> None:
+                ...
+
+        At runtime, Injected[T] resolves to Annotated[T, _InjectedMarker()].
+        """
+
+        def __new__(cls, *_args: object, **_kwargs: object) -> Self:
+            """Prevent instantiation; use Injected[T] instead."""
+            raise DIWireInjectedInstantiationError
+
+        def __class_getitem__(cls, item: T) -> Annotated[T, _InjectedMarker]:
+            if get_origin(item) is Annotated:
+                args = get_args(item)
+                inner = args[0]
+                metadata = args[1:]
+                return _build_annotated((inner, *metadata, _InjectedMarker()))
+            return _build_annotated((item, _InjectedMarker()))

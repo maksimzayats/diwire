@@ -15,7 +15,7 @@ Recommended order
 2. :doc:`registration` - explicit registration, decorators, and interfaces
 3. :doc:`lifetimes` - transient vs singleton vs scoped
 4. :doc:`scopes` - request-like scopes and deterministic cleanup
-5. :doc:`function-injection` - injecting into functions with ``Injected()``
+5. :doc:`function-injection` - injecting into functions with ``Injected[T]``
 6. :doc:`components` - multiple implementations via ``Component("name")``
 7. :doc:`open-generics` - open generic registrations and type-safe resolution
 8. :doc:`async` - async factories, async cleanup, and ``aresolve()``

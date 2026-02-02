@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, cast
+from typing import Any, cast
 
 import pytest
 
@@ -29,7 +29,7 @@ def diwire_container() -> Container:
     return container
 
 
-def test_injection_without_scope(service: Annotated[Service, Injected()]) -> None:
+def test_injection_without_scope(service: Injected[Service]) -> None:
     assert isinstance(service, Service)
 
 

@@ -49,7 +49,7 @@ Minimal sketch
 
    @app.get("/health")
    @container.resolve()  # uses the already-active scope from before_request
-   def health(service: Annotated[Service, Injected()]) -> dict[str, bool]:
+   def health(service: Injected[Service]) -> dict[str, bool]:
        return {"ok": True}
 
 If you'd rather have the wrapper create the scope per call, pass ``scope="request"`` to ``resolve()``, but the

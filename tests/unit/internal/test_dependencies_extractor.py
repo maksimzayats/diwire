@@ -226,7 +226,7 @@ class TestGetInjectedDependencies:
     ) -> None:
         """Get only dependencies marked with Injected."""
 
-        def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def my_func(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         deps = dependencies_extractor.get_injected_dependencies(
@@ -258,7 +258,7 @@ class TestGetInjectedDependencies:
 
         def my_func(
             value: int,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> ServiceA:
             return service
 
@@ -279,8 +279,8 @@ class TestGetInjectedDependencies:
             pass
 
         def my_func(
-            a: Annotated[ServiceA, Injected()],
-            b: Annotated[ServiceC, Injected()],
+            a: Injected[ServiceA],
+            b: Injected[ServiceC],
         ) -> None:
             pass
 
@@ -300,7 +300,7 @@ class TestGetInjectedDependencies:
         """Injected not first in metadata still works."""
 
         def my_func(
-            service: Annotated[ServiceA, "other_metadata", Injected()],
+            service: Injected[Annotated[ServiceA, "other_metadata"]],
         ) -> ServiceA:
             return service
 
@@ -316,7 +316,7 @@ class TestGetInjectedDependencies:
     ) -> None:
         """Return type is excluded."""
 
-        def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def my_func(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         deps = dependencies_extractor.get_injected_dependencies(
@@ -351,7 +351,7 @@ class TestExtractInjectedType:
         dependencies_extractor: DependenciesExtractor,
     ) -> None:
         """Annotated with Injected returns inner type."""
-        annotated = Annotated[ServiceA, Injected()]
+        annotated = Injected[ServiceA]
         result = dependencies_extractor._extract_injected_type(annotated)
 
         assert result is ServiceA

@@ -508,7 +508,7 @@ class TestInjectedFunctions:
         container.register(str, instance="injected_value")
 
         @container.resolve()
-        def get_value(value: Annotated[str, Injected()]) -> str:
+        def get_value(value: Injected[str]) -> str:
             return value
 
         result = get_value()

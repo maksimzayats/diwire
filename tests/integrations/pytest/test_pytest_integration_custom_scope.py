@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Annotated
-
 import pytest
 
 from diwire.container import Container
@@ -29,7 +27,7 @@ def diwire_container() -> Container:
 
 
 def test_custom_scope_is_used(
-    first: Annotated[ScopedService, Injected()],
-    second: Annotated[ScopedService, Injected()],
+    first: Injected[ScopedService],
+    second: Injected[ScopedService],
 ) -> None:
     assert first is second

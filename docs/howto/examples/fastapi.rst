@@ -57,7 +57,7 @@ integration:
            print("Closing service")
 
 
-   async def handler(request: Request, service: Annotated[Service, Injected()]) -> dict:
+   async def handler(request: Request, service: Injected[Service]) -> dict:
        """Handle the request using the injected service."""
        print(f"Service {service.id} handling request")
        return {"message": service.greet(), "request_id": id(request)}
@@ -67,7 +67,7 @@ integration:
 
 
    @app.get("/greet")
-   async def greet(request: Request, service: Annotated[Service, Injected()]) -> dict:
+   async def greet(request: Request, service: Injected[Service]) -> dict:
        return await handler(request, service)
 
 Decorator-based layering
@@ -153,7 +153,7 @@ Key points:
    @container.resolve(scope="request")
    async def greet(
        name: Annotated[str, Query()],
-       service: Annotated[Service, Injected()],
+       service: Injected[Service],
    ) -> dict[str, str]:
        """Endpoint that uses the layered dependencies."""
        print(f"Handler: processing request for {name}")
@@ -240,7 +240,7 @@ Key concepts:
    @container_context.resolve(scope="request")
    async def greet(
        name: str,
-       service: Annotated[Service, Injected()],
+       service: Injected[Service],
    ) -> dict[str, str | int]:
        """Endpoint using container_context for dependency resolution."""
        print(f"greet: processing request for {name}")

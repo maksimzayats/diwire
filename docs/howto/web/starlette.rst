@@ -47,7 +47,7 @@ Minimal sketch
    @container_context.resolve(scope="request")
    async def handler(
        request: Request,
-       service: Annotated["Service", Injected()],
+       service: Injected["Service"],
    ) -> JSONResponse:
        return JSONResponse({"ok": True})
 

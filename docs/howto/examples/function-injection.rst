@@ -4,11 +4,11 @@
 Function injection
 ==================
 
-Injected marker (Annotated[T, Injected()])
+Injected marker (Injected[T])
 ------------------------------------------
 
 Demonstrates how to mark function parameters for dependency injection using
-``Annotated[T, Injected()]``.
+``Injected[T]``.
 
 .. code-block:: python
    :class: diwire-example py-run
@@ -38,14 +38,14 @@ Demonstrates how to mark function parameters for dependency injection using
 
 
    def send_welcome_email(
-       email_service: Annotated[EmailService, Injected()],
-       logger: Annotated[Logger, Injected()],
        user_email: str,
        user_name: str,
+       email_service: Injected[EmailService],
+       logger: Injected[Logger],
    ) -> str:
        """Send a welcome email to a new user.
 
-       Parameters marked with Injected() are injected by the container.
+       Parameters marked with Injected[T] are injected by the container.
        Regular parameters (user_email, user_name) must be provided by caller.
        """
        logger.log(f"Sending welcome email to {user_name}")
@@ -109,8 +109,8 @@ Demonstrates:
 
 
    def process_item(
-       counter: Annotated[Counter, Injected()],
        item_id: int,
+       counter: Injected[Counter],
    ) -> str:
        """Process an item, using a counter service."""
        return f"Processing item {item_id} with counter instance #{counter.instance_number}"
@@ -200,9 +200,8 @@ where each call needs its own scope.
 
    def handle_request(
        user_id: int,
-       *,
-       user_service: Annotated[UserService, Injected()],
-       audit_service: Annotated[AuditService, Injected()],
+       user_service: Injected[UserService],
+       audit_service: Injected[AuditService],
    ) -> dict[str, str]:
        """Handle a request - both services should share the same session."""
        return {
