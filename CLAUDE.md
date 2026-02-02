@@ -14,7 +14,7 @@ make lint      # Run all checks: ruff, ty, pyrefly, mypy (strict)
 make test      # Run tests with 100% coverage requirement
 
 # Single test execution
-uv run pytest tests/test_container.py::test_register
+uv run pytest tests/unit/internal/test_container.py::test_register
 uv run pytest -k "keyword" tests/
 
 # Benchmarks
@@ -57,6 +57,12 @@ Tests in `tests/` use fixtures from `conftest.py`:
 - `container()` - auto-registration enabled
 - `container_no_autoregister()` - manual registration only
 - `container_singleton()` - singleton as default lifetime
+
+Test layout:
+- Unit tests (public API): `tests/unit/public/`
+- Unit tests (internal/private behavior): `tests/unit/internal/`
+- Integrations (by dependency): `tests/integrations/`
+- Docs validation: `tests/docs/`
 
 ## Public API
 

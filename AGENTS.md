@@ -29,8 +29,8 @@ the current public API.
 ## Tests
 
 - Run all tests: `uv run pytest tests/`
-- Run a single test file: `uv run pytest tests/test_container.py`
-- Run a single test: `uv run pytest tests/test_container.py::test_register`
+- Run a single test file: `uv run pytest tests/unit/internal/test_container.py`
+- Run a single test: `uv run pytest tests/unit/internal/test_container.py::test_register`
 - Run tests with keyword filter: `uv run pytest -k "dependency" tests/`
 - Coverage (recommended for new work):
   `uv run pytest --cov=diwire --cov-report=term-missing tests/`
@@ -39,6 +39,10 @@ the current public API.
 
 - Library source: `src/diwire/`
 - Tests: `tests/`
+  - Unit tests (public API): `tests/unit/public/`
+  - Unit tests (internal/private behavior): `tests/unit/internal/`
+  - Integrations (by dependency): `tests/integrations/`
+  - Docs validation: `tests/docs/`
 - Docs: `docs/`
 - Runnable examples (embedded in docs): `docs/howto/examples/`
 

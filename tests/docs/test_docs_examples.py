@@ -6,7 +6,7 @@ import sys
 import types
 from pathlib import Path
 
-from tests.docs_examples import iter_rst_code_blocks
+from tests.docs.docs_examples import iter_rst_code_blocks
 
 
 def _run_example_code(*, code: str, filename: str) -> None:
@@ -35,7 +35,7 @@ def _run_example_code(*, code: str, filename: str) -> None:
 
 
 def test_docs_runnable_examples_execute() -> None:
-    docs_dir = Path(__file__).resolve().parent.parent / "docs"
+    docs_dir = Path(__file__).resolve().parents[2] / "docs"
     blocks = iter_rst_code_blocks(docs_dir=docs_dir)
 
     example_blocks = [b for b in blocks if "diwire-example" in b.classes]
