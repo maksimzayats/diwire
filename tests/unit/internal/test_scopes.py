@@ -5,6 +5,7 @@ import threading
 import uuid
 from collections.abc import AsyncGenerator, Generator
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import Context
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -36,6 +37,14 @@ def _assert_app_scope_active() -> _ScopeId:
     assert scope is not None
     assert scope.contains_scope("app")
     return scope
+
+
+def _thread_with_empty_context(*, target: Any, args: tuple[Any, ...]) -> threading.Thread:
+    """Create a thread with an empty ContextVar context when supported."""
+    try:
+        return threading.Thread(target=target, args=args, context=Context())
+    except TypeError:
+        return threading.Thread(target=target, args=args)
 
 
 @dataclass
@@ -1023,7 +1032,9 @@ class TestScopeContextVariableIsolation:
             except Exception as e:
                 errors.append(e)
 
-        threads = [threading.Thread(target=worker, args=(f"t{i}",)) for i in range(3)]
+        threads = [
+            _thread_with_empty_context(target=worker, args=(f"t{i}",)) for i in range(3)
+        ]
         for t in threads:
             t.start()
         for t in threads:
