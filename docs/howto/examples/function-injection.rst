@@ -38,10 +38,10 @@ Demonstrates how to mark function parameters for dependency injection using
 
 
    def send_welcome_email(
-       email_service: Injected[EmailService],
-       logger: Injected[Logger],
        user_email: str,
        user_name: str,
+       email_service: Injected[EmailService],
+       logger: Injected[Logger],
    ) -> str:
        """Send a welcome email to a new user.
 
@@ -109,8 +109,8 @@ Demonstrates:
 
 
    def process_item(
-       counter: Injected[Counter],
        item_id: int,
+       counter: Injected[Counter],
    ) -> str:
        """Process an item, using a counter service."""
        return f"Processing item {item_id} with counter instance #{counter.instance_number}"
@@ -200,7 +200,6 @@ where each call needs its own scope.
 
    def handle_request(
        user_id: int,
-       *,
        user_service: Injected[UserService],
        audit_service: Injected[AuditService],
    ) -> dict[str, str]:
