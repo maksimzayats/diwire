@@ -305,6 +305,4 @@ class DIWireInvalidScopeNameError(DIWireError):
 
     def __init__(self, scope_name: str) -> None:
         self.scope_name = scope_name
-        super().__init__(
-            f"initial_scope must be a non-empty scope name, got {scope_name!r}."
-        )
+        super().__init__(f"initial_scope must be a non-empty scope name, got {scope_name!r}.")
