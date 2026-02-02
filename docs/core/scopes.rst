@@ -26,8 +26,13 @@ Scoped lifetime
 
 To share an instance *within* a scope, register it as ``Lifetime.SCOPED`` and provide a scope name:
 
-You can use predefined scope names like ``Scope.REQUEST`` (``app``, ``session``, ``request``) or provide any
-custom string name.
+The ``Scope`` enum provides three built-in scope names:
+
+- ``Scope.APP`` (``"app"``) -- application-wide scope (one per container or app lifetime)
+- ``Scope.SESSION`` (``"session"``) -- connection or session scope (e.g., websocket or user session)
+- ``Scope.REQUEST`` (``"request"``) -- request or job scope (one per request or unit of work)
+
+Scope parameters accept any string, so you can also provide a custom name like ``"tenant"`` or ``"task"``.
 
 See the runnable scripts in :doc:`/howto/examples/scopes` (SCOPED lifetime section).
 
