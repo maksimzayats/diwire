@@ -18,7 +18,6 @@ Then annotate parameters:
 
 .. code-block:: python
 
-    from typing import Annotated
     from diwire.types import Injected
 
     def test_example(service: Injected[Service]) -> None:
