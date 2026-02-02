@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Annotated
-
 import pytest
 
 from diwire.container import Container
@@ -35,15 +33,15 @@ def value() -> int:
 
 def test_injected_params_are_resolved(
     value: int,
-    service: Annotated[Service, Injected()],
+    service: Injected[Service],
 ) -> None:
     assert value == 42
     assert isinstance(service, Service)
 
 
 def test_default_scope_is_applied(
-    first: Annotated[ScopedService, Injected()],
-    second: Annotated[ScopedService, Injected()],
+    first: Injected[ScopedService],
+    second: Injected[ScopedService],
 ) -> None:
     assert first is second
 
@@ -53,5 +51,5 @@ def test_no_injection_needed(value: int) -> None:
 
 
 @pytest.mark.asyncio
-async def test_async_injection(service: Annotated[Service, Injected()]) -> None:
+async def test_async_injection(service: Injected[Service]) -> None:
     assert isinstance(service, Service)

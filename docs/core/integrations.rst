@@ -45,7 +45,7 @@ pytest
 ------
 
 diwire includes an optional pytest plugin that can resolve parameters annotated as
-``Annotated[T, Injected()]`` directly in test functions.
+``Injected[T]`` directly in test functions.
 
 See :doc:`/howto/testing/pytest`.
 

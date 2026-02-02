@@ -7,7 +7,7 @@ import inspect
 import threading
 import uuid
 from dataclasses import dataclass, field
-from typing import Annotated, Any
+from typing import Any
 
 import pytest
 
@@ -324,7 +324,7 @@ class TestDecoratorPatternSync:
         try:
 
             @container_context.resolve()
-            def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             assert isinstance(handler, _ContextInjected)
@@ -338,7 +338,7 @@ class TestDecoratorPatternSync:
         try:
 
             @container_context.resolve(scope="request")
-            def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             assert isinstance(handler, _ContextScopedInjected)
@@ -351,7 +351,7 @@ class TestDecoratorPatternSync:
         token = container_context.set_current(container)
         try:
 
-            def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             injected = container_context.resolve(handler)
@@ -365,7 +365,7 @@ class TestDecoratorPatternSync:
         token = container_context.set_current(container)
         try:
 
-            def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             injected = container_context.resolve(handler, scope="request")
@@ -380,7 +380,7 @@ class TestDecoratorPatternSync:
         try:
 
             @container_context.resolve()
-            def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             result = handler()
@@ -397,7 +397,7 @@ class TestDecoratorPatternSync:
             @container_context.resolve()
             def handler(
                 value: int,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> tuple[int, ServiceA]:
                 return value, service
 
@@ -416,7 +416,7 @@ class TestDecoratorPatternSync:
         try:
 
             @container_context.resolve(scope="request")
-            def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             result1 = handler()
@@ -442,7 +442,7 @@ class TestDecoratorPatternAsync:
         try:
 
             @container_context.resolve()
-            async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            async def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             assert isinstance(handler, _AsyncContextInjected)
@@ -456,7 +456,7 @@ class TestDecoratorPatternAsync:
         try:
 
             @container_context.resolve(scope="request")
-            async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            async def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             assert isinstance(handler, _AsyncContextScopedInjected)
@@ -471,7 +471,7 @@ class TestDecoratorPatternAsync:
         try:
 
             @container_context.resolve()
-            async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            async def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             result = await handler()
@@ -489,7 +489,7 @@ class TestDecoratorPatternAsync:
         try:
 
             @container_context.resolve(scope="request")
-            async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            async def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             result1 = await handler()
@@ -509,7 +509,7 @@ class TestDecoratorPatternAsync:
             @container_context.resolve(scope="request")
             async def handler(
                 value: int,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> tuple[int, ServiceA]:
                 return value, service
 
@@ -535,7 +535,7 @@ class TestLazyContainerLookup:
         try:
             # Apply decorator BEFORE container is set
             @container_context.resolve(scope="request")
-            def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             # Should create wrapper without error
@@ -559,7 +559,7 @@ class TestLazyContainerLookup:
         try:
 
             @container_context.resolve(scope="request")
-            async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            async def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             assert isinstance(handler, _AsyncContextScopedInjected)
@@ -580,7 +580,7 @@ class TestLazyContainerLookup:
         try:
 
             @container_context.resolve()
-            def handler(service: Annotated[ServiceA, Injected()]) -> str:
+            def handler(service: Injected[ServiceA]) -> str:
                 return service.id
 
             # First container
@@ -623,7 +623,7 @@ class TestSignatureHandling:
             @container_context.resolve()
             def handler(
                 value: int,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> tuple[int, ServiceA]:
                 return value, service
 
@@ -643,7 +643,7 @@ class TestSignatureHandling:
             @container_context.resolve()
             async def handler(
                 value: int,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> tuple[int, ServiceA]:
                 return value, service
 
@@ -663,7 +663,7 @@ class TestSignatureHandling:
             @container_context.resolve(scope="request")
             def handler(
                 value: int,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> tuple[int, ServiceA]:
                 return value, service
 
@@ -681,7 +681,7 @@ class TestSignatureHandling:
             @container_context.resolve(scope="request")
             def handler(
                 value: int,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> tuple[int, ServiceA]:
                 return value, service
 
@@ -708,7 +708,7 @@ class TestMetadataPreservation:
         try:
 
             @container_context.resolve()
-            def my_handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def my_handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             assert my_handler.__name__ == "my_handler"
@@ -722,7 +722,7 @@ class TestMetadataPreservation:
         try:
 
             @container_context.resolve()
-            def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def handler(service: Injected[ServiceA]) -> ServiceA:
                 """This is my docstring."""
                 return service
 
@@ -736,7 +736,7 @@ class TestMetadataPreservation:
         token = container_context.set_current(container)
         try:
 
-            def original_handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def original_handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             wrapped = container_context.resolve(original_handler)
@@ -751,7 +751,7 @@ class TestMetadataPreservation:
         try:
 
             @container_context.resolve()
-            def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             assert "_ContextInjected" in repr(handler)
@@ -765,7 +765,7 @@ class TestMetadataPreservation:
         try:
 
             @container_context.resolve(scope="request")
-            def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             assert "_ContextScopedInjected" in repr(handler)
@@ -1114,7 +1114,7 @@ class TestFastAPILikeIntegration:
             @container_context.resolve(scope="request")
             def get_data(
                 name: str,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> dict[str, Any]:
                 return {"name": name, "service_id": service.id}
 
@@ -1137,11 +1137,11 @@ class TestFastAPILikeIntegration:
         try:
 
             @container_context.resolve(scope="request")
-            def endpoint1(service: Annotated[ServiceA, Injected()]) -> str:
+            def endpoint1(service: Injected[ServiceA]) -> str:
                 return f"endpoint1:{service.id}"
 
             @container_context.resolve(scope="request")
-            def endpoint2(service: Annotated[ServiceA, Injected()]) -> str:
+            def endpoint2(service: Injected[ServiceA]) -> str:
                 return f"endpoint2:{service.id}"
 
             # Set up container
@@ -1181,7 +1181,7 @@ class TestFastAPILikeIntegration:
         try:
 
             @container_context.resolve(scope="request")
-            def handler(service: Annotated[ServiceA, Injected()]) -> str:
+            def handler(service: Injected[ServiceA]) -> str:
                 return service.id
 
             result = handler()
@@ -1222,7 +1222,7 @@ class TestEdgeCases:
 
             @container_context.resolve()
             def handler(
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
                 value: int = 10,
             ) -> tuple[int, ServiceA]:
                 return value, service
@@ -1245,7 +1245,7 @@ class TestEdgeCases:
             @container_context.resolve()
             def handler(
                 *args: int,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
                 **kwargs: str,
             ) -> dict[str, Any]:
                 return {"args": args, "kwargs": kwargs, "service": service}
@@ -1266,7 +1266,7 @@ class TestEdgeCases:
             @container_context.resolve()
             def handler(
                 value: int,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> tuple[int, ServiceA]:
                 return value, service
 
@@ -1306,7 +1306,7 @@ class TestEdgeCases:
         try:
 
             @container_context.resolve()
-            def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             with pytest.raises(DIWireContainerNotSetError):
@@ -1320,7 +1320,7 @@ class TestEdgeCases:
         try:
 
             @container_context.resolve()
-            def handler(service: Annotated[ServiceA, Injected()]) -> str:
+            def handler(service: Injected[ServiceA]) -> str:
                 return service.id
 
             container1 = Container()
@@ -1367,7 +1367,7 @@ class TestDecoratorStacking:
 
             @logging_decorator
             @container_context.resolve()
-            def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             result = handler()
@@ -1392,7 +1392,7 @@ class TestDecoratorStacking:
 
             @container_context.resolve()
             @logging_decorator
-            def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             result = handler()
@@ -1418,7 +1418,7 @@ class TestErrorPropagation:
         try:
 
             @container_context.resolve()
-            def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             with pytest.raises(DIWireServiceNotRegisteredError):
@@ -1438,7 +1438,7 @@ class TestErrorPropagation:
         try:
 
             @container_context.resolve()
-            def handler(service: Annotated[_CircularA, Injected()]) -> _CircularA:
+            def handler(service: Injected[_CircularA]) -> _CircularA:
                 return service
 
             with pytest.raises(DIWireCircularDependencyError):
@@ -1453,7 +1453,7 @@ class TestErrorPropagation:
         try:
 
             @container_context.resolve()
-            def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def handler(service: Injected[ServiceA]) -> ServiceA:
                 raise ValueError("Handler error")
 
             with pytest.raises(ValueError, match="Handler error"):
@@ -1469,7 +1469,7 @@ class TestErrorPropagation:
         try:
 
             @container_context.resolve()
-            async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            async def handler(service: Injected[ServiceA]) -> ServiceA:
                 raise ValueError("Async handler error")
 
             with pytest.raises(ValueError, match="Async handler error"):
@@ -1494,8 +1494,8 @@ class TestMultipleInjectedParameters:
 
             @container_context.resolve()
             def handler(
-                s1: Annotated[ServiceA, Injected()],
-                s2: Annotated[ServiceA, Injected()],
+                s1: Injected[ServiceA],
+                s2: Injected[ServiceA],
             ) -> tuple[ServiceA, ServiceA]:
                 return s1, s2
 
@@ -1516,8 +1516,8 @@ class TestMultipleInjectedParameters:
 
             @container_context.resolve()
             def handler(
-                a: Annotated[ServiceA, Injected()],
-                b: Annotated[ServiceB, Injected()],
+                a: Injected[ServiceA],
+                b: Injected[ServiceB],
             ) -> tuple[ServiceA, ServiceB]:
                 return a, b
 
@@ -1536,9 +1536,9 @@ class TestMultipleInjectedParameters:
             @container_context.resolve()
             def handler(
                 value: int,
-                a: Annotated[ServiceA, Injected()],
+                a: Injected[ServiceA],
                 name: str,
-                b: Annotated[ServiceB, Injected()],
+                b: Injected[ServiceB],
             ) -> dict[str, Any]:
                 return {"value": value, "name": name, "a": a, "b": b}
 
@@ -1734,7 +1734,7 @@ class TestAsyncRepr:
         try:
 
             @container_context.resolve()
-            async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            async def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             assert "_AsyncContextInjected" in repr(handler)
@@ -1748,7 +1748,7 @@ class TestAsyncRepr:
         try:
 
             @container_context.resolve(scope="request")
-            async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            async def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             assert "_AsyncContextScopedInjected" in repr(handler)
@@ -1773,8 +1773,8 @@ class TestSignatureEdgeCases:
 
             @container_context.resolve()
             def handler(
-                a: Annotated[ServiceA, Injected()],
-                b: Annotated[ServiceB, Injected()],
+                a: Injected[ServiceA],
+                b: Injected[ServiceB],
             ) -> tuple[ServiceA, ServiceB]:
                 return a, b
 
@@ -1794,7 +1794,7 @@ class TestSignatureEdgeCases:
             def handler(
                 value: int,
                 *,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
                 name: str = "default",
             ) -> dict[str, Any]:
                 return {"value": value, "service": service, "name": name}
@@ -1822,7 +1822,7 @@ class TestSignatureEdgeCases:
             def handler(
                 value: int,
                 /,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
                 name: str = "default",
             ) -> dict[str, Any]:
                 return {"value": value, "service": service, "name": name}
@@ -1858,7 +1858,7 @@ class TestMethodDecorators:
                 @container_context.resolve()
                 def handler(
                     self,
-                    service: Annotated[ServiceA, Injected()],
+                    service: Injected[ServiceA],
                 ) -> ServiceA:
                     return service
 
@@ -1878,7 +1878,7 @@ class TestMethodDecorators:
                 @staticmethod
                 @container_context.resolve()
                 def handler(
-                    service: Annotated[ServiceA, Injected()],
+                    service: Injected[ServiceA],
                 ) -> ServiceA:
                     return service
 
@@ -1898,7 +1898,7 @@ class TestMethodDecorators:
                 @container_context.resolve()
                 def handler(
                     cls,
-                    service: Annotated[ServiceA, Injected()],
+                    service: Injected[ServiceA],
                 ) -> tuple[type, ServiceA]:
                     return cls, service
 
@@ -1927,8 +1927,8 @@ class TestLifetimeVariations:
 
             @container_context.resolve()
             def handler(
-                s1: Annotated[ServiceA, Injected()],
-                s2: Annotated[ServiceA, Injected()],
+                s1: Injected[ServiceA],
+                s2: Injected[ServiceA],
             ) -> tuple[ServiceA, ServiceA]:
                 return s1, s2
 
@@ -1947,7 +1947,7 @@ class TestLifetimeVariations:
         try:
 
             @container_context.resolve()
-            def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             result1 = handler()
@@ -1967,8 +1967,8 @@ class TestLifetimeVariations:
 
             @container_context.resolve(scope="request")
             def handler(
-                s1: Annotated[ServiceA, Injected()],
-                s2: Annotated[ServiceA, Injected()],
+                s1: Injected[ServiceA],
+                s2: Injected[ServiceA],
             ) -> tuple[ServiceA, ServiceA]:
                 return s1, s2
 
@@ -2005,7 +2005,7 @@ class TestAsyncGeneratorFactory:
         try:
 
             @container_context.resolve(scope="request")
-            async def handler(service: Annotated[ServiceA, Injected()]) -> str:
+            async def handler(service: Injected[ServiceA]) -> str:
                 return service.id
 
             result = await handler()
@@ -2031,7 +2031,7 @@ class TestServiceWithDependencies:
 
             @container_context.resolve()
             def handler(
-                service: Annotated[ServiceWithDep, Injected()],
+                service: Injected[ServiceWithDep],
             ) -> ServiceWithDep:
                 return service
 
@@ -2052,7 +2052,7 @@ class TestServiceWithDependencies:
 
             @container_context.resolve()
             def handler(
-                service: Annotated[ServiceWithDep, Injected()],
+                service: Injected[ServiceWithDep],
             ) -> ServiceWithDep:
                 return service
 
@@ -2077,7 +2077,7 @@ class TestReturnValueEdgeCases:
         try:
 
             @container_context.resolve()
-            def handler(service: Annotated[ServiceA, Injected()]) -> None:
+            def handler(service: Injected[ServiceA]) -> None:
                 _ = service
 
             result = handler()
@@ -2093,7 +2093,7 @@ class TestReturnValueEdgeCases:
 
             @container_context.resolve()
             def handler(
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> Any:
                 def gen() -> Any:
                     yield service.id
@@ -2117,7 +2117,7 @@ class TestReturnValueEdgeCases:
 
             @container_context.resolve()
             async def handler(
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> Any:
                 async def agen() -> Any:
                     yield service.id
@@ -2179,7 +2179,7 @@ class TestPEP563Compatibility:
 
             @container_context.resolve()
             def handler(
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> ServiceA:
                 return service
 
@@ -2265,7 +2265,7 @@ class TestDirectFunctionResolution:
         token = container_context.set_current(container)
         try:
 
-            def my_handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def my_handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             wrapped = container_context.resolve(my_handler)
@@ -2281,7 +2281,7 @@ class TestDirectFunctionResolution:
         token = container_context.set_current(container)
         try:
 
-            async def my_handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            async def my_handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             wrapped = container_context.resolve(my_handler)
@@ -2308,7 +2308,7 @@ class TestOverloadBehavior:
             assert callable(decorator)
 
             @decorator
-            def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def handler(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             assert isinstance(handler, _ContextInjected)
@@ -2341,7 +2341,7 @@ class TestOverloadBehavior:
         token = container_context.set_current(container)
         try:
 
-            def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def my_func(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
             result = container_context.resolve(my_func)
@@ -2361,7 +2361,7 @@ class TestContextInjectedDescriptors:
     def test_context_injected_get_returns_self_when_obj_none(self) -> None:
         """_ContextInjected descriptor returns self when accessed on class."""
 
-        def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         proxy = _ContainerContextProxy()
@@ -2374,7 +2374,7 @@ class TestContextInjectedDescriptors:
     def test_context_scoped_injected_get_returns_self_when_obj_none(self) -> None:
         """_ContextScopedInjected descriptor returns self when accessed on class."""
 
-        def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         proxy = _ContainerContextProxy()
@@ -2388,7 +2388,7 @@ class TestContextInjectedDescriptors:
         """_ContextScopedInjected descriptor returns MethodType when accessed on instance."""
         import types
 
-        def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         proxy = _ContainerContextProxy()
@@ -2402,7 +2402,7 @@ class TestContextInjectedDescriptors:
     def test_async_context_injected_get_returns_self_when_obj_none(self) -> None:
         """_AsyncContextInjected descriptor returns self when accessed on class."""
 
-        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        async def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         proxy = _ContainerContextProxy()
@@ -2416,7 +2416,7 @@ class TestContextInjectedDescriptors:
         """_AsyncContextInjected descriptor returns MethodType when accessed on instance."""
         import types
 
-        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        async def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         proxy = _ContainerContextProxy()
@@ -2430,7 +2430,7 @@ class TestContextInjectedDescriptors:
     def test_async_context_scoped_injected_get_returns_self_when_obj_none(self) -> None:
         """_AsyncContextScopedInjected descriptor returns self when accessed on class."""
 
-        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        async def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         proxy = _ContainerContextProxy()
@@ -2444,7 +2444,7 @@ class TestContextInjectedDescriptors:
         """_AsyncContextScopedInjected descriptor returns MethodType when accessed on instance."""
         import types
 
-        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        async def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         proxy = _ContainerContextProxy()
@@ -2609,7 +2609,7 @@ class TestCrossThreadDefaultContainer:
         @container_context.resolve(scope="request")
         def handler(
             value: int,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> dict[str, Any]:
             return {"value": value, "service_id": service.id}
 
@@ -2647,7 +2647,7 @@ class TestCrossThreadDefaultContainer:
             def handle(
                 self,
                 name: str,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> dict[str, str]:
                 return {"name": name, "service_id": service.id}
 

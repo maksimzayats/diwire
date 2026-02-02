@@ -16,7 +16,7 @@ Built-in integration (recommended)
 ----------------------------------
 
 The built-in FastAPI integration auto-wraps endpoints that use
-``Annotated[T, Injected()]`` parameters. FastAPI only sees request parameters, and diwire
+``Injected[T]`` parameters. FastAPI only sees request parameters, and diwire
 resolves the injected dependencies when the endpoint is called.
 
 1. Configure the container and install the integration (do this before registering routes that
@@ -43,7 +43,7 @@ resolves the injected dependencies when the endpoint is called.
 
 
       @app.get("/health")
-      async def health(service: Annotated["Service", Injected()]) -> dict[str, str]:
+      async def health(service: Injected["Service"]) -> dict[str, str]:
           return {"status": service.ok()}
 
 3. Register request-scoped services (``Lifetime.SCOPED``, ``scope="request"``) and any request-specific objects

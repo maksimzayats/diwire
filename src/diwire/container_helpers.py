@@ -17,7 +17,7 @@ from typing import (
 
 from diwire.registry import Registration
 from diwire.service_key import ServiceKey
-from diwire.types import Injected
+from diwire.types import _InjectedMarker
 
 
 @dataclass(kw_only=True, slots=True, frozen=True)
@@ -153,7 +153,7 @@ def _has_injected_annotation(param: inspect.Parameter) -> bool:
     # For Annotated[T, ...], args[0] is T and args[1:] are the metadata
     if get_origin(annotation) is Annotated:
         args = get_args(annotation)
-        return any(isinstance(arg, Injected) for arg in args[1:])
+        return any(isinstance(arg, _InjectedMarker) for arg in args[1:])
 
     return False
 

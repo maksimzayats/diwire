@@ -1,5 +1,5 @@
 .. meta::
-   :description: pytest integration for diwire: Injected() parameter injection via the built-in plugin, container/scope fixtures, using container_context safely with tokens, and cleaning up scopes.
+   :description: pytest integration for diwire: Injected[T] parameter injection via the built-in plugin, container/scope fixtures, using container_context safely with tokens, and cleaning up scopes.
 
 pytest
 ======
@@ -8,7 +8,7 @@ Built-in pytest plugin (Injected parameters)
 --------------------------------------------
 
 diwire ships with an optional pytest plugin that resolves parameters annotated as
-``Annotated[T, Injected()]`` from a container.
+``Injected[T]`` from a container.
 
 Enable it in a test module or ``conftest.py``:
 
@@ -25,7 +25,7 @@ Then annotate parameters:
    from diwire import Injected
 
 
-   def test_example(service: Annotated["Service", Injected()]) -> None:
+   def test_example(service: Injected["Service"]) -> None:
        assert service is not None
 
 Customizing the container

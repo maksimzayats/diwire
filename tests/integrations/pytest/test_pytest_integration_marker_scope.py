@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Annotated
-
 import pytest
 
 from diwire.container import Container
@@ -29,10 +27,10 @@ def diwire_scope() -> str:
 
 
 @pytest.mark.diwire_scope("marker_scope")
-def test_marker_scope_overrides_default(service: Annotated[Service, Injected()]) -> None:
+def test_marker_scope_overrides_default(service: Injected[Service]) -> None:
     assert isinstance(service, Service)
 
 
 @pytest.mark.diwire_scope(scope="marker_scope")
-def test_marker_scope_kwarg(service: Annotated[Service, Injected()]) -> None:
+def test_marker_scope_kwarg(service: Injected[Service]) -> None:
     assert isinstance(service, Service)

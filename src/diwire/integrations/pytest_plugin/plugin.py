@@ -40,7 +40,7 @@ def _get_container_cls() -> type[Container]:
 @lru_cache(maxsize=1)
 def _get_injected_marker_cls() -> type[Any]:
     module = importlib.import_module("diwire.types")
-    return module.Injected
+    return module._InjectedMarker  # noqa: SLF001
 
 
 @lru_cache(maxsize=1)

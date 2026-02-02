@@ -127,8 +127,8 @@ dependencies on each call.
 
    async def get_user_handler(
        user_id: int,
-       repo: Annotated[UserRepository, Injected()],
-       logger: Annotated[Logger, Injected()],
+       repo: Injected[UserRepository],
+       logger: Injected[Logger],
    ) -> dict[str, str]:
        logger.info(f"fetch user {user_id}")  # noqa: G004
        return {"user": await repo.get_username(user_id)}
@@ -173,7 +173,7 @@ Demonstrates ``AsyncScopedInjected``: resolving an async function with
 
    async def handler(
        payload: dict[str, str],
-       ctx: Annotated[RequestContext, Injected()],
+       ctx: Injected[RequestContext],
    ) -> dict[str, str]:
        await asyncio.sleep(0.01)
        return {"request_id": ctx.request_id, "payload": str(payload)}

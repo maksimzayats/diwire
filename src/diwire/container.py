@@ -1660,7 +1660,7 @@ class Container:
 
                 # Decorator usage:
                 @container.resolve(scope="request")
-                async def handler(service: Annotated[Service, Injected()]) -> dict: ...
+                async def handler(service: Injected[Service]) -> dict: ...
 
         """
         self._check_not_closed()

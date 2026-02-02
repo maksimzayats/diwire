@@ -1,5 +1,5 @@
 .. meta::
-   :description: Function injection in diwire using Annotated[T, Injected()]. Learn how container.resolve() wraps callables and can create per-call scopes.
+   :description: Function injection in diwire using Injected[T]. Learn how container.resolve() wraps callables and can create per-call scopes.
 
 Function injection
 ==================
@@ -11,10 +11,10 @@ The building blocks are:
 - :class:`diwire.Injected` - a marker used inside ``typing.Annotated``
 - :meth:`diwire.Container.resolve` - when given a function, returns an injected callable wrapper
 
-Basic injection with ``Injected()``
+Basic injection with ``Injected[T]``
 -----------------------------------
 
-Mark injectable parameters using ``Annotated[T, Injected()]``.
+Mark injectable parameters using ``Injected[T]``.
 All other parameters remain caller-provided.
 
 See the runnable scripts in :doc:`/howto/examples/function-injection` (Injected marker section).
@@ -40,7 +40,7 @@ You can also use ``resolve()`` as a decorator:
 
 
    @container.resolve()
-   def handler(service: Annotated["Service", Injected()]) -> str:
+   def handler(service: Injected["Service"]) -> str:
        return service.run()
 
 For framework integration (FastAPI/Starlette), also see :doc:`container-context` and :doc:`../howto/web/fastapi`.

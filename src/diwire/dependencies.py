@@ -6,7 +6,7 @@ from typing import Annotated, Any, TypeVar, get_args, get_origin, get_type_hints
 
 from diwire.exceptions import DIWireDependencyExtractionError
 from diwire.service_key import ServiceKey
-from diwire.types import Injected
+from diwire.types import _InjectedMarker
 
 MIN_ANNOTATED_ARGS = 2
 
@@ -140,7 +140,7 @@ class DependenciesExtractor:
         return result
 
     def _extract_injected_type(self, hint: Any) -> Any | None:
-        """Extract the inner type if hint is Annotated[T, Injected()], otherwise return None."""
+        """Extract the inner type if hint is Injected[T], otherwise return None."""
         if get_origin(hint) is not Annotated:
             return None
 
@@ -150,8 +150,8 @@ class DependenciesExtractor:
 
         # Check if any metadata is an Injected marker
         for metadata in args[1:]:
-            if isinstance(metadata, Injected):
-                return args[0]  # Return the actual type T from Annotated[T, Injected()]
+            if isinstance(metadata, _InjectedMarker):
+                return args[0]  # Return the actual type T from Annotated[T, Injected]
 
         return None
 

@@ -12,6 +12,13 @@ class DIWireError(Exception):
     """Base exception for all diwire errors."""
 
 
+class DIWireInjectedInstantiationError(DIWireError):
+    """Injected() was called instead of using Injected[T]."""
+
+    def __init__(self) -> None:
+        super().__init__("Injected is not instantiable; use Injected[T].")
+
+
 class DIWireServiceNotRegisteredError(DIWireError):
     """Service not registered and auto-registration disabled."""
 

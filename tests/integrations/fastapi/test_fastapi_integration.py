@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, cast
+from typing import cast
 
 from fastapi import APIRouter, FastAPI
 from fastapi.routing import APIRoute
@@ -24,7 +24,7 @@ def test_setup_diwire_wraps_registered_routes() -> None:
     try:
 
         @app.get("/hello")
-        async def hello(service: Annotated[Service, Injected()]) -> dict[str, str]:
+        async def hello(service: Injected[Service]) -> dict[str, str]:
             return {"value": service.value}
 
         client = TestClient(app)
@@ -45,7 +45,7 @@ def test_diwire_route_class_wraps_router_routes() -> None:
         router = APIRouter(route_class=DIWireRoute)
 
         @router.get("/hello")
-        async def hello(service: Annotated[Service, Injected()]) -> dict[str, str]:
+        async def hello(service: Injected[Service]) -> dict[str, str]:
             return {"value": service.value}
 
         app = FastAPI()
@@ -76,7 +76,7 @@ def test_setup_diwire_wraps_existing_routes() -> None:
     container.register(Service)
 
     @container_context.resolve(scope="request")
-    async def hello_wrapped(service: Annotated[Service, Injected()]) -> dict[str, str]:
+    async def hello_wrapped(service: Injected[Service]) -> dict[str, str]:
         return {"value": service.value}
 
     app.add_api_route("/hello", hello_wrapped, methods=["GET"])
@@ -107,7 +107,7 @@ def test_setup_diwire_keeps_wrapped_routes() -> None:
     container.register(Service)
 
     @container_context.resolve(scope="request")
-    async def hello_wrapped(service: Annotated[Service, Injected()]) -> dict[str, str]:
+    async def hello_wrapped(service: Injected[Service]) -> dict[str, str]:
         return {"value": service.value}
 
     app.add_api_route("/hello", hello_wrapped, methods=["GET"])

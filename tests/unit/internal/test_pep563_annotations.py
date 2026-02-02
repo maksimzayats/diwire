@@ -26,10 +26,10 @@ class TestPEP563SignatureFiltering:
         """Signature should exclude Injected params even with string annotations."""
         container = Container()
 
-        # With PEP 563, this annotation becomes the string "Annotated[ServiceA, Injected()]"
+        # With PEP 563, this annotation becomes the string "Injected[ServiceA]"
         def my_func(
             value: int,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> int:
             return value
 
@@ -46,9 +46,9 @@ class TestPEP563SignatureFiltering:
 
         def my_func(
             value: int,
-            service_a: Annotated[ServiceA, Injected()],
+            service_a: Injected[ServiceA],
             name: str,
-            service_b: Annotated[ServiceB, Injected()],
+            service_b: Injected[ServiceB],
         ) -> int:
             return value
 
@@ -63,8 +63,8 @@ class TestPEP563SignatureFiltering:
         container = Container()
 
         def my_func(
-            service_a: Annotated[ServiceA, Injected()],
-            service_b: Annotated[ServiceB, Injected()],
+            service_a: Injected[ServiceA],
+            service_b: Injected[ServiceB],
         ) -> tuple[ServiceA, ServiceB]:
             return (service_a, service_b)
 
@@ -85,7 +85,7 @@ class TestPEP563ForwardReferences:
         @container.resolve()
         def handler(
             value: int,
-            service: Annotated[ForwardService, Injected()],
+            service: Injected[ForwardService],
         ) -> str:
             return f"{value}: {service.name}"
 
@@ -105,7 +105,7 @@ class TestPEP563ForwardReferences:
         @container.resolve()
         async def handler(
             value: int,
-            service: Annotated[ForwardService, Injected()],
+            service: Injected[ForwardService],
         ) -> str:
             return f"{value}: {service.name}"
 
@@ -126,7 +126,7 @@ class TestPEP563ForwardReferences:
         @container.resolve(scope="request")
         def handler(
             value: int,
-            service: Annotated[ForwardService, Injected()],
+            service: Injected[ForwardService],
         ) -> str:
             return f"{value}: {service.name}"
 
@@ -146,7 +146,7 @@ class TestPEP563ForwardReferences:
         @container.resolve(scope="request")
         async def handler(
             value: int,
-            service: Annotated[ForwardService, Injected()],
+            service: Injected[ForwardService],
         ) -> str:
             return f"{value}: {service.name}"
 
@@ -172,7 +172,7 @@ class TestPEP563ScopeDetection:
         # With explicit scope, this should work even though ForwardService
         # wasn't defined when the decorator ran
         @container.resolve(scope="request")
-        def handler(service: Annotated[ForwardService, Injected()]) -> str:
+        def handler(service: Injected[ForwardService]) -> str:
             return service.name
 
         assert isinstance(handler, _ScopedInjectedFunction)
@@ -184,7 +184,7 @@ class TestPEP563ScopeDetection:
         # Without explicit scope and with forward reference,
         # scope detection may fail but should fall back to no scope
         @container.resolve()
-        def handler(service: Annotated[ForwardService, Injected()]) -> str:
+        def handler(service: Injected[ForwardService]) -> str:
             return service.name
 
         # Should be regular _InjectedFunction (not _ScopedInjectedFunction) since scope
@@ -202,7 +202,7 @@ class TestPEP563Resolution:
         @container.resolve()
         def handler(
             value: int,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> tuple[int, ServiceA]:
             return (value, service)
 
@@ -218,7 +218,7 @@ class TestPEP563Resolution:
         @container.resolve()
         async def handler(
             value: int,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> tuple[int, ServiceA]:
             return (value, service)
 
@@ -234,7 +234,7 @@ class TestPEP563Resolution:
 
         @container.resolve(scope="request")
         def handler(
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> ServiceA:
             return service
 
@@ -248,7 +248,7 @@ class TestPEP563Resolution:
 
         @container.resolve(scope="request")
         async def handler(
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> ServiceA:
             return service
 
@@ -265,7 +265,7 @@ class TestPEP563EdgeCases:
 
         def handler(
             value: Annotated[int, "some metadata"],
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
             name: Annotated[str, "more metadata"],
         ) -> int:
             return value
@@ -282,7 +282,7 @@ class TestPEP563EdgeCases:
         container = Container()
 
         def handler(
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> ServiceA:
             return service
 
@@ -298,7 +298,7 @@ class TestPEP563EdgeCases:
         custom_service = ServiceA()
 
         @container.resolve()
-        def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         # Override with explicit kwarg
@@ -313,7 +313,7 @@ class TestPEP563EdgeCases:
         def handler(
             a: int,
             b: str,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> tuple[int, str, ServiceA]:
             return (a, b, service)
 

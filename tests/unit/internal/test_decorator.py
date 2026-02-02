@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from inspect import signature
-from typing import Annotated, Any
+from typing import Any
 
 import pytest
 
@@ -33,7 +33,7 @@ class TestDecoratorBasic:
         """@container.resolve(scope="test") on sync function returns _ScopedInjectedFunction."""
 
         @container.resolve(scope="test")
-        def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         assert isinstance(handler, _ScopedInjectedFunction)
@@ -43,7 +43,7 @@ class TestDecoratorBasic:
         """@container.resolve(scope="test") on async function returns _AsyncScopedInjectedFunction."""
 
         @container.resolve(scope="test")
-        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        async def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         assert isinstance(handler, _AsyncScopedInjectedFunction)
@@ -52,7 +52,7 @@ class TestDecoratorBasic:
         """@container.resolve() on sync function returns _InjectedFunction."""
 
         @container.resolve()
-        def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         assert isinstance(handler, _InjectedFunction)
@@ -62,7 +62,7 @@ class TestDecoratorBasic:
         """@container.resolve() on async function returns _AsyncInjectedFunction."""
 
         @container.resolve()
-        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        async def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         assert isinstance(handler, _AsyncInjectedFunction)
@@ -74,7 +74,7 @@ class TestDecoratorBackwardCompatibility:
     def test_direct_call_still_works(self, container: Container) -> None:
         """container.resolve(my_func, scope="test") works."""
 
-        def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def my_func(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         injected = container.resolve(my_func, scope="test")
@@ -88,7 +88,7 @@ class TestDecoratorBackwardCompatibility:
     def test_direct_call_without_scope(self, container: Container) -> None:
         """container.resolve(my_func) without scope works."""
 
-        def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def my_func(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         injected = container.resolve(my_func)
@@ -102,7 +102,7 @@ class TestDecoratorMetadataPreservation:
         """__doc__ is preserved."""
 
         @container.resolve(scope="test")
-        def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def handler(service: Injected[ServiceA]) -> ServiceA:
             """This is my docstring."""
             return service
 
@@ -112,7 +112,7 @@ class TestDecoratorMetadataPreservation:
         """__name__ is preserved."""
 
         @container.resolve(scope="test")
-        def my_handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def my_handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         assert my_handler.__name__ == "my_handler"
@@ -123,7 +123,7 @@ class TestDecoratorMetadataPreservation:
         @container.resolve(scope="test")
         def handler(
             value: int,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> tuple[int, ServiceA]:
             return (value, service)
 
@@ -136,10 +136,10 @@ class TestDecoratorFunctionality:
     """Test that decorated functions resolve dependencies correctly."""
 
     def test_decorator_resolves_dependencies(self, container: Container) -> None:
-        """Dependencies marked with Injected() are injected."""
+        """Dependencies marked with Injected[T] are injected."""
 
         @container.resolve(scope="test")
-        def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         result = handler()
@@ -151,7 +151,7 @@ class TestDecoratorFunctionality:
         @container.resolve(scope="test")
         def handler(
             value: int,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> tuple[int, ServiceA]:
             return (value, service)
 
@@ -165,9 +165,9 @@ class TestDecoratorFunctionality:
         @container.resolve(scope="test")
         def handler(
             a: int,
-            service_a: Annotated[ServiceA, Injected()],
+            service_a: Injected[ServiceA],
             b: str,
-            service_b: Annotated[ServiceB, Injected()],
+            service_b: Injected[ServiceB],
         ) -> dict[str, Any]:
             return {
                 "a": a,
@@ -191,7 +191,7 @@ class TestDecoratorFunctionality:
         )
 
         @container.resolve(scope="test")
-        def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         result1 = handler()
@@ -209,8 +209,8 @@ class TestDecoratorFunctionality:
 
         @container.resolve(scope="test")
         def handler(
-            service1: Annotated[ServiceA, Injected()],
-            service2: Annotated[ServiceA, Injected()],
+            service1: Injected[ServiceA],
+            service2: Injected[ServiceA],
         ) -> tuple[ServiceA, ServiceA]:
             return (service1, service2)
 
@@ -227,7 +227,7 @@ class TestDecoratorAsync:
         """Decorated async function is awaitable."""
 
         @container.resolve(scope="test")
-        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        async def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         result = await handler()
@@ -243,7 +243,7 @@ class TestDecoratorAsync:
         container.register(ServiceA, factory=async_factory)
 
         @container.resolve(scope="test")
-        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        async def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         result = await handler()
@@ -259,7 +259,7 @@ class TestDecoratorAsync:
         )
 
         @container.resolve(scope="test")
-        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        async def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         result1 = await handler()
@@ -281,7 +281,7 @@ class TestDecoratorIntegration:
 
         @logging_decorator  # type: ignore[untyped-decorator]
         @container.resolve(scope="test")
-        def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         result = handler()
@@ -298,7 +298,7 @@ class TestDecoratorIntegration:
         container.register(ServiceA, factory=generator_factory, scope="test")
 
         @container.resolve(scope="test")
-        def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         result = handler()
@@ -318,7 +318,7 @@ class TestDecoratorIntegration:
         container.register(ServiceA, factory=async_gen_factory, scope="test")
 
         @container.resolve(scope="test")
-        async def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        async def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         result = await handler()
@@ -344,7 +344,7 @@ class TestDecoratorEdgeCases:
 
         @container.resolve(scope="test")
         def handler(
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
             value: int = 10,
         ) -> tuple[int, ServiceA]:
             return (value, service)
@@ -364,7 +364,7 @@ class TestDecoratorEdgeCases:
         @container.resolve(scope="test")
         def handler(
             *args: int,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
             **kwargs: str,
         ) -> dict[str, Any]:
             return {"args": args, "kwargs": kwargs, "service": service}
@@ -381,7 +381,7 @@ class TestDecoratorEdgeCases:
         """Raises DIWireServiceNotRegisteredError for missing services."""
 
         @container_no_autoregister.resolve(scope="test")
-        def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         with pytest.raises(DIWireServiceNotRegisteredError):
@@ -395,7 +395,7 @@ class TestDecoratorWithStaticmethod:
         """Can be used with staticmethod pattern."""
 
         @container.resolve(scope="test")
-        def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         class MyClass:
@@ -414,7 +414,7 @@ class TestDecoratorWithoutParentheses:
         # This pattern uses resolve with the function as the key directly
         injected = container.resolve
 
-        def handler(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def handler(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         result = injected(handler)

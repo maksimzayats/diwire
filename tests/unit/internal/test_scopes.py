@@ -6,7 +6,7 @@ import uuid
 from collections.abc import AsyncGenerator, Generator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import Annotated, Any
+from typing import Any
 
 import pytest
 
@@ -184,7 +184,7 @@ class TestScopedInjected:
     def test_resolve_with_scope_returns_scoped_injected(self, container: Container) -> None:
         """resolve() with scope parameter returns ScopedInjected."""
 
-        def handler(service: Annotated[Service, Injected()]) -> Service:
+        def handler(service: Injected[Service]) -> Service:
             return service
 
         result = container.resolve(handler, scope="request")
@@ -195,8 +195,8 @@ class TestScopedInjected:
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
         def handler(
-            service_a: Annotated[ServiceA, Injected()],
-            service_b: Annotated[ServiceB, Injected()],
+            service_a: Injected[ServiceA],
+            service_b: Injected[ServiceB],
         ) -> tuple[ServiceA, ServiceB]:
             return service_a, service_b
 
@@ -215,7 +215,7 @@ class TestScopedInjected:
     def test_scoped_injected_preserves_function_name(self, container: Container) -> None:
         """ScopedInjected preserves the wrapped function's name."""
 
-        def my_handler(service: Annotated[Service, Injected()]) -> None:
+        def my_handler(service: Injected[Service]) -> None:
             pass
 
         result = container.resolve(my_handler, scope="request")
@@ -224,7 +224,7 @@ class TestScopedInjected:
     def test_scoped_injected_repr(self, container: Container) -> None:
         """ScopedInjected has informative repr."""
 
-        def handler(service: Annotated[Service, Injected()]) -> None:
+        def handler(service: Injected[Service]) -> None:
             pass
 
         result = container.resolve(handler, scope="request")
@@ -234,7 +234,7 @@ class TestScopedInjected:
     def test_scoped_injected_allows_explicit_kwargs(self, container: Container) -> None:
         """ScopedInjected allows explicit kwargs to override injected ones."""
 
-        def handler(value: int, service: Annotated[Service, Injected()]) -> tuple[int, Service]:
+        def handler(value: int, service: Injected[Service]) -> tuple[int, Service]:
             return value, service
 
         request_handler = container.resolve(handler, scope="request")
@@ -442,8 +442,8 @@ class TestAutoScopeDetection:
         )
 
         def handler(
-            service_a: Annotated[ServiceA, Injected()],
-            service_b: Annotated[ServiceB, Injected()],
+            service_a: Injected[ServiceA],
+            service_b: Injected[ServiceB],
         ) -> tuple[ServiceA, ServiceB]:
             return service_a, service_b
 
@@ -457,7 +457,7 @@ class TestAutoScopeDetection:
         """Explicit scope parameter overrides auto-detection."""
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
-        def handler(service: Annotated[Service, Injected()]) -> Service:
+        def handler(service: Injected[Service]) -> Service:
             return service
 
         # Explicit scope
@@ -468,7 +468,7 @@ class TestAutoScopeDetection:
         """Without scoped dependencies, resolve returns regular Injected."""
         container.register(Session, lifetime=Lifetime.TRANSIENT)
 
-        def handler(service: Annotated[Service, Injected()]) -> Service:
+        def handler(service: Injected[Service]) -> Service:
             return service
 
         result = container.resolve(handler)
@@ -479,7 +479,7 @@ class TestAutoScopeDetection:
         """resolve() auto-detects scope from scoped_registry."""
         container.register(Session, scope="request", lifetime=Lifetime.SCOPED)
 
-        def handler(session: Annotated[Session, Injected()]) -> Session:
+        def handler(session: Injected[Session]) -> Session:
             return session
 
         injected = container.resolve(handler)
@@ -495,7 +495,7 @@ class TestAutoScopeDetection:
             scope="session",
         )
 
-        def handler(session: Annotated[Session, Injected()]) -> Session:
+        def handler(session: Injected[Session]) -> Session:
             return session
 
         injected = container.resolve(handler)

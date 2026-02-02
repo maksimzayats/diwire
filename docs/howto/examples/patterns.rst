@@ -54,9 +54,9 @@ Demonstrates a common web pattern:
 
    def handle_request(
        token: str,
-       auth: Annotated[AuthService, Injected()],
-       audit: Annotated[AuditLogger, Injected()],
-       ctx: Annotated[RequestContext, Injected()],
+       auth: Injected[AuthService],
+       audit: Injected[AuditLogger],
+       ctx: Injected[RequestContext],
    ) -> dict[str, str | int | None]:
        auth.authenticate(token)
        audit.log("handle_request")
@@ -122,8 +122,8 @@ Per-call unit of work (ScopedInjected)
 
    def create_user(
        username: str,
-       session: Annotated[Session, Injected()],
-       user_repo: Annotated[UserRepository, Injected()],
+       session: Injected[Session],
+       user_repo: Injected[UserRepository],
    ) -> dict[str, str | int]:
        user = user_repo.create(username)
        session.commit()
@@ -218,7 +218,7 @@ Instance method injection
            self.prefix = prefix
 
        @container_context.resolve()
-       def ping(self, logger: Annotated[Logger, Injected()]) -> str:
+       def ping(self, logger: Injected[Logger]) -> str:
            logger.info(f"{self.prefix}/ping")  # noqa: G004
            return "pong"
 
@@ -263,7 +263,7 @@ Injected params and caller-provided params can be mixed.
        def get_user(
            self,
            user_id: int,
-           repo: Annotated[UserRepository, Injected()],
+           repo: Injected[UserRepository],
        ) -> str:
            return repo.get_username(user_id)
 

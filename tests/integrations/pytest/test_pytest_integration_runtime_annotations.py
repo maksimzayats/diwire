@@ -1,7 +1,7 @@
 """Tests for pytest integration with runtime annotations (no __future__)."""
 
 import asyncio
-from typing import Annotated, Any, cast
+from typing import Any, cast
 
 import pytest
 
@@ -32,7 +32,7 @@ def diwire_container() -> Container:
 
 @pytest.mark.asyncio
 async def test_async_injection_runtime_annotations(
-    service: Annotated[AsyncService, Injected()],
+    service: Injected[AsyncService],
 ) -> None:
     assert isinstance(service, AsyncService)
 
@@ -66,7 +66,7 @@ def test_pyfunc_call_async_branch() -> None:
     container = Container()
     container.register(AsyncService, lifetime=Lifetime.SINGLETON)
 
-    async def handler(service: Annotated[AsyncService, Injected()]) -> AsyncService:
+    async def handler(service: Injected[AsyncService]) -> AsyncService:
         return service
 
     class DummyItem:

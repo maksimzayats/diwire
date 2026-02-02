@@ -58,7 +58,7 @@ Minimal sketch
 
 
    @container.resolve()
-   def view(request, service: Annotated[Service, Injected()]):
+   def view(request, service: Injected[Service]):
        ...
 
 The exact wiring depends on whether you're running Django under WSGI or ASGI and how you prefer to structure

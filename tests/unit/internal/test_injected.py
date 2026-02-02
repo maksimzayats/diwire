@@ -1,7 +1,6 @@
 """Tests for _InjectedFunction wrapper class."""
 
 from inspect import signature
-from typing import Annotated
 
 import pytest
 
@@ -23,7 +22,7 @@ class TestInjectedMetadata:
     def test_injected_preserves_function_docstring(self, container: Container) -> None:
         """Docstring should be preserved."""
 
-        def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def my_func(service: Injected[ServiceA]) -> ServiceA:
             """This is my docstring."""
             return service
 
@@ -34,7 +33,7 @@ class TestInjectedMetadata:
     def test_injected_repr_format(self, container: Container) -> None:
         """Verify __repr__ output."""
 
-        def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def my_func(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         injected = container.resolve(my_func)
@@ -50,7 +49,7 @@ class TestInjectedCallPatterns:
 
         def my_func(
             value: int,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> tuple[int, ServiceA]:
             return (value, service)
 
@@ -66,7 +65,7 @@ class TestInjectedCallPatterns:
         def my_func(
             a: int,
             b: str,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> tuple[int, str, ServiceA]:
             return (a, b, service)
 
@@ -95,7 +94,7 @@ class TestInjectedCallPatterns:
 
         def my_func(
             *args: int,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> tuple[tuple[int, ...], ServiceA]:
             return (args, service)
 
@@ -109,7 +108,7 @@ class TestInjectedCallPatterns:
         """Function has **kwargs."""
 
         def my_func(
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
             **kwargs: str,
         ) -> tuple[ServiceA, dict[str, str]]:
             return (service, kwargs)
@@ -125,7 +124,7 @@ class TestInjectedCallPatterns:
 
         def my_func(
             *args: int,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
             **kwargs: str,
         ) -> tuple[tuple[int, ...], ServiceA, dict[str, str]]:
             return (args, service, kwargs)
@@ -141,7 +140,7 @@ class TestInjectedCallPatterns:
         """Param defaults preserved for non-injected params."""
 
         def my_func(
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
             value: int = 10,
         ) -> tuple[int, ServiceA]:
             return (value, service)
@@ -158,7 +157,7 @@ class TestInjectedCallPatterns:
         def my_func(
             *,
             value: int,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> tuple[int, ServiceA]:
             return (value, service)
 
@@ -174,7 +173,7 @@ class TestInjectedCallPatterns:
         def my_func(
             value: int,
             /,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> tuple[int, ServiceA]:
             return (value, service)
 
@@ -191,7 +190,7 @@ class TestInjectedSpecialMethods:
 
         class MyClass:
             @staticmethod
-            def my_method(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+            def my_method(service: Injected[ServiceA]) -> ServiceA:
                 return service
 
         # Extract the underlying function from staticmethod
@@ -220,7 +219,7 @@ class TestInjectedSignature:
         """Non-injected params preserve defaults in signature."""
 
         def my_func(
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
             value: int = 100,
         ) -> int:
             return value
@@ -236,7 +235,7 @@ class TestInjectedSignature:
 
         def my_func(
             value: int,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> int:
             return value
 
@@ -249,8 +248,8 @@ class TestInjectedSignature:
         """Empty signature when all params are injected."""
 
         def my_func(
-            service_a: Annotated[ServiceA, Injected()],
-            service_b: Annotated[ServiceB, Injected()],
+            service_a: Injected[ServiceA],
+            service_b: Injected[ServiceB],
         ) -> tuple[ServiceA, ServiceB]:
             return (service_a, service_b)
 
@@ -271,7 +270,7 @@ class TestInjectedDependencyResolution:
             pass
 
         def my_func(
-            service: Annotated[UnregisteredService, Injected()],
+            service: Injected[UnregisteredService],
         ) -> UnregisteredService:
             return service
 
@@ -285,8 +284,8 @@ class TestInjectedDependencyResolution:
         """Multiple Injected params resolved."""
 
         def my_func(
-            a: Annotated[ServiceA, Injected()],
-            b: Annotated[ServiceB, Injected()],
+            a: Injected[ServiceA],
+            b: Injected[ServiceB],
         ) -> tuple[ServiceA, ServiceB]:
             return (a, b)
 
@@ -302,7 +301,7 @@ class TestInjectedDependencyResolution:
     ) -> None:
         """Transient dependencies are fresh on each call."""
 
-        def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def my_func(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         injected = container.resolve(my_func)
@@ -318,7 +317,7 @@ class TestInjectedDependencyResolution:
     ) -> None:
         """Singleton dependencies are reused."""
 
-        def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        def my_func(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         injected = container_singleton.resolve(my_func)
@@ -336,7 +335,7 @@ class TestAsyncInjectedMetadata:
         """AsyncInjected preserves function docstring."""
         from diwire.container_injection import _AsyncInjectedFunction
 
-        async def my_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        async def my_func(service: Injected[ServiceA]) -> ServiceA:
             """This is my async docstring."""
             return service
 
@@ -348,7 +347,7 @@ class TestAsyncInjectedMetadata:
     async def test_async_injected_repr_format(self, container: Container) -> None:
         """AsyncInjected has correct __repr__ format."""
 
-        async def my_async_func(service: Annotated[ServiceA, Injected()]) -> ServiceA:
+        async def my_async_func(service: Injected[ServiceA]) -> ServiceA:
             return service
 
         injected = await container.aresolve(my_async_func)
@@ -369,7 +368,7 @@ class TestAsyncInjectedCallPatterns:
 
         async def my_func(
             value: int,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> tuple[int, ServiceA]:
             return (value, service)
 
@@ -385,7 +384,7 @@ class TestAsyncInjectedCallPatterns:
         async def my_func(
             a: int,
             b: str,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> tuple[int, str, ServiceA]:
             return (a, b, service)
 
@@ -405,7 +404,7 @@ class TestAsyncInjectedCallPatterns:
         async def my_func(
             pos: int,
             *args: int,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
             **kwargs: str,
         ) -> tuple[int, tuple[int, ...], ServiceA, dict[str, str]]:
             return (pos, args, service, kwargs)
@@ -432,7 +431,7 @@ class TestInjectedMethodDecoration:
         # Define handler after class to avoid forward reference
         def handler_impl(
             self: MyController,
-            service: Annotated[ServiceA, Injected()],
+            service: Injected[ServiceA],
         ) -> tuple[str, ServiceA]:
             return (self.prefix, service)
 
@@ -458,7 +457,7 @@ class TestInjectedMethodDecoration:
             @container.resolve()
             def process(
                 self,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> tuple[str, ServiceA]:
                 return (self.name, service)
 
@@ -475,7 +474,7 @@ class TestInjectedMethodDecoration:
             @staticmethod
             @container.resolve()
             def static_handler(
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> ServiceA:
                 return service
 
@@ -497,7 +496,7 @@ class TestInjectedMethodDecoration:
             @container.resolve()
             def create(
                 cls,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> tuple[str, ServiceA]:
                 return (cls.class_name, service)
 
@@ -526,7 +525,7 @@ class TestInjectedMethodDecoration:
             @container.resolve(scope="request")
             def handle(
                 self,
-                service: Annotated[ScopedService, Injected()],
+                service: Injected[ScopedService],
             ) -> tuple[str, ScopedService]:
                 return (self.name, service)
 
@@ -550,7 +549,7 @@ class TestInjectedMethodDecoration:
             @container.resolve()
             async def fetch(
                 self,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> tuple[str, ServiceA]:
                 return (self.path, service)
 
@@ -583,7 +582,7 @@ class TestInjectedMethodDecoration:
             @container.resolve(scope="async-request")
             async def process(
                 self,
-                service: Annotated[AsyncScopedService, Injected()],
+                service: Injected[AsyncScopedService],
             ) -> tuple[str, AsyncScopedService]:
                 return (self.endpoint, service)
 
@@ -607,7 +606,7 @@ class TestInjectedMethodDecoration:
             @container_singleton.resolve()
             def get_service(
                 self,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> tuple[str, ServiceA]:
                 return (self.name, service)
 
@@ -638,7 +637,7 @@ class TestInjectedMethodDecoration:
             @container.resolve()
             def process_all(
                 self,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> tuple[list[str], int, ServiceA]:
                 self.processed_count = len(self.items)
                 return (self.items, self.processed_count, service)
@@ -661,7 +660,7 @@ class TestInjectedMethodDecoration:
             @container.resolve()
             def method(
                 self,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> ServiceA:
                 return service
 
@@ -682,7 +681,7 @@ class TestInjectedMethodDecoration:
             @container.resolve()
             def _get_service(
                 self,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> ServiceA:
                 return service
 
@@ -708,7 +707,7 @@ class TestInjectedMethodDecoration:
             @container.resolve()
             def _get_formatted_data(
                 self,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> tuple[str, ServiceA]:
                 return (f"{self.prefix}-data", service)
 
@@ -737,7 +736,7 @@ class TestInjectedMethodDecoration:
             @container_singleton.resolve()
             def _fetch_service(
                 self,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> ServiceA:
                 return service
 
@@ -764,7 +763,7 @@ class TestInjectedMethodDecoration:
             @container.resolve()
             async def get_data(
                 self,
-                service: Annotated[ServiceA, Injected()],
+                service: Injected[ServiceA],
             ) -> tuple[str, ServiceA]:
                 return (f"data-{self.source_id}", service)
 
@@ -794,7 +793,7 @@ class TestInjectedMethodDecoration:
             @container.resolve(scope="request")
             def _build_response(
                 self,
-                dep: Annotated[ScopedDep, Injected()],
+                dep: Injected[ScopedDep],
             ) -> tuple[str, ScopedDep]:
                 return (self.path, dep)
 
@@ -819,7 +818,7 @@ class TestInjectedMethodDecoration:
             @container.resolve()
             def service(
                 self,
-                svc: Annotated[ServiceA, Injected()],
+                svc: Injected[ServiceA],
             ) -> tuple[str, ServiceA]:
                 return (self.name, svc)
 
@@ -840,7 +839,7 @@ class TestInjectedMethodDecoration:
             @container_singleton.resolve()
             def service(
                 self,
-                svc: Annotated[ServiceA, Injected()],
+                svc: Injected[ServiceA],
             ) -> ServiceA:
                 return svc
 
@@ -867,7 +866,7 @@ class TestInjectedMethodDecoration:
             @container.resolve()
             def incremented(
                 self,
-                svc: Annotated[ServiceA, Injected()],
+                svc: Injected[ServiceA],
             ) -> tuple[int, ServiceA]:
                 self.count += 1
                 return (self.count, svc)
@@ -896,7 +895,7 @@ class TestInjectedMethodDecoration:
             @container.resolve()
             async def fetch_data(
                 self,
-                svc: Annotated[ServiceA, Injected()],
+                svc: Injected[ServiceA],
             ) -> tuple[str, ServiceA]:
                 return (f"data-{self.id_}", svc)
 

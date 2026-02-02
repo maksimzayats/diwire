@@ -33,7 +33,7 @@ Basic usage
 
 
    @container_context.resolve()
-   def greet(service: Annotated[Service, Injected()]) -> str:
+   def greet(service: Injected[Service]) -> str:
        return f"hello {service.name}"
 
 
