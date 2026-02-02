@@ -12,79 +12,112 @@ FastAPI already has its own dependency system, but diwire is still useful when y
 - constructor injection for your domain/services
 - handler signatures that stay friendly for FastAPI (only request parameters are visible)
 
-Recommended pattern
--------------------
+Built-in integration (recommended)
+----------------------------------
 
-1. Configure the container at startup and set it as current:
+The built-in FastAPI integration auto-wraps endpoints that use
+``Annotated[T, Injected()]`` parameters. FastAPI only sees request parameters, and diwire
+resolves the injected dependencies when the endpoint is called.
+
+1. Configure the container and install the integration (do this before registering routes that
+   use ``Injected``):
 
    .. code-block:: python
 
-      from diwire import Container, container_context
+      from fastapi import FastAPI
 
+      from diwire import Container
+      from diwire.integrations.fastapi import setup_diwire
+
+      app = FastAPI()
       container = Container()
-      container_context.set_current(container)
+      setup_diwire(app, container=container, scope="request")
 
-2. Use a request scope per request (created by the injected wrapper):
+2. Define routes normally (no explicit diwire decorator needed):
 
    .. code-block:: python
 
       from typing import Annotated
-      from fastapi import FastAPI
 
-      from diwire import Injected, container_context
-
-      app = FastAPI()
+      from diwire import Injected
 
 
       @app.get("/health")
-      @container_context.resolve(scope="request")
       async def health(service: Annotated["Service", Injected()]) -> dict[str, str]:
           return {"status": service.ok()}
 
 3. Register request-scoped services (``Lifetime.SCOPED``, ``scope="request"``) and any request-specific objects
    (like ``fastapi.Request``) via factories/contextvars.
 
-First-party integration (auto-wrapping)
----------------------------------------
+Router-level control
+--------------------
 
-If you want FastAPI to auto-wrap endpoints that use ``Injected`` parameters, use the
-FastAPI integration:
-
-.. code-block:: python
-
-   from typing import Annotated
-   from fastapi import FastAPI
-
-   from diwire import Container, Injected
-   from diwire.integrations.fastapi import setup_diwire
-
-   app = FastAPI()
-   container = Container()
-   setup_diwire(app, container=container, scope="request")
-
-
-   @app.get("/health")
-   async def health(service: Annotated["Service", Injected()]) -> dict[str, str]:
-       return {"status": service.ok()}
-
-Call ``setup_diwire`` before registering routes that use ``Injected``. It returns a
-context token if you want to reset the container later.
-
-For router-level control, use ``DIWireRoute`` on a router:
+You can also configure a router to use ``DIWireRoute``:
 
 .. code-block:: python
 
+   from diwire import Container, container_context
    from fastapi import APIRouter
 
    from diwire.integrations.fastapi import DIWireRoute
 
+   container = Container()
+   container_context.set_current(container)
+
    router = APIRouter(route_class=DIWireRoute)
+
+Manual alternatives
+-------------------
+
+If you prefer to be explicit (or want to avoid the integration), you can wrap endpoints manually:
+
+.. code-block:: python
+
+   from fastapi import FastAPI
+
+   from diwire import Container
+
+   app = FastAPI()
+   container = Container()
+
+
+   async def handler() -> dict: ...
+
+   app.add_api_route(
+       "/path",
+       container.resolve(handler, scope="request"),
+       methods=["GET"],
+   )
+
+Or use decorator-based wrapping:
+
+.. code-block:: python
+
+   from diwire import Container
+
+   container = Container()
+
+
+   @app.get("/path")
+   @container.resolve(scope="request")
+   async def handler() -> dict: ...
+
+For larger applications, ``container_context`` can be used to avoid passing the container
+everywhere:
+
+.. code-block:: python
+
+   from diwire import container_context
+
+   @app.get("/path")
+   @container_context.resolve(scope="request")
+   async def handler() -> dict: ...
 
 Runnable examples
 -----------------
 
 See :doc:`../examples/fastapi` for three progressively more advanced FastAPI examples:
 
-- basic integration with explicit container calls
+- built-in integration with ``setup_diwire``
 - decorator-based layering
 - ``container_context`` + middleware-managed request context

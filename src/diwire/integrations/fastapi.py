@@ -84,6 +84,47 @@ def _build_route_class(scope: str | None) -> type[DIWireRoute]:
     return _ConfiguredDIWireRoute
 
 
+def _clone_route(route: APIRoute, endpoint: Callable[..., Any]) -> APIRoute:
+    route_cls = type(route)
+    sig = inspect.signature(route_cls.__init__)
+    kwargs: dict[str, Any] = {}
+    for name, param in list(sig.parameters.items())[1:]:
+        if name == "path":
+            kwargs[name] = route.path
+            continue
+        if name == "endpoint":
+            kwargs[name] = endpoint
+            continue
+        if name == "methods":
+            kwargs[name] = route.methods
+            continue
+        if hasattr(route, name):
+            kwargs[name] = getattr(route, name)
+            continue
+        if name == "dependency_overrides_provider":
+            kwargs[name] = getattr(route, "dependency_overrides_provider", None)
+            continue
+        if param.default is not inspect.Parameter.empty:
+            continue
+        message = f"Unable to rebuild FastAPI route; missing attribute '{name}'."
+        raise RuntimeError(message)
+    return route_cls(**kwargs)
+
+
+def _wrap_existing_routes(routes: list[Any], *, scope: str | None) -> None:
+    updated_routes: list[Any] = []
+    for route in routes:
+        if not isinstance(route, APIRoute):
+            updated_routes.append(route)
+            continue
+        wrapped = _wrap_endpoint(route.endpoint, scope=scope)
+        if wrapped is route.endpoint:
+            updated_routes.append(route)
+            continue
+        updated_routes.append(_clone_route(route, wrapped))
+    routes[:] = updated_routes
+
+
 class DIWireRoute(APIRoute):
     """FastAPI route that auto-wraps endpoints with diwire injection."""
 
@@ -111,6 +152,7 @@ def setup_diwire(
 
     app.state.diwire_scope = scope
     app.router.route_class = _build_route_class(scope)
+    _wrap_existing_routes(app.router.routes, scope=scope)
     return token
 
 
