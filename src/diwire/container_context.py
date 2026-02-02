@@ -9,13 +9,13 @@ from collections.abc import Callable, Coroutine
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from functools import wraps
-from typing import TYPE_CHECKING, Any, TypeVar, get_origin, overload
+from typing import TYPE_CHECKING, Any, TypeVar, cast, get_origin, overload
 
+from diwire.container_interface import IContainer
 from diwire.exceptions import DIWireContainerNotSetError
 from diwire.types import Factory, Lifetime
 
 if TYPE_CHECKING:
-    from diwire.container import Container
     from diwire.container_scopes import ScopedContainer
 
 # Import signature builder to exclude Injected parameters from signature
@@ -24,7 +24,7 @@ from diwire.container_helpers import _build_signature_without_injected
 T = TypeVar("T")
 _C = TypeVar("_C", bound=type)
 
-_current_container: ContextVar[Container | None] = ContextVar(
+_current_container: ContextVar[IContainer | None] = ContextVar(
     "diwire_current_container",
     default=None,
 )
@@ -48,7 +48,7 @@ class _DeferredRegistration:
     concrete_class: type | None
     via_decorator: bool
 
-    def apply(self, container: Container) -> None:
+    def apply(self, container: IContainer) -> None:
         if self.via_decorator:
             decorator = container.register(
                 lifetime=self.lifetime,
@@ -238,7 +238,7 @@ class _AsyncContextScopedInjected:
         return types.MethodType(self, obj)
 
 
-class _ContainerContextProxy:
+class _ContainerContextProxy(IContainer):
     """Lazy proxy that forwards calls to the current container from context.
 
     This allows setting up decorators before the container is configured,
@@ -258,10 +258,10 @@ class _ContainerContextProxy:
     """
 
     def __init__(self) -> None:
-        self._default_container: Container | None = None
+        self._default_container: IContainer | None = None
         self._deferred_registrations: list[_DeferredRegistration] = []
 
-    def set_current(self, container: Container) -> Token[Container | None]:
+    def set_current(self, container: IContainer) -> Token[IContainer | None]:
         """Set the current container in the context.
 
         Sets the container in three storage mechanisms:
@@ -282,7 +282,7 @@ class _ContainerContextProxy:
         self._flush_deferred(container)
         return token
 
-    def _get_current_or_none(self) -> Container | None:
+    def _get_current_or_none(self) -> IContainer | None:
         """Return the current container if available, otherwise None."""
         container = _current_container.get()
         if container is not None:
@@ -294,7 +294,7 @@ class _ContainerContextProxy:
 
         return self._default_container
 
-    def get_current(self) -> Container:
+    def get_current(self) -> IContainer:
         """Get the current container from the context.
 
         Resolution order (first non-None wins):
@@ -325,7 +325,7 @@ class _ContainerContextProxy:
 
         raise DIWireContainerNotSetError
 
-    def _flush_deferred(self, container: Container) -> None:
+    def _flush_deferred(self, container: IContainer) -> None:
         if not self._deferred_registrations:
             return
 
@@ -334,7 +334,7 @@ class _ContainerContextProxy:
         for registration in pending:
             registration.apply(container)
 
-    def reset(self, token: Token[Container | None]) -> None:
+    def reset(self, token: Token[IContainer | None]) -> None:
         """Reset the container to its previous value.
 
         Args:
@@ -720,7 +720,10 @@ class _ContainerContextProxy:
             A ScopedContainer context manager.
 
         """
-        return self.get_current().enter_scope(scope_name)
+        return cast(
+            "ScopedContainer",
+            self.get_current().enter_scope(scope_name),
+        )
 
     def compile(self) -> None:
         """Compile the current container for optimized resolution."""

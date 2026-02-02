@@ -6,8 +6,10 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from diwire.container_interface import IContainer
 from diwire.exceptions import DIWireScopeMismatchError
 from diwire.service_key import ServiceKey
+from diwire.types import Factory, Lifetime
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -84,7 +86,7 @@ _current_scope: ContextVar[_ScopeId | None] = ContextVar("current_scope", defaul
 
 
 @dataclass
-class ScopedContainer:
+class ScopedContainer(IContainer):
     """A context manager for scoped dependency resolution.
 
     Supports both sync and async context managers:
@@ -114,8 +116,19 @@ class ScopedContainer:
                 _current_scope.reset(self._token)
             raise
 
-    def resolve(self, key: Any) -> Any:
-        """Resolve a service within this scope."""
+    def enter_scope(self, scope_name: str | None = None) -> ScopedContainer:
+        """Start a nested scope."""
+        return self._container.enter_scope(scope_name)
+
+    def resolve(self, key: Any | None = None, *, scope: str | None = None) -> Any:
+        """Resolve a service or create a dependency-injected wrapper."""
+        if key is None:
+
+            def decorator(func: Any) -> Any:
+                return self.resolve(func, scope=scope)
+
+            return decorator
+
         if self._exited:
             current = _current_scope.get()
             raise DIWireScopeMismatchError(
@@ -123,6 +136,10 @@ class ScopedContainer:
                 self._scope_id.path,
                 current.path if current else None,
             )
+
+        if scope is not None:
+            return self._container.resolve(key, scope=scope)
+
         handled, result = self._container._resolve_scoped_compiled(  # noqa: SLF001
             key,
             self._scope_id,
@@ -131,7 +148,7 @@ class ScopedContainer:
             return result
         return self._container.resolve(key)
 
-    async def aresolve(self, key: Any) -> Any:
+    async def aresolve(self, key: Any, *, scope: str | None = None) -> Any:
         """Asynchronously resolve a service within this scope."""
         if self._exited:
             current = _current_scope.get()
@@ -140,11 +157,43 @@ class ScopedContainer:
                 self._scope_id.path,
                 current.path if current else None,
             )
+        if scope is not None:
+            return await self._container.aresolve(key, scope=scope)
         return await self._container.aresolve(key)
 
-    def enter_scope(self, scope_name: str | None = None) -> ScopedContainer:
-        """Start a nested scope."""
-        return self._container.enter_scope(scope_name)
+    def register(  # noqa: PLR0913
+        self,
+        key: Any | None = None,
+        /,
+        factory: Factory | None = None,
+        instance: Any | None = None,
+        lifetime: Lifetime = Lifetime.TRANSIENT,
+        scope: str | None = None,
+        is_async: bool | None = None,  # noqa: FBT001
+        concrete_class: type | None = None,
+    ) -> Any:
+        """Register a service with the underlying container."""
+        return self._container.register(
+            key,
+            factory=factory,
+            instance=instance,
+            lifetime=lifetime,
+            scope=scope,
+            is_async=is_async,
+            concrete_class=concrete_class,
+        )
+
+    def compile(self) -> None:
+        """Compile the underlying container for optimized resolution."""
+        return self._container.compile()
+
+    def close_scope(self, scope_name: str) -> None:
+        """Close all active scopes that contain the given scope name."""
+        return self._container.close_scope(scope_name)
+
+    async def aclose_scope(self, scope_name: str) -> None:
+        """Asynchronously close all active scopes that contain the given scope name."""
+        return await self._container.aclose_scope(scope_name)
 
     def _close_sync(self) -> None:
         """Close the scope synchronously."""

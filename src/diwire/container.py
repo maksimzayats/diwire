@@ -51,6 +51,7 @@ from diwire.container_injection import (
     _InjectedFunction,
     _ScopedInjectedFunction,
 )
+from diwire.container_interface import IContainer
 from diwire.container_locks import LockManager
 from diwire.container_resolution_stack import _get_resolution_stack
 from diwire.container_scopes import ScopedContainer, _current_scope, _ScopeId
@@ -289,7 +290,7 @@ class _ScopedCacheView(MutableMapping[ServiceKey, Any]):
             return instance
 
 
-class Container:
+class Container(IContainer):
     """Dependency injection container for registering and resolving services.
 
     Supports automatic registration, lifetime singleton/transient, and factory patterns.

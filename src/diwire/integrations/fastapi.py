@@ -17,7 +17,7 @@ except ModuleNotFoundError as exc:  # pragma: no cover - exercised in optional i
     raise ModuleNotFoundError(message) from exc
 
 if TYPE_CHECKING:
-    from diwire.container import Container
+    from diwire.container_interface import IContainer
 
 _DEFAULT_SCOPE = "request"
 _DIWIRE_WRAPPED_ATTR = "__diwire_wrapped__"
@@ -139,12 +139,12 @@ class DIWireRoute(APIRoute):
 
 def setup_diwire(
     app: FastAPI,
-    container: Container | None = None,
+    container: IContainer | None = None,
     *,
     scope: str | None = _DEFAULT_SCOPE,
-) -> Token[Container | None] | None:
+) -> Token[IContainer | None] | None:
     """Configure FastAPI to auto-wrap routes for diwire Injected parameters."""
-    token: Token[Container | None] | None = None
+    token: Token[IContainer | None] | None = None
     if container is not None:
         token = container_context.set_current(container)
         app.state.diwire_container = container

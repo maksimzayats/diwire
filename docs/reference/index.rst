@@ -10,6 +10,7 @@ The public API is intentionally small and stable.
    :maxdepth: 2
 
    container
+   container_interface
    scopes
    context
    types
