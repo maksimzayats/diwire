@@ -6,7 +6,7 @@ the current public API.
 
 ## Quick commands
 
-- Install deps (dev): `uv sync --dev`
+- Install deps (dev): `uv sync --group dev`
 - Format: `make format`
 - Lint (all): `make lint`
 - Test (all): `make test`
@@ -22,18 +22,16 @@ the current public API.
 - Ruff lint: `uv run ruff check .`
 - Ruff auto-fix (limited): `uv run ruff check --fix-only .`
 - Ruff format: `uv run ruff format .`
-- ty type checks: `uv run ty check .`
-- pyrefly checks: `uv run pyrefly check .`
 - mypy (strict): `uv run mypy .`
 
 ## Tests
 
-- Run all tests: `uv run pytest tests/`
+- Run all tests (coverage): `make test`
 - Run a single test file: `uv run pytest tests/unit/internal/test_container.py`
 - Run a single test: `uv run pytest tests/unit/internal/test_container.py::test_register`
 - Run tests with keyword filter: `uv run pytest -k "dependency" tests/`
 - Coverage (recommended for new work):
-  `uv run pytest --cov=diwire --cov-report=term-missing tests/`
+  `uv run pytest tests/ --benchmark-skip --cov=src/diwire --cov-report=term-missing`
 
 ## Repo structure
 

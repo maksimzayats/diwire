@@ -61,7 +61,9 @@ You can also manage scopes imperatively:
 
 .. code-block:: python
 
-   scope = container.enter_scope("request")
+   from diwire import Scope
+
+   scope = container.enter_scope(Scope.REQUEST)
    try:
        ...
    finally:

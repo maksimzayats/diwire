@@ -403,7 +403,10 @@ class _ContainerContextProxy(IContainer):
             .. code-block:: python
 
                 # Decorator usage (container looked up at call time):
-                @container_context.resolve(scope="request")
+                from diwire import Scope
+
+
+                @container_context.resolve(scope=Scope.REQUEST)
                 async def handler(service: Injected[Service]) -> dict: ...
 
 
