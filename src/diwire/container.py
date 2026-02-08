@@ -389,7 +389,8 @@ if __name__ == "__main__":
 
     rendered = template.render(
         registrations=registrations,
-        scope_enum=Scope,
+        Scope=Scope,
+        ProviderKind=ProviderKind,
     )
 
     print(rendered)

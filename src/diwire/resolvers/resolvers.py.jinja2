@@ -21,11 +21,29 @@ _dep_{{ registration.slot }}_threading_lock = threading.Lock()
 _dep_{{ registration.slot }}_asyncio_lock = asyncio.Lock()
 {% endfor %}
 
-{% macro generate_resolver_method %}
+{% macro generate_resolver_method(registration) %}
+def resolve_{{ registration.slot }}(self) -> Any:
+    with _dep_{{ registration.slot }}_threading_lock:
+        # registration kind: {{ registration.provider_kind }}
+        {% if registration.provider_kind == ProviderKind.VALUE %}
+        value = _dep_{{ registration.slot }}_resolver
+        {% elif registration.provider_kind == ProviderKind.CALL %}
+        # resolve dependencies {{ registration.dependencies }}
+        {% endif %}
+
+        self.resolve_{{ registration.slot }} = lambda: value
+        return value
+{% endmacro -%}
+
+{% macro build_call(registration) %}
+{# Build call code with dependencies resolution (from .resolve_X) #}
+{# With proper usage of inspect.Parameter (for kw/pos only args); default to kw args #}
+
+{% endmacro -%}
 
 class RootResolver:
     def enter_scope(self, scope: BaseScope):
-        {% for scope in scope_enum %}
+        {% for scope in Scope %}
         if scope == {{ scope.value }}:
             return _{{ scope.name|capitalize }}Resolver(root_resolver=self)
         {% endfor %}
@@ -35,19 +53,13 @@ class RootResolver:
         return _resolvers_by_type_mapping[dependency](self)
 
     {% for registration in registrations.get_by_scope(None) %}
-    def resolve_{{ registration.slot }}(self) -> Any:
-        # after first resolution, we will set to lambda: instance
-        # no need to check for attr, we will replace the resolver method
-        with _dep_{{ registration.slot }}_threading_lock:
-            value = _dep_{{ registration.slot }}_resolver()
-            self.resolve_{{ registration.slot }} = lambda: value
-            return value
+    {{ generate_resolver_method(registration)|indent(4) }}
     {% endfor %}
 
 
 {% set seen_scopes_ns = namespace(seen_scopes=[]) %}
 
-{% for scope in scope_enum %}
+{% for scope in Scope %}
 
 # scope {{ scope.name }}
 # seen scopes: {{ seen_scopes_ns.seen_scopes }}
@@ -66,12 +78,12 @@ class _{{ scope.name|capitalize }}Resolver:
         self._{{ seen_scope.name|lower }}_resolver = {{ seen_scope.name|lower}}_resolver
         {% endfor %}
 
-    {% if seen_scopes_ns.seen_scopes|count != scope_enum|count - 1 %}
+    {% if seen_scopes_ns.seen_scopes|count != Scope|count - 1 %}
     def enter_scope(
         self,
         scope: BaseScope,
     ) -> Any:
-        {% for scope_to_enter in scope_enum -%}
+        {% for scope_to_enter in Scope -%}
         {% if scope != scope_to_enter and scope_to_enter not in seen_scopes_ns.seen_scopes %}
         if scope == {{ scope_to_enter.value }}:
             return _{{ scope_to_enter.name|capitalize }}Resolver(
@@ -90,11 +102,7 @@ class _{{ scope.name|capitalize }}Resolver:
         return _resolvers_by_type_mapping[dependency](self)
 
     {% for registration in registrations.get_by_scope(scope.value) %}
-    def resolve_{{ registration.slot }}(self) -> Any:
-        with _dep_{{ registration.slot }}_threading_lock:
-            value = _dep_{{ registration.slot }}_resolver()
-            self.resolve_{{ registration.slot }} = lambda: value
-            return value
+    {{ generate_resolver_method(registration)|indent(4) }}
     {% endfor %}
 
 {% set seen_scopes_ns.seen_scopes = seen_scopes_ns.seen_scopes + [scope] %}
@@ -106,7 +114,7 @@ _resolvers_by_slot_mapping = {
     {% for registration in registrations.get_by_scope(None) %}
     {{ registration.slot }}: RootResolver.resolve_{{ registration.slot }},
     {% endfor %}
-    {% for scope in scope_enum %}
+    {% for scope in Scope %}
     {% for registration in registrations.get_by_scope(scope.value) %}
     {{ registration.slot }}: _{{ scope.name|capitalize }}Resolver.resolve_{{ registration.slot }},
     {% endfor %}
