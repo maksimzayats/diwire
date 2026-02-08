@@ -62,6 +62,7 @@ class Container:
                 scope=self._root_scope,
                 is_async=False,
                 is_any_dependency_async=False,
+                needs_cleanup=False,
             ),
         )
 
@@ -112,6 +113,7 @@ class Container:
                 dependencies=dependencies_for_provider,
                 is_async=False,
                 is_any_dependency_async=is_any_dependency_async,
+                needs_cleanup=False,
             ),
         )
 
@@ -159,6 +161,7 @@ class Container:
                 dependencies=dependencies_for_provider,
                 is_async=is_async,
                 is_any_dependency_async=is_any_dependency_async,
+                needs_cleanup=False,
             ),
         )
 
@@ -210,6 +213,7 @@ class Container:
                 dependencies=dependencies_for_provider,
                 is_async=is_async,
                 is_any_dependency_async=is_any_dependency_async,
+                needs_cleanup=True,
             ),
         )
 
@@ -263,6 +267,7 @@ class Container:
                 dependencies=dependencies_for_provider,
                 is_async=is_async,
                 is_any_dependency_async=is_any_dependency_async,
+                needs_cleanup=True,
             ),
         )
 

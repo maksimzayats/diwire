@@ -87,6 +87,8 @@ class ProviderSpec:
     """Indicates whether the provider specification itself is asynchronous."""
     is_any_dependency_async: bool
     """Indicates whether any dependency requires asynchronous resolution."""
+    needs_cleanup: bool
+    """True if provider itself or any dependency requires cleanup."""
 
     lifetime: Lifetime | None = None
     """The lifetime of the provided dependency. Could be none in case of instance providers."""
@@ -125,10 +127,15 @@ class ProvidersRegistrations:
         """Add a new provider specification to the registrations."""
         self._registrations_by_type[spec.provides] = spec
         self._registrations_by_slot[spec.slot] = spec
+        self._refresh_needs_cleanup_flags()
 
     def get_by_type(self, dep_type: UserDependency) -> ProviderSpec:
         """Get a provider specification by the type of dependency it provides."""
         return self._registrations_by_type[dep_type]
+
+    def find_by_type(self, dep_type: UserDependency) -> ProviderSpec | None:
+        """Get a provider specification by dependency type, if it exists."""
+        return self._registrations_by_type.get(dep_type)
 
     def get_by_slot(self, slot: int) -> ProviderSpec:
         """Get a provider specification by its unique slot number."""
@@ -141,6 +148,27 @@ class ProvidersRegistrations:
     def values(self) -> list[ProviderSpec]:
         """Get all provider specifications."""
         return list(self._registrations_by_type.values())
+
+    def _refresh_needs_cleanup_flags(self) -> None:
+        """Recompute cleanup requirements for all registered providers."""
+        # Dependencies can be registered after dependents, so recompute until stable.
+        has_changes = True
+        while has_changes:
+            has_changes = False
+            for spec in self.values():
+                dependency_needs_cleanup = any(
+                    dependency_spec.needs_cleanup
+                    for dependency in spec.dependencies
+                    if (dependency_spec := self.find_by_type(dependency.provides))
+                )
+                needs_cleanup = (
+                    spec.generator is not None
+                    or spec.context_manager is not None
+                    or dependency_needs_cleanup
+                )
+                if spec.needs_cleanup is not needs_cleanup:
+                    spec.needs_cleanup = needs_cleanup
+                    has_changes = True
 
     def __len__(self) -> int:
         return len(self._registrations_by_type)
