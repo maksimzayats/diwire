@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import functools
-import inspect
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from inspect import Parameter
-from typing import Any, Awaitable, Callable, TypeAlias, get_type_hints
+from typing import Any, Awaitable, Callable, TypeAlias
 
 from diwire.exceptions import DIWireInvalidProviderSpecError
 from diwire.scope import BaseScope
@@ -161,7 +159,7 @@ class ProviderSpecExtractor:
             lifetime = self._extract_lifetime_from_provider(provider, scope=scope)
 
         if dependencies is None:
-            dependencies = self._provider_dependencies_extractor.extract_from_provider(provider)
+            dependencies = self._provider_dependencies_extractor.extract(provider)
 
         self._specs_extracted += 1
         return ProviderSpec(
@@ -251,60 +249,12 @@ class ProvidersRegistrations:
 class ProviderDependenciesExtractor:
     """Extracts dependencies from user-defined provider objects."""
 
-    def extract_from_provider(
+    def extract_from_type(self, dep_type: type[UserDependency]) -> list[_ProviderDependency]: ...
+
+    def extract_from_factory(
         self,
-        concrete_type: type[Any] | None = None,
-        factory: Callable[..., Any] | Callable[..., Awaitable[Any]] | None = None,
-        # provider: UserProviderObject,
-    ) -> list[_ProviderDependency]:
-        """Extract dependencies from the given provider object."""
-
-        if not isinstance(provider, type):
-            # instance handling
-            return []
-
-        target_for_hints: Any = provider
-        signature_target: Any = provider
-        bound_names: set[str] = set()
-
-        if isinstance(provider, functools.partial):
-            target_for_hints = provider.func
-            signature_target = provider
-            bound = inspect.signature(provider.func).bind_partial(
-                *provider.args,
-                **(provider.keywords or {}),
-            )
-            bound_names = set(bound.arguments.keys())
-        elif inspect.isclass(provider):
-            target_for_hints = provider.__init__
-            signature_target = provider
-        elif (
-            not inspect.isfunction(provider)
-            and not inspect.ismethod(provider)
-            and not inspect.isbuiltin(provider)
-            and callable(provider)
-        ):
-            target_for_hints = provider.__call__
-            signature_target = provider.__call__
-
-        type_hints = get_type_hints(target_for_hints, include_extras=True)
-        sig = inspect.signature(signature_target)
-        dependencies: list[_ProviderDependency] = []
-
-        for dep_name, dep_type in type_hints.items():
-            if dep_name == "return" or dep_name in bound_names:
-                continue
-            param = sig.parameters.get(dep_name)
-            if param is None:
-                continue
-            dependencies.append(
-                _ProviderDependency(
-                    provides=dep_type,
-                    parameter=param,
-                ),
-            )
-
-        return dependencies
+        factory: Callable[..., Any] | Callable[..., Awaitable[Any]],
+    ) -> list[_ProviderDependency]: ...
 
 
 @dataclass(slots=True)
