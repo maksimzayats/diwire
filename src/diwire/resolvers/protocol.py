@@ -3,6 +3,7 @@ from typing import Any, Protocol, TypeVar, overload
 
 from typing_extensions import Self
 
+from diwire.providers import ProvidersRegistrations
 from diwire.scope import BaseScope
 
 T = TypeVar("T")
@@ -63,3 +64,13 @@ class ResolverProtocol(Protocol):
         Cleanup will happen ONLY if the resolver created resources that need to be cleaned up.
         Like context managers or generators.
         """
+
+
+class BuildRootResolverFunctionProtocol(Protocol):
+    """Protocol for a function that gets the root resolver for the given registrations."""
+
+    def __call__(
+        self,
+        registrations: ProvidersRegistrations,
+    ) -> ResolverProtocol:
+        """Get the root resolver for the given registrations."""

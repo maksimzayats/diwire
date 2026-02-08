@@ -5,7 +5,7 @@ import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 from diwire.exceptions import DIWireInvalidRegistrationError
 from diwire.providers import (
@@ -19,6 +19,8 @@ from diwire.providers import (
     ProviderSpec,
     ProvidersRegistrations,
 )
+from diwire.resolvers.manager import ResolversManager
+from diwire.resolvers.protocol import ResolverProtocol
 from diwire.scope import BaseScope, Scope
 
 T = TypeVar("T")
@@ -46,7 +48,18 @@ class Container:
         self._provider_dependencies_extractor = ProviderDependenciesExtractor()
         self._provider_return_type_extractor = ProviderReturnTypeExtractor()
         self._providers_registrations = ProvidersRegistrations()
+        self._resolvers_manager = ResolversManager()
 
+        self._root_resolver: ResolverProtocol | None = None
+        if TYPE_CHECKING:
+            resolver = cast("ResolverProtocol", object())
+            self.resolve = resolver.resolve
+            self.enter_scope = resolver.enter_scope
+        else:
+            self.resolve = self._resolve
+            self.enter_scope = self._enter_scope
+
+    # region Registration Methods
     def register_instance(
         self,
         provides: type[T] | None = None,
@@ -332,6 +345,26 @@ class Container:
             context_manager=context_manager,
             dependencies=explicit_dependencies,
         )
+
+    # endregion Registration Methods
+
+    def _resolve(self, dependency: Any) -> Any:
+        if self._root_resolver is None:
+            self._root_resolver = self._resolvers_manager.build_root_resolver(
+                root_scope=self._root_scope,
+                registrations=self._providers_registrations,
+            )
+
+        return self._root_resolver.resolve(dependency)
+
+    def _enter_scope(self, scope: BaseScope) -> Any:
+        if self._root_resolver is None:
+            self._root_resolver = self._resolvers_manager.build_root_resolver(
+                root_scope=self._root_scope,
+                registrations=self._providers_registrations,
+            )
+
+        return self._root_resolver.enter_scope(scope)
 
 
 @dataclass(slots=True, kw_only=True)

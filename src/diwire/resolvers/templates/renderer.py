@@ -30,7 +30,7 @@ class ResolversTemplateRenderer:
         self._env = Environment(autoescape=True)
         self._root_template = self._env.from_string(RESOLVERS_CODE_TEMPLATE)
 
-    def render(
+    def get_providers_code(
         self,
         *,
         root_scope: BaseScope,
@@ -47,7 +47,7 @@ class ResolversTemplateRenderer:
 
 def main() -> None:
     renderer = ResolversTemplateRenderer()
-    rendered_code = renderer.render(
+    rendered_code = renderer.get_providers_code(
         root_scope=Scope.APP,
         registrations=ProvidersRegistrations(),
     )
