@@ -34,9 +34,14 @@ class Container:
         self,
         root_scope: BaseScope = Scope.APP,
         default_lifetime: Lifetime = Lifetime.TRANSIENT,
+        *,
+        # Define whether the container is safe for concurrent use.
+        # For thread-safety and async-safety, appropriate locks will be used
+        concurrency_safe: bool = True,
     ) -> None:
         self._root_scope = root_scope
         self._default_lifetime = default_lifetime
+        self._concurrency_safe = concurrency_safe
 
         self._provider_dependencies_extractor = ProviderDependenciesExtractor()
         self._provider_return_type_extractor = ProviderReturnTypeExtractor()
