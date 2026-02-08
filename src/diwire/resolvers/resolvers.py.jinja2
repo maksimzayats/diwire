@@ -29,17 +29,65 @@ def resolve_{{ registration.slot }}(self) -> Any:
         value = _dep_{{ registration.slot }}_resolver
         {% elif registration.provider_kind == ProviderKind.CALL %}
         # resolve dependencies {{ registration.dependencies }}
+        {{ build_call(registration)|indent(8) }}
+        {% else %}
+        raise ValueError(f"Unsupported provider kind: {{ registration.provider_kind }}")
         {% endif %}
 
         self.resolve_{{ registration.slot }} = lambda: value
         return value
 {% endmacro -%}
 
-{% macro build_call(registration) %}
+{% macro build_call(registration) -%}
 {# Build call code with dependencies resolution (from .resolve_X) #}
 {# With proper usage of inspect.Parameter (for kw/pos only args); default to kw args #}
-
-{% endmacro -%}
+{%- if registration.dependencies %}
+{%- set ns = namespace(positional_args=[], keyword_args=[]) %}
+{%- for dependency in registration.dependencies %}
+{%- set dependency_registration = registrations.get_by_type(dependency.provides) %}
+{%- set dependency_resolver_ns = namespace(target="self") %}
+{%- if dependency_registration.scope == registration.scope %}
+{%- set dependency_resolver_ns.target = "self" %}
+{%- elif dependency_registration.scope == None %}
+{%- if registration.scope == None %}
+{%- set dependency_resolver_ns.target = "self" %}
+{%- else %}
+{%- set dependency_resolver_ns.target = "self._root_resolver" %}
+{%- endif %}
+{%- else %}
+{%- for scope in Scope %}
+{%- if scope.value == dependency_registration.scope %}
+{%- if registration.scope == None %}
+{%- set dependency_resolver_ns.target = "self.enter_scope(" ~ scope.value ~ ")" %}
+{%- else %}
+{%- set dependency_resolver_ns.target = "self._" ~ scope.name|lower ~ "_resolver" %}
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+{%- set dependency_resolver_call = dependency_resolver_ns.target ~ ".resolve_" ~ dependency_registration.slot ~ "()" %}
+{%- if dependency.parameter.kind == dependency.parameter.POSITIONAL_ONLY %}
+{%- set ns.positional_args = ns.positional_args + [dependency_resolver_call] %}
+{%- elif dependency.parameter.kind == dependency.parameter.VAR_POSITIONAL %}
+{%- set ns.positional_args = ns.positional_args + ["*" ~ dependency_resolver_call] %}
+{%- elif dependency.parameter.kind == dependency.parameter.VAR_KEYWORD %}
+{%- set ns.keyword_args = ns.keyword_args + ["**" ~ dependency_resolver_call] %}
+{%- else %}
+{%- set ns.keyword_args = ns.keyword_args + [dependency.parameter.name ~ "=" ~ dependency_resolver_call] %}
+{%- endif %}
+{%- endfor %}
+value = _dep_{{ registration.slot }}_resolver(
+{%- for positional_arg in ns.positional_args %}
+    {{ positional_arg }},
+{%- endfor %}
+{%- for keyword_arg in ns.keyword_args %}
+    {{ keyword_arg }},
+{%- endfor %}
+)
+{%- else %}
+value = _dep_{{ registration.slot }}_resolver()
+{%- endif %}
+{%- endmacro -%}
 
 class RootResolver:
     def enter_scope(self, scope: BaseScope):
