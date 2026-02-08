@@ -39,11 +39,11 @@ class Container:
         *,
         # Define whether the container is safe for concurrent use.
         # For thread-safety and async-safety, appropriate locks will be used
-        concurrency_safe: bool = True,
+        default_concurrency_safe: bool = True,
     ) -> None:
         self._root_scope = root_scope
         self._default_lifetime = default_lifetime
-        self._concurrency_safe = concurrency_safe
+        self._default_concurrency_safe = default_concurrency_safe
 
         self._provider_dependencies_extractor = ProviderDependenciesExtractor()
         self._provider_return_type_extractor = ProviderReturnTypeExtractor()
@@ -65,6 +65,7 @@ class Container:
         provides: type[T] | None = None,
         *,
         instance: T,
+        concurrency_safe: bool | None = None,
     ) -> None:
         """Register an instance provider in the container."""
         self._providers_registrations.add(
@@ -76,6 +77,7 @@ class Container:
                 is_async=False,
                 is_any_dependency_async=False,
                 needs_cleanup=False,
+                concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
             ),
         )
 
@@ -87,6 +89,7 @@ class Container:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
+        concurrency_safe: bool | None = None,
     ) -> ConcreteTypeRegistrationDecorator[T]:
         """Register a concrete type provider in the container."""
         decorator = ConcreteTypeRegistrationDecorator(
@@ -95,6 +98,7 @@ class Container:
             lifetime=lifetime,
             provides=provides,
             dependencies=dependencies,
+            concurrency_safe=concurrency_safe,
         )
 
         if provides is None and concrete_type is None:
@@ -127,6 +131,7 @@ class Container:
                 is_async=False,
                 is_any_dependency_async=is_any_dependency_async,
                 needs_cleanup=False,
+                concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
             ),
         )
 
@@ -140,6 +145,7 @@ class Container:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
+        concurrency_safe: bool | None = None,
     ) -> FactoryRegistrationDecorator[T]:
         """Register a factory provider in the container."""
         decorator = FactoryRegistrationDecorator(
@@ -148,6 +154,7 @@ class Container:
             lifetime=lifetime,
             provides=provides,
             dependencies=dependencies,
+            concurrency_safe=concurrency_safe,
         )
 
         if factory is None:
@@ -175,6 +182,7 @@ class Container:
                 is_async=is_async,
                 is_any_dependency_async=is_any_dependency_async,
                 needs_cleanup=False,
+                concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
             ),
         )
 
@@ -190,6 +198,7 @@ class Container:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
+        concurrency_safe: bool | None = None,
     ) -> GeneratorRegistrationDecorator[T]:
         """Register a generator provider in the container."""
         decorator = GeneratorRegistrationDecorator(
@@ -198,6 +207,7 @@ class Container:
             lifetime=lifetime,
             provides=provides,
             dependencies=dependencies,
+            concurrency_safe=concurrency_safe,
         )
 
         if generator is None:
@@ -227,6 +237,7 @@ class Container:
                 is_async=is_async,
                 is_any_dependency_async=is_any_dependency_async,
                 needs_cleanup=True,
+                concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
             ),
         )
 
@@ -244,6 +255,7 @@ class Container:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
+        concurrency_safe: bool | None = None,
     ) -> ContextManagerRegistrationDecorator[T]:
         """Register a context manager provider in the container."""
         decorator = ContextManagerRegistrationDecorator(
@@ -252,6 +264,7 @@ class Container:
             lifetime=lifetime,
             provides=provides,
             dependencies=dependencies,
+            concurrency_safe=concurrency_safe,
         )
 
         if context_manager is None:
@@ -281,6 +294,7 @@ class Container:
                 is_async=is_async,
                 is_any_dependency_async=is_any_dependency_async,
                 needs_cleanup=True,
+                concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
             ),
         )
 
@@ -348,6 +362,11 @@ class Container:
 
     # endregion Registration Methods
 
+    def _resolve_provider_concurrency_safe(self, concurrency_safe: bool | None) -> bool:
+        if concurrency_safe is None:
+            return self._default_concurrency_safe
+        return concurrency_safe
+
     def _resolve(self, dependency: Any) -> Any:
         if self._root_resolver is None:
             self._root_resolver = self._resolvers_manager.build_root_resolver(
@@ -376,6 +395,7 @@ class ConcreteTypeRegistrationDecorator(Generic[T]):
     lifetime: Lifetime | None
     provides: type[T] | None = None
     dependencies: list[ProviderDependency] | None = None
+    concurrency_safe: bool | None = None
 
     def __call__(self, concrete_type: type[T]) -> type[T]:
         """Register the concrete type provider in the container."""
@@ -385,6 +405,7 @@ class ConcreteTypeRegistrationDecorator(Generic[T]):
             scope=self.scope,
             lifetime=self.lifetime,
             dependencies=self.dependencies,
+            concurrency_safe=self.concurrency_safe,
         )
 
         return concrete_type
@@ -399,6 +420,7 @@ class FactoryRegistrationDecorator(Generic[T]):
     lifetime: Lifetime | None
     provides: type[T] | None = None
     dependencies: list[ProviderDependency] | None = None
+    concurrency_safe: bool | None = None
 
     def __call__(self, factory: F) -> F:
         """Register the factory provider in the container."""
@@ -408,6 +430,7 @@ class FactoryRegistrationDecorator(Generic[T]):
             scope=self.scope,
             lifetime=self.lifetime,
             dependencies=self.dependencies,
+            concurrency_safe=self.concurrency_safe,
         )
 
         return factory
@@ -422,6 +445,7 @@ class GeneratorRegistrationDecorator(Generic[T]):
     lifetime: Lifetime | None
     provides: type[T] | None = None
     dependencies: list[ProviderDependency] | None = None
+    concurrency_safe: bool | None = None
 
     def __call__(self, generator: F) -> F:
         """Register the generator provider in the container."""
@@ -431,6 +455,7 @@ class GeneratorRegistrationDecorator(Generic[T]):
             scope=self.scope,
             lifetime=self.lifetime,
             dependencies=self.dependencies,
+            concurrency_safe=self.concurrency_safe,
         )
 
         return generator
@@ -445,6 +470,7 @@ class ContextManagerRegistrationDecorator(Generic[T]):
     lifetime: Lifetime | None
     provides: type[T] | None = None
     dependencies: list[ProviderDependency] | None = None
+    concurrency_safe: bool | None = None
 
     def __call__(self, context_manager: F) -> F:
         """Register the context manager provider in the container."""
@@ -454,6 +480,7 @@ class ContextManagerRegistrationDecorator(Generic[T]):
             scope=self.scope,
             lifetime=self.lifetime,
             dependencies=self.dependencies,
+            concurrency_safe=self.concurrency_safe,
         )
 
         return context_manager

@@ -89,6 +89,8 @@ class ProviderSpec:
     """Indicates whether any dependency requires asynchronous resolution."""
     needs_cleanup: bool
     """True if provider itself or any dependency requires cleanup."""
+    concurrency_safe: bool = True
+    """Whether generated resolver code should use locking for this provider."""
 
     lifetime: Lifetime | None = None
     """The lifetime of the provided dependency. Could be none in case of instance providers."""
