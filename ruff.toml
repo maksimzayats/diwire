@@ -21,6 +21,10 @@ ignore = [
     "TC001", # Move first-party import into TYPE_CHECKING block
     "TC002", # Move third-party import into TYPE_CHECKING block
     "TC003", # Move stdlib import into TYPE_CHECKING block
+
+    # TODO
+    "TD003",
+    "FIX002",
 ]
 
 [lint.per-file-ignores]

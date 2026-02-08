@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import inspect
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
+from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from inspect import Parameter
-from typing import Any, Awaitable, Callable, TypeAlias
+from typing import Any, ClassVar, TypeAlias, TypeVar
 
-from diwire.exceptions import DIWireInvalidProviderSpecError
 from diwire.scope import BaseScope
 
-UserDependency: TypeAlias = type[Any]
+T = TypeVar("T")
+
+UserDependency: TypeAlias = Any
 """A dependency that been registered or trying to be resolved from the user's code."""
 
 UserProviderObject: TypeAlias = Any
@@ -17,87 +21,68 @@ UserProviderObject: TypeAlias = Any
 ProviderSlot: TypeAlias = int
 """A unique slot number assigned to each provider specification."""
 
+ConcreteTypeProvider: TypeAlias = type[T]
+"""A concrete type that can be instantiated to produce a dependency."""
+
+FactoryProvider: TypeAlias = Callable[..., T] | Callable[..., Awaitable[T]]
+"""A factory function or asynchronous function that produces a dependency."""
+
+GeneratorProvider: TypeAlias = (
+    Callable[..., Generator[T, None, None]] | Callable[..., AsyncGenerator[T, None]]
+)
+"""A generator function or asynchronous generator function that yields a dependency."""
+
+ContextManagerProvider: TypeAlias = (
+    Callable[..., AbstractContextManager[T]] | Callable[..., AbstractAsyncContextManager[T]]
+)
+
 
 @dataclass(kw_only=True)
 class ProviderSpec:
     """A specification of a provider in the dependency injection system."""
 
-    slot: int
+    SLOT_COUNTER: ClassVar[ProviderSlot] = 0
 
     provides: UserDependency
-    provider: UserProviderObject
-    provider_kind: ProviderKind
-    lifetime: Lifetime
+    """The dependency type that this provider supplies."""
 
-    scope: BaseScope | None = None
-    dependencies: list[_ProviderDependency] = field(default_factory=list)
+    instance: UserDependency | None = None
+    """An optional instance of the provided dependency, if applicable."""
+    concrete_type: ConcreteTypeProvider[Any] | None = None
+    """An optional concrete type of the provided dependency, if applicable."""
+    factory: FactoryProvider[Any] | None = None
+    """An optional factory function to create the provided dependency, if applicable."""
+    generator: GeneratorProvider[Any] | None = None
+    """An optional generator function to yield the provided dependency, if applicable."""
+    context_manager: ContextManagerProvider[Any] | None = None
+    """An optional context manager function to manage the provided dependency, if applicable."""
+    dependencies: list[ProviderDependency] = field(default_factory=list)
+    """A list of dependencies required by this provider."""
 
+    lifetime: Lifetime | None = None
+    """The lifetime of the provided dependency. Could be none in case of instance providers."""
+    scope: BaseScope
+    """The scope in which the provided dependency is valid."""
 
-class ProviderKind(Enum):
-    """Defines the kind of provider used to supply a dependency."""
+    slot: ProviderSlot = field(init=False)
+    """A unique slot number assigned to this provider specification."""
 
-    VALUE = auto()
-    """
-    A simple value, e.g., an integer, string, or object instance.
-    Usage in provider: `return value`
-    """
+    def __post_init__(self) -> None:
+        self.__class__.SLOT_COUNTER += 1
+        self.slot = self.SLOT_COUNTER
 
-    CALL = auto()
-    """
-    A callable that returns a value when invoked. Could be a function or a class constructor.
-    Usage in provider: `return callable(**dependencies)`
-    """
-    ASYNC_CALL = auto()
-    """
-    An asynchronous callable that returns a value when awaited.
-    Usage in provider: `return await async_callable(**dependencies)`
-    """
+    @property
+    def is_async(self) -> bool:
+        """Indicates whether the provider is asynchronous in nature."""
+        if self.factory is not None:
+            return inspect.iscoroutinefunction(self.factory)
+        if self.generator is not None:
+            return inspect.isasyncgenfunction(self.generator)
+        if self.context_manager is not None:
+            # TODO(Maksim): make sure it work with proper testing
+            return hasattr(self.context_manager, "__aenter__")
 
-    GENERATOR = auto()
-    """
-    A generator callable that yields a value.
-    Usage in provider:
-    ```
-    gen = generator_function(**dependencies)
-    resource = next(gen)
-    scope_context.open_resources.append(OpenGeneratorResource(gen))
-    return resource
-    ```
-    """
-    ASYNC_GENERATOR = auto()
-    """
-    An asynchronous generator callable that yields a value.
-    Usage in provider:
-    ```
-    agen = async_generator_function(**dependencies)
-    resource = await anext(agen)
-    scope_context.open_resources.append(OpenAsyncGeneratorResource(agen))
-    return resource
-    ```
-    """
-
-    CONTEXT_MANAGER = auto()
-    """
-    A context manager callable that provides a resource within a `with` block.
-    Usage in provider:
-    ```
-    context_manager = context_manager_function(**dependencies)
-    resource = context_manager.__enter__()
-    scope_context.open_resources.append(OpenContextManagerResource(context_manager))
-    return resource
-    ```
-    """
-    ASYNC_CONTEXT_MANAGER = auto()
-    """
-    An asynchronous context manager callable that provides a resource within an `async with` block.
-    Usage in provider:
-    ```
-    async_context_manager = async_context_manager_function(**dependencies)
-    resource = await async_context_manager.__aenter__()
-    scope_context.open_resources.append(OpenAsyncContextManagerResource(async_context_manager))
-    return resource
-    ```
-    """
+        return False
 
 
 class Lifetime(Enum):
@@ -111,106 +96,6 @@ class Lifetime(Enum):
 
     SCOPED = auto()
     """Instance is shared within a scope, different instances across scopes."""
-
-
-@dataclass(slots=True)
-class ProviderSpecExtractor:
-    """Extracts ProviderSpec from user-defined provider objects."""
-
-    root_scope: BaseScope
-
-    # fmt: off
-    _provider_dependencies_extractor: ProviderDependenciesExtractor = field(default_factory=lambda: ProviderDependenciesExtractor())  # noqa: PLW0108
-    _provider_spec_introspector: _ProviderSpecIntrospector = field(default_factory=lambda: _ProviderSpecIntrospector())  # noqa: PLW0108
-    # fmt: on
-
-    _specs_extracted: int = 0
-
-    def extract(  # noqa: PLR0913
-        self,
-        *,
-        provider: UserProviderObject | None,
-        provider_kind: ProviderKind | None,
-        provides: UserDependency | None,
-        scope: BaseScope,
-        lifetime: Lifetime,
-        dependencies: list[_ProviderDependency],
-    ) -> ProviderSpec:
-        """Extract a ProviderSpec from the given parameters.
-
-        Automatically infers missing information where possible.
-        """
-        if provider is None and provides is None:
-            msg = "Either 'provider' or 'provides' must be specified to extract a ProviderSpec."
-            raise DIWireInvalidProviderSpecError(msg)
-
-        if provider is None:
-            provider = self._extract_provider_from_provides(provides)
-        elif provides is None:
-            provides = self._extract_provides_from_provider(provider)
-
-        if provider_kind is None:
-            provider_kind = self._extract_provider_kind_from_provider(provider)
-
-        if scope is None:
-            scope = self._extract_scope_from_provider(provider)
-
-        if lifetime is None:
-            lifetime = self._extract_lifetime_from_provider(provider, scope=scope)
-
-        if dependencies is None:
-            dependencies = self._provider_dependencies_extractor.extract(provider)
-
-        self._specs_extracted += 1
-        return ProviderSpec(
-            slot=self._specs_extracted,
-            provides=provides,
-            provider=provider,
-            provider_kind=provider_kind,
-            lifetime=lifetime,
-            scope=scope,
-            dependencies=dependencies,
-        )
-
-    def _extract_provider_from_provides(self, provides: UserDependency) -> UserProviderObject:
-        return provides
-
-    def _extract_provides_from_provider(self, provider: UserProviderObject) -> UserDependency:
-        if not isinstance(provider, type):
-            # instance handling
-            return type(provider)
-
-        return provider
-
-    def _extract_provider_kind_from_provider(self, provider: UserProviderObject) -> ProviderKind:
-        if not isinstance(provider, type):
-            # instance handling
-            return ProviderKind.VALUE
-
-        return ProviderKind.CALL
-
-    def _extract_lifetime_from_provider(
-        self,
-        provider: UserProviderObject,
-        scope: BaseScope | None = None,
-    ) -> Lifetime | None:
-        if not isinstance(provider, type):
-            # instance handling
-            return Lifetime.SINGLETON
-
-        if scope is not None:
-            return Lifetime.SCOPED
-
-        msg = "Cannot determine lifetime from provider without scope"
-        raise DIWireInvalidProviderSpecError(msg)
-
-    def _extract_scope_from_provider(self, provider: UserProviderObject) -> BaseScope | None:
-        if not isinstance(provider, type):
-            # instance handling
-            return None
-
-        msg = "Scope must be explicitly provided for class/function providers"
-        raise DIWireInvalidProviderSpecError(msg)
 
 
 class ProvidersRegistrations:
@@ -249,16 +134,39 @@ class ProvidersRegistrations:
 class ProviderDependenciesExtractor:
     """Extracts dependencies from user-defined provider objects."""
 
-    def extract_from_type(self, dep_type: type[UserDependency]) -> list[_ProviderDependency]: ...
+    def extract_from_concrete_type(
+        self,
+        concrete_type: ConcreteTypeProvider[Any],
+    ) -> list[ProviderDependency]:
+        """Extract dependencies from a concrete type-based provider."""
+        return []
 
     def extract_from_factory(
         self,
-        factory: Callable[..., Any] | Callable[..., Awaitable[Any]],
-    ) -> list[_ProviderDependency]: ...
+        factory: FactoryProvider[Any],
+    ) -> list[ProviderDependency]:
+        """Extract dependencies from a factory-based provider."""
+        return []
+
+    def extract_from_generator(
+        self,
+        generator: GeneratorProvider[Any],
+    ) -> list[ProviderDependency]:
+        """Extract dependencies from a generator-based provider."""
+        return []
+
+    def extract_from_context_manager(
+        self,
+        context_manager: ContextManagerProvider[Any],
+    ) -> list[ProviderDependency]:
+        """Extract dependencies from a context manager-based provider."""
+        return []
 
 
 @dataclass(slots=True)
-class _ProviderDependency:
+class ProviderDependency:
+    """Represents a dependency required by a provider."""
+
     provides: UserDependency
     parameter: Parameter
 

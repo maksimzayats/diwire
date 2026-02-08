@@ -1,25 +1,21 @@
 from __future__ import annotations
 
-import inspect
 import logging
-from pathlib import Path
-from typing import Any, Awaitable, Callable, Literal, TypeVar
-
-import jinja2
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
+from contextlib import AbstractAsyncContextManager, AbstractContextManager
+from dataclasses import dataclass
+from typing import Any, Generic, TypeVar
 
 from diwire.providers import (
     Lifetime,
     ProviderDependenciesExtractor,
-    ProviderKind,
     ProviderSpec,
-    ProviderSpecExtractor,
     ProvidersRegistrations,
-    UserDependency,
-    UserProviderObject,
 )
 from diwire.scope import BaseScope, Scope
 
-TUserProviderObject = TypeVar("TUserProviderObject", bound=UserProviderObject)
+T = TypeVar("T")
+F = TypeVar("F", bound=Callable[..., Any])
 
 logger = logging.getLogger(__name__)
 
@@ -35,178 +31,262 @@ class Container:
         self._root_scope = root_scope
         self._default_lifetime = default_lifetime
 
-        self._provider_spec_extractor = ProviderSpecExtractor(root_scope=self._root_scope)
         self._provider_dependencies_extractor = ProviderDependenciesExtractor()
         self._providers_registrations = ProvidersRegistrations()
 
-    def register(
+    def register_instance(
         self,
-        provides: UserDependency | None = None,
+        provides: type[T] | None = None,
         *,
-        instance: Any | None = None,
-        concrete_type: type[Any] | None = None,
-        factory: Callable[..., Any] | Callable[..., Awaitable[Any]] | None = None,
-        scope: BaseScope | None = None,
-        lifetime: Lifetime | None = None,
-    ) -> RegistrationDecorator:
-        scope = scope or self._root_scope
-        lifetime = lifetime or self._default_lifetime
-
-        if instance is not None and scope != self._root_scope:
-            scope = self._root_scope
-            logger.warning(
-                "Instance registration requires root scope; overriding scope to root scope.",
-            )
-
-        if lifetime == Lifetime.SINGLETON and scope != self._root_scope:
-            scope = self._root_scope
-            logger.warning(
-                "Singleton lifetime requires root scope; overriding scope to root scope.",
-            )
-
-        spec: ProviderSpec | None = None
-        if instance is not None:
-            spec = self._provider_spec_extractor.extract(
-                provider=instance,
-                provider_kind=ProviderKind.VALUE,
-                provides=provides,
-                scope=scope,
-                lifetime=lifetime,
-                dependencies=[],
-            )
-        elif factory is not None:
-            dependencies = self._provider_dependencies_extractor.extract(provider=factory)
-            print(f"{factory} dependencies:", dependencies)
-            spec = self._provider_spec_extractor.extract(
-                provider=factory,
-                provider_kind=ProviderKind.CALL,
-                provides=provides,
-                scope=scope,
-                lifetime=lifetime,
-                dependencies=dependencies,
-            )
-        elif concrete_type is not None:
-            dependencies = self._provider_dependencies_extractor.extract(provider=concrete_type)
-            spec = self._provider_spec_extractor.extract(
-                provider=concrete_type,
-                provider_kind=ProviderKind.CALL,
-                provides=provides,
-                scope=scope,
-                lifetime=lifetime,
-                dependencies=dependencies,
-            )
-        elif provides is not None and provides is not Literal:
-            dependencies = self._provider_dependencies_extractor.extract(provider=provides)
-            spec = self._provider_spec_extractor.extract(
-                provider=provides,
-                provider_kind=ProviderKind.CALL,
-                provides=provides,
-                scope=scope,
-                lifetime=lifetime,
-                dependencies=dependencies,
-            )
-
-        if spec is not None:
-            self._providers_registrations.add(spec)
-
-        return RegistrationDecorator(
-            container=self,
-            provides=provides,
-            instance=instance,
-            concrete_type=concrete_type,
-            factory=factory,
-            scope=scope,
-            lifetime=lifetime,
+        instance: T,
+    ) -> None:
+        """Register an instance provider in the container."""
+        self._providers_registrations.add(
+            ProviderSpec(
+                provides=provides or type(instance),
+                instance=instance,
+                lifetime=self._default_lifetime,
+                scope=self._root_scope,
+            ),
         )
 
-
-class RegistrationDecorator:
-    def __init__(
+    def register_concrete(
         self,
-        container: Container,
-        provides: UserDependency | None = None,
-        **registration_kwargs: Any,
+        provides: type[T] | None = None,
+        *,
+        concrete_type: type[T] | None = None,
+        scope: BaseScope | None = None,
+        lifetime: Lifetime | None = None,
+    ) -> ConcreteTypeRegistrationDecorator[T]:
+        """Register a concrete type provider in the container."""
+        decorator = ConcreteTypeRegistrationDecorator(
+            container=self,
+            scope=scope,
+            lifetime=lifetime,
+            provides=provides,
+        )
+
+        if provides is None and concrete_type is not None:
+            provides = concrete_type
+        elif provides is not None and concrete_type is None:
+            concrete_type = provides
+        elif provides is None and concrete_type is None:
+            return decorator
+
+        dependencies = self._provider_dependencies_extractor.extract_from_concrete_type(
+            concrete_type=concrete_type,
+        )
+
+        self._providers_registrations.add(
+            ProviderSpec(
+                provides=provides,
+                concrete_type=concrete_type,
+                lifetime=lifetime or self._default_lifetime,
+                scope=scope or self._root_scope,
+                dependencies=dependencies,
+            ),
+        )
+
+        return decorator
+
+    def register_factory(
+        self,
+        provides: type[T] | None = None,
+        *,
+        factory: Callable[..., T] | Callable[..., Awaitable[T]] | None = None,
+        scope: BaseScope | None = None,
+        lifetime: Lifetime | None = None,
+    ) -> FactoryRegistrationDecorator[T]:
+        """Register a factory provider in the container."""
+        decorator = FactoryRegistrationDecorator(
+            container=self,
+            scope=scope,
+            lifetime=lifetime,
+            provides=provides,
+        )
+
+        if factory is None:
+            return decorator
+
+        dependencies = self._provider_dependencies_extractor.extract_from_factory(
+            factory=factory,
+        )
+
+        self._providers_registrations.add(
+            ProviderSpec(
+                provides=provides,
+                factory=factory,
+                lifetime=lifetime or self._default_lifetime,
+                scope=scope or self._root_scope,
+                dependencies=dependencies,
+            ),
+        )
+
+        return decorator
+
+    def register_generator(
+        self,
+        provides: type[T] | None = None,
+        *,
+        generator: (
+            Callable[..., Generator[T, None, None]] | Callable[..., AsyncGenerator[T, None]] | None
+        ),
+        scope: BaseScope | None = None,
+        lifetime: Lifetime | None = None,
+    ) -> GeneratorRegistrationDecorator[T]:
+        """Register a generator provider in the container."""
+        decorator = GeneratorRegistrationDecorator(
+            container=self,
+            scope=scope,
+            lifetime=lifetime,
+            provides=provides,
+        )
+
+        if generator is None:
+            return decorator
+
+        dependencies = self._provider_dependencies_extractor.extract_from_generator(
+            generator=generator,
+        )
+
+        self._providers_registrations.add(
+            ProviderSpec(
+                provides=provides,
+                generator=generator,
+                lifetime=lifetime or self._default_lifetime,
+                scope=scope or self._root_scope,
+                dependencies=dependencies,
+            ),
+        )
+
+        return decorator
+
+    def register_context_manager(
+        self,
+        provides: type[T] | None = None,
+        *,
+        context_manager: (
+            Callable[..., AbstractContextManager[T]] | Callable[..., AbstractAsyncContextManager[T]]
+        ),
+        scope: BaseScope | None = None,
+        lifetime: Lifetime | None = None,
     ) -> None:
-        self._container = container
-        self._provides = provides
-        self._registration_kwargs = registration_kwargs
+        """Register a context manager provider in the container."""
+        decorator = ContextManagerRegistrationDecorator(
+            container=self,
+            scope=scope,
+            lifetime=lifetime,
+            provides=provides,
+        )
 
-    def __call__(self, provider: TUserProviderObject) -> TUserProviderObject:
-        if inspect.isclass(provider):
-            self._registration_kwargs["concrete_type"] = provider
-        elif callable(provider):
-            self._registration_kwargs["factory"] = provider
-        else:
-            self._registration_kwargs["instance"] = provider
+        if context_manager is None:
+            return decorator
 
-        if self._provides is not None:
-            self._container.register(provides=self._provides, **self._registration_kwargs)
+        dependencies = self._provider_dependencies_extractor.extract_from_context_manager(
+            context_manager=context_manager,
+        )
 
-        print("Calling register with provider:", provider)
-        self._container.register(provides=provider, **self._registration_kwargs)
+        self._providers_registrations.add(
+            ProviderSpec(
+                provides=provides,
+                context_manager=context_manager,
+                lifetime=lifetime or self._default_lifetime,
+                scope=scope or self._root_scope,
+                dependencies=dependencies,
+            ),
+        )
 
-        return provider
+        return decorator
 
-#
-# ex = _ProviderSpecExtractor()
-# registrations = Registrations()
-# registrations.add(ex.extract(provider=42))
-# registrations.add(
-#     ex.extract(
-#         provides=float,
-#         provider=lambda: 42.69,
-#         provider_kind=ProviderKind.CALL,
-#     ),
-# )
-# registrations.add(
-#     ex.extract(
-#         provider=lambda f: str(f()),
-#         provides=str,
-#         provider_kind=ProviderKind.CALL,
-#         scope=Scope.REQUEST,
-#         dependencies=[
-#             ProviderDependency(
-#                 provides=float,
-#                 parameter=inspect.Parameter(
-#                     name="f",
-#                     kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-#                     annotation=float,
-#                 ),
-#             ),
-#         ],
-#     ),
-# )
+
+@dataclass(slots=True, kw_only=True)
+class ConcreteTypeRegistrationDecorator(Generic[T]):
+    """A decorator for registering concrete type providers in the container."""
+
+    container: Container
+    scope: BaseScope
+    lifetime: Lifetime
+    provides: type[T] | None = None
+
+    def __call__(self, concrete_type: type[T]) -> type[T]:
+        """Register the concrete type provider in the container."""
+        self.container.register_concrete(
+            provides=self.provides,
+            concrete_type=concrete_type,
+            scope=self.scope,
+            lifetime=self.lifetime,
+        )
+
+        return concrete_type
+
+
+@dataclass(slots=True, kw_only=True)
+class FactoryRegistrationDecorator(Generic[T]):
+    """A decorator for registering factory providers in the container."""
+
+    container: Container
+    scope: BaseScope
+    lifetime: Lifetime
+    provides: type[T] | None = None
+
+    def __call__(self, factory: F) -> F:
+        """Register the factory provider in the container."""
+        self.container.register_factory(
+            provides=self.provides,
+            factory=factory,
+            scope=self.scope,
+            lifetime=self.lifetime,
+        )
+
+        return factory
+
+
+@dataclass(slots=True, kw_only=True)
+class GeneratorRegistrationDecorator(Generic[T]):
+    """A decorator for registering generator providers in the container."""
+
+    container: Container
+    scope: BaseScope
+    lifetime: Lifetime
+    provides: type[T] | None = None
+
+    def __call__(self, generator: F) -> F:
+        """Register the generator provider in the container."""
+        self.container.register_generator(
+            provides=self.provides,
+            generator=generator,
+            scope=self.scope,
+            lifetime=self.lifetime,
+        )
+
+        return generator
+
+
+@dataclass(slots=True, kw_only=True)
+class ContextManagerRegistrationDecorator(Generic[T]):
+    """A decorator for registering context manager providers in the container."""
+
+    container: Container
+    scope: BaseScope
+    lifetime: Lifetime
+    provides: type[T] | None = None
+
+    def __call__(self, context_manager: F) -> F:
+        """Register the context manager provider in the container."""
+        self.container.register_context_manager(
+            provides=self.provides,
+            context_manager=context_manager,
+            scope=self.scope,
+            lifetime=self.lifetime,
+        )
+
+        return context_manager
+
 
 def main() -> None:
     container = Container()
-    container.register(int, instance=42)
-    container.register(float, factory=lambda: 42.69)
+    container.register_instance(int, instance=42)
 
-    @container.register(str, scope=Scope.REQUEST)
-    def str_provider(f: float) -> str:
-        return str(f)
-
-    print(f"{container._providers_registrations._registrations_by_type = }")
 
 if __name__ == "__main__":
     main()
-    # print(registrations._registrations_by_slot)
-    #
-    # # jinja2 loading
-    # template = jinja2.Environment().from_string(
-    #     Path(
-    #         "/Users/maksimzayats/dev/diwires/diwire1/src/diwire/resolvers/resolvers.py.jinja2",
-    #     ).read_text(),
-    # )
-    #
-    # rendered = template.render(
-    #     registrations=registrations,
-    #     Scope=Scope,
-    #     ProviderKind=ProviderKind,
-    # )
-    #
-    # print(rendered)
-    #
-    # Path("/Users/maksimzayats/dev/diwires/diwire1/src/diwire/resolvers/resolvers_ex.py").write_text(
-    #     rendered,
-    # )

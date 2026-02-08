@@ -1,12 +1,12 @@
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Self
 
 
 class BaseScope(int):
     """Base class for scopes."""
 
-    def __new__(cls, *args: Any, **_kwargs: Any) -> int:  # noqa: D102
+    def __new__(cls, *args: Any, **_kwargs: Any) -> Self:  # noqa: D102
         return super().__new__(cls, *args)
 
     def __init__(self, level: int, *, skippable: bool = False) -> None:
