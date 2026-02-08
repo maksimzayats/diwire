@@ -1,0 +1,121 @@
+from __future__ import annotations
+
+import asyncio
+import threading
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
+from contextlib import AbstractAsyncContextManager, AbstractContextManager
+from typing import (
+    Any,
+)
+from diwire.container import BaseScope
+
+_missing_resolver: Any = object()
+
+_number_of_dependencies = {{ registrations|count }}
+
+{% for registration in registrations.values() %}
+# spec: {{ registration }}
+_dep_{{ registration.slot }}_type: type[Any]
+_dep_{{ registration.slot }}_resolver: Any
+_dep_{{ registration.slot }}_threading_lock = threading.Lock()
+_dep_{{ registration.slot }}_asyncio_lock = asyncio.Lock()
+{% endfor %}
+
+{% macro generate_resolver_method %}
+
+class RootResolver:
+    def enter_scope(self, scope: BaseScope):
+        {% for scope in scope_enum %}
+        if scope == {{ scope.value }}:
+            return _{{ scope.name|capitalize }}Resolver(root_resolver=self)
+        {% endfor %}
+        raise ValueError(f"Unknown scope: {scope}")
+
+    def resolve(self, dependency: Any) -> Any:
+        return _resolvers_by_type_mapping[dependency](self)
+
+    {% for registration in registrations.get_by_scope(None) %}
+    def resolve_{{ registration.slot }}(self) -> Any:
+        # after first resolution, we will set to lambda: instance
+        # no need to check for attr, we will replace the resolver method
+        with _dep_{{ registration.slot }}_threading_lock:
+            value = _dep_{{ registration.slot }}_resolver()
+            self.resolve_{{ registration.slot }} = lambda: value
+            return value
+    {% endfor %}
+
+
+{% set seen_scopes_ns = namespace(seen_scopes=[]) %}
+
+{% for scope in scope_enum %}
+
+# scope {{ scope.name }}
+# seen scopes: {{ seen_scopes_ns.seen_scopes }}
+
+class _{{ scope.name|capitalize }}Resolver:
+    def __init__(
+        self,
+        root_resolver: RootResolver,
+        {% for seen_scope in seen_scopes_ns.seen_scopes -%}
+        {{ seen_scope.name|lower }}_resolver: _{{ seen_scope.name|capitalize }}Resolver = _missing_resolver,
+        {% endfor %}
+    ) -> None:
+        self._opened_resources: list[Any] = []
+        self._root_resolver = root_resolver
+        {% for seen_scope in seen_scopes_ns.seen_scopes -%}
+        self._{{ seen_scope.name|lower }}_resolver = {{ seen_scope.name|lower}}_resolver
+        {% endfor %}
+
+    {% if seen_scopes_ns.seen_scopes|count != scope_enum|count - 1 %}
+    def enter_scope(
+        self,
+        scope: BaseScope,
+    ) -> Any:
+        {% for scope_to_enter in scope_enum -%}
+        {% if scope != scope_to_enter and scope_to_enter not in seen_scopes_ns.seen_scopes %}
+        if scope == {{ scope_to_enter.value }}:
+            return _{{ scope_to_enter.name|capitalize }}Resolver(
+                root_resolver=self._root_resolver,
+                {% for seen_scope in seen_scopes_ns.seen_scopes -%}
+                {{ seen_scope.name|lower }}_resolver=self._{{ seen_scope.name|lower }}_resolver,
+                {% endfor %}
+                {{ scope.name|lower }}_resolver=self,
+            )
+        {% endif %}
+        {% endfor %}
+        raise ValueError(f"Unknown scope: {scope}")
+    {% endif %}
+
+    def resolve(self, dependency: Any) -> Any:
+        return _resolvers_by_type_mapping[dependency](self)
+
+    {% for registration in registrations.get_by_scope(scope.value) %}
+    def resolve_{{ registration.slot }}(self) -> Any:
+        with _dep_{{ registration.slot }}_threading_lock:
+            value = _dep_{{ registration.slot }}_resolver()
+            self.resolve_{{ registration.slot }} = lambda: value
+            return value
+    {% endfor %}
+
+{% set seen_scopes_ns.seen_scopes = seen_scopes_ns.seen_scopes + [scope] %}
+{% endfor %}
+
+_resolvers_by_type_mapping: dict[type[Any], Callable[[Any], Any]] = {}
+
+_resolvers_by_slot_mapping = {
+    {% for registration in registrations.get_by_scope(None) %}
+    {{ registration.slot }}: RootResolver.resolve_{{ registration.slot }},
+    {% endfor %}
+    {% for scope in scope_enum %}
+    {% for registration in registrations.get_by_scope(scope.value) %}
+    {{ registration.slot }}: _{{ scope.name|capitalize }}Resolver.resolve_{{ registration.slot }},
+    {% endfor %}
+    {% endfor -%}
+}
+
+def init(registrations) -> RootResolver:
+    for slot, resolver in _resolvers_by_slot_mapping.items():
+        registration = registrations.get_by_slot(slot)
+        _resolvers_by_type_mapping[registration.dependency_type] = resolver
+
+    return RootResolver()
