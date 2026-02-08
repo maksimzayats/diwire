@@ -360,12 +360,12 @@ class Container:
             dependencies=explicit_dependencies,
         )
 
-    # endregion Registration Methods
-
     def _resolve_provider_concurrency_safe(self, concurrency_safe: bool | None) -> bool:
         if concurrency_safe is None:
             return self._default_concurrency_safe
         return concurrency_safe
+
+    # endregion Registration Methods
 
     def _resolve(self, dependency: Any) -> Any:
         if self._root_resolver is None:
