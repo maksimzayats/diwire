@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import inspect
-from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
+from collections.abc import AsyncGenerator, Awaitable, Callable, Coroutine, Generator
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from inspect import Parameter
-from typing import Any, ClassVar, TypeAlias, TypeVar, get_type_hints
+from typing import Any, ClassVar, TypeAlias, TypeVar, get_args, get_origin, get_type_hints
 
-from diwire.exceptions import DIWireInvalidProviderSpecError, DIWireProviderDependencyInferenceError
+from diwire.exceptions import (
+    DIWireInvalidProviderSpecError,
+    DIWireInvalidRegistrationError,
+    DIWireProviderDependencyInferenceError,
+)
 from diwire.scope import BaseScope
 
 T = TypeVar("T")
@@ -39,6 +43,8 @@ ContextManagerProvider: TypeAlias = (
 
 _MISSING_ANNOTATION: Any = object()
 _IMPLICIT_FIRST_PARAMETER_NAMES = {"self", "cls"}
+_COROUTINE_RESULT_INDEX = 2
+_COROUTINE_ARGUMENT_COUNT = 3
 
 
 @dataclass(kw_only=True)
@@ -404,5 +410,197 @@ class ProviderDependency:
 
 
 @dataclass(slots=True)
-class _ProviderSpecIntrospector:
-    pass
+class ProviderReturnTypeExtractor:
+    """Extracts return types from user-defined provider objects."""
+
+    def extract_from_factory(
+        self,
+        factory: FactoryProvider[Any],
+    ) -> Any:
+        """Extract a return type from a factory-based provider."""
+        return_annotation, annotation_error = self._resolved_return_annotation(factory)
+        provider_name = self._provider_name(factory)
+        if return_annotation is _MISSING_ANNOTATION:
+            self._raise_missing_return_annotation_error(
+                provider_kind="factory",
+                provider_name=provider_name,
+                annotation_error=annotation_error,
+            )
+
+        unwrapped_return_type = self._unwrap_factory_return_type(return_annotation)
+        if unwrapped_return_type is _MISSING_ANNOTATION:
+            self._raise_invalid_return_annotation_error(
+                provider_kind="factory",
+                provider_name=provider_name,
+                expected_annotations="`T`, `Awaitable[T]`, or `Coroutine[Any, Any, T]`",
+                annotation_error=annotation_error,
+            )
+
+        return unwrapped_return_type
+
+    def extract_from_generator(
+        self,
+        generator: GeneratorProvider[Any],
+    ) -> Any:
+        """Extract a return type from a generator-based provider."""
+        return_annotation, annotation_error = self._resolved_return_annotation(generator)
+        provider_name = self._provider_name(generator)
+        if return_annotation is _MISSING_ANNOTATION:
+            self._raise_missing_return_annotation_error(
+                provider_kind="generator",
+                provider_name=provider_name,
+                annotation_error=annotation_error,
+            )
+
+        yielded_type = self._extract_yielded_or_managed_type(
+            return_annotation=return_annotation,
+            expected_origins=(Generator, AsyncGenerator),
+        )
+        if yielded_type is _MISSING_ANNOTATION:
+            self._raise_invalid_return_annotation_error(
+                provider_kind="generator",
+                provider_name=provider_name,
+                expected_annotations="`Generator[T, None, None]` or `AsyncGenerator[T, None]`",
+                annotation_error=annotation_error,
+            )
+
+        return yielded_type
+
+    def extract_from_context_manager(
+        self,
+        context_manager: ContextManagerProvider[Any],
+    ) -> Any:
+        """Extract a return type from a context manager-based provider."""
+        return_annotation, annotation_error = self._resolved_return_annotation(context_manager)
+        provider_name = self._provider_name(context_manager)
+        if return_annotation is _MISSING_ANNOTATION:
+            self._raise_missing_return_annotation_error(
+                provider_kind="context manager",
+                provider_name=provider_name,
+                annotation_error=annotation_error,
+            )
+
+        yielded_type = self._extract_yielded_or_managed_type(
+            return_annotation=return_annotation,
+            expected_origins=(
+                AbstractContextManager,
+                AbstractAsyncContextManager,
+                Generator,
+                AsyncGenerator,
+            ),
+        )
+        if yielded_type is _MISSING_ANNOTATION:
+            self._raise_invalid_return_annotation_error(
+                provider_kind="context manager",
+                provider_name=provider_name,
+                expected_annotations=(
+                    "`AbstractContextManager[T]`, `AbstractAsyncContextManager[T]`, "
+                    "`Generator[T, None, None]`, or `AsyncGenerator[T, None]`"
+                ),
+                annotation_error=annotation_error,
+            )
+
+        return yielded_type
+
+    def _resolved_return_annotation(
+        self,
+        provider: Callable[..., Any],
+    ) -> tuple[Any, Exception | None]:
+        try:
+            return_type_hints = get_type_hints(provider, include_extras=True)
+            annotation_error: Exception | None = None
+        except (AttributeError, NameError, TypeError) as error:
+            return_type_hints = {}
+            annotation_error = error
+
+        resolved_return_annotation = return_type_hints.get("return", _MISSING_ANNOTATION)
+        if resolved_return_annotation is not _MISSING_ANNOTATION:
+            return resolved_return_annotation, annotation_error
+
+        try:
+            raw_return_annotation = inspect.signature(provider).return_annotation
+        except (TypeError, ValueError) as error:
+            if annotation_error is None:
+                annotation_error = error
+            return _MISSING_ANNOTATION, annotation_error
+
+        if raw_return_annotation is inspect.Signature.empty or isinstance(
+            raw_return_annotation,
+            str,
+        ):
+            return _MISSING_ANNOTATION, annotation_error
+
+        return raw_return_annotation, annotation_error
+
+    def _unwrap_factory_return_type(
+        self,
+        return_annotation: Any,
+    ) -> Any:
+        origin = get_origin(return_annotation)
+        annotation_args = get_args(return_annotation)
+        if origin is Awaitable:
+            if len(annotation_args) != 1:
+                return _MISSING_ANNOTATION
+            return annotation_args[0]
+        if origin is Coroutine:
+            if len(annotation_args) != _COROUTINE_ARGUMENT_COUNT:
+                return _MISSING_ANNOTATION
+            return annotation_args[_COROUTINE_RESULT_INDEX]
+        return return_annotation
+
+    def _extract_yielded_or_managed_type(
+        self,
+        *,
+        return_annotation: Any,
+        expected_origins: tuple[type[Any], ...],
+    ) -> Any:
+        origin = get_origin(return_annotation)
+        if origin not in expected_origins:
+            return _MISSING_ANNOTATION
+
+        annotation_args = get_args(return_annotation)
+        if len(annotation_args) < 1:
+            return _MISSING_ANNOTATION
+        return annotation_args[0]
+
+    def _raise_missing_return_annotation_error(
+        self,
+        *,
+        provider_kind: str,
+        provider_name: str,
+        annotation_error: Exception | None,
+    ) -> None:
+        msg = (
+            f"Unable to infer return type for {provider_kind} provider '{provider_name}'. "
+            "Add a return type annotation or pass provides= explicitly."
+        )
+        self._raise_invalid_registration_error(msg=msg, annotation_error=annotation_error)
+
+    def _raise_invalid_return_annotation_error(
+        self,
+        *,
+        provider_kind: str,
+        provider_name: str,
+        expected_annotations: str,
+        annotation_error: Exception | None,
+    ) -> None:
+        msg = (
+            f"Unable to infer return type for {provider_kind} provider '{provider_name}'. "
+            f"Expected return annotation {expected_annotations}. "
+            "Add a valid return annotation or pass provides= explicitly."
+        )
+        self._raise_invalid_registration_error(msg=msg, annotation_error=annotation_error)
+
+    def _raise_invalid_registration_error(
+        self,
+        *,
+        msg: str,
+        annotation_error: Exception | None,
+    ) -> None:
+        if annotation_error is None:
+            raise DIWireInvalidRegistrationError(msg)
+        full_msg = f"{msg} Original annotation error: {annotation_error}"
+        raise DIWireInvalidRegistrationError(full_msg) from annotation_error
+
+    def _provider_name(self, provider: Callable[..., Any]) -> str:
+        return getattr(provider, "__qualname__", repr(provider))

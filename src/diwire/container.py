@@ -15,6 +15,7 @@ from diwire.providers import (
     Lifetime,
     ProviderDependenciesExtractor,
     ProviderDependency,
+    ProviderReturnTypeExtractor,
     ProviderSpec,
     ProvidersRegistrations,
 )
@@ -38,6 +39,7 @@ class Container:
         self._default_lifetime = default_lifetime
 
         self._provider_dependencies_extractor = ProviderDependenciesExtractor()
+        self._provider_return_type_extractor = ProviderReturnTypeExtractor()
         self._providers_registrations = ProvidersRegistrations()
 
     def register_instance(
@@ -124,6 +126,9 @@ class Container:
         if factory is None:
             return decorator
 
+        if provides is None:
+            provides = self._provider_return_type_extractor.extract_from_factory(factory=factory)
+
         dependencies_for_provider = self._resolve_factory_registration_dependencies(
             factory=factory,
             explicit_dependencies=dependencies,
@@ -163,6 +168,11 @@ class Container:
 
         if generator is None:
             return decorator
+
+        if provides is None:
+            provides = self._provider_return_type_extractor.extract_from_generator(
+                generator=generator,
+            )
 
         dependencies_for_provider = self._resolve_generator_registration_dependencies(
             generator=generator,
@@ -205,6 +215,11 @@ class Container:
 
         if context_manager is None:
             return decorator
+
+        if provides is None:
+            provides = self._provider_return_type_extractor.extract_from_context_manager(
+                context_manager=context_manager,
+            )
 
         dependencies_for_provider = self._resolve_context_manager_registration_dependencies(
             context_manager=context_manager,
