@@ -6,8 +6,9 @@ from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from inspect import Parameter
-from typing import Any, ClassVar, TypeAlias, TypeVar
+from typing import Any, ClassVar, TypeAlias, TypeVar, get_type_hints
 
+from diwire.exceptions import DIWireInvalidProviderSpecError, DIWireProviderDependencyInferenceError
 from diwire.scope import BaseScope
 
 T = TypeVar("T")
@@ -35,6 +36,9 @@ GeneratorProvider: TypeAlias = (
 ContextManagerProvider: TypeAlias = (
     Callable[..., AbstractContextManager[T]] | Callable[..., AbstractAsyncContextManager[T]]
 )
+
+_MISSING_ANNOTATION: Any = object()
+_IMPLICIT_FIRST_PARAMETER_NAMES = {"self", "cls"}
 
 
 @dataclass(kw_only=True)
@@ -139,28 +143,256 @@ class ProviderDependenciesExtractor:
         concrete_type: ConcreteTypeProvider[Any],
     ) -> list[ProviderDependency]:
         """Extract dependencies from a concrete type-based provider."""
-        return []
+        init_callable = concrete_type.__init__
+        return self._extract_dependencies(
+            provider=init_callable,
+            provider_name=concrete_type.__qualname__,
+            skip_first_parameter=True,
+        )
 
     def extract_from_factory(
         self,
         factory: FactoryProvider[Any],
     ) -> list[ProviderDependency]:
         """Extract dependencies from a factory-based provider."""
-        return []
+        return self._extract_dependencies(
+            provider=factory,
+            provider_name=self._provider_name(factory),
+            skip_first_parameter=False,
+        )
 
     def extract_from_generator(
         self,
         generator: GeneratorProvider[Any],
     ) -> list[ProviderDependency]:
         """Extract dependencies from a generator-based provider."""
-        return []
+        return self._extract_dependencies(
+            provider=generator,
+            provider_name=self._provider_name(generator),
+            skip_first_parameter=False,
+        )
 
     def extract_from_context_manager(
         self,
         context_manager: ContextManagerProvider[Any],
     ) -> list[ProviderDependency]:
         """Extract dependencies from a context manager-based provider."""
-        return []
+        return self._extract_dependencies(
+            provider=context_manager,
+            provider_name=self._provider_name(context_manager),
+            skip_first_parameter=False,
+        )
+
+    def validate_explicit_for_concrete_type(
+        self,
+        concrete_type: ConcreteTypeProvider[Any],
+        dependencies: list[ProviderDependency],
+    ) -> list[ProviderDependency]:
+        """Validate explicit dependencies for a concrete type-based provider."""
+        init_callable = concrete_type.__init__
+        return self._validate_explicit_dependencies(
+            provider=init_callable,
+            provider_name=concrete_type.__qualname__,
+            dependencies=dependencies,
+            skip_first_parameter=True,
+        )
+
+    def validate_explicit_for_factory(
+        self,
+        factory: FactoryProvider[Any],
+        dependencies: list[ProviderDependency],
+    ) -> list[ProviderDependency]:
+        """Validate explicit dependencies for a factory-based provider."""
+        return self._validate_explicit_dependencies(
+            provider=factory,
+            provider_name=self._provider_name(factory),
+            dependencies=dependencies,
+            skip_first_parameter=False,
+        )
+
+    def validate_explicit_for_generator(
+        self,
+        generator: GeneratorProvider[Any],
+        dependencies: list[ProviderDependency],
+    ) -> list[ProviderDependency]:
+        """Validate explicit dependencies for a generator-based provider."""
+        return self._validate_explicit_dependencies(
+            provider=generator,
+            provider_name=self._provider_name(generator),
+            dependencies=dependencies,
+            skip_first_parameter=False,
+        )
+
+    def validate_explicit_for_context_manager(
+        self,
+        context_manager: ContextManagerProvider[Any],
+        dependencies: list[ProviderDependency],
+    ) -> list[ProviderDependency]:
+        """Validate explicit dependencies for a context manager-based provider."""
+        return self._validate_explicit_dependencies(
+            provider=context_manager,
+            provider_name=self._provider_name(context_manager),
+            dependencies=dependencies,
+            skip_first_parameter=False,
+        )
+
+    def _extract_dependencies(
+        self,
+        *,
+        provider: Callable[..., Any],
+        provider_name: str,
+        skip_first_parameter: bool,
+    ) -> list[ProviderDependency]:
+        parameters = self._provider_parameters(
+            provider=provider,
+            skip_first_parameter=skip_first_parameter,
+        )
+        annotations, annotation_error = self._resolved_type_hints(provider)
+        dependencies: list[ProviderDependency] = []
+
+        for parameter in parameters:
+            provides = self._resolve_parameter_annotation(
+                parameter=parameter,
+                annotations=annotations,
+                annotation_error=annotation_error,
+                provider_name=provider_name,
+            )
+            if provides is _MISSING_ANNOTATION:
+                continue
+
+            dependencies.append(
+                ProviderDependency(
+                    provides=provides,
+                    parameter=parameter,
+                ),
+            )
+
+        return dependencies
+
+    def _validate_explicit_dependencies(
+        self,
+        *,
+        provider: Callable[..., Any],
+        provider_name: str,
+        dependencies: list[ProviderDependency],
+        skip_first_parameter: bool,
+    ) -> list[ProviderDependency]:
+        parameters = self._provider_parameters(
+            provider=provider,
+            skip_first_parameter=skip_first_parameter,
+        )
+        parameters_by_name = {parameter.name: parameter for parameter in parameters}
+        validated_dependencies_by_name: dict[str, ProviderDependency] = {}
+
+        for dependency in dependencies:
+            parameter_name = dependency.parameter.name
+            signature_parameter = parameters_by_name.get(parameter_name)
+            if signature_parameter is None:
+                msg = (
+                    f"Explicit dependency for unknown parameter '{parameter_name}' in "
+                    f"provider '{provider_name}'."
+                )
+                raise DIWireInvalidProviderSpecError(msg)
+            if parameter_name in validated_dependencies_by_name:
+                msg = (
+                    f"Explicit dependency for parameter '{parameter_name}' in "
+                    f"provider '{provider_name}' is duplicated."
+                )
+                raise DIWireInvalidProviderSpecError(msg)
+            if dependency.parameter.kind is not signature_parameter.kind:
+                msg = (
+                    f"Explicit dependency for parameter '{parameter_name}' in provider "
+                    f"'{provider_name}' has kind '{dependency.parameter.kind}' but expected "
+                    f"'{signature_parameter.kind}'."
+                )
+                raise DIWireInvalidProviderSpecError(msg)
+
+            validated_dependencies_by_name[parameter_name] = ProviderDependency(
+                provides=dependency.provides,
+                parameter=signature_parameter,
+            )
+
+        missing_required_parameters = [
+            parameter.name
+            for parameter in parameters
+            if self._is_required_parameter(parameter)
+            and parameter.name not in validated_dependencies_by_name
+        ]
+        if missing_required_parameters:
+            missing_parameters = ", ".join(f"'{name}'" for name in missing_required_parameters)
+            msg = (
+                f"Explicit dependencies for provider '{provider_name}' are incomplete. "
+                f"Missing required parameters: {missing_parameters}."
+            )
+            raise DIWireProviderDependencyInferenceError(msg)
+
+        return [
+            validated_dependencies_by_name[parameter.name]
+            for parameter in parameters
+            if parameter.name in validated_dependencies_by_name
+        ]
+
+    def _resolve_parameter_annotation(
+        self,
+        *,
+        parameter: Parameter,
+        annotations: dict[str, Any],
+        annotation_error: Exception | None,
+        provider_name: str,
+    ) -> Any:
+        annotation = annotations.get(parameter.name, _MISSING_ANNOTATION)
+        if annotation is not _MISSING_ANNOTATION:
+            return annotation
+
+        raw_annotation = parameter.annotation
+        if raw_annotation is not Parameter.empty and not isinstance(raw_annotation, str):
+            return raw_annotation
+
+        if not self._is_required_parameter(parameter):
+            return _MISSING_ANNOTATION
+
+        error_message = (
+            f"Unable to infer dependency for required parameter '{parameter.name}' "
+            f"in provider '{provider_name}'. Add a type annotation or pass explicit dependencies."
+        )
+        if annotation_error is None:
+            raise DIWireProviderDependencyInferenceError(error_message)
+        msg = f"{error_message} Original annotation error: {annotation_error}"
+        raise DIWireProviderDependencyInferenceError(msg) from annotation_error
+
+    def _provider_parameters(
+        self,
+        *,
+        provider: Callable[..., Any],
+        skip_first_parameter: bool,
+    ) -> tuple[Parameter, ...]:
+        parameters = tuple(inspect.signature(provider).parameters.values())
+        if (
+            skip_first_parameter
+            and parameters
+            and parameters[0].name in _IMPLICIT_FIRST_PARAMETER_NAMES
+        ):
+            return parameters[1:]
+        return parameters
+
+    def _resolved_type_hints(
+        self,
+        provider: Callable[..., Any],
+    ) -> tuple[dict[str, Any], Exception | None]:
+        try:
+            return get_type_hints(provider, include_extras=True), None
+        except (AttributeError, NameError, TypeError) as error:
+            return {}, error
+
+    def _is_required_parameter(self, parameter: Parameter) -> bool:
+        return (
+            parameter.default is Parameter.empty
+            and parameter.kind is not Parameter.VAR_POSITIONAL
+            and parameter.kind is not Parameter.VAR_KEYWORD
+        )
+
+    def _provider_name(self, provider: Callable[..., Any]) -> str:
+        return getattr(provider, "__qualname__", repr(provider))
 
 
 @dataclass(slots=True)

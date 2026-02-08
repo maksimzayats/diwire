@@ -8,3 +8,7 @@ class DIWireInvalidRegistrationError(DIWireError):
 
 class DIWireInvalidProviderSpecError(DIWireError):
     """Raised when an invalid spec is provided."""
+
+
+class DIWireProviderDependencyInferenceError(DIWireInvalidProviderSpecError):
+    """Raised when provider dependencies cannot be inferred."""

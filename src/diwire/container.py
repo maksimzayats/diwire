@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+import inspect
 import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar
 
+from diwire.exceptions import DIWireInvalidRegistrationError
 from diwire.providers import (
+    ContextManagerProvider,
+    FactoryProvider,
+    GeneratorProvider,
     Lifetime,
     ProviderDependenciesExtractor,
+    ProviderDependency,
     ProviderSpec,
     ProvidersRegistrations,
 )
@@ -57,6 +63,7 @@ class Container:
         concrete_type: type[T] | None = None,
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
+        dependencies: list[ProviderDependency] | None = None,
     ) -> ConcreteTypeRegistrationDecorator[T]:
         """Register a concrete type provider in the container."""
         decorator = ConcreteTypeRegistrationDecorator(
@@ -64,17 +71,24 @@ class Container:
             scope=scope,
             lifetime=lifetime,
             provides=provides,
+            dependencies=dependencies,
         )
 
-        if provides is None and concrete_type is not None:
-            provides = concrete_type
-        elif provides is not None and concrete_type is None:
-            concrete_type = provides
-        elif provides is None and concrete_type is None:
+        if provides is None and concrete_type is None:
             return decorator
 
-        dependencies = self._provider_dependencies_extractor.extract_from_concrete_type(
+        if provides is None:
+            provides = concrete_type
+        if concrete_type is None:
+            concrete_type = provides
+
+        if provides is None or concrete_type is None:
+            msg = "Concrete provider registration requires either provides or concrete_type."
+            raise DIWireInvalidRegistrationError(msg)
+
+        dependencies_for_provider = self._resolve_concrete_registration_dependencies(
             concrete_type=concrete_type,
+            explicit_dependencies=dependencies,
         )
 
         self._providers_registrations.add(
@@ -83,7 +97,7 @@ class Container:
                 concrete_type=concrete_type,
                 lifetime=lifetime or self._default_lifetime,
                 scope=scope or self._root_scope,
-                dependencies=dependencies,
+                dependencies=dependencies_for_provider,
             ),
         )
 
@@ -96,6 +110,7 @@ class Container:
         factory: Callable[..., T] | Callable[..., Awaitable[T]] | None = None,
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
+        dependencies: list[ProviderDependency] | None = None,
     ) -> FactoryRegistrationDecorator[T]:
         """Register a factory provider in the container."""
         decorator = FactoryRegistrationDecorator(
@@ -103,13 +118,15 @@ class Container:
             scope=scope,
             lifetime=lifetime,
             provides=provides,
+            dependencies=dependencies,
         )
 
         if factory is None:
             return decorator
 
-        dependencies = self._provider_dependencies_extractor.extract_from_factory(
+        dependencies_for_provider = self._resolve_factory_registration_dependencies(
             factory=factory,
+            explicit_dependencies=dependencies,
         )
 
         self._providers_registrations.add(
@@ -118,7 +135,7 @@ class Container:
                 factory=factory,
                 lifetime=lifetime or self._default_lifetime,
                 scope=scope or self._root_scope,
-                dependencies=dependencies,
+                dependencies=dependencies_for_provider,
             ),
         )
 
@@ -133,6 +150,7 @@ class Container:
         ),
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
+        dependencies: list[ProviderDependency] | None = None,
     ) -> GeneratorRegistrationDecorator[T]:
         """Register a generator provider in the container."""
         decorator = GeneratorRegistrationDecorator(
@@ -140,13 +158,15 @@ class Container:
             scope=scope,
             lifetime=lifetime,
             provides=provides,
+            dependencies=dependencies,
         )
 
         if generator is None:
             return decorator
 
-        dependencies = self._provider_dependencies_extractor.extract_from_generator(
+        dependencies_for_provider = self._resolve_generator_registration_dependencies(
             generator=generator,
+            explicit_dependencies=dependencies,
         )
 
         self._providers_registrations.add(
@@ -155,7 +175,7 @@ class Container:
                 generator=generator,
                 lifetime=lifetime or self._default_lifetime,
                 scope=scope or self._root_scope,
-                dependencies=dependencies,
+                dependencies=dependencies_for_provider,
             ),
         )
 
@@ -166,24 +186,29 @@ class Container:
         provides: type[T] | None = None,
         *,
         context_manager: (
-            Callable[..., AbstractContextManager[T]] | Callable[..., AbstractAsyncContextManager[T]]
-        ),
+            Callable[..., AbstractContextManager[T]]
+            | Callable[..., AbstractAsyncContextManager[T]]
+            | None
+        ) = None,
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
-    ) -> None:
+        dependencies: list[ProviderDependency] | None = None,
+    ) -> ContextManagerRegistrationDecorator[T]:
         """Register a context manager provider in the container."""
         decorator = ContextManagerRegistrationDecorator(
             container=self,
             scope=scope,
             lifetime=lifetime,
             provides=provides,
+            dependencies=dependencies,
         )
 
         if context_manager is None:
             return decorator
 
-        dependencies = self._provider_dependencies_extractor.extract_from_context_manager(
+        dependencies_for_provider = self._resolve_context_manager_registration_dependencies(
             context_manager=context_manager,
+            explicit_dependencies=dependencies,
         )
 
         self._providers_registrations.add(
@@ -192,11 +217,71 @@ class Container:
                 context_manager=context_manager,
                 lifetime=lifetime or self._default_lifetime,
                 scope=scope or self._root_scope,
-                dependencies=dependencies,
+                dependencies=dependencies_for_provider,
             ),
         )
 
         return decorator
+
+    def _resolve_concrete_registration_dependencies(
+        self,
+        *,
+        concrete_type: type[Any],
+        explicit_dependencies: list[ProviderDependency] | None,
+    ) -> list[ProviderDependency]:
+        if explicit_dependencies is None:
+            return self._provider_dependencies_extractor.extract_from_concrete_type(
+                concrete_type=concrete_type,
+            )
+        return self._provider_dependencies_extractor.validate_explicit_for_concrete_type(
+            concrete_type=concrete_type,
+            dependencies=explicit_dependencies,
+        )
+
+    def _resolve_factory_registration_dependencies(
+        self,
+        *,
+        factory: FactoryProvider[Any],
+        explicit_dependencies: list[ProviderDependency] | None,
+    ) -> list[ProviderDependency]:
+        if explicit_dependencies is None:
+            return self._provider_dependencies_extractor.extract_from_factory(
+                factory=factory,
+            )
+        return self._provider_dependencies_extractor.validate_explicit_for_factory(
+            factory=factory,
+            dependencies=explicit_dependencies,
+        )
+
+    def _resolve_generator_registration_dependencies(
+        self,
+        *,
+        generator: GeneratorProvider[Any],
+        explicit_dependencies: list[ProviderDependency] | None,
+    ) -> list[ProviderDependency]:
+        if explicit_dependencies is None:
+            return self._provider_dependencies_extractor.extract_from_generator(
+                generator=generator,
+            )
+        return self._provider_dependencies_extractor.validate_explicit_for_generator(
+            generator=generator,
+            dependencies=explicit_dependencies,
+        )
+
+    def _resolve_context_manager_registration_dependencies(
+        self,
+        *,
+        context_manager: ContextManagerProvider[Any],
+        explicit_dependencies: list[ProviderDependency] | None,
+    ) -> list[ProviderDependency]:
+        if explicit_dependencies is None:
+            return self._provider_dependencies_extractor.extract_from_context_manager(
+                context_manager=context_manager,
+            )
+        return self._provider_dependencies_extractor.validate_explicit_for_context_manager(
+            context_manager=context_manager,
+            dependencies=explicit_dependencies,
+        )
 
 
 @dataclass(slots=True, kw_only=True)
@@ -204,9 +289,10 @@ class ConcreteTypeRegistrationDecorator(Generic[T]):
     """A decorator for registering concrete type providers in the container."""
 
     container: Container
-    scope: BaseScope
-    lifetime: Lifetime
+    scope: BaseScope | None
+    lifetime: Lifetime | None
     provides: type[T] | None = None
+    dependencies: list[ProviderDependency] | None = None
 
     def __call__(self, concrete_type: type[T]) -> type[T]:
         """Register the concrete type provider in the container."""
@@ -215,6 +301,7 @@ class ConcreteTypeRegistrationDecorator(Generic[T]):
             concrete_type=concrete_type,
             scope=self.scope,
             lifetime=self.lifetime,
+            dependencies=self.dependencies,
         )
 
         return concrete_type
@@ -225,9 +312,10 @@ class FactoryRegistrationDecorator(Generic[T]):
     """A decorator for registering factory providers in the container."""
 
     container: Container
-    scope: BaseScope
-    lifetime: Lifetime
+    scope: BaseScope | None
+    lifetime: Lifetime | None
     provides: type[T] | None = None
+    dependencies: list[ProviderDependency] | None = None
 
     def __call__(self, factory: F) -> F:
         """Register the factory provider in the container."""
@@ -236,6 +324,7 @@ class FactoryRegistrationDecorator(Generic[T]):
             factory=factory,
             scope=self.scope,
             lifetime=self.lifetime,
+            dependencies=self.dependencies,
         )
 
         return factory
@@ -246,9 +335,10 @@ class GeneratorRegistrationDecorator(Generic[T]):
     """A decorator for registering generator providers in the container."""
 
     container: Container
-    scope: BaseScope
-    lifetime: Lifetime
+    scope: BaseScope | None
+    lifetime: Lifetime | None
     provides: type[T] | None = None
+    dependencies: list[ProviderDependency] | None = None
 
     def __call__(self, generator: F) -> F:
         """Register the generator provider in the container."""
@@ -257,6 +347,7 @@ class GeneratorRegistrationDecorator(Generic[T]):
             generator=generator,
             scope=self.scope,
             lifetime=self.lifetime,
+            dependencies=self.dependencies,
         )
 
         return generator
@@ -267,9 +358,10 @@ class ContextManagerRegistrationDecorator(Generic[T]):
     """A decorator for registering context manager providers in the container."""
 
     container: Container
-    scope: BaseScope
-    lifetime: Lifetime
+    scope: BaseScope | None
+    lifetime: Lifetime | None
     provides: type[T] | None = None
+    dependencies: list[ProviderDependency] | None = None
 
     def __call__(self, context_manager: F) -> F:
         """Register the context manager provider in the container."""
@@ -278,6 +370,7 @@ class ContextManagerRegistrationDecorator(Generic[T]):
             context_manager=context_manager,
             scope=self.scope,
             lifetime=self.lifetime,
+            dependencies=self.dependencies,
         )
 
         return context_manager
@@ -286,6 +379,19 @@ class ContextManagerRegistrationDecorator(Generic[T]):
 def main() -> None:
     container = Container()
     container.register_instance(int, instance=42)
+    container.register_factory(
+        float,
+        factory=lambda i: float(i) + 1,
+        dependencies=[
+            ProviderDependency(
+                provides=int,
+                parameter=inspect.Parameter(
+                    name="i",
+                    kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                ),
+            ),
+        ],
+    )
 
 
 if __name__ == "__main__":
