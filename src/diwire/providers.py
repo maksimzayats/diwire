@@ -6,7 +6,16 @@ from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from inspect import Parameter
-from typing import Any, ClassVar, TypeAlias, TypeVar, get_args, get_origin, get_type_hints
+from typing import (
+    Annotated,
+    Any,
+    ClassVar,
+    TypeAlias,
+    TypeVar,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 from diwire.exceptions import (
     DIWireInvalidProviderSpecError,
@@ -45,6 +54,12 @@ _MISSING_ANNOTATION: Any = object()
 _IMPLICIT_FIRST_PARAMETER_NAMES = {"self", "cls"}
 _COROUTINE_RESULT_INDEX = 2
 _COROUTINE_ARGUMENT_COUNT = 3
+_ASYNC_RESOLVER_ORIGINS: tuple[type[Any], ...] = (
+    Awaitable,
+    Coroutine,
+    AsyncGenerator,
+    AbstractAsyncContextManager,
+)
 
 
 @dataclass(kw_only=True)
@@ -68,6 +83,10 @@ class ProviderSpec:
     """An optional context manager function to manage the provided dependency, if applicable."""
     dependencies: list[ProviderDependency] = field(default_factory=list)
     """A list of dependencies required by this provider."""
+    is_async: bool
+    """Indicates whether the provider specification itself is asynchronous."""
+    is_any_dependency_async: bool
+    """Indicates whether any dependency requires asynchronous resolution."""
 
     lifetime: Lifetime | None = None
     """The lifetime of the provided dependency. Could be none in case of instance providers."""
@@ -80,19 +99,6 @@ class ProviderSpec:
     def __post_init__(self) -> None:
         self.__class__.SLOT_COUNTER += 1
         self.slot = self.SLOT_COUNTER
-
-    @property
-    def is_async(self) -> bool:
-        """Indicates whether the provider is asynchronous in nature."""
-        if self.factory is not None:
-            return inspect.iscoroutinefunction(self.factory)
-        if self.generator is not None:
-            return inspect.isasyncgenfunction(self.generator)
-        if self.context_manager is not None:
-            # TODO(Maksim): make sure it work with proper testing
-            return hasattr(self.context_manager, "__aenter__")
-
-        return False
 
 
 class Lifetime(Enum):
@@ -413,6 +419,54 @@ class ProviderDependency:
 class ProviderReturnTypeExtractor:
     """Extracts return types from user-defined provider objects."""
 
+    def is_factory_async(
+        self,
+        factory: FactoryProvider[Any],
+    ) -> bool:
+        """Check whether a factory provider itself is asynchronous."""
+        return inspect.iscoroutinefunction(factory) or self.return_annotation_matches_origins(
+            provider=factory,
+            expected_origins=(Awaitable, Coroutine),
+        )
+
+    def is_generator_async(
+        self,
+        generator: GeneratorProvider[Any],
+    ) -> bool:
+        """Check whether a generator provider itself is asynchronous."""
+        return inspect.isasyncgenfunction(generator) or self.return_annotation_matches_origins(
+            provider=generator,
+            expected_origins=(AsyncGenerator,),
+        )
+
+    def is_context_manager_async(
+        self,
+        context_manager: ContextManagerProvider[Any],
+    ) -> bool:
+        """Check whether a context manager provider itself is asynchronous."""
+        unwrapped_context_manager = inspect.unwrap(context_manager)
+        if inspect.isasyncgenfunction(unwrapped_context_manager):
+            return True
+        if inspect.iscoroutinefunction(unwrapped_context_manager):
+            return True
+        return self.return_annotation_matches_origins(
+            provider=unwrapped_context_manager,
+            expected_origins=(AbstractAsyncContextManager, AsyncGenerator),
+        )
+
+    def is_any_dependency_async(
+        self,
+        dependencies: list[ProviderDependency],
+    ) -> bool:
+        """Check whether provider dependencies require asynchronous resolution."""
+        return any(
+            self.annotation_matches_origins(
+                annotation=dependency.provides,
+                expected_origins=_ASYNC_RESOLVER_ORIGINS,
+            )
+            for dependency in dependencies
+        )
+
     def extract_from_factory(
         self,
         factory: FactoryProvider[Any],
@@ -501,6 +555,46 @@ class ProviderReturnTypeExtractor:
             )
 
         return yielded_type
+
+    def return_annotation_matches_origins(
+        self,
+        *,
+        provider: Callable[..., Any],
+        expected_origins: tuple[type[Any], ...],
+    ) -> bool:
+        """Check whether provider return annotation origin matches one of expected origins."""
+        return_annotation, _annotation_error = self._resolved_return_annotation(provider)
+        if return_annotation is _MISSING_ANNOTATION:
+            return False
+        return self.annotation_matches_origins(
+            annotation=return_annotation,
+            expected_origins=expected_origins,
+        )
+
+    def annotation_matches_origins(
+        self,
+        *,
+        annotation: Any,
+        expected_origins: tuple[type[Any], ...],
+    ) -> bool:
+        """Check whether annotation origin matches one of expected origins."""
+        annotation = self.unwrap_annotated(annotation)
+        origin = get_origin(annotation)
+        if origin in expected_origins:
+            return True
+        return annotation in expected_origins
+
+    def unwrap_annotated(
+        self,
+        annotation: Any,
+    ) -> Any:
+        """Recursively unwrap Annotated[T, ...] into T."""
+        if get_origin(annotation) is not Annotated:
+            return annotation
+        annotation_args = get_args(annotation)
+        if not annotation_args:
+            return annotation
+        return self.unwrap_annotated(annotation_args[0])
 
     def _resolved_return_annotation(
         self,

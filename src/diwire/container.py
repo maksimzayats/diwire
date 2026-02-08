@@ -60,6 +60,8 @@ class Container:
                 instance=instance,
                 lifetime=self._default_lifetime,
                 scope=self._root_scope,
+                is_async=False,
+                is_any_dependency_async=False,
             ),
         )
 
@@ -97,6 +99,9 @@ class Container:
             concrete_type=concrete_type,
             explicit_dependencies=dependencies,
         )
+        is_any_dependency_async = self._provider_return_type_extractor.is_any_dependency_async(
+            dependencies_for_provider,
+        )
 
         self._providers_registrations.add(
             ProviderSpec(
@@ -105,6 +110,8 @@ class Container:
                 lifetime=lifetime or self._default_lifetime,
                 scope=scope or self._root_scope,
                 dependencies=dependencies_for_provider,
+                is_async=False,
+                is_any_dependency_async=is_any_dependency_async,
             ),
         )
 
@@ -138,6 +145,10 @@ class Container:
             factory=factory,
             explicit_dependencies=dependencies,
         )
+        is_async = self._provider_return_type_extractor.is_factory_async(factory)
+        is_any_dependency_async = self._provider_return_type_extractor.is_any_dependency_async(
+            dependencies_for_provider,
+        )
 
         self._providers_registrations.add(
             ProviderSpec(
@@ -146,6 +157,8 @@ class Container:
                 lifetime=lifetime or self._default_lifetime,
                 scope=scope or self._root_scope,
                 dependencies=dependencies_for_provider,
+                is_async=is_async,
+                is_any_dependency_async=is_any_dependency_async,
             ),
         )
 
@@ -183,6 +196,10 @@ class Container:
             generator=generator,
             explicit_dependencies=dependencies,
         )
+        is_async = self._provider_return_type_extractor.is_generator_async(generator)
+        is_any_dependency_async = self._provider_return_type_extractor.is_any_dependency_async(
+            dependencies_for_provider,
+        )
 
         self._providers_registrations.add(
             ProviderSpec(
@@ -191,6 +208,8 @@ class Container:
                 lifetime=lifetime or self._default_lifetime,
                 scope=scope or self._root_scope,
                 dependencies=dependencies_for_provider,
+                is_async=is_async,
+                is_any_dependency_async=is_any_dependency_async,
             ),
         )
 
@@ -230,6 +249,10 @@ class Container:
             context_manager=context_manager,
             explicit_dependencies=dependencies,
         )
+        is_async = self._provider_return_type_extractor.is_context_manager_async(context_manager)
+        is_any_dependency_async = self._provider_return_type_extractor.is_any_dependency_async(
+            dependencies_for_provider,
+        )
 
         self._providers_registrations.add(
             ProviderSpec(
@@ -238,6 +261,8 @@ class Container:
                 lifetime=lifetime or self._default_lifetime,
                 scope=scope or self._root_scope,
                 dependencies=dependencies_for_provider,
+                is_async=is_async,
+                is_any_dependency_async=is_any_dependency_async,
             ),
         )
 

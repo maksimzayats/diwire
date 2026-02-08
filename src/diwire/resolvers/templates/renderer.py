@@ -4,7 +4,7 @@ from jinja2 import Environment
 
 from diwire.providers import ProvidersRegistrations
 from diwire.resolvers.templates.templates import RESOLVERS_CODE_TEMPLATE
-from diwire.scope import BaseScope, Scope, Scopes
+from diwire.scope import BaseScope, BaseScopes, Scope
 
 
 class RenderContext(TypedDict):
@@ -16,7 +16,7 @@ class RenderContext(TypedDict):
     The singletons and transient registrations will be rendered in the root resolver.
     """
 
-    scopes: Scopes
+    scopes: type[BaseScopes]
     """An enum-like class representing different scopes."""
 
     registrations: ProvidersRegistrations
@@ -32,12 +32,15 @@ class ResolversTemplateRenderer:
 
     def render(
         self,
+        *,
         root_scope: BaseScope,
+        registrations: ProvidersRegistrations,
     ) -> str:
         """Render the resolver template with the given context."""
         context = RenderContext(
+            root_scope=root_scope,
             scopes=root_scope.owner,
-            registrations=root_scope,
+            registrations=registrations,
         )
         return self._root_template.render(**context)
 
@@ -45,7 +48,7 @@ class ResolversTemplateRenderer:
 def main() -> None:
     renderer = ResolversTemplateRenderer()
     rendered_code = renderer.render(
-        Scope=Scope,
+        root_scope=Scope.APP,
         registrations=ProvidersRegistrations(),
     )
     print(rendered_code)  # noqa: T201
