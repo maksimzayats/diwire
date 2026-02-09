@@ -14,7 +14,9 @@ _BENCHMARK_ROUNDS = 5
 def test_benchmark_diwire_enter_scope_open_close(benchmark: Any) -> None:
     container = DIWireContainer(default_concurrency_safe=False)
     container.register_instance(int, instance=42)
-    _ = container.resolve(int)
+    assert container.resolve(int) == 42
+    with container.enter_scope() as scope:
+        assert scope.resolve(int) == 42
 
     def bench_diwire_enter_scope() -> None:
         with container.enter_scope():
@@ -32,7 +34,9 @@ def test_benchmark_rodi_enter_scope_open_close(benchmark: Any) -> None:
     rodi_container = rodi.Container()
     rodi_container.add_singleton_by_factory(lambda: 42, int)
     services = rodi_container.build_provider()
-    _ = services.get(int)
+    assert services.get(int) == 42
+    with services.create_scope() as scope:
+        assert scope.get(int) == 42
 
     def bench_rodi_enter_scope() -> None:
         with services.create_scope():
