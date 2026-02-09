@@ -679,6 +679,179 @@ def test_cleanup_does_not_override_active_body_exception() -> None:
 
 
 @pytest.mark.asyncio
+async def test_async_cleanup_callbacks_execute_in_lifo_order_and_drain_stack() -> None:
+    events: list[str] = []
+
+    class _SyncContext:
+        def __enter__(self) -> _Resource:
+            events.append("sync-enter")
+            return _Resource()
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            events.append("sync-exit")
+
+    class _AsyncContext:
+        async def __aenter__(self) -> _SingletonService:
+            events.append("async-enter")
+            return _SingletonService()
+
+        async def __aexit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            events.append("async-exit")
+
+    def provide_sync() -> _SyncContext:
+        return _SyncContext()
+
+    def provide_async() -> AbstractAsyncContextManager[_SingletonService]:
+        return _AsyncContext()
+
+    class _Both:
+        def __init__(self, first: _Resource, second: _SingletonService) -> None:
+            self.first = first
+            self.second = second
+
+    container = Container()
+    container.register_context_manager(
+        _Resource,
+        context_manager=provide_sync,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_context_manager(
+        _SingletonService,
+        context_manager=provide_async,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_concrete(
+        _Both,
+        concrete_type=_Both,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    request_scope: Any = None
+    async with container.enter_scope() as opened_scope:
+        request_scope = opened_scope
+        await opened_scope.aresolve(_Both)
+
+    assert events == ["sync-enter", "async-enter", "async-exit", "sync-exit"]
+    assert request_scope._cleanup_callbacks == []
+
+
+@pytest.mark.asyncio
+async def test_async_cleanup_keeps_first_cleanup_error_when_multiple_callbacks_fail() -> None:
+    class _FirstAsyncContext:
+        async def __aenter__(self) -> _Resource:
+            return _Resource()
+
+        async def __aexit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            raise RuntimeError("first-async-exit-error")
+
+    class _SecondAsyncContext:
+        async def __aenter__(self) -> _SingletonService:
+            return _SingletonService()
+
+        async def __aexit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            raise RuntimeError("second-async-exit-error")
+
+    def provide_first() -> AbstractAsyncContextManager[_Resource]:
+        return _FirstAsyncContext()
+
+    def provide_second() -> AbstractAsyncContextManager[_SingletonService]:
+        return _SecondAsyncContext()
+
+    class _Both:
+        def __init__(self, first: _Resource, second: _SingletonService) -> None:
+            self.first = first
+            self.second = second
+
+    container = Container()
+    container.register_context_manager(
+        _Resource,
+        context_manager=provide_first,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_context_manager(
+        _SingletonService,
+        context_manager=provide_second,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_concrete(
+        _Both,
+        concrete_type=_Both,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with pytest.raises(RuntimeError, match="second-async-exit-error"):
+        async with container.enter_scope() as request_scope:
+            await request_scope.aresolve(_Both)
+
+
+@pytest.mark.asyncio
+async def test_async_cleanup_does_not_override_body_exception_and_forwards_exc_info() -> None:
+    received: dict[str, object | None] = {
+        "exc_type": None,
+        "exc_value": None,
+    }
+
+    class _TrackingAsyncContext:
+        async def __aenter__(self) -> _Resource:
+            return _Resource()
+
+        async def __aexit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            received["exc_type"] = exc_type
+            received["exc_value"] = exc_value
+            raise RuntimeError("async cleanup boom")
+
+    def provide_resource() -> AbstractAsyncContextManager[_Resource]:
+        return _TrackingAsyncContext()
+
+    container = Container()
+    container.register_context_manager(
+        _Resource,
+        context_manager=provide_resource,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with pytest.raises(ValueError, match="async body boom"):
+        async with container.enter_scope() as request_scope:
+            await request_scope.aresolve(_Resource)
+            raise ValueError("async body boom")
+
+    assert received["exc_type"] is ValueError
+    assert isinstance(received["exc_value"], ValueError)
+
+
+@pytest.mark.asyncio
 async def test_async_generator_dependency_chain_requires_aresolve() -> None:
     async def provide_resource() -> AsyncGenerator[_Resource, None]:
         yield _Resource()
