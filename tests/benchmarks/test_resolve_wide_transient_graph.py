@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+from typing import Any
+
+import rodi
+
+from diwire.container import Container as DIWireContainer
+from diwire.providers import Lifetime
+from tests.benchmarks.helpers import run_benchmark
+
+
+class _DepA:
+    pass
+
+
+class _DepB:
+    pass
+
+
+class _DepC:
+    pass
+
+
+class _DepD:
+    pass
+
+
+class _DepE:
+    pass
+
+
+class _Root:
+    def __init__(
+        self,
+        dep_a: _DepA,
+        dep_b: _DepB,
+        dep_c: _DepC,
+        dep_d: _DepD,
+        dep_e: _DepE,
+    ) -> None:
+        self.dep_a = dep_a
+        self.dep_b = dep_b
+        self.dep_c = dep_c
+        self.dep_d = dep_d
+        self.dep_e = dep_e
+
+
+def test_benchmark_diwire_resolve_wide_transient_graph(benchmark: Any) -> None:
+    container = DIWireContainer(default_concurrency_safe=False)
+    container.register_concrete(_DepA, lifetime=Lifetime.TRANSIENT)
+    container.register_concrete(_DepB, lifetime=Lifetime.TRANSIENT)
+    container.register_concrete(_DepC, lifetime=Lifetime.TRANSIENT)
+    container.register_concrete(_DepD, lifetime=Lifetime.TRANSIENT)
+    container.register_concrete(_DepE, lifetime=Lifetime.TRANSIENT)
+    container.register_concrete(_Root, lifetime=Lifetime.TRANSIENT)
+    first = container.resolve(_Root)
+    second = container.resolve(_Root)
+    assert first is not second
+    assert first.dep_a is not second.dep_a
+    assert first.dep_b is not second.dep_b
+    assert first.dep_c is not second.dep_c
+    assert first.dep_d is not second.dep_d
+    assert first.dep_e is not second.dep_e
+
+    def bench_diwire_wide_graph() -> None:
+        _ = container.resolve(_Root)
+
+    run_benchmark(benchmark, bench_diwire_wide_graph, iterations=25_000)
+
+
+def test_benchmark_rodi_resolve_wide_transient_graph(benchmark: Any) -> None:
+    rodi_container = rodi.Container()
+    rodi_container.add_transient(_DepA)
+    rodi_container.add_transient(_DepB)
+    rodi_container.add_transient(_DepC)
+    rodi_container.add_transient(_DepD)
+    rodi_container.add_transient(_DepE)
+    rodi_container.add_transient(_Root)
+    services = rodi_container.build_provider()
+    first = services.get(_Root)
+    second = services.get(_Root)
+    assert first is not second
+    assert first.dep_a is not second.dep_a
+    assert first.dep_b is not second.dep_b
+    assert first.dep_c is not second.dep_c
+    assert first.dep_d is not second.dep_d
+    assert first.dep_e is not second.dep_e
+
+    def bench_rodi_wide_graph() -> None:
+        _ = services.get(_Root)
+
+    run_benchmark(benchmark, bench_rodi_wide_graph, iterations=25_000)
