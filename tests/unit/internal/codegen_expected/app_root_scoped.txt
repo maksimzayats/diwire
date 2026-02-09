@@ -4,7 +4,7 @@ import threading
 
 
 from types import TracebackType
-from typing import Any
+from typing import Any, NoReturn
 
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
@@ -12,7 +12,6 @@ from diwire.exceptions import (
     DIWireScopeMismatchError,
 )
 from diwire.providers import ProvidersRegistrations
-from diwire.resolvers.protocol import ResolverProtocol
 
 _MISSING_RESOLVER: Any = object()
 _MISSING_CACHE: Any = object()
@@ -37,7 +36,7 @@ class RootResolver:
         self._root_resolver = self
         self._app_resolver = self._root_resolver
 
-    def enter_scope(self, scope: Any | None = None) -> ResolverProtocol:
+    def enter_scope(self, scope: Any | None = None) -> RootResolver | _SessionResolver | _RequestResolver:
         if scope is None:
             return _RequestResolver(
                 self._root_resolver,
@@ -80,7 +79,7 @@ class RootResolver:
         msg = f"Dependency {dependency!r} is not registered."
         raise DIWireDependencyNotRegisteredError(msg)
 
-    def __enter__(self) -> ResolverProtocol:
+    def __enter__(self) -> RootResolver:
         return self
 
     def __exit__(
@@ -91,7 +90,7 @@ class RootResolver:
     ) -> None:
         return None
 
-    async def __aenter__(self) -> ResolverProtocol:
+    async def __aenter__(self) -> RootResolver:
         return self
 
     async def __aexit__(
@@ -131,7 +130,7 @@ class _SessionResolver:
         self._session_resolver = self
         self._cache_1 = _MISSING_CACHE
 
-    def enter_scope(self, scope: Any | None = None) -> ResolverProtocol:
+    def enter_scope(self, scope: Any | None = None) -> _SessionResolver | _RequestResolver:
         if scope is None:
             return _RequestResolver(
                 self._root_resolver,
@@ -169,7 +168,7 @@ class _SessionResolver:
         msg = f"Dependency {dependency!r} is not registered."
         raise DIWireDependencyNotRegisteredError(msg)
 
-    def __enter__(self) -> ResolverProtocol:
+    def __enter__(self) -> _SessionResolver:
         return self
 
     def __exit__(
@@ -180,7 +179,7 @@ class _SessionResolver:
     ) -> None:
         return None
 
-    async def __aenter__(self) -> ResolverProtocol:
+    async def __aenter__(self) -> _SessionResolver:
         return self
 
     async def __aexit__(
@@ -203,12 +202,12 @@ class _SessionResolver:
                 return cached_value
             value = _provider_1()
             self._cache_1 = value
-            self.resolve_1 = lambda: value
+            self.resolve_1 = lambda: value  # type: ignore[method-assign]
 
             async def _cached() -> Any:
                 return value
 
-            self.aresolve_1 = _cached
+            self.aresolve_1 = _cached  # type: ignore[method-assign]
             return value
 
     async def aresolve_1(self) -> Any:
@@ -237,7 +236,7 @@ class _RequestResolver:
         self._request_resolver = self
         self._cache_2 = _MISSING_CACHE
 
-    def enter_scope(self, scope: Any | None = None) -> ResolverProtocol:
+    def enter_scope(self, scope: Any | None = None) -> _RequestResolver | _ActionResolver:
         if scope is None:
             return _ActionResolver(
                 self._root_resolver,
@@ -277,7 +276,7 @@ class _RequestResolver:
         msg = f"Dependency {dependency!r} is not registered."
         raise DIWireDependencyNotRegisteredError(msg)
 
-    def __enter__(self) -> ResolverProtocol:
+    def __enter__(self) -> _RequestResolver:
         return self
 
     def __exit__(
@@ -288,7 +287,7 @@ class _RequestResolver:
     ) -> None:
         return None
 
-    async def __aenter__(self) -> ResolverProtocol:
+    async def __aenter__(self) -> _RequestResolver:
         return self
 
     async def __aexit__(
@@ -323,12 +322,12 @@ class _RequestResolver:
                 session=self.resolve_1(),
             )
             self._cache_2 = value
-            self.resolve_2 = lambda: value
+            self.resolve_2 = lambda: value  # type: ignore[method-assign]
 
             async def _cached() -> Any:
                 return value
 
-            self.aresolve_2 = _cached
+            self.aresolve_2 = _cached  # type: ignore[method-assign]
             return value
 
     async def aresolve_2(self) -> Any:
@@ -351,7 +350,7 @@ class _ActionResolver:
         self._request_resolver = request_resolver
         self._action_resolver = self
 
-    def enter_scope(self, scope: Any | None = None) -> ResolverProtocol:
+    def enter_scope(self, scope: Any | None = None) -> _ActionResolver | _StepResolver:
         if scope is None:
             return _StepResolver(
                 self._root_resolver,
@@ -393,7 +392,7 @@ class _ActionResolver:
         msg = f"Dependency {dependency!r} is not registered."
         raise DIWireDependencyNotRegisteredError(msg)
 
-    def __enter__(self) -> ResolverProtocol:
+    def __enter__(self) -> _ActionResolver:
         return self
 
     def __exit__(
@@ -404,7 +403,7 @@ class _ActionResolver:
     ) -> None:
         return None
 
-    async def __aenter__(self) -> ResolverProtocol:
+    async def __aenter__(self) -> _ActionResolver:
         return self
 
     async def __aexit__(
@@ -455,7 +454,7 @@ class _StepResolver:
         self._action_resolver = action_resolver
         self._step_resolver = self
 
-    def enter_scope(self, scope: Any | None = None) -> ResolverProtocol:
+    def enter_scope(self, scope: Any | None = None) -> NoReturn:
         msg = f"Cannot enter deeper scope from level {self._scope_level}."
         raise DIWireScopeMismatchError(msg)
 
@@ -475,7 +474,7 @@ class _StepResolver:
         msg = f"Dependency {dependency!r} is not registered."
         raise DIWireDependencyNotRegisteredError(msg)
 
-    def __enter__(self) -> ResolverProtocol:
+    def __enter__(self) -> _StepResolver:
         return self
 
     def __exit__(
@@ -486,7 +485,7 @@ class _StepResolver:
     ) -> None:
         return None
 
-    async def __aenter__(self) -> ResolverProtocol:
+    async def __aenter__(self) -> _StepResolver:
         return self
 
     async def __aexit__(
@@ -522,7 +521,7 @@ def build_root_resolver(
     registrations: ProvidersRegistrations,
     *,
     cleanup_enabled: bool = True,
-) -> ResolverProtocol:
+) -> RootResolver:
     global _dep_1_type, _provider_1
     global _dep_2_type, _provider_2
 

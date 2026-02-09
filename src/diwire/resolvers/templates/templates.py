@@ -24,7 +24,7 @@ IMPORTS_TEMPLATE = dedent(
     from contextlib import asynccontextmanager, contextmanager
     {% endif %}
     from types import TracebackType
-    from typing import Any
+    from typing import Any, NoReturn
 
     from diwire.exceptions import (
         DIWireAsyncDependencyInSyncContextError,
@@ -32,7 +32,6 @@ IMPORTS_TEMPLATE = dedent(
         DIWireScopeMismatchError,
     )
     from diwire.providers import ProvidersRegistrations
-    from diwire.resolvers.protocol import ResolverProtocol
     """,
 ).strip()
 
@@ -87,7 +86,7 @@ INIT_METHOD_TEMPLATE = dedent(
 
 ENTER_SCOPE_METHOD_TEMPLATE = dedent(
     """
-    def enter_scope(self, scope: Any | None = None) -> ResolverProtocol:
+    def enter_scope(self, scope: Any | None = None) -> {{ return_annotation }}:
     {{ body_block }}
     """,
 ).strip()
@@ -108,14 +107,14 @@ DISPATCH_ARESOLVE_METHOD_TEMPLATE = dedent(
 
 CONTEXT_ENTER_METHOD_TEMPLATE = dedent(
     """
-    def __enter__(self) -> ResolverProtocol:
+    def __enter__(self) -> {{ return_annotation }}:
         return self
     """,
 ).strip()
 
 CONTEXT_AENTER_METHOD_TEMPLATE = dedent(
     """
-    async def __aenter__(self) -> ResolverProtocol:
+    async def __aenter__(self) -> {{ return_annotation }}:
         return self
     """,
 ).strip()
@@ -215,7 +214,7 @@ BUILD_FUNCTION_TEMPLATE = dedent(
         registrations: ProvidersRegistrations,
         *,
         cleanup_enabled: bool = True,
-    ) -> ResolverProtocol:
+    ) -> {{ return_annotation }}:
     {{ body_block }}
     """,
 ).strip()

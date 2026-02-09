@@ -57,6 +57,8 @@ class ResolversTemplateRenderer:
         self._class_template = self._template(CLASS_TEMPLATE)
         self._init_method_template = self._template(INIT_METHOD_TEMPLATE)
         self._enter_scope_method_template = self._template(ENTER_SCOPE_METHOD_TEMPLATE)
+        self._context_enter_method_template = self._template(CONTEXT_ENTER_METHOD_TEMPLATE)
+        self._context_aenter_method_template = self._template(CONTEXT_AENTER_METHOD_TEMPLATE)
         self._resolve_dispatch_template = self._template(DISPATCH_RESOLVE_METHOD_TEMPLATE)
         self._aresolve_dispatch_template = self._template(DISPATCH_ARESOLVE_METHOD_TEMPLATE)
         self._sync_method_template = self._template(SYNC_METHOD_TEMPLATE)
@@ -186,15 +188,21 @@ class ResolversTemplateRenderer:
         resolver_methods_block = "\n\n".join(
             self._indent_block(method) for method in resolver_methods
         )
+        enter_method_block = self._context_enter_method_template.render(
+            return_annotation=class_plan.class_name,
+        ).strip()
+        aenter_method_block = self._context_aenter_method_template.render(
+            return_annotation=class_plan.class_name,
+        ).strip()
         return self._class_template.render(
             class_name=class_plan.class_name,
             init_method_block=init_method_block,
             enter_scope_method_block=enter_scope_method_block,
             resolve_method_block=resolve_method_block,
             aresolve_method_block=aresolve_method_block,
-            enter_method_block=self._indent_block(CONTEXT_ENTER_METHOD_TEMPLATE),
+            enter_method_block=self._indent_block(enter_method_block),
             exit_method_block=exit_method_block,
-            aenter_method_block=self._indent_block(CONTEXT_AENTER_METHOD_TEMPLATE),
+            aenter_method_block=self._indent_block(aenter_method_block),
             aexit_method_block=aexit_method_block,
             resolver_methods_block=resolver_methods_block,
         ).strip()
@@ -305,8 +313,13 @@ class ResolversTemplateRenderer:
             plan=plan,
             class_scope_level=class_plan.scope_level,
         )
+        return_annotation = self._enter_scope_return_annotation(
+            class_plan=class_plan,
+            explicit_candidates=explicit_candidates,
+        )
         if immediate_next is None:
             return self._enter_scope_method_template.render(
+                return_annotation=return_annotation,
                 body_block=self._join_lines(
                     self._indent_lines(
                         [
@@ -371,8 +384,22 @@ class ResolversTemplateRenderer:
             ],
         )
         return self._enter_scope_method_template.render(
+            return_annotation=return_annotation,
             body_block=self._join_lines(self._indent_lines(body_lines, 1)),
         ).strip()
+
+    def _enter_scope_return_annotation(
+        self,
+        *,
+        class_plan: ScopePlan,
+        explicit_candidates: tuple[ScopePlan, ...],
+    ) -> str:
+        if not explicit_candidates:
+            return "NoReturn"
+        possible_returns = [class_plan.class_name]
+        possible_returns.extend(scope.class_name for scope in explicit_candidates)
+        unique_returns = self._unique_ordered(possible_returns)
+        return " | ".join(unique_returns)
 
     def _constructor_return_lines(
         self,
@@ -831,12 +858,12 @@ class ResolversTemplateRenderer:
             return []
         return [
             f"self._cache_{workflow.slot} = value",
-            f"self.resolve_{workflow.slot} = lambda: value",
+            f"self.resolve_{workflow.slot} = lambda: value  # type: ignore[method-assign]",
             "",
             "async def _cached() -> Any:",
             "    return value",
             "",
-            f"self.aresolve_{workflow.slot} = _cached",
+            f"self.aresolve_{workflow.slot} = _cached  # type: ignore[method-assign]",
         ]
 
     def _render_async_cache_replace(self, *, workflow: ProviderWorkflowPlan) -> list[str]:
@@ -848,7 +875,7 @@ class ResolversTemplateRenderer:
             "async def _cached() -> Any:",
             "    return value",
             "",
-            f"self.aresolve_{workflow.slot} = _cached",
+            f"self.aresolve_{workflow.slot} = _cached  # type: ignore[method-assign]",
         ]
 
     def _render_callable_call(
@@ -888,6 +915,7 @@ class ResolversTemplateRenderer:
 
         body_lines.append("return RootResolver(cleanup_enabled)")
         return self._build_function_template.render(
+            return_annotation="RootResolver",
             body_block=self._join_lines(self._indent_lines(body_lines, 1)),
         ).strip()
 
@@ -928,6 +956,16 @@ class ResolversTemplateRenderer:
 
     def _join_lines(self, lines: list[str]) -> str:
         return "\n".join(lines)
+
+    def _unique_ordered(self, values: list[str]) -> list[str]:
+        seen: set[str] = set()
+        unique_values: list[str] = []
+        for value in values:
+            if value in seen:
+                continue
+            seen.add(value)
+            unique_values.append(value)
+        return unique_values
 
 
 def main() -> None:
