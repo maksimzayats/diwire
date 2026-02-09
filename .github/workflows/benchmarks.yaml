@@ -1,0 +1,60 @@
+name: Benchmarks
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmarks:
+    name: Benchmark Report (Python 3.14)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.14
+        run: uv python install 3.14
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run benchmark suite
+        run: |
+          mkdir -p benchmark-results
+          uv run pytest tests/benchmarks --benchmark-only -q --benchmark-json=benchmark-results/raw-benchmark.json
+
+      - name: Generate benchmark table artifacts
+        run: |
+          uv run python -m tools.benchmark_reporting \
+            --input benchmark-results/raw-benchmark.json \
+            --markdown benchmark-results/benchmark-table.md \
+            --json benchmark-results/benchmark-table.json \
+            --comment benchmark-results/pr-comment.md
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-results/*
+
+      - name: Post sticky benchmark comment
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: benchmark-results
+          path: benchmark-results/pr-comment.md

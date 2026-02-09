@@ -1,4 +1,4 @@
-.PHONY: format lint test docs benchmark
+.PHONY: format lint test docs benchmark benchmark-json benchmark-report
 
 format:
 	uv run ruff format .
@@ -34,3 +34,14 @@ benchmark:
 	uv run pytest tests/benchmarks/test_resolve_transient.py --benchmark-only --benchmark-columns=ops -q
 	uv run pytest tests/benchmarks/test_resolve_scoped.py --benchmark-only --benchmark-columns=ops -q
 	uv run pytest tests/benchmarks/test_resolve_mixed_lifetimes.py --benchmark-only --benchmark-columns=ops -q
+
+benchmark-json:
+	mkdir -p benchmark-results
+	uv run pytest tests/benchmarks --benchmark-only -q --benchmark-json=benchmark-results/raw-benchmark.json
+
+benchmark-report: benchmark-json
+	uv run python -m tools.benchmark_reporting \
+		--input benchmark-results/raw-benchmark.json \
+		--markdown benchmark-results/benchmark-table.md \
+		--json benchmark-results/benchmark-table.json \
+		--comment benchmark-results/pr-comment.md
