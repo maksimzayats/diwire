@@ -21,6 +21,7 @@ from diwire.resolvers.templates.planner import (
     ScopePlan,
 )
 from diwire.resolvers.templates.renderer import (
+    DependencyExpressionContext,
     ResolversTemplateRenderer,
 )
 from diwire.scope import Scope
@@ -872,11 +873,320 @@ def test_renderer_dependency_expression_delegates_to_root_scope_when_safe() -> N
         dependency_workflow=dependency_workflow,
         dependency_requires_async=False,
         is_async_call=False,
-        class_scope_level=Scope.REQUEST.level,
-        root_scope=root_scope,
+        context=DependencyExpressionContext(
+            class_scope_level=Scope.REQUEST.level,
+            root_scope=root_scope,
+            workflow_by_slot={dependency_workflow.slot: dependency_workflow},
+        ),
     )
 
     assert expression == "self._app_resolver.resolve_3()"
+
+
+def test_inline_root_sync_dependency_expression_returns_none_for_non_callable_provider() -> None:
+    renderer = ResolversTemplateRenderer()
+    workflow = replace(
+        _make_workflow_plan(
+            slot=2,
+            provider_attribute="instance",
+            is_cached=False,
+            scope_level=Scope.APP.level,
+        ),
+        max_required_scope_level=Scope.APP.level,
+    )
+    root_scope = ScopePlan(
+        scope_name="app",
+        scope_level=Scope.APP.level,
+        class_name="RootResolver",
+        resolver_arg_name="root_resolver",
+        resolver_attr_name="_root_resolver",
+        skippable=False,
+        is_root=True,
+    )
+    context = DependencyExpressionContext(
+        class_scope_level=Scope.REQUEST.level,
+        root_scope=root_scope,
+        workflow_by_slot={workflow.slot: workflow},
+    )
+
+    assert (
+        renderer._inline_root_sync_dependency_expression(
+            dependency_workflow=workflow,
+            dependency_requires_async=False,
+            context=context,
+            depth=0,
+        )
+        is None
+    )
+
+
+def test_inline_root_sync_dependency_expression_renders_factory_call() -> None:
+    renderer = ResolversTemplateRenderer()
+    workflow = replace(
+        _make_workflow_plan(
+            slot=5,
+            provider_attribute="factory",
+            is_cached=False,
+            scope_level=Scope.APP.level,
+        ),
+        max_required_scope_level=Scope.APP.level,
+    )
+    root_scope = ScopePlan(
+        scope_name="app",
+        scope_level=Scope.APP.level,
+        class_name="RootResolver",
+        resolver_arg_name="root_resolver",
+        resolver_attr_name="_root_resolver",
+        skippable=False,
+        is_root=True,
+    )
+    context = DependencyExpressionContext(
+        class_scope_level=Scope.REQUEST.level,
+        root_scope=root_scope,
+        workflow_by_slot={workflow.slot: workflow},
+    )
+
+    expression = renderer._inline_root_sync_dependency_expression(
+        dependency_workflow=workflow,
+        dependency_requires_async=False,
+        context=context,
+        depth=0,
+    )
+
+    assert expression == "_provider_5()"
+
+
+def test_inline_root_nested_dependency_expression_falls_back_to_root_resolve() -> None:
+    renderer = ResolversTemplateRenderer()
+    signature = inspect.signature(_provide_dependency_shape_service)
+    dependency = ProviderDependency(
+        provides=int,
+        parameter=signature.parameters["positional"],
+    )
+    parent_workflow = replace(
+        _make_workflow_plan(
+            slot=1,
+            provider_attribute="factory",
+            is_cached=False,
+            scope_level=Scope.APP.level,
+        ),
+        max_required_scope_level=Scope.APP.level,
+        dependencies=(dependency,),
+        dependency_slots=(2,),
+        dependency_requires_async=(False,),
+        dependency_order_is_signature_order=True,
+    )
+    nested_workflow = replace(
+        _make_workflow_plan(
+            slot=2,
+            provider_attribute="instance",
+            is_cached=False,
+            scope_level=Scope.APP.level,
+        ),
+        max_required_scope_level=Scope.APP.level,
+    )
+    root_scope = ScopePlan(
+        scope_name="app",
+        scope_level=Scope.APP.level,
+        class_name="RootResolver",
+        resolver_arg_name="root_resolver",
+        resolver_attr_name="_root_resolver",
+        skippable=False,
+        is_root=True,
+    )
+    context = DependencyExpressionContext(
+        class_scope_level=Scope.REQUEST.level,
+        root_scope=root_scope,
+        workflow_by_slot={
+            parent_workflow.slot: parent_workflow,
+            nested_workflow.slot: nested_workflow,
+        },
+    )
+
+    expression = renderer._inline_root_nested_dependency_expression(
+        slot=nested_workflow.slot,
+        requires_async=False,
+        context=context,
+        depth=0,
+    )
+
+    assert expression == "self._root_resolver.resolve_2()"
+
+
+def test_inline_root_sync_dependency_expression_returns_none_when_argument_inlining_fails() -> None:
+    renderer = ResolversTemplateRenderer()
+    signature = inspect.signature(_provide_dependency_shape_service)
+    dependency = ProviderDependency(
+        provides=int,
+        parameter=signature.parameters["positional"],
+    )
+    parent_workflow = replace(
+        _make_workflow_plan(
+            slot=7,
+            provider_attribute="factory",
+            is_cached=False,
+            scope_level=Scope.APP.level,
+        ),
+        max_required_scope_level=Scope.APP.level,
+        dependencies=(dependency,),
+        dependency_slots=(8,),
+        dependency_requires_async=(True,),
+        dependency_order_is_signature_order=True,
+    )
+    nested_workflow = replace(
+        _make_workflow_plan(
+            slot=8,
+            provider_attribute="instance",
+            is_cached=False,
+            scope_level=Scope.APP.level,
+        ),
+        max_required_scope_level=Scope.APP.level,
+    )
+    root_scope = ScopePlan(
+        scope_name="app",
+        scope_level=Scope.APP.level,
+        class_name="RootResolver",
+        resolver_arg_name="root_resolver",
+        resolver_attr_name="_root_resolver",
+        skippable=False,
+        is_root=True,
+    )
+    context = DependencyExpressionContext(
+        class_scope_level=Scope.REQUEST.level,
+        root_scope=root_scope,
+        workflow_by_slot={
+            parent_workflow.slot: parent_workflow,
+            nested_workflow.slot: nested_workflow,
+        },
+    )
+
+    expression = renderer._inline_root_sync_dependency_expression(
+        dependency_workflow=parent_workflow,
+        dependency_requires_async=False,
+        context=context,
+        depth=0,
+    )
+
+    assert expression is None
+
+
+def test_inline_root_nested_dependency_expression_returns_inlined_expression_when_available() -> (
+    None
+):
+    renderer = ResolversTemplateRenderer()
+    nested_workflow = replace(
+        _make_workflow_plan(
+            slot=4,
+            provider_attribute="factory",
+            is_cached=False,
+            scope_level=Scope.APP.level,
+        ),
+        max_required_scope_level=Scope.APP.level,
+    )
+    root_scope = ScopePlan(
+        scope_name="app",
+        scope_level=Scope.APP.level,
+        class_name="RootResolver",
+        resolver_arg_name="root_resolver",
+        resolver_attr_name="_root_resolver",
+        skippable=False,
+        is_root=True,
+    )
+    context = DependencyExpressionContext(
+        class_scope_level=Scope.REQUEST.level,
+        root_scope=root_scope,
+        workflow_by_slot={nested_workflow.slot: nested_workflow},
+    )
+
+    expression = renderer._inline_root_nested_dependency_expression(
+        slot=nested_workflow.slot,
+        requires_async=False,
+        context=context,
+        depth=0,
+    )
+
+    assert expression == "_provider_4()"
+
+
+def test_inline_root_nested_dependency_expression_returns_none_for_scope_mismatch() -> None:
+    renderer = ResolversTemplateRenderer()
+    nested_workflow = replace(
+        _make_workflow_plan(
+            slot=6,
+            provider_attribute="instance",
+            is_cached=False,
+            scope_level=Scope.SESSION.level,
+        ),
+        max_required_scope_level=Scope.SESSION.level,
+    )
+    root_scope = ScopePlan(
+        scope_name="app",
+        scope_level=Scope.APP.level,
+        class_name="RootResolver",
+        resolver_arg_name="root_resolver",
+        resolver_attr_name="_root_resolver",
+        skippable=False,
+        is_root=True,
+    )
+    context = DependencyExpressionContext(
+        class_scope_level=Scope.REQUEST.level,
+        root_scope=root_scope,
+        workflow_by_slot={nested_workflow.slot: nested_workflow},
+    )
+
+    expression = renderer._inline_root_nested_dependency_expression(
+        slot=nested_workflow.slot,
+        requires_async=False,
+        context=context,
+        depth=0,
+    )
+
+    assert expression is None
+
+
+def test_inline_root_nested_dependency_expression_returns_none_for_root_scope_limit_and_async() -> (
+    None
+):
+    renderer = ResolversTemplateRenderer()
+    nested_workflow = replace(
+        _make_workflow_plan(
+            slot=9,
+            provider_attribute="instance",
+            is_cached=False,
+            scope_level=Scope.APP.level,
+        ),
+        max_required_scope_level=Scope.SESSION.level,
+    )
+    root_scope = ScopePlan(
+        scope_name="app",
+        scope_level=Scope.APP.level,
+        class_name="RootResolver",
+        resolver_arg_name="root_resolver",
+        resolver_attr_name="_root_resolver",
+        skippable=False,
+        is_root=True,
+    )
+    context = DependencyExpressionContext(
+        class_scope_level=Scope.REQUEST.level,
+        root_scope=root_scope,
+        workflow_by_slot={nested_workflow.slot: nested_workflow},
+    )
+
+    async_expression = renderer._inline_root_nested_dependency_expression(
+        slot=nested_workflow.slot,
+        requires_async=True,
+        context=context,
+        depth=0,
+    )
+    root_limit_expression = renderer._inline_root_nested_dependency_expression(
+        slot=nested_workflow.slot,
+        requires_async=False,
+        context=context,
+        depth=0,
+    )
+
+    assert async_expression is None
+    assert root_limit_expression is None
 
 
 def test_renderer_format_lifetime_returns_none_when_workflow_has_no_lifetime() -> None:

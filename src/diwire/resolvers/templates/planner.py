@@ -134,8 +134,16 @@ class ResolverGenerationPlanner:
                         if scope.level == self._root_scope.level
                         else f"_{scope.scope_name.capitalize()}Resolver"
                     ),
-                    resolver_arg_name=f"{scope_name}_resolver",
-                    resolver_attr_name=f"_{scope_name}_resolver",
+                    resolver_arg_name=(
+                        "root_resolver"
+                        if scope.level == self._root_scope.level
+                        else f"{scope_name}_resolver"
+                    ),
+                    resolver_attr_name=(
+                        "_root_resolver"
+                        if scope.level == self._root_scope.level
+                        else f"_{scope_name}_resolver"
+                    ),
                     skippable=scope.skippable,
                     is_root=scope.level == self._root_scope.level,
                 ),
