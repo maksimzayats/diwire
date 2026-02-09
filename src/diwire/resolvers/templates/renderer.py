@@ -59,6 +59,14 @@ class DependencyExpressionContext:
     class_scope_level: int
     root_scope: ScopePlan
     workflow_by_slot: dict[int, ProviderWorkflowPlan]
+    root_resolver_expression: str | None = None
+
+    @property
+    def root_resolver_expr(self) -> str:
+        """Return expression that resolves the root resolver for current method context."""
+        if self.root_resolver_expression is not None:
+            return self.root_resolver_expression
+        return f"self.{self.root_scope.resolver_attr_name}"
 
 
 class ResolversTemplateRenderer:
@@ -340,7 +348,7 @@ class ResolversTemplateRenderer:
         plan: ResolverGenerationPlan,
         class_plan: ScopePlan,
     ) -> tuple[str, ...]:
-        slots: list[str] = ["_scope_level", "_root_resolver"]
+        slots: list[str] = ["_root_resolver"]
         if plan.has_cleanup:
             slots.append("_cleanup_enabled")
         if class_plan.is_root:
@@ -406,7 +414,7 @@ class ResolversTemplateRenderer:
         plan: ResolverGenerationPlan,
         class_plan: ScopePlan,
     ) -> list[str]:
-        body_lines = [f"self._scope_level = {class_plan.scope_level}"]
+        body_lines: list[str] = []
         if plan.has_cleanup:
             body_lines.append("self._cleanup_enabled = cleanup_enabled")
         body_lines.append(
@@ -462,7 +470,7 @@ class ResolversTemplateRenderer:
                 body_block=self._join_lines(
                     self._indent_lines(
                         [
-                            'msg = f"Cannot enter deeper scope from level {self._scope_level}."',
+                            f'msg = "Cannot enter deeper scope from level {class_plan.scope_level}."',
                             "raise DIWireScopeMismatchError(msg)",
                         ],
                         1,
@@ -1129,6 +1137,7 @@ class ResolversTemplateRenderer:
             scope_by_level=scope_by_level,
             workflow_by_slot=workflow_by_slot,
         )
+        root_resolver_alias_lines = self._root_resolver_alias_lines(arguments=arguments)
         provider_expr = f"_provider_{workflow.slot}"
 
         if workflow.provider_attribute == "instance":
@@ -1142,23 +1151,30 @@ class ResolversTemplateRenderer:
             )
             if workflow.is_provider_async:
                 lines.append("value = await value")
-            return lines
+            return [*root_resolver_alias_lines, *lines]
 
         if workflow.provider_attribute == "generator":
-            return self._render_generator_build(
+            lines = self._render_generator_build(
                 workflow=workflow,
                 arguments=arguments,
                 is_async_call=is_async_call,
             )
+            return [*root_resolver_alias_lines, *lines]
 
         if workflow.provider_attribute == "context_manager":
-            return self._render_context_manager_build(
+            lines = self._render_context_manager_build(
                 workflow=workflow,
                 arguments=arguments,
             )
+            return [*root_resolver_alias_lines, *lines]
 
         msg = f"Unsupported provider attribute {workflow.provider_attribute!r}."
         raise ValueError(msg)
+
+    def _root_resolver_alias_lines(self, *, arguments: tuple[str, ...]) -> list[str]:
+        if not any("_root_resolver" in argument for argument in arguments):
+            return []
+        return ["_root_resolver = self._root_resolver"]
 
     def _build_call_arguments(
         self,
@@ -1178,6 +1194,9 @@ class ResolversTemplateRenderer:
         expression_context = DependencyExpressionContext(
             class_scope_level=class_plan.scope_level,
             root_scope=root_scope,
+            root_resolver_expression=(
+                "self" if class_plan.scope_level == root_scope_level else "_root_resolver"
+            ),
             workflow_by_slot=workflow_by_slot,
         )
 
@@ -1242,7 +1261,7 @@ class ResolversTemplateRenderer:
             and dependency_workflow.max_required_scope_level <= dependency_workflow.scope_level
             and dependency_workflow.scope_level == root_scope.scope_level
         ):
-            return f"self.{root_scope.resolver_attr_name}.resolve_{dependency_slot}()"
+            return f"{context.root_resolver_expr}.resolve_{dependency_slot}()"
 
         return f"self.resolve_{dependency_slot}()"
 
@@ -1262,9 +1281,8 @@ class ResolversTemplateRenderer:
         ):
             return None
 
-        root_scope = context.root_scope
         dependency_slot = dependency_workflow.slot
-        root_resolver_expression = f"self.{root_scope.resolver_attr_name}"
+        root_resolver_expression = context.root_resolver_expr
         if dependency_workflow.is_cached:
             return self._inline_root_cached_expression(
                 dependency_slot=dependency_slot,
@@ -1358,7 +1376,7 @@ class ResolversTemplateRenderer:
         depth: int,
     ) -> str | None:
         root_scope_level = context.root_scope.scope_level
-        root_resolver_expression = f"self.{context.root_scope.resolver_attr_name}"
+        root_resolver_expression = context.root_resolver_expr
         nested_workflow = context.workflow_by_slot[slot]
         nested_expression = self._inline_root_sync_dependency_expression(
             dependency_workflow=nested_workflow,
