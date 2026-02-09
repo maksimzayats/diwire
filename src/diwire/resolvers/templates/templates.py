@@ -2,6 +2,8 @@ from textwrap import dedent
 
 MODULE_TEMPLATE = dedent(
     """
+    {{ module_docstring_block }}
+
     {{ imports_block }}
 
     {{ globals_block }}
@@ -52,6 +54,10 @@ GLOBALS_TEMPLATE = dedent(
 CLASS_TEMPLATE = dedent(
     """
     class {{ class_name }}:
+    {% if class_docstring_block %}
+    {{ class_docstring_block }}
+
+    {% endif %}
     {{ init_method_block }}
 
     {{ enter_scope_method_block }}
@@ -80,6 +86,9 @@ INIT_METHOD_TEMPLATE = dedent(
         self,
     {{ signature_block }}
     ) -> None:
+    {% if docstring_block %}
+    {{ docstring_block }}
+    {% endif %}
     {{ body_block }}
     """,
 ).strip()
@@ -87,6 +96,9 @@ INIT_METHOD_TEMPLATE = dedent(
 ENTER_SCOPE_METHOD_TEMPLATE = dedent(
     """
     def enter_scope(self, scope: Any | None = None) -> {{ return_annotation }}:
+    {% if docstring_block %}
+    {{ docstring_block }}
+    {% endif %}
     {{ body_block }}
     """,
 ).strip()
@@ -94,6 +106,9 @@ ENTER_SCOPE_METHOD_TEMPLATE = dedent(
 DISPATCH_RESOLVE_METHOD_TEMPLATE = dedent(
     """
     def resolve(self, dependency: Any) -> Any:
+    {% if docstring_block %}
+    {{ docstring_block }}
+    {% endif %}
     {{ body_block }}
     """,
 ).strip()
@@ -101,6 +116,9 @@ DISPATCH_RESOLVE_METHOD_TEMPLATE = dedent(
 DISPATCH_ARESOLVE_METHOD_TEMPLATE = dedent(
     """
     async def aresolve(self, dependency: Any) -> Any:
+    {% if docstring_block %}
+    {{ docstring_block }}
+    {% endif %}
     {{ body_block }}
     """,
 ).strip()
@@ -197,6 +215,9 @@ CONTEXT_AEXIT_WITH_CLEANUP_TEMPLATE = dedent(
 SYNC_METHOD_TEMPLATE = dedent(
     """
     def resolve_{{ slot }}(self) -> Any:
+    {% if docstring_block %}
+    {{ docstring_block }}
+    {% endif %}
     {{ body_block }}
     """,
 ).strip()
@@ -204,6 +225,9 @@ SYNC_METHOD_TEMPLATE = dedent(
 ASYNC_METHOD_TEMPLATE = dedent(
     """
     async def aresolve_{{ slot }}(self) -> Any:
+    {% if docstring_block %}
+    {{ docstring_block }}
+    {% endif %}
     {{ body_block }}
     """,
 ).strip()
@@ -215,6 +239,9 @@ BUILD_FUNCTION_TEMPLATE = dedent(
         *,
         cleanup_enabled: bool = True,
     ) -> {{ return_annotation }}:
+    {% if docstring_block %}
+    {{ docstring_block }}
+    {% endif %}
     {{ body_block }}
     """,
 ).strip()

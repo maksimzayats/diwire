@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 from diwire.exceptions import DIWireInvalidProviderSpecError
 from diwire.providers import Lifetime, ProviderDependency, ProviderSpec, ProvidersRegistrations
@@ -34,7 +35,11 @@ class ProviderWorkflowPlan:
     """Provider metadata used during method rendering."""
 
     slot: int
+    provides: Any
     provider_attribute: str
+    provider_reference: Any
+    lifetime: Lifetime | None
+    scope_name: str
     scope_level: int
     scope_attr_name: str
     is_cached: bool
@@ -44,6 +49,8 @@ class ProviderWorkflowPlan:
     is_provider_async: bool
     requires_async: bool
     needs_cleanup: bool
+    dependencies: tuple[ProviderDependency, ...]
+    dependency_slots: tuple[int, ...]
     sync_arguments: tuple[str, ...]
     async_arguments: tuple[str, ...]
 
@@ -167,7 +174,11 @@ class ResolverGenerationPlanner:
         scope_plan = scope_by_level[spec.scope.level]
         return ProviderWorkflowPlan(
             slot=spec.slot,
+            provides=spec.provides,
             provider_attribute=provider_attribute,
+            provider_reference=getattr(spec, provider_attribute),
+            lifetime=spec.lifetime,
+            scope_name=scope_plan.scope_name,
             scope_level=scope_plan.scope_level,
             scope_attr_name=scope_plan.resolver_attr_name,
             is_cached=is_cached,
@@ -177,6 +188,8 @@ class ResolverGenerationPlanner:
             is_provider_async=spec.is_async,
             requires_async=self._requires_async_by_slot[spec.slot],
             needs_cleanup=spec.needs_cleanup,
+            dependencies=tuple(spec.dependencies),
+            dependency_slots=tuple(dependency_spec.slot for dependency_spec in dependency_specs),
             sync_arguments=sync_arguments,
             async_arguments=async_arguments,
         )
