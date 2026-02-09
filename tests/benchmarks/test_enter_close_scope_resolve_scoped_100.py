@@ -14,7 +14,7 @@ class _ScopedService:
     pass
 
 
-def test_benchmark_diwire_open_scope_resolve_scoped_100(benchmark: Any) -> None:
+def test_benchmark_diwire_enter_close_scope_resolve_scoped_100(benchmark: Any) -> None:
     container = DIWireContainer(default_concurrency_safe=False)
     container.register_concrete(
         _ScopedService,
@@ -29,15 +29,15 @@ def test_benchmark_diwire_open_scope_resolve_scoped_100(benchmark: Any) -> None:
     assert first is second
     assert first is not third
 
-    def bench_diwire_scope_resolve_100() -> None:
+    def bench_diwire_enter_close_scope_resolve_scoped_100() -> None:
         with container.enter_scope(Scope.REQUEST) as scope:
             for _ in range(100):
                 _ = scope.resolve(_ScopedService)
 
-    run_benchmark(benchmark, bench_diwire_scope_resolve_100, iterations=1_000)
+    run_benchmark(benchmark, bench_diwire_enter_close_scope_resolve_scoped_100, iterations=1_000)
 
 
-def test_benchmark_rodi_open_scope_resolve_scoped_100(benchmark: Any) -> None:
+def test_benchmark_rodi_enter_close_scope_resolve_scoped_100(benchmark: Any) -> None:
     rodi_container = rodi.Container()
     rodi_container.add_scoped(_ScopedService)
     services = rodi_container.build_provider()
@@ -49,9 +49,9 @@ def test_benchmark_rodi_open_scope_resolve_scoped_100(benchmark: Any) -> None:
     assert first is second
     assert first is not third
 
-    def bench_rodi_scope_resolve_100() -> None:
+    def bench_rodi_enter_close_scope_resolve_scoped_100() -> None:
         with services.create_scope() as scope:
             for _ in range(100):
                 _ = scope.get(_ScopedService)
 
-    run_benchmark(benchmark, bench_rodi_scope_resolve_100, iterations=1_000)
+    run_benchmark(benchmark, bench_rodi_enter_close_scope_resolve_scoped_100, iterations=1_000)
