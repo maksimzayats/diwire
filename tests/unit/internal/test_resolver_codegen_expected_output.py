@@ -65,6 +65,18 @@ def _build_snapshot_mixed_shape_service(
     return _SnapshotMixedShapeService(positional=positional, values=tuple(values), options=options)
 
 
+class _SnapshotRequestRootAppService:
+    pass
+
+
+class _SnapshotRequestRootSessionService:
+    pass
+
+
+class _SnapshotRequestRootRequestService:
+    pass
+
+
 def test_codegen_matches_expected_for_empty_app_root_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
@@ -165,6 +177,32 @@ def test_codegen_matches_expected_for_mixed_dependency_shape_graph() -> None:
     )
     generated = _render(container=container, root_scope=Scope.APP)
     expected = _read_expected("app_root_mixed_dependency_shapes.txt")
+    assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
+
+
+def test_codegen_matches_expected_for_request_root_filtered_graph() -> None:
+    ProviderSpec.SLOT_COUNTER = 0
+    container = Container()
+    container.register_concrete(
+        _SnapshotRequestRootAppService,
+        concrete_type=_SnapshotRequestRootAppService,
+        scope=Scope.APP,
+        lifetime=Lifetime.SINGLETON,
+    )
+    container.register_concrete(
+        _SnapshotRequestRootSessionService,
+        concrete_type=_SnapshotRequestRootSessionService,
+        scope=Scope.SESSION,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_concrete(
+        _SnapshotRequestRootRequestService,
+        concrete_type=_SnapshotRequestRootRequestService,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    generated = _render(container=container, root_scope=Scope.REQUEST)
+    expected = _read_expected("request_root_filtered.txt")
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 

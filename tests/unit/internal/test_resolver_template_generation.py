@@ -64,6 +64,14 @@ class _CycleB:
     pass
 
 
+class _RequestRootOnlyService:
+    pass
+
+
+class _RequestRootSessionService:
+    pass
+
+
 async def _provide_int() -> int:
     return 42
 
@@ -328,3 +336,37 @@ def test_renderer_documents_instance_lifetime_as_none() -> None:
 
     assert "Provider spec kind: instance" in code
     assert "Declared lifetime: none" in code
+
+
+def test_renderer_filters_providers_and_scopes_when_root_scope_is_request() -> None:
+    container = Container()
+    container.register_concrete(
+        _Config,
+        concrete_type=_Config,
+        scope=Scope.APP,
+        lifetime=Lifetime.SINGLETON,
+    )
+    container.register_concrete(
+        _RequestRootSessionService,
+        concrete_type=_RequestRootSessionService,
+        scope=Scope.SESSION,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_concrete(
+        _RequestRootOnlyService,
+        concrete_type=_RequestRootOnlyService,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    code = ResolversTemplateRenderer().get_providers_code(
+        root_scope=Scope.REQUEST,
+        registrations=container._providers_registrations,
+    )
+
+    assert "root scope level: 3" in code
+    assert "managed scopes: request:3, action:4, step:5" in code
+    assert "class _SessionResolver:" not in code
+    assert "session:2" not in code
+    assert "Provider target: " in code
+    assert "_RequestRootOnlyService" in code

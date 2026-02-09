@@ -10,8 +10,12 @@ from typing import Any, cast
 import pytest
 
 from diwire.container import Container
-from diwire.exceptions import DIWireAsyncDependencyInSyncContextError, DIWireScopeMismatchError
-from diwire.providers import Lifetime, ProviderDependency
+from diwire.exceptions import (
+    DIWireAsyncDependencyInSyncContextError,
+    DIWireDependencyNotRegisteredError,
+    DIWireScopeMismatchError,
+)
+from diwire.providers import Lifetime, ProviderDependency, ProviderSpec
 from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire.scope import Scope
 
@@ -58,6 +62,10 @@ class _VarArgsService:
 class _KwArgsService:
     def __init__(self, options: dict[str, int]) -> None:
         self.options = options
+
+
+class _SessionAsyncService:
+    pass
 
 
 def test_sync_singleton_uses_lambda_method_replacement_cache() -> None:
@@ -163,6 +171,16 @@ def test_scope_resolution_requires_explicit_opened_scope_chain() -> None:
             assert from_request is from_action
 
 
+def test_generated_dispatch_raises_for_unknown_dependency_in_sync_and_async_paths() -> None:
+    container = Container()
+
+    with pytest.raises(DIWireDependencyNotRegisteredError):
+        container.resolve(object)
+
+    with pytest.raises(DIWireDependencyNotRegisteredError):
+        asyncio.run(container.aresolve(object))
+
+
 def test_enter_scope_can_choose_skippable_or_next_non_skippable_scope() -> None:
     container = Container()
     container.register_concrete(
@@ -189,6 +207,100 @@ def test_enter_scope_can_choose_skippable_or_next_non_skippable_scope() -> None:
         assert isinstance(request_scope.resolve(_RequestService), _RequestService)
         with pytest.raises(DIWireScopeMismatchError):
             request_scope.resolve(_SessionService)
+
+
+def test_enter_scope_returns_self_for_same_scope_and_rejects_non_forward_transition() -> None:
+    container = Container()
+    with container.enter_scope(Scope.SESSION) as session_scope:
+        assert session_scope.enter_scope(Scope.SESSION) is session_scope
+
+        with session_scope.enter_scope() as request_scope:
+            assert request_scope.enter_scope(Scope.REQUEST) is request_scope
+            with pytest.raises(DIWireScopeMismatchError, match="Cannot enter scope level"):
+                request_scope.enter_scope(Scope.SESSION)
+
+
+def test_enter_scope_from_deepest_scope_without_target_raises() -> None:
+    container = Container()
+    with container.enter_scope(Scope.SESSION) as session_scope:
+        with session_scope.enter_scope() as request_scope:
+            with request_scope.enter_scope() as action_scope:
+                with action_scope.enter_scope() as step_scope:
+                    with pytest.raises(DIWireScopeMismatchError, match="Cannot enter deeper scope"):
+                        step_scope.enter_scope()
+
+
+def test_request_resolver_delegates_to_session_owner_cache_when_opened_from_session() -> None:
+    calls = 0
+
+    def build_session_service() -> _SessionService:
+        nonlocal calls
+        calls += 1
+        return _SessionService()
+
+    container = Container()
+    container.register_factory(
+        _SessionService,
+        factory=build_session_service,
+        scope=Scope.SESSION,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with container.enter_scope(Scope.SESSION) as session_scope:
+        session_instance = session_scope.resolve(_SessionService)
+        with session_scope.enter_scope() as request_scope:
+            delegated_instance = request_scope.resolve(_SessionService)
+            delegated_again = request_scope.resolve(_SessionService)
+
+    assert session_instance is delegated_instance
+    assert delegated_instance is delegated_again
+    assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_request_aresolve_for_async_session_service_raises_when_owner_missing() -> None:
+    async def build_session_async_service() -> _SessionAsyncService:
+        return _SessionAsyncService()
+
+    container = Container()
+    container.register_factory(
+        _SessionAsyncService,
+        factory=build_session_async_service,
+        scope=Scope.SESSION,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with container.enter_scope() as request_scope:
+        with pytest.raises(DIWireScopeMismatchError, match="requires opened scope level"):
+            await request_scope.aresolve(_SessionAsyncService)
+
+
+@pytest.mark.asyncio
+async def test_request_resolver_async_delegates_to_session_owner_cache() -> None:
+    calls = 0
+
+    async def build_session_async_service() -> _SessionAsyncService:
+        nonlocal calls
+        calls += 1
+        return _SessionAsyncService()
+
+    container = Container()
+    container.register_factory(
+        _SessionAsyncService,
+        factory=build_session_async_service,
+        scope=Scope.SESSION,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with container.enter_scope(Scope.SESSION) as session_scope:
+        session_instance = await session_scope.aresolve(_SessionAsyncService)
+        with session_scope.enter_scope() as request_scope:
+            delegated_instance = await request_scope.aresolve(_SessionAsyncService)
+            delegated_again = await request_scope.aresolve(_SessionAsyncService)
+
+    assert session_instance is delegated_instance
+    assert delegated_instance is delegated_again
+    assert calls == 1
 
 
 def test_renderer_emits_thread_locks_for_sync_graph() -> None:
@@ -407,6 +519,163 @@ def test_sync_scope_exit_raises_when_async_cleanup_callbacks_are_present() -> No
     ):
         with container.enter_scope() as request_scope:
             asyncio.run(request_scope.aresolve(_Resource))
+
+
+def test_cleanup_callbacks_execute_in_lifo_order() -> None:
+    events: list[str] = []
+
+    class _FirstContext:
+        def __enter__(self) -> _Resource:
+            events.append("first-enter")
+            return _Resource()
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            events.append("first-exit")
+
+    class _SecondContext:
+        def __enter__(self) -> _SingletonService:
+            events.append("second-enter")
+            return _SingletonService()
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            events.append("second-exit")
+
+    def provide_first() -> _FirstContext:
+        return _FirstContext()
+
+    def provide_second() -> _SecondContext:
+        return _SecondContext()
+
+    class _Both:
+        def __init__(self, first: _Resource, second: _SingletonService) -> None:
+            self.first = first
+            self.second = second
+
+    container = Container()
+    container.register_context_manager(
+        _Resource,
+        context_manager=provide_first,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_context_manager(
+        _SingletonService,
+        context_manager=provide_second,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_concrete(
+        _Both,
+        concrete_type=_Both,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with container.enter_scope() as request_scope:
+        request_scope.resolve(_Both)
+
+    assert events == ["first-enter", "second-enter", "second-exit", "first-exit"]
+
+
+def test_cleanup_keeps_first_cleanup_error_when_multiple_callbacks_fail() -> None:
+    class _FirstContext:
+        def __enter__(self) -> _Resource:
+            return _Resource()
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            raise RuntimeError("first-exit-error")
+
+    class _SecondContext:
+        def __enter__(self) -> _SingletonService:
+            return _SingletonService()
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            raise RuntimeError("second-exit-error")
+
+    def provide_first() -> _FirstContext:
+        return _FirstContext()
+
+    def provide_second() -> _SecondContext:
+        return _SecondContext()
+
+    class _Both:
+        def __init__(self, first: _Resource, second: _SingletonService) -> None:
+            self.first = first
+            self.second = second
+
+    container = Container()
+    container.register_context_manager(
+        _Resource,
+        context_manager=provide_first,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_context_manager(
+        _SingletonService,
+        context_manager=provide_second,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_concrete(
+        _Both,
+        concrete_type=_Both,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with pytest.raises(RuntimeError, match="second-exit-error"):
+        with container.enter_scope() as request_scope:
+            request_scope.resolve(_Both)
+
+
+def test_cleanup_does_not_override_active_body_exception() -> None:
+    class _FailingContext:
+        def __enter__(self) -> _Resource:
+            return _Resource()
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            raise RuntimeError("cleanup boom")
+
+    def provide_resource() -> _FailingContext:
+        return _FailingContext()
+
+    container = Container()
+    container.register_context_manager(
+        _Resource,
+        context_manager=provide_resource,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with pytest.raises(ValueError, match="body boom"):
+        with container.enter_scope() as request_scope:
+            request_scope.resolve(_Resource)
+            raise ValueError("body boom")
 
 
 @pytest.mark.asyncio
@@ -677,3 +946,37 @@ def test_build_root_resolver_supports_no_cleanup_mode() -> None:
 
     assert enter_calls == 1
     assert exit_calls == 0
+
+
+def test_build_root_resolver_rebinds_globals_for_new_registrations() -> None:
+    first = _Resource()
+    second = _Resource()
+
+    slot_counter = ProviderSpec.SLOT_COUNTER
+    try:
+        ProviderSpec.SLOT_COUNTER = 0
+        first_container = Container()
+        first_container.register_instance(_Resource, instance=first)
+
+        ProviderSpec.SLOT_COUNTER = 0
+        second_container = Container()
+        second_container.register_instance(_Resource, instance=second)
+    finally:
+        ProviderSpec.SLOT_COUNTER = slot_counter
+
+    code = ResolversTemplateRenderer().get_providers_code(
+        root_scope=Scope.APP,
+        registrations=first_container._providers_registrations,
+    )
+    namespace: dict[str, object] = {}
+    exec(code, namespace)  # noqa: S102
+    build_root_resolver = cast("Any", namespace["build_root_resolver"])
+
+    first_resolver = build_root_resolver(first_container._providers_registrations)
+    assert first_resolver.resolve(_Resource) is first
+
+    second_resolver = build_root_resolver(second_container._providers_registrations)
+    assert second_resolver.resolve(_Resource) is second
+
+    # Already-cached value remains stable for the first resolver after global rebinding.
+    assert first_resolver.resolve(_Resource) is first
