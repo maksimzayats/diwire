@@ -58,6 +58,10 @@ CLASS_TEMPLATE = dedent(
     {{ class_docstring_block }}
 
     {% endif %}
+    {% if slots_block %}
+    {{ slots_block }}
+
+    {% endif %}
     {{ init_method_block }}
 
     {{ enter_scope_method_block }}

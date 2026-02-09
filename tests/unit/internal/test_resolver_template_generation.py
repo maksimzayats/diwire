@@ -161,6 +161,9 @@ def _make_workflow_plan(
         needs_cleanup=False,
         dependencies=(),
         dependency_slots=(),
+        dependency_requires_async=(),
+        dependency_order_is_signature_order=True,
+        max_required_scope_level=scope_level,
         sync_arguments=(),
         async_arguments=(),
     )
@@ -224,7 +227,7 @@ def test_renderer_output_avoids_reflective_hot_path_tokens() -> None:
     )
 
     assert "getattr(" not in code
-    assert "__dict__" not in code
+    assert "__dict__" in code
     assert "cast(" not in code
 
 
@@ -346,8 +349,8 @@ def test_renderer_dependency_wiring_supports_positional_varargs_and_varkw() -> N
     )
 
     assert "positional=self.resolve_" not in code
-    assert "*self.resolve_" in code
-    assert "**self.resolve_" in code
+    assert "*self." in code
+    assert "**self." in code
 
 
 def test_renderer_raises_for_circular_dependency_graph() -> None:
@@ -472,6 +475,113 @@ def test_planner_propagates_async_requirement_from_dependencies() -> None:
     assert workflow_by_type[_AsyncDependencyConsumer].requires_async is True
 
 
+def test_planner_dependency_order_helpers_cover_edge_paths() -> None:
+    planner = ResolverGenerationPlanner(
+        root_scope=Scope.APP,
+        registrations=ProvidersRegistrations(),
+    )
+    signature = inspect.signature(_provide_dependency_shape_service)
+
+    no_provider_spec = ProviderSpec(
+        provides=_DependencyShapeService,
+        instance=_DependencyShapeService(positional=1, values=(), options={}),
+        lifetime=Lifetime.SINGLETON,
+        scope=Scope.APP,
+        is_async=False,
+        is_any_dependency_async=False,
+        needs_cleanup=False,
+        dependencies=[
+            ProviderDependency(
+                provides=int,
+                parameter=signature.parameters["positional"],
+            ),
+        ],
+    )
+    assert planner._dependency_order_is_signature_order(spec=no_provider_spec) is False
+
+    out_of_order_spec = ProviderSpec(
+        provides=_DependencyShapeService,
+        factory=_provide_dependency_shape_service,
+        lifetime=Lifetime.TRANSIENT,
+        scope=Scope.APP,
+        is_async=False,
+        is_any_dependency_async=False,
+        needs_cleanup=False,
+        dependencies=[
+            ProviderDependency(
+                provides=dict[str, int],
+                parameter=signature.parameters["options"],
+            ),
+            ProviderDependency(
+                provides=int,
+                parameter=signature.parameters["positional"],
+            ),
+        ],
+    )
+    assert planner._dependency_order_is_signature_order(spec=out_of_order_spec) is False
+
+    generator_spec = ProviderSpec(
+        provides=_GeneratorService,
+        generator=_provide_generator_service,
+        lifetime=Lifetime.SCOPED,
+        scope=Scope.REQUEST,
+        is_async=False,
+        is_any_dependency_async=False,
+        needs_cleanup=True,
+    )
+    context_spec = ProviderSpec(
+        provides=_ContextManagerService,
+        context_manager=_provide_context_manager_service,
+        lifetime=Lifetime.SCOPED,
+        scope=Scope.REQUEST,
+        is_async=False,
+        is_any_dependency_async=False,
+        needs_cleanup=True,
+    )
+    missing_spec = ProviderSpec(
+        provides=int,
+        instance=1,
+        lifetime=Lifetime.SINGLETON,
+        scope=Scope.APP,
+        is_async=False,
+        is_any_dependency_async=False,
+        needs_cleanup=False,
+    )
+
+    assert (
+        planner._provider_callable_for_signature(spec=generator_spec) is _provide_generator_service
+    )
+    assert (
+        planner._provider_callable_for_signature(spec=context_spec)
+        is _provide_context_manager_service
+    )
+    assert planner._provider_callable_for_signature(spec=missing_spec) is None
+
+
+def test_planner_max_required_scope_level_detects_cycles() -> None:
+    planner = ResolverGenerationPlanner(
+        root_scope=Scope.APP,
+        registrations=ProvidersRegistrations(),
+    )
+    spec = ProviderSpec(
+        provides=int,
+        instance=1,
+        lifetime=Lifetime.SINGLETON,
+        scope=Scope.APP,
+        is_async=False,
+        is_any_dependency_async=False,
+        needs_cleanup=False,
+    )
+
+    with pytest.raises(DIWireInvalidProviderSpecError, match="Circular dependency detected"):
+        planner._resolve_max_required_scope_level(
+            slot=spec.slot,
+            by_slot={spec.slot: spec},
+            max_scope_level_by_slot={},
+            in_progress={spec.slot},
+        )
+
+
 def test_renderer_enter_scope_raises_when_default_transition_is_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -513,10 +623,25 @@ def test_renderer_enter_scope_raises_when_default_transition_is_missing(
 
 def test_renderer_local_value_build_raises_for_unsupported_provider_attribute() -> None:
     renderer = ResolversTemplateRenderer()
+    class_plan = ScopePlan(
+        scope_name="app",
+        scope_level=Scope.APP.level,
+        class_name="RootResolver",
+        resolver_arg_name="app_resolver",
+        resolver_attr_name="_app_resolver",
+        skippable=False,
+        is_root=True,
+    )
     workflow = _make_workflow_plan(provider_attribute="unsupported")
 
     with pytest.raises(ValueError, match="Unsupported provider attribute"):
-        renderer._render_local_value_build(workflow=workflow, is_async_call=False)
+        renderer._render_local_value_build(
+            workflow=workflow,
+            is_async_call=False,
+            class_plan=class_plan,
+            scope_by_level={class_plan.scope_level: class_plan},
+            workflow_by_slot={workflow.slot: workflow},
+        )
 
 
 def test_renderer_async_method_renders_non_locking_async_build_path() -> None:
@@ -581,21 +706,177 @@ def test_renderer_provider_scope_guard_returns_scope_mismatch_for_deeper_provide
 
 def test_renderer_local_value_build_appends_await_for_async_factory_provider() -> None:
     renderer = ResolversTemplateRenderer()
+    class_plan = ScopePlan(
+        scope_name="app",
+        scope_level=Scope.APP.level,
+        class_name="RootResolver",
+        resolver_arg_name="app_resolver",
+        resolver_attr_name="_app_resolver",
+        skippable=False,
+        is_root=True,
+    )
     workflow = _make_workflow_plan(
         provider_attribute="factory",
         is_provider_async=True,
     )
 
-    lines = renderer._render_local_value_build(workflow=workflow, is_async_call=True)
+    lines = renderer._render_local_value_build(
+        workflow=workflow,
+        is_async_call=True,
+        class_plan=class_plan,
+        scope_by_level={class_plan.scope_level: class_plan},
+        workflow_by_slot={workflow.slot: workflow},
+    )
 
     assert lines == ["value = _provider_1()", "value = await value"]
 
 
 def test_renderer_async_cache_replace_returns_empty_for_non_cached_workflow() -> None:
     renderer = ResolversTemplateRenderer()
+    class_plan = ScopePlan(
+        scope_name="app",
+        scope_level=Scope.APP.level,
+        class_name="RootResolver",
+        resolver_arg_name="app_resolver",
+        resolver_attr_name="_app_resolver",
+        skippable=False,
+        is_root=True,
+    )
     workflow = _make_workflow_plan(is_cached=False)
+    plan = ResolverGenerationPlan(
+        root_scope_level=Scope.APP.level,
+        lock_mode=LockMode.ASYNC,
+        has_cleanup=False,
+        scopes=(class_plan,),
+        workflows=(workflow,),
+    )
 
-    assert renderer._render_async_cache_replace(workflow=workflow) == []
+    assert renderer._render_async_cache_replace(plan=plan, workflow=workflow) == []
+
+
+def test_renderer_async_method_delegates_to_non_root_owner_for_async_workflow() -> None:
+    renderer = ResolversTemplateRenderer()
+    root_scope = ScopePlan(
+        scope_name="app",
+        scope_level=Scope.APP.level,
+        class_name="RootResolver",
+        resolver_arg_name="app_resolver",
+        resolver_attr_name="_app_resolver",
+        skippable=False,
+        is_root=True,
+    )
+    owner_scope = ScopePlan(
+        scope_name="session",
+        scope_level=Scope.SESSION.level,
+        class_name="_SessionResolver",
+        resolver_arg_name="session_resolver",
+        resolver_attr_name="_session_resolver",
+        skippable=True,
+        is_root=False,
+    )
+    class_plan = ScopePlan(
+        scope_name="request",
+        scope_level=Scope.REQUEST.level,
+        class_name="_RequestResolver",
+        resolver_arg_name="request_resolver",
+        resolver_attr_name="_request_resolver",
+        skippable=False,
+        is_root=False,
+    )
+    workflow = replace(
+        _make_workflow_plan(
+            provider_attribute="factory",
+            is_provider_async=True,
+            is_cached=False,
+            scope_level=Scope.SESSION.level,
+        ),
+        scope_name="session",
+        scope_attr_name="_session_resolver",
+        requires_async=True,
+        max_required_scope_level=Scope.SESSION.level,
+    )
+    plan = ResolverGenerationPlan(
+        root_scope_level=Scope.APP.level,
+        lock_mode=LockMode.ASYNC,
+        has_cleanup=False,
+        scopes=(root_scope, owner_scope, class_plan),
+        workflows=(workflow,),
+    )
+
+    method_code = renderer._render_async_method(
+        plan=plan,
+        class_plan=class_plan,
+        scope_by_level={
+            root_scope.scope_level: root_scope,
+            owner_scope.scope_level: owner_scope,
+            class_plan.scope_level: class_plan,
+        },
+        workflow=workflow,
+    )
+
+    assert "owner_resolver = self._session_resolver" in method_code
+    assert "return await owner_resolver.aresolve_1()" in method_code
+
+
+def test_renderer_provider_scope_guard_uses_owner_resolver_for_cleanup_providers() -> None:
+    renderer = ResolversTemplateRenderer()
+    owner_scope = ScopePlan(
+        scope_name="session",
+        scope_level=Scope.SESSION.level,
+        class_name="_SessionResolver",
+        resolver_arg_name="session_resolver",
+        resolver_attr_name="_session_resolver",
+        skippable=True,
+        is_root=False,
+    )
+    workflow = replace(
+        _make_workflow_plan(
+            provider_attribute="generator",
+            scope_level=Scope.SESSION.level,
+        ),
+        scope_name="session",
+        scope_attr_name="_session_resolver",
+    )
+
+    lines = renderer._render_provider_scope_guard(
+        class_scope_level=Scope.REQUEST.level,
+        scope_by_level={Scope.SESSION.level: owner_scope},
+        workflow=workflow,
+    )
+
+    assert lines[0] == "provider_scope_resolver = self._session_resolver"
+
+
+def test_renderer_dependency_expression_delegates_to_root_scope_when_safe() -> None:
+    renderer = ResolversTemplateRenderer()
+    dependency_workflow = replace(
+        _make_workflow_plan(
+            slot=3,
+            provider_attribute="factory",
+            is_cached=False,
+            scope_level=Scope.APP.level,
+        ),
+        max_required_scope_level=Scope.APP.level,
+    )
+    root_scope = ScopePlan(
+        scope_name="app",
+        scope_level=Scope.APP.level,
+        class_name="RootResolver",
+        resolver_arg_name="app_resolver",
+        resolver_attr_name="_app_resolver",
+        skippable=False,
+        is_root=True,
+    )
+
+    expression = renderer._dependency_expression_for_class(
+        dependency_workflow=dependency_workflow,
+        dependency_requires_async=False,
+        is_async_call=False,
+        class_scope_level=Scope.REQUEST.level,
+        root_scope=root_scope,
+    )
+
+    assert expression == "self._app_resolver.resolve_3()"
 
 
 def test_renderer_format_lifetime_returns_none_when_workflow_has_no_lifetime() -> None:

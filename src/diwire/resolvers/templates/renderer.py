@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 from textwrap import indent
 
-from diwire.providers import ProvidersRegistrations
+from diwire.providers import ProviderDependency, ProvidersRegistrations
 from diwire.resolvers.templates.mini_jinja import Environment, Template
 from diwire.resolvers.templates.planner import (
     LockMode,
@@ -35,6 +36,7 @@ from diwire.resolvers.templates.templates import (
 from diwire.scope import BaseScope, BaseScopes, Scope
 
 _INDENT = " " * 4
+_MIN_CONSTRUCTOR_BASE_ARGUMENTS = 2
 _GENERATOR_SOURCE = (
     "diwire.resolvers.templates.renderer.ResolversTemplateRenderer.get_providers_code"
 )
@@ -187,15 +189,20 @@ class ResolversTemplateRenderer:
                 depth=0,
             ),
         )
+        slots_block = self._indent_block(
+            self._render_slots_block(plan=plan, class_plan=class_plan),
+        )
         init_method_block = self._indent_block(
             self._render_init_method(plan=plan, class_plan=class_plan),
         )
         enter_scope_method_block = self._indent_block(
             self._render_enter_scope_method(plan=plan, class_plan=class_plan),
         )
-        resolve_method_block = self._indent_block(self._render_dispatch_resolve_method(plan=plan))
+        resolve_method_block = self._indent_block(
+            self._render_dispatch_resolve_method(plan=plan, class_plan=class_plan),
+        )
         aresolve_method_block = self._indent_block(
-            self._render_dispatch_aresolve_method(plan=plan),
+            self._render_dispatch_aresolve_method(plan=plan, class_plan=class_plan),
         )
 
         if plan.has_cleanup:
@@ -236,6 +243,7 @@ class ResolversTemplateRenderer:
         return self._class_template.render(
             class_name=class_plan.class_name,
             class_docstring_block=class_docstring_block,
+            slots_block=slots_block,
             init_method_block=init_method_block,
             enter_scope_method_block=enter_scope_method_block,
             resolve_method_block=resolve_method_block,
@@ -303,6 +311,54 @@ class ResolversTemplateRenderer:
             "cleanup_enabled: bool = True,",
             *ancestor_lines,
         ]
+
+    def _render_slots_block(
+        self,
+        *,
+        plan: ResolverGenerationPlan,
+        class_plan: ScopePlan,
+    ) -> str:
+        slots = self._class_slots(plan=plan, class_plan=class_plan)
+        lines = ["__slots__ = ("]
+        lines.extend(f'    "{slot}",' for slot in slots)
+        lines.append(")")
+        return self._join_lines(lines)
+
+    def _class_slots(
+        self,
+        *,
+        plan: ResolverGenerationPlan,
+        class_plan: ScopePlan,
+    ) -> tuple[str, ...]:
+        slots: list[str] = ["_scope_level", "_cleanup_enabled", "_root_resolver"]
+        if class_plan.is_root:
+            slots.append("__dict__")
+        if plan.has_cleanup:
+            slots.append("_cleanup_callbacks")
+
+        slots.append(plan.scopes[0].resolver_attr_name)
+
+        uses_stateless_scope_reuse = self._uses_stateless_scope_reuse(plan=plan)
+        if not uses_stateless_scope_reuse:
+            slots.extend(
+                scope.resolver_attr_name
+                for scope in self._stored_non_root_scopes(
+                    plan=plan,
+                    class_scope_level=class_plan.scope_level,
+                )
+            )
+
+        if uses_stateless_scope_reuse and class_plan.is_root:
+            slots.extend(
+                f"_scope_resolver_{scope.scope_level}" for scope in plan.scopes if not scope.is_root
+            )
+
+        slots.extend(
+            f"_cache_{workflow.slot}"
+            for workflow in plan.workflows
+            if workflow.is_cached and workflow.cache_owner_scope_level == class_plan.scope_level
+        )
+        return tuple(self._unique_ordered(slots))
 
     def _build_init_body_lines(
         self,
@@ -485,6 +541,11 @@ class ResolversTemplateRenderer:
                 arguments.append("self")
             else:
                 arguments.append("_MISSING_RESOLVER")
+        while (
+            len(arguments) > _MIN_CONSTRUCTOR_BASE_ARGUMENTS
+            and arguments[-1] == "_MISSING_RESOLVER"
+        ):
+            arguments.pop()
 
         lines = [f"return {target_scope.class_name}("]
         lines.extend(f"    {argument}," for argument in arguments)
@@ -511,9 +572,15 @@ class ResolversTemplateRenderer:
             explicit_candidates.append(default_next)
         return immediate_next, default_next, tuple(explicit_candidates)
 
-    def _render_dispatch_resolve_method(self, *, plan: ResolverGenerationPlan) -> str:
+    def _render_dispatch_resolve_method(
+        self,
+        *,
+        plan: ResolverGenerationPlan,
+        class_plan: ScopePlan,
+    ) -> str:
+        ordered_workflows = self._dispatch_workflows(plan=plan, class_plan=class_plan)
         body_lines: list[str] = ["# Fast path identity checks to avoid reflective dispatch."]
-        for workflow in plan.workflows:
+        for workflow in ordered_workflows:
             body_lines.extend(
                 [
                     f"if dependency is _dep_{workflow.slot}_type:",
@@ -539,9 +606,15 @@ class ResolversTemplateRenderer:
             body_block=self._join_lines(self._indent_lines(body_lines, 1)),
         ).strip()
 
-    def _render_dispatch_aresolve_method(self, *, plan: ResolverGenerationPlan) -> str:
+    def _render_dispatch_aresolve_method(
+        self,
+        *,
+        plan: ResolverGenerationPlan,
+        class_plan: ScopePlan,
+    ) -> str:
+        ordered_workflows = self._dispatch_workflows(plan=plan, class_plan=class_plan)
         body_lines: list[str] = ["# Fast path identity checks for asynchronous resolution."]
-        for workflow in plan.workflows:
+        for workflow in ordered_workflows:
             body_lines.extend(
                 [
                     f"if dependency is _dep_{workflow.slot}_type:",
@@ -587,12 +660,17 @@ class ResolversTemplateRenderer:
                 )
             else:
                 owner_scope = scope_by_level[owner_scope_level]
-                body_lines = self._render_owner_guard(
-                    workflow=workflow,
-                    scope_attr_name=owner_scope.resolver_attr_name,
-                    resolver_name="owner_resolver",
-                )
-                body_lines.append(f"return owner_resolver.resolve_{workflow.slot}()")
+                if owner_scope.is_root:
+                    body_lines = [
+                        f"return self.{owner_scope.resolver_attr_name}.resolve_{workflow.slot}()",
+                    ]
+                else:
+                    body_lines = self._render_owner_guard(
+                        workflow=workflow,
+                        scope_attr_name=owner_scope.resolver_attr_name,
+                        resolver_name="owner_resolver",
+                    )
+                    body_lines.append(f"return owner_resolver.resolve_{workflow.slot}()")
                 behavior_note = (
                     "This resolver delegates to the cache owner resolver so scoped caching remains "
                     "consistent across nested resolvers."
@@ -613,6 +691,36 @@ class ResolversTemplateRenderer:
             scope_by_level=scope_by_level,
             workflow=workflow,
         )
+        if (
+            workflow.scope_level < class_plan.scope_level
+            and workflow.max_required_scope_level <= workflow.scope_level
+        ):
+            owner_scope = scope_by_level[workflow.scope_level]
+            if owner_scope.is_root:
+                body_lines = [
+                    f"return self.{owner_scope.resolver_attr_name}.resolve_{workflow.slot}()",
+                ]
+            else:
+                body_lines = self._render_owner_guard(
+                    workflow=workflow,
+                    scope_attr_name=owner_scope.resolver_attr_name,
+                    resolver_name="owner_resolver",
+                )
+                body_lines.append(f"return owner_resolver.resolve_{workflow.slot}()")
+            return self._sync_method_template.render(
+                slot=workflow.slot,
+                docstring_block=self._resolver_docstring_block(
+                    class_plan=class_plan,
+                    workflow=workflow,
+                    behavior_note=(
+                        "This resolver delegates to the provider declaration scope because the "
+                        "dependency graph does not require deeper scope access."
+                    ),
+                    is_async_method=False,
+                ),
+                body_block=self._join_lines(self._indent_lines(body_lines, 1)),
+            ).strip()
+
         behavior_note = (
             "Builds the provider value in this resolver, enforcing scope guards and cache policy."
         )
@@ -660,8 +768,11 @@ class ResolversTemplateRenderer:
                         *self._render_local_value_build(
                             workflow=workflow,
                             is_async_call=False,
+                            class_plan=class_plan,
+                            scope_by_level=scope_by_level,
+                            workflow_by_slot={item.slot: item for item in plan.workflows},
                         ),
-                        *self._render_sync_cache_replace(workflow=workflow),
+                        *self._render_sync_cache_replace(plan=plan, workflow=workflow),
                         "return value",
                     ],
                     1,
@@ -683,8 +794,11 @@ class ResolversTemplateRenderer:
                 *self._render_local_value_build(
                     workflow=workflow,
                     is_async_call=False,
+                    class_plan=class_plan,
+                    scope_by_level=scope_by_level,
+                    workflow_by_slot={item.slot: item for item in plan.workflows},
                 ),
-                *self._render_sync_cache_replace(workflow=workflow),
+                *self._render_sync_cache_replace(plan=plan, workflow=workflow),
                 "return value",
             ],
         )
@@ -738,12 +852,17 @@ class ResolversTemplateRenderer:
                 )
             else:
                 owner_scope = scope_by_level[owner_scope_level]
-                body_lines = self._render_owner_guard(
-                    workflow=workflow,
-                    scope_attr_name=owner_scope.resolver_attr_name,
-                    resolver_name="owner_resolver",
-                )
-                body_lines.append(f"return await owner_resolver.aresolve_{workflow.slot}()")
+                if owner_scope.is_root:
+                    body_lines = [
+                        f"return await self.{owner_scope.resolver_attr_name}.aresolve_{workflow.slot}()",
+                    ]
+                else:
+                    body_lines = self._render_owner_guard(
+                        workflow=workflow,
+                        scope_attr_name=owner_scope.resolver_attr_name,
+                        resolver_name="owner_resolver",
+                    )
+                    body_lines.append(f"return await owner_resolver.aresolve_{workflow.slot}()")
                 behavior_note = (
                     "This resolver delegates to the cache owner resolver so scoped caching remains "
                     "consistent across nested resolvers."
@@ -764,6 +883,36 @@ class ResolversTemplateRenderer:
             scope_by_level=scope_by_level,
             workflow=workflow,
         )
+        if (
+            workflow.scope_level < class_plan.scope_level
+            and workflow.max_required_scope_level <= workflow.scope_level
+        ):
+            owner_scope = scope_by_level[workflow.scope_level]
+            if owner_scope.is_root:
+                body_lines = [
+                    f"return await self.{owner_scope.resolver_attr_name}.aresolve_{workflow.slot}()",
+                ]
+            else:
+                body_lines = self._render_owner_guard(
+                    workflow=workflow,
+                    scope_attr_name=owner_scope.resolver_attr_name,
+                    resolver_name="owner_resolver",
+                )
+                body_lines.append(f"return await owner_resolver.aresolve_{workflow.slot}()")
+            return self._async_method_template.render(
+                slot=workflow.slot,
+                docstring_block=self._resolver_docstring_block(
+                    class_plan=class_plan,
+                    workflow=workflow,
+                    behavior_note=(
+                        "This resolver delegates to the provider declaration scope because the "
+                        "dependency graph does not require deeper scope access."
+                    ),
+                    is_async_method=True,
+                ),
+                body_block=self._join_lines(self._indent_lines(body_lines, 1)),
+            ).strip()
+
         behavior_note = (
             "Builds the provider value in this resolver, enforcing scope guards and cache policy."
         )
@@ -790,8 +939,11 @@ class ResolversTemplateRenderer:
                         *self._render_local_value_build(
                             workflow=workflow,
                             is_async_call=True,
+                            class_plan=class_plan,
+                            scope_by_level=scope_by_level,
+                            workflow_by_slot={item.slot: item for item in plan.workflows},
                         ),
-                        *self._render_async_cache_replace(workflow=workflow),
+                        *self._render_async_cache_replace(plan=plan, workflow=workflow),
                         "return value",
                     ],
                     1,
@@ -813,8 +965,11 @@ class ResolversTemplateRenderer:
                 *self._render_local_value_build(
                     workflow=workflow,
                     is_async_call=True,
+                    class_plan=class_plan,
+                    scope_by_level=scope_by_level,
+                    workflow_by_slot={item.slot: item for item in plan.workflows},
                 ),
-                *self._render_async_cache_replace(workflow=workflow),
+                *self._render_async_cache_replace(plan=plan, workflow=workflow),
                 "return value",
             ],
         )
@@ -836,14 +991,28 @@ class ResolversTemplateRenderer:
         scope_by_level: dict[int, ScopePlan],
         workflow: ProviderWorkflowPlan,
     ) -> list[str]:
+        needs_scope_resolver = workflow.provider_attribute in {"generator", "context_manager"}
+
         if workflow.scope_level > class_scope_level:
             return self._scope_mismatch_lines(workflow=workflow)
+
         if workflow.scope_level == class_scope_level:
-            return ["provider_scope_resolver = self"]
+            return ["provider_scope_resolver = self"] if needs_scope_resolver else []
+
         scope = scope_by_level[workflow.scope_level]
+        scope_reference = f"self.{scope.resolver_attr_name}"
+        if scope.is_root:
+            return [f"provider_scope_resolver = {scope_reference}"] if needs_scope_resolver else []
+
+        if needs_scope_resolver:
+            return [
+                f"provider_scope_resolver = {scope_reference}",
+                "if provider_scope_resolver is _MISSING_RESOLVER:",
+                *self._indent_lines(self._scope_mismatch_lines(workflow=workflow), 1),
+            ]
+
         return [
-            f"provider_scope_resolver = self.{scope.resolver_attr_name}",
-            "if provider_scope_resolver is _MISSING_RESOLVER:",
+            f"if {scope_reference} is _MISSING_RESOLVER:",
             *self._indent_lines(self._scope_mismatch_lines(workflow=workflow), 1),
         ]
 
@@ -874,8 +1043,17 @@ class ResolversTemplateRenderer:
         *,
         workflow: ProviderWorkflowPlan,
         is_async_call: bool,
+        class_plan: ScopePlan,
+        scope_by_level: dict[int, ScopePlan],
+        workflow_by_slot: dict[int, ProviderWorkflowPlan],
     ) -> list[str]:
-        arguments = workflow.async_arguments if is_async_call else workflow.sync_arguments
+        arguments = self._build_call_arguments(
+            workflow=workflow,
+            is_async_call=is_async_call,
+            class_plan=class_plan,
+            scope_by_level=scope_by_level,
+            workflow_by_slot=workflow_by_slot,
+        )
         provider_expr = f"_provider_{workflow.slot}"
 
         if workflow.provider_attribute == "instance":
@@ -906,6 +1084,99 @@ class ResolversTemplateRenderer:
 
         msg = f"Unsupported provider attribute {workflow.provider_attribute!r}."
         raise ValueError(msg)
+
+    def _build_call_arguments(
+        self,
+        *,
+        workflow: ProviderWorkflowPlan,
+        is_async_call: bool,
+        class_plan: ScopePlan,
+        scope_by_level: dict[int, ScopePlan],
+        workflow_by_slot: dict[int, ProviderWorkflowPlan],
+    ) -> tuple[str, ...]:
+        if not workflow.dependencies:
+            return ()
+
+        arguments: list[str] = []
+        root_scope_level = min(scope_by_level)
+        root_scope = scope_by_level[root_scope_level]
+        class_scope_level = class_plan.scope_level
+
+        for dependency, dependency_slot, dependency_requires_async in zip(
+            workflow.dependencies,
+            workflow.dependency_slots,
+            workflow.dependency_requires_async,
+            strict=True,
+        ):
+            dependency_workflow = workflow_by_slot[dependency_slot]
+            expression = self._dependency_expression_for_class(
+                dependency_workflow=dependency_workflow,
+                dependency_requires_async=dependency_requires_async,
+                is_async_call=is_async_call,
+                class_scope_level=class_scope_level,
+                root_scope=root_scope,
+            )
+            arguments.append(
+                self._format_dependency_argument(
+                    dependency=dependency,
+                    expression=expression,
+                    prefer_positional=workflow.dependency_order_is_signature_order,
+                ),
+            )
+
+        return tuple(arguments)
+
+    def _dependency_expression_for_class(
+        self,
+        *,
+        dependency_workflow: ProviderWorkflowPlan,
+        dependency_requires_async: bool,
+        is_async_call: bool,
+        class_scope_level: int,
+        root_scope: ScopePlan,
+    ) -> str:
+        dependency_slot = dependency_workflow.slot
+        if is_async_call and dependency_requires_async:
+            return f"await self.aresolve_{dependency_slot}()"
+
+        if is_async_call:
+            return f"self.resolve_{dependency_slot}()"
+
+        if (
+            dependency_workflow.is_cached
+            and dependency_workflow.cache_owner_scope_level == class_scope_level
+        ):
+            return (
+                f"self._cache_{dependency_slot} if self._cache_{dependency_slot} is not "
+                f"_MISSING_CACHE else self.resolve_{dependency_slot}()"
+            )
+
+        if (
+            dependency_workflow.scope_level < class_scope_level
+            and dependency_workflow.max_required_scope_level <= dependency_workflow.scope_level
+            and dependency_workflow.scope_level == root_scope.scope_level
+        ):
+            return f"self.{root_scope.resolver_attr_name}.resolve_{dependency_slot}()"
+
+        return f"self.resolve_{dependency_slot}()"
+
+    def _format_dependency_argument(
+        self,
+        *,
+        dependency: ProviderDependency,
+        expression: str,
+        prefer_positional: bool,
+    ) -> str:
+        kind = dependency.parameter.kind
+        if kind is inspect.Parameter.POSITIONAL_ONLY:
+            return expression
+        if kind is inspect.Parameter.POSITIONAL_OR_KEYWORD and prefer_positional:
+            return expression
+        if kind is inspect.Parameter.VAR_POSITIONAL:
+            return f"*{expression}"
+        if kind is inspect.Parameter.VAR_KEYWORD:
+            return f"**{expression}"
+        return f"{dependency.parameter.name}={expression}"
 
     def _render_generator_build(
         self,
@@ -1008,9 +1279,16 @@ class ResolversTemplateRenderer:
         )
         return lines
 
-    def _render_sync_cache_replace(self, *, workflow: ProviderWorkflowPlan) -> list[str]:
+    def _render_sync_cache_replace(
+        self,
+        *,
+        plan: ResolverGenerationPlan,
+        workflow: ProviderWorkflowPlan,
+    ) -> list[str]:
         if not workflow.is_cached:
             return []
+        if workflow.cache_owner_scope_level != plan.root_scope_level:
+            return [f"self._cache_{workflow.slot} = value"]
         return [
             f"self._cache_{workflow.slot} = value",
             f"self.resolve_{workflow.slot} = lambda: value  # type: ignore[method-assign]",
@@ -1021,9 +1299,16 @@ class ResolversTemplateRenderer:
             f"self.aresolve_{workflow.slot} = _cached  # type: ignore[method-assign]",
         ]
 
-    def _render_async_cache_replace(self, *, workflow: ProviderWorkflowPlan) -> list[str]:
+    def _render_async_cache_replace(
+        self,
+        *,
+        plan: ResolverGenerationPlan,
+        workflow: ProviderWorkflowPlan,
+    ) -> list[str]:
         if not workflow.is_cached:
             return []
+        if workflow.cache_owner_scope_level != plan.root_scope_level:
+            return [f"self._cache_{workflow.slot} = value"]
         return [
             f"self._cache_{workflow.slot} = value",
             "",
@@ -1339,6 +1624,23 @@ class ResolversTemplateRenderer:
             seen.add(value)
             unique_values.append(value)
         return unique_values
+
+    def _dispatch_workflows(
+        self,
+        *,
+        plan: ResolverGenerationPlan,
+        class_plan: ScopePlan,
+    ) -> tuple[ProviderWorkflowPlan, ...]:
+        return tuple(
+            sorted(
+                plan.workflows,
+                key=lambda workflow: (
+                    workflow.scope_level != class_plan.scope_level,
+                    abs(workflow.scope_level - class_plan.scope_level),
+                    workflow.slot,
+                ),
+            ),
+        )
 
 
 def main() -> None:

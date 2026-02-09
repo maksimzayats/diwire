@@ -51,6 +51,9 @@ class ProviderWorkflowPlan:
     needs_cleanup: bool
     dependencies: tuple[ProviderDependency, ...]
     dependency_slots: tuple[int, ...]
+    dependency_requires_async: tuple[bool, ...]
+    dependency_order_is_signature_order: bool
+    max_required_scope_level: int
     sync_arguments: tuple[str, ...]
     async_arguments: tuple[str, ...]
 
@@ -79,6 +82,7 @@ class ResolverGenerationPlanner:
         self._registrations = registrations
         self._work_specs = self._collect_specs()
         self._requires_async_by_slot = self._build_requires_async_by_slot()
+        self._max_required_scope_level_by_slot = self._build_max_required_scope_level_by_slot()
 
     def build(self) -> ResolverGenerationPlan:
         """Build resolver generation metadata."""
@@ -190,6 +194,14 @@ class ResolverGenerationPlanner:
             needs_cleanup=spec.needs_cleanup,
             dependencies=tuple(spec.dependencies),
             dependency_slots=tuple(dependency_spec.slot for dependency_spec in dependency_specs),
+            dependency_requires_async=tuple(
+                self._requires_async_by_slot[dependency_spec.slot]
+                for dependency_spec in dependency_specs
+            ),
+            dependency_order_is_signature_order=self._dependency_order_is_signature_order(
+                spec=spec,
+            ),
+            max_required_scope_level=self._max_required_scope_level_by_slot[spec.slot],
             sync_arguments=sync_arguments,
             async_arguments=async_arguments,
         )
@@ -321,3 +333,84 @@ class ResolverGenerationPlanner:
         if is_async_call and dependency_requires_async:
             return f"await self.aresolve_{dependency_slot}()"
         return f"self.resolve_{dependency_slot}()"
+
+    def _dependency_order_is_signature_order(self, *, spec: ProviderSpec) -> bool:
+        if not spec.dependencies:
+            return True
+
+        provider_callable = self._provider_callable_for_signature(spec=spec)
+        if provider_callable is None:
+            return False
+
+        parameters = list(inspect.signature(provider_callable).parameters.values())
+        if spec.concrete_type is not None and parameters:
+            parameters = parameters[1:]
+
+        order_by_name = {parameter.name: index for index, parameter in enumerate(parameters)}
+        last_index = -1
+        for dependency in spec.dependencies:
+            current_index = order_by_name.get(dependency.parameter.name)
+            if current_index is None or current_index < last_index:
+                return False
+            last_index = current_index
+        return True
+
+    def _provider_callable_for_signature(self, *, spec: ProviderSpec) -> Any | None:
+        if spec.concrete_type is not None:
+            return spec.concrete_type.__init__
+        if spec.factory is not None:
+            return spec.factory
+        if spec.generator is not None:
+            return spec.generator
+        if spec.context_manager is not None:
+            return spec.context_manager
+        return None
+
+    def _build_max_required_scope_level_by_slot(self) -> dict[int, int]:
+        by_slot = {spec.slot: spec for spec in self._work_specs}
+        max_scope_level_by_slot: dict[int, int] = {}
+        in_progress: set[int] = set()
+
+        for slot in by_slot:
+            self._resolve_max_required_scope_level(
+                slot=slot,
+                by_slot=by_slot,
+                max_scope_level_by_slot=max_scope_level_by_slot,
+                in_progress=in_progress,
+            )
+
+        return max_scope_level_by_slot
+
+    def _resolve_max_required_scope_level(
+        self,
+        *,
+        slot: int,
+        by_slot: dict[int, ProviderSpec],
+        max_scope_level_by_slot: dict[int, int],
+        in_progress: set[int],
+    ) -> int:
+        known = max_scope_level_by_slot.get(slot)
+        if known is not None:
+            return known
+
+        if slot in in_progress:
+            msg = f"Circular dependency detected while planning provider slot {slot}."
+            raise DIWireInvalidProviderSpecError(msg)
+
+        in_progress.add(slot)
+        spec = by_slot[slot]
+        max_scope_level = spec.scope.level
+
+        for dependency in spec.dependencies:
+            dependency_spec = self._registrations.get_by_type(dependency.provides)
+            dependency_max_scope = self._resolve_max_required_scope_level(
+                slot=dependency_spec.slot,
+                by_slot=by_slot,
+                max_scope_level_by_slot=max_scope_level_by_slot,
+                in_progress=in_progress,
+            )
+            max_scope_level = max(max_scope_level, dependency_max_scope)
+
+        in_progress.remove(slot)
+        max_scope_level_by_slot[slot] = max_scope_level
+        return max_scope_level
