@@ -24,4 +24,7 @@ docs:
 # === Benchmark Commands ===
 
 benchmark:
-	uv run python -m tests.benchmarks.rodi_comparison
+	uv run pytest tests/benchmarks/test_singleton_resolution.py --benchmark-only --benchmark-columns=ops -q
+	uv run pytest tests/benchmarks/test_wide_singleton_resolution.py --benchmark-only --benchmark-columns=ops -q
+	uv run pytest tests/benchmarks/test_transient_chain_resolution.py --benchmark-only --benchmark-columns=ops -q
+	uv run pytest tests/benchmarks/test_request_scoped_resolution.py --benchmark-only --benchmark-columns=ops -q

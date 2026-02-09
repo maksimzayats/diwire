@@ -153,5 +153,3 @@ staticfiles/
 
 # WIP
 /benchmarks
-/.benchmarks/*.md
-/.benchmarks/*.json
