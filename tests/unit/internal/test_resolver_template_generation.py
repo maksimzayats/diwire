@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+import inspect
+from collections.abc import AsyncGenerator, Generator
+from contextlib import asynccontextmanager, contextmanager
+
+import pytest
+
 from diwire.container import Container
-from diwire.providers import Lifetime
+from diwire.exceptions import DIWireInvalidProviderSpecError
+from diwire.providers import Lifetime, ProviderDependency, ProviderSpec, ProvidersRegistrations
 from diwire.resolvers.templates.planner import LockMode, ResolverGenerationPlanner
 from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire.scope import Scope
@@ -21,12 +28,86 @@ class _AsyncService:
         self.value = value
 
 
+class _GeneratorService:
+    pass
+
+
+class _AsyncGeneratorService:
+    pass
+
+
+class _ContextManagerService:
+    pass
+
+
+class _AsyncContextManagerService:
+    pass
+
+
+class _DependencyShapeService:
+    def __init__(
+        self,
+        positional: int,
+        values: tuple[int, ...],
+        options: dict[str, int],
+    ) -> None:
+        self.positional = positional
+        self.values = values
+        self.options = options
+
+
+class _CycleA:
+    pass
+
+
+class _CycleB:
+    pass
+
+
 async def _provide_int() -> int:
     return 42
 
 
 async def _provide_async_service(value: int) -> _AsyncService:
     return _AsyncService(value)
+
+
+def _provide_generator_service() -> Generator[_GeneratorService, None, None]:
+    yield _GeneratorService()
+
+
+async def _provide_async_generator_service() -> AsyncGenerator[_AsyncGeneratorService, None]:
+    yield _AsyncGeneratorService()
+
+
+@contextmanager
+def _provide_context_manager_service() -> Generator[_ContextManagerService, None, None]:
+    yield _ContextManagerService()
+
+
+@asynccontextmanager
+async def _provide_async_context_manager_service() -> AsyncGenerator[
+    _AsyncContextManagerService,
+    None,
+]:
+    yield _AsyncContextManagerService()
+
+
+def _provide_dependency_shape_service(
+    positional: int,
+    /,
+    *values: int,
+    **options: int,
+) -> _DependencyShapeService:
+    return _DependencyShapeService(positional=positional, values=tuple(values), options=options)
+
+
+def _provide_cycle_a(dep_b: _CycleB) -> _CycleA:
+    return _CycleA()
+
+
+def _provide_cycle_b(dep_a: _CycleA) -> _CycleB:
+    return _CycleB()
 
 
 def test_renderer_output_is_deterministic_and_composable() -> None:
@@ -106,3 +187,144 @@ def test_planner_selects_async_lock_mode_when_async_specs_exist() -> None:
     ).build()
 
     assert plan.lock_mode is LockMode.ASYNC
+
+
+def test_renderer_includes_generator_context_helpers_for_generator_graphs() -> None:
+    container = Container()
+    container.register_generator(
+        _GeneratorService,
+        generator=_provide_generator_service,
+        lifetime=Lifetime.SCOPED,
+        scope=Scope.REQUEST,
+    )
+    container.register_generator(
+        _AsyncGeneratorService,
+        generator=_provide_async_generator_service,
+        lifetime=Lifetime.SCOPED,
+        scope=Scope.REQUEST,
+    )
+
+    code = ResolversTemplateRenderer().get_providers_code(
+        root_scope=Scope.APP,
+        registrations=container._providers_registrations,
+    )
+
+    assert "from contextlib import asynccontextmanager, contextmanager" in code
+    assert "contextmanager(_provider_" in code
+    assert "value = _provider_cm.__enter__()" in code
+    assert "value = next(_provider_gen)" in code
+    assert "asynccontextmanager(_provider_" in code
+    assert "value = await _provider_cm.__aenter__()" in code
+    assert "value = await anext(_provider_gen)" in code
+
+
+def test_renderer_does_not_add_generator_helpers_for_context_manager_only_graphs() -> None:
+    container = Container()
+    container.register_context_manager(
+        _ContextManagerService,
+        context_manager=_provide_context_manager_service,
+        lifetime=Lifetime.SCOPED,
+        scope=Scope.REQUEST,
+    )
+
+    code = ResolversTemplateRenderer().get_providers_code(
+        root_scope=Scope.APP,
+        registrations=container._providers_registrations,
+    )
+
+    assert "from contextlib import asynccontextmanager, contextmanager" not in code
+    assert "value = _provider_cm.__enter__()" in code
+
+
+def test_renderer_emits_async_context_manager_branch_for_async_context_manager_specs() -> None:
+    container = Container()
+    container.register_context_manager(
+        _AsyncContextManagerService,
+        context_manager=_provide_async_context_manager_service,
+        lifetime=Lifetime.SCOPED,
+        scope=Scope.REQUEST,
+    )
+
+    code = ResolversTemplateRenderer().get_providers_code(
+        root_scope=Scope.APP,
+        registrations=container._providers_registrations,
+    )
+
+    assert "value = await _provider_cm.__aenter__()" in code
+    assert "provider_scope_resolver._cleanup_callbacks.append((1, _provider_cm.__aexit__))" in code
+    assert "asynccontextmanager(_provider_" not in code
+
+
+def test_renderer_dependency_wiring_supports_positional_varargs_and_varkw() -> None:
+    signature = inspect.signature(_provide_dependency_shape_service)
+    positional_type = int
+    values_type = tuple[int, ...]
+    options_type = dict[str, int]
+
+    container = Container()
+    container.register_instance(provides=positional_type, instance=1)
+    container.register_instance(provides=values_type, instance=(2, 3))
+    container.register_instance(provides=options_type, instance={"first": 1, "second": 2})
+    container.register_factory(
+        _DependencyShapeService,
+        factory=_provide_dependency_shape_service,
+        dependencies=[
+            ProviderDependency(
+                provides=positional_type,
+                parameter=signature.parameters["positional"],
+            ),
+            ProviderDependency(
+                provides=values_type,
+                parameter=signature.parameters["values"],
+            ),
+            ProviderDependency(
+                provides=options_type,
+                parameter=signature.parameters["options"],
+            ),
+        ],
+    )
+
+    code = ResolversTemplateRenderer().get_providers_code(
+        root_scope=Scope.APP,
+        registrations=container._providers_registrations,
+    )
+
+    assert "positional=self.resolve_" not in code
+    assert "*self.resolve_" in code
+    assert "**self.resolve_" in code
+
+
+def test_renderer_raises_for_circular_dependency_graph() -> None:
+    container = Container()
+    container.register_factory(_CycleA, factory=_provide_cycle_a)
+    container.register_factory(_CycleB, factory=_provide_cycle_b)
+
+    with pytest.raises(DIWireInvalidProviderSpecError, match="Circular dependency detected"):
+        ResolversTemplateRenderer().get_providers_code(
+            root_scope=Scope.APP,
+            registrations=container._providers_registrations,
+        )
+
+
+def test_renderer_documents_instance_lifetime_as_none() -> None:
+    registrations = ProvidersRegistrations()
+    registrations.add(
+        ProviderSpec(
+            provides=_Config,
+            instance=_Config(),
+            lifetime=None,
+            scope=Scope.APP,
+            is_async=False,
+            is_any_dependency_async=False,
+            needs_cleanup=False,
+            concurrency_safe=True,
+        ),
+    )
+
+    code = ResolversTemplateRenderer().get_providers_code(
+        root_scope=Scope.APP,
+        registrations=registrations,
+    )
+
+    assert "Provider spec kind: instance" in code
+    assert "Declared lifetime: none" in code

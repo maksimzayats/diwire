@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
+from collections.abc import AsyncGenerator, Generator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from types import TracebackType
 from typing import Any, cast
 
 import pytest
 
 from diwire.container import Container
-from diwire.exceptions import DIWireScopeMismatchError
-from diwire.providers import Lifetime
+from diwire.exceptions import DIWireAsyncDependencyInSyncContextError, DIWireScopeMismatchError
+from diwire.providers import Lifetime, ProviderDependency
 from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire.scope import Scope
 
@@ -31,6 +34,30 @@ class _SessionService:
 
 class _Resource:
     pass
+
+
+class _DependsOnResource:
+    def __init__(self, resource: _Resource) -> None:
+        self.resource = resource
+
+
+class _PosOnlyDependency:
+    pass
+
+
+class _PosOnlyService:
+    def __init__(self, dependency: _PosOnlyDependency) -> None:
+        self.dependency = dependency
+
+
+class _VarArgsService:
+    def __init__(self, values: tuple[int, ...]) -> None:
+        self.values = values
+
+
+class _KwArgsService:
+    def __init__(self, options: dict[str, int]) -> None:
+        self.options = options
 
 
 def test_sync_singleton_uses_lambda_method_replacement_cache() -> None:
@@ -216,6 +243,321 @@ async def test_renderer_emits_async_locks_only_for_async_cached_paths() -> None:
 
     resolved = await container.aresolve(_TransientService)
     assert isinstance(resolved, _TransientService)
+
+
+def test_sync_generator_runs_cleanup_on_scope_exit() -> None:
+    events: list[str] = []
+
+    def provide_resource() -> Generator[_Resource, None, None]:
+        events.append("enter")
+        try:
+            yield _Resource()
+        finally:
+            events.append("exit")
+
+    container = Container()
+    container.register_generator(
+        _Resource,
+        generator=provide_resource,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with container.enter_scope() as request_scope:
+        resolved = request_scope.resolve(_Resource)
+        assert isinstance(resolved, _Resource)
+        assert events == ["enter"]
+
+    assert events == ["enter", "exit"]
+
+
+def test_sync_generator_cleanup_disabled_keeps_cleanup_callbacks_empty() -> None:
+    events: list[str] = []
+
+    def provide_resource() -> Generator[_Resource, None, None]:
+        events.append("enter")
+        yield _Resource()
+
+    container = Container()
+    container.register_generator(
+        _Resource,
+        generator=provide_resource,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    renderer = ResolversTemplateRenderer()
+    code = renderer.get_providers_code(
+        root_scope=Scope.APP,
+        registrations=container._providers_registrations,
+    )
+    namespace: dict[str, object] = {}
+    exec(code, namespace)  # noqa: S102
+    build_root_resolver = cast("Any", namespace["build_root_resolver"])
+    root_resolver = build_root_resolver(
+        container._providers_registrations,
+        cleanup_enabled=False,
+    )
+
+    request_scope = root_resolver.enter_scope()
+    resolved = request_scope.resolve(_Resource)
+
+    assert isinstance(resolved, _Resource)
+    assert request_scope._cleanup_callbacks == []
+    request_scope.__exit__(None, None, None)
+    assert request_scope._cleanup_callbacks == []
+    assert events == ["enter"]
+
+
+@pytest.mark.asyncio
+async def test_async_generator_runs_cleanup_on_async_scope_exit() -> None:
+    events: list[str] = []
+
+    async def provide_resource() -> AsyncGenerator[_Resource, None]:
+        events.append("enter")
+        try:
+            yield _Resource()
+        finally:
+            events.append("exit")
+
+    container = Container()
+    container.register_generator(
+        _Resource,
+        generator=provide_resource,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    async with container.enter_scope() as request_scope:
+        resolved = await request_scope.aresolve(_Resource)
+        assert isinstance(resolved, _Resource)
+        assert events == ["enter"]
+
+    assert events == ["enter", "exit"]
+
+
+def test_sync_resolution_for_async_generator_raises_async_dependency_error() -> None:
+    async def provide_resource() -> AsyncGenerator[_Resource, None]:
+        yield _Resource()
+
+    container = Container()
+    container.register_generator(_Resource, generator=provide_resource)
+
+    with pytest.raises(
+        DIWireAsyncDependencyInSyncContextError,
+        match="requires asynchronous resolution",
+    ):
+        container.resolve(_Resource)
+
+
+@pytest.mark.asyncio
+async def test_async_context_manager_provider_uses_aenter_and_aexit() -> None:
+    enter_calls = 0
+    exit_calls = 0
+
+    class _ManagedAsyncContext:
+        async def __aenter__(self) -> _Resource:
+            nonlocal enter_calls
+            enter_calls += 1
+            return _Resource()
+
+        async def __aexit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            nonlocal exit_calls
+            exit_calls += 1
+
+    def provide_resource() -> AbstractAsyncContextManager[_Resource]:
+        return _ManagedAsyncContext()
+
+    container = Container()
+    container.register_context_manager(
+        _Resource,
+        context_manager=provide_resource,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    async with container.enter_scope() as request_scope:
+        resolved = await request_scope.aresolve(_Resource)
+        assert isinstance(resolved, _Resource)
+
+    assert enter_calls == 1
+    assert exit_calls == 1
+
+
+def test_sync_scope_exit_raises_when_async_cleanup_callbacks_are_present() -> None:
+    async def provide_resource() -> AsyncGenerator[_Resource, None]:
+        yield _Resource()
+
+    container = Container()
+    container.register_generator(
+        _Resource,
+        generator=provide_resource,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with pytest.raises(
+        DIWireAsyncDependencyInSyncContextError,
+        match="Cannot execute async cleanup in sync context",
+    ):
+        with container.enter_scope() as request_scope:
+            asyncio.run(request_scope.aresolve(_Resource))
+
+
+@pytest.mark.asyncio
+async def test_async_generator_dependency_chain_requires_aresolve() -> None:
+    async def provide_resource() -> AsyncGenerator[_Resource, None]:
+        yield _Resource()
+
+    def build_dependent(resource: _Resource) -> _DependsOnResource:
+        return _DependsOnResource(resource)
+
+    container = Container()
+    container.register_generator(
+        _Resource,
+        generator=provide_resource,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_factory(
+        _DependsOnResource,
+        factory=build_dependent,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with container.enter_scope() as request_scope:
+        with pytest.raises(
+            DIWireAsyncDependencyInSyncContextError,
+            match="requires asynchronous resolution",
+        ):
+            request_scope.resolve(_DependsOnResource)
+
+    async with container.enter_scope() as request_scope:
+        resolved = await request_scope.aresolve(_DependsOnResource)
+        assert isinstance(resolved, _DependsOnResource)
+        assert isinstance(resolved.resource, _Resource)
+
+
+@pytest.mark.asyncio
+async def test_async_context_manager_dependency_chain_requires_aresolve() -> None:
+    @asynccontextmanager
+    async def provide_resource() -> AsyncGenerator[_Resource, None]:
+        yield _Resource()
+
+    def build_dependent(resource: _Resource) -> _DependsOnResource:
+        return _DependsOnResource(resource)
+
+    container = Container()
+    container.register_context_manager(
+        _Resource,
+        context_manager=provide_resource,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_factory(
+        _DependsOnResource,
+        factory=build_dependent,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with container.enter_scope() as request_scope:
+        with pytest.raises(
+            DIWireAsyncDependencyInSyncContextError,
+            match="requires asynchronous resolution",
+        ):
+            request_scope.resolve(_DependsOnResource)
+
+    async with container.enter_scope() as request_scope:
+        resolved = await request_scope.aresolve(_DependsOnResource)
+        assert isinstance(resolved, _DependsOnResource)
+        assert isinstance(resolved.resource, _Resource)
+
+
+@pytest.mark.asyncio
+async def test_async_scope_mismatch_raises_for_deeper_scoped_provider() -> None:
+    container = Container()
+    container.register_concrete(
+        _RequestService,
+        concrete_type=_RequestService,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with pytest.raises(DIWireScopeMismatchError, match="requires opened scope level"):
+        await container.aresolve(_RequestService)
+
+
+def test_positional_only_dependency_wiring_is_supported() -> None:
+    dependency_instance = _PosOnlyDependency()
+
+    def build_service(dependency: _PosOnlyDependency, /) -> _PosOnlyService:
+        return _PosOnlyService(dependency)
+
+    container = Container()
+    container.register_instance(_PosOnlyDependency, instance=dependency_instance)
+    container.register_factory(_PosOnlyService, factory=build_service)
+
+    resolved = container.resolve(_PosOnlyService)
+
+    assert isinstance(resolved, _PosOnlyService)
+    assert resolved.dependency is dependency_instance
+
+
+def test_var_positional_dependency_wiring_expands_iterable_dependency() -> None:
+    def build_service(*values: int) -> _VarArgsService:
+        return _VarArgsService(values)
+
+    signature = inspect.signature(build_service)
+    values_parameter = signature.parameters["values"]
+    values_type = tuple[int, ...]
+    values_instance = (1, 2, 3)
+
+    container = Container()
+    container.register_instance(provides=values_type, instance=values_instance)
+    container.register_factory(
+        _VarArgsService,
+        factory=build_service,
+        dependencies=[
+            ProviderDependency(provides=values_type, parameter=values_parameter),
+        ],
+    )
+
+    resolved = container.resolve(_VarArgsService)
+
+    assert isinstance(resolved, _VarArgsService)
+    assert resolved.values == values_instance
+
+
+def test_var_keyword_dependency_wiring_expands_mapping_dependency() -> None:
+    def build_service(**options: int) -> _KwArgsService:
+        return _KwArgsService(options)
+
+    signature = inspect.signature(build_service)
+    options_parameter = signature.parameters["options"]
+    options_type = dict[str, int]
+    options_instance = {"first": 1, "second": 2}
+
+    container = Container()
+    container.register_instance(provides=options_type, instance=options_instance)
+    container.register_factory(
+        _KwArgsService,
+        factory=build_service,
+        dependencies=[
+            ProviderDependency(provides=options_type, parameter=options_parameter),
+        ],
+    )
+
+    resolved = container.resolve(_KwArgsService)
+
+    assert isinstance(resolved, _KwArgsService)
+    assert resolved.options == options_instance
 
 
 def test_cleanup_raises_when_only_cleanup_fails() -> None:
