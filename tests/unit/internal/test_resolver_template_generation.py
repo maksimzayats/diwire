@@ -361,28 +361,17 @@ def test_renderer_raises_for_circular_dependency_graph() -> None:
         )
 
 
-def test_renderer_documents_instance_lifetime_as_none() -> None:
-    registrations = ProvidersRegistrations()
-    registrations.add(
-        ProviderSpec(
-            provides=_Config,
-            instance=_Config(),
-            lifetime=None,
-            scope=Scope.APP,
-            is_async=False,
-            is_any_dependency_async=False,
-            needs_cleanup=False,
-            concurrency_safe=True,
-        ),
-    )
+def test_renderer_documents_instance_lifetime_from_container_default() -> None:
+    container = Container(default_lifetime=Lifetime.SINGLETON)
+    container.register_instance(provides=_Config, instance=_Config())
 
     code = ResolversTemplateRenderer().get_providers_code(
         root_scope=Scope.APP,
-        registrations=registrations,
+        registrations=container._providers_registrations,
     )
 
     assert "Provider spec kind: instance" in code
-    assert "Declared lifetime: none" in code
+    assert "Declared lifetime: singleton" in code
 
 
 def test_renderer_filters_providers_and_scopes_when_root_scope_is_request() -> None:
