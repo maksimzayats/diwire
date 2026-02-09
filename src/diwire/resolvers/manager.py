@@ -29,6 +29,13 @@ class ResolversManager:
         namespace: dict[str, Any] = {}
         exec(code, namespace)  # noqa: S102
 
+        for scope in root_scope.owner.__dict__.values():
+            if not isinstance(scope, BaseScope):
+                continue
+            scope_binding_name = f"_scope_obj_{scope.level}"
+            if scope_binding_name in namespace:
+                namespace[scope_binding_name] = scope
+
         build_root_resolver = cast(
             "BuildRootResolverFunctionProtocol",
             namespace["build_root_resolver"],

@@ -159,6 +159,9 @@ class ResolversTemplateRenderer:
         return self._docstring_block(lines=lines, depth=0)
 
     def _render_globals(self, *, plan: ResolverGenerationPlan) -> str:
+        scope_lines = [
+            f"_scope_obj_{scope.scope_level}: Any = {scope.scope_level}" for scope in plan.scopes
+        ]
         provider_lines: list[str] = []
         for workflow in plan.workflows:
             provider_lines.extend(
@@ -178,7 +181,7 @@ class ResolversTemplateRenderer:
                 lock_lines.append(f"_dep_{workflow.slot}_async_lock = asyncio.Lock()")
 
         return self._globals_template.render(
-            provider_globals_block="\n".join(provider_lines),
+            provider_globals_block="\n".join([*scope_lines, *provider_lines]),
             lock_globals_block="\n".join(lock_lines),
         ).strip()
 
@@ -483,7 +486,10 @@ class ResolversTemplateRenderer:
             raise ValueError(msg)
 
         body_lines = [
-            f"if scope == {default_next.scope_level}:",
+            (
+                f"if scope is _scope_obj_{default_next.scope_level} "
+                f"or scope == {default_next.scope_level}:"
+            ),
             *self._indent_lines(
                 self._constructor_return_lines(
                     plan=plan,
@@ -506,7 +512,10 @@ class ResolversTemplateRenderer:
 
         body_lines.extend(
             [
-                f"if target_scope_level == {class_plan.scope_level}:",
+                (
+                    f"if target_scope_level is _scope_obj_{class_plan.scope_level} "
+                    f"or target_scope_level == {class_plan.scope_level}:"
+                ),
                 "    return self",
                 f"if target_scope_level <= {class_plan.scope_level}:",
                 (
@@ -520,7 +529,12 @@ class ResolversTemplateRenderer:
         for candidate in explicit_candidates:
             if candidate.scope_level == default_next.scope_level:
                 continue
-            body_lines.append(f"if target_scope_level == {candidate.scope_level}:")
+            body_lines.append(
+                (
+                    f"if target_scope_level is _scope_obj_{candidate.scope_level} "
+                    f"or target_scope_level == {candidate.scope_level}:"
+                ),
+            )
             body_lines.extend(
                 self._indent_lines(
                     self._constructor_return_lines(
@@ -832,18 +846,17 @@ class ResolversTemplateRenderer:
                 body_block=self._join_lines(self._indent_lines(body_lines, 1)),
             ).strip()
 
-        if workflow.is_cached:
-            body_lines.extend(
-                [
-                    f"if (cached_value := self._cache_{workflow.slot}) is not _MISSING_CACHE:",
-                    "    return cached_value",
-                ],
-            )
-
         uses_thread_lock = (
             workflow.is_cached and workflow.concurrency_safe and plan.lock_mode is LockMode.THREAD
         )
         if uses_thread_lock:
+            body_lines.extend(
+                [
+                    f"cached_value = self._cache_{workflow.slot}",
+                    "if cached_value is not _MISSING_CACHE:",
+                    "    return cached_value",
+                ],
+            )
             body_lines.append(f"with _dep_{workflow.slot}_thread_lock:")
             body_lines.extend(
                 self._indent_lines(
@@ -862,6 +875,37 @@ class ResolversTemplateRenderer:
                     ],
                     1,
                 ),
+            )
+            return self._sync_method_template.render(
+                slot=workflow.slot,
+                docstring_block=self._resolver_docstring_block(
+                    class_plan=class_plan,
+                    workflow=workflow,
+                    behavior_note=behavior_note,
+                    is_async_method=False,
+                ),
+                body_block=self._join_lines(self._indent_lines(body_lines, 1)),
+            ).strip()
+
+        if workflow.is_cached:
+            build_and_cache_lines = [
+                *self._render_local_value_build(
+                    workflow=workflow,
+                    is_async_call=False,
+                    class_plan=class_plan,
+                    scope_by_level=scope_by_level,
+                    workflow_by_slot={item.slot: item for item in plan.workflows},
+                ),
+                *self._render_sync_cache_replace(plan=plan, workflow=workflow),
+                "return value",
+            ]
+            body_lines.extend(
+                [
+                    f"cached_value = self._cache_{workflow.slot}",
+                    "if cached_value is _MISSING_CACHE:",
+                    *self._indent_lines(build_and_cache_lines, 1),
+                    "return cached_value",
+                ],
             )
             return self._sync_method_template.render(
                 slot=workflow.slot,
@@ -1001,18 +1045,17 @@ class ResolversTemplateRenderer:
         behavior_note = (
             "Builds the provider value in this resolver, enforcing scope guards and cache policy."
         )
-        if workflow.is_cached:
-            body_lines.extend(
-                [
-                    f"if (cached_value := self._cache_{workflow.slot}) is not _MISSING_CACHE:",
-                    "    return cached_value",
-                ],
-            )
-
         uses_async_lock = (
             workflow.is_cached and workflow.concurrency_safe and plan.lock_mode is LockMode.ASYNC
         )
         if uses_async_lock:
+            body_lines.extend(
+                [
+                    f"cached_value = self._cache_{workflow.slot}",
+                    "if cached_value is not _MISSING_CACHE:",
+                    "    return cached_value",
+                ],
+            )
             body_lines.append(f"async with _dep_{workflow.slot}_async_lock:")
             body_lines.extend(
                 self._indent_lines(
@@ -1031,6 +1074,37 @@ class ResolversTemplateRenderer:
                     ],
                     1,
                 ),
+            )
+            return self._async_method_template.render(
+                slot=workflow.slot,
+                docstring_block=self._resolver_docstring_block(
+                    class_plan=class_plan,
+                    workflow=workflow,
+                    behavior_note=behavior_note,
+                    is_async_method=True,
+                ),
+                body_block=self._join_lines(self._indent_lines(body_lines, 1)),
+            ).strip()
+
+        if workflow.is_cached:
+            build_and_cache_lines = [
+                *self._render_local_value_build(
+                    workflow=workflow,
+                    is_async_call=True,
+                    class_plan=class_plan,
+                    scope_by_level=scope_by_level,
+                    workflow_by_slot={item.slot: item for item in plan.workflows},
+                ),
+                *self._render_async_cache_replace(plan=plan, workflow=workflow),
+                "return value",
+            ]
+            body_lines.extend(
+                [
+                    f"cached_value = self._cache_{workflow.slot}",
+                    "if cached_value is _MISSING_CACHE:",
+                    *self._indent_lines(build_and_cache_lines, 1),
+                    "return cached_value",
+                ],
             )
             return self._async_method_template.render(
                 slot=workflow.slot,
