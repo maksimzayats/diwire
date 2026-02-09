@@ -56,9 +56,7 @@ class Container:
             self.aresolve = resolver.aresolve
             self.enter_scope = resolver.enter_scope
         else:
-            self.resolve = self._resolve
-            self.aresolve = self._aresolve
-            self.enter_scope = self._enter_scope
+            self._bind_lazy_entrypoints()
 
     # region Registration Methods
     def register_instance(
@@ -81,6 +79,7 @@ class Container:
                 concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
             ),
         )
+        self._invalidate_compilation()
 
     def register_concrete(
         self,
@@ -135,6 +134,7 @@ class Container:
                 concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
             ),
         )
+        self._invalidate_compilation()
 
         return decorator
 
@@ -186,6 +186,7 @@ class Container:
                 concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
             ),
         )
+        self._invalidate_compilation()
 
         return decorator
 
@@ -241,6 +242,7 @@ class Container:
                 concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
             ),
         )
+        self._invalidate_compilation()
 
         return decorator
 
@@ -298,6 +300,7 @@ class Container:
                 concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
             ),
         )
+        self._invalidate_compilation()
 
         return decorator
 
@@ -368,16 +371,36 @@ class Container:
 
     # endregion Registration Methods
 
-    def _ensure_root_resolver(self) -> ResolverProtocol:
+    # region Compilation
+    def compile(self) -> ResolverProtocol:
+        """Compile and cache the root resolver for current registrations."""
         if self._root_resolver is None:
-            self._root_resolver = self._resolvers_manager.build_root_resolver(
+            resolver = self._resolvers_manager.build_root_resolver(
                 root_scope=self._root_scope,
                 registrations=self._providers_registrations,
             )
-            self.resolve = self._root_resolver.resolve
-            self.aresolve = self._root_resolver.aresolve
-            self.enter_scope = self._root_resolver.enter_scope
+            self._root_resolver = resolver
+            self._bind_compiled_entrypoints(resolver)
         return self._root_resolver
+
+    def _bind_lazy_entrypoints(self) -> None:
+        self.resolve = self._resolve
+        self.aresolve = self._aresolve
+        self.enter_scope = self._enter_scope
+
+    def _bind_compiled_entrypoints(self, resolver: ResolverProtocol) -> None:
+        self.resolve = resolver.resolve
+        self.aresolve = resolver.aresolve
+        self.enter_scope = resolver.enter_scope
+
+    def _invalidate_compilation(self) -> None:
+        self._root_resolver = None
+        self._bind_lazy_entrypoints()
+
+    def _ensure_root_resolver(self) -> ResolverProtocol:
+        return self.compile()
+
+    # endregion Compilation
 
     def _resolve(self, dependency: Any) -> Any:
         resolver = self._ensure_root_resolver()

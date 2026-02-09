@@ -68,6 +68,10 @@ class _SessionAsyncService:
     pass
 
 
+def _bound_self(method: Any) -> Any:
+    return cast("Any", method).__self__
+
+
 def test_sync_singleton_uses_lambda_method_replacement_cache() -> None:
     calls = 0
 
@@ -125,6 +129,174 @@ async def test_async_singleton_uses_async_cached_method_replacement() -> None:
     cached_method = getattr(root_resolver, f"aresolve_{slot}")
     assert inspect.iscoroutinefunction(cached_method)
     assert cached_method.__name__ == "_cached"
+
+
+def test_compile_returns_cached_resolver_and_rebinds_entrypoints() -> None:
+    container = Container()
+    container.register_instance(_Resource, instance=_Resource())
+
+    initial_resolver = container._root_resolver
+    assert initial_resolver is None
+    assert _bound_self(container.resolve) is container
+    assert _bound_self(container.aresolve) is container
+    assert _bound_self(container.enter_scope) is container
+
+    first_resolver = container.compile()
+    second_resolver = container.compile()
+
+    assert first_resolver is second_resolver
+    assert container._root_resolver is first_resolver
+    assert _bound_self(container.resolve) is first_resolver
+    assert _bound_self(container.aresolve) is first_resolver
+    assert _bound_self(container.enter_scope) is first_resolver
+
+
+def test_resolve_auto_compiles_root_resolver_when_uncompiled() -> None:
+    resource = _Resource()
+    container = Container()
+    container.register_instance(_Resource, instance=resource)
+
+    initial_resolver = container._root_resolver
+    assert initial_resolver is None
+
+    resolved = container.resolve(_Resource)
+    root_resolver = container._root_resolver
+
+    assert resolved is resource
+    assert root_resolver is not None
+    assert _bound_self(container.resolve) is root_resolver
+
+
+@pytest.mark.asyncio
+async def test_aresolve_auto_compiles_root_resolver_when_uncompiled() -> None:
+    resource = _Resource()
+    container = Container()
+    container.register_instance(_Resource, instance=resource)
+
+    initial_resolver = container._root_resolver
+    assert initial_resolver is None
+
+    resolved = await container.aresolve(_Resource)
+    root_resolver = container._root_resolver
+
+    assert resolved is resource
+    assert root_resolver is not None
+    assert _bound_self(container.aresolve) is root_resolver
+
+
+def test_enter_scope_auto_compiles_root_resolver_when_uncompiled() -> None:
+    container = Container()
+    container.register_concrete(
+        _RequestService,
+        concrete_type=_RequestService,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    initial_resolver = container._root_resolver
+    assert initial_resolver is None
+
+    with container.enter_scope() as request_scope:
+        resolved = request_scope.resolve(_RequestService)
+        assert isinstance(resolved, _RequestService)
+
+    root_resolver = container._root_resolver
+    assert root_resolver is not None
+    assert _bound_self(container.enter_scope) is root_resolver
+
+
+def test_registering_after_compile_invalidates_compilation_and_rebinds_lazy_entrypoints() -> None:
+    class _RegisteredByInstance:
+        pass
+
+    class _RegisteredByConcrete:
+        pass
+
+    class _RegisteredByFactory:
+        pass
+
+    class _RegisteredByGenerator:
+        pass
+
+    class _RegisteredByContextManager:
+        pass
+
+    def build_factory() -> _RegisteredByFactory:
+        return _RegisteredByFactory()
+
+    def build_generator() -> Generator[_RegisteredByGenerator, None, None]:
+        yield _RegisteredByGenerator()
+
+    class _ManagedContext:
+        def __enter__(self) -> _RegisteredByContextManager:
+            return _RegisteredByContextManager()
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            return None
+
+    def build_context_manager() -> _ManagedContext:
+        return _ManagedContext()
+
+    container = Container()
+    previous_resolver = container.compile()
+
+    registrations: tuple[tuple[str, Any], ...] = (
+        (
+            "instance",
+            lambda: container.register_instance(
+                _RegisteredByInstance,
+                instance=_RegisteredByInstance(),
+            ),
+        ),
+        (
+            "concrete",
+            lambda: container.register_concrete(
+                _RegisteredByConcrete,
+                concrete_type=_RegisteredByConcrete,
+            ),
+        ),
+        (
+            "factory",
+            lambda: container.register_factory(
+                _RegisteredByFactory,
+                factory=build_factory,
+            ),
+        ),
+        (
+            "generator",
+            lambda: container.register_generator(
+                _RegisteredByGenerator,
+                generator=build_generator,
+            ),
+        ),
+        (
+            "context manager",
+            lambda: container.register_context_manager(
+                _RegisteredByContextManager,
+                context_manager=build_context_manager,
+            ),
+        ),
+    )
+
+    for registration_name, register in registrations:
+        register()
+
+        assert container._root_resolver is None, registration_name
+        assert _bound_self(container.resolve) is container, registration_name
+        assert _bound_self(container.aresolve) is container, registration_name
+        assert _bound_self(container.enter_scope) is container, registration_name
+
+        compiled_resolver = container.compile()
+        assert compiled_resolver is not previous_resolver, registration_name
+        assert _bound_self(container.resolve) is compiled_resolver, registration_name
+        assert _bound_self(container.aresolve) is compiled_resolver, registration_name
+        assert _bound_self(container.enter_scope) is compiled_resolver, registration_name
+        previous_resolver = compiled_resolver
 
 
 def test_transient_provider_is_not_cached() -> None:
