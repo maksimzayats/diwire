@@ -28,9 +28,7 @@ classifiers = [
     "Typing :: Typed",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = [
-    "jinja2>=3.1.6",
-]
+dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/maksimzayats/diwire"

@@ -338,9 +338,6 @@ wheels = [
 [[package]]
 name = "diwire"
 source = { editable = "." }
-dependencies = [
-    { name = "jinja2" },
-]
 
 [package.dev-dependencies]
 dev = [
@@ -376,7 +373,6 @@ docs = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "jinja2", specifier = ">=3.1.6" }]
 
 [package.metadata.requires-dev]
 dev = [

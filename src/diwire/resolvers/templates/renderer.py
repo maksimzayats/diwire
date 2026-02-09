@@ -4,9 +4,8 @@ from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 from textwrap import indent
 
-from jinja2 import Environment, Template
-
 from diwire.providers import ProvidersRegistrations
+from diwire.resolvers.templates.mini_jinja import Environment, Template
 from diwire.resolvers.templates.planner import (
     LockMode,
     ProviderWorkflowPlan,
@@ -54,7 +53,7 @@ class ResolversTemplateRenderer:
     """Renderer for generated resolver code."""
 
     def __init__(self) -> None:
-        self._env = Environment(autoescape=False)  # noqa: S701
+        self._env = Environment(autoescape=False)
         self._module_template = self._template(MODULE_TEMPLATE)
         self._imports_template = self._template(IMPORTS_TEMPLATE)
         self._globals_template = self._template(GLOBALS_TEMPLATE)
