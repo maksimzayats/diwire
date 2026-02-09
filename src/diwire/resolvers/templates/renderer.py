@@ -487,23 +487,34 @@ class ResolversTemplateRenderer:
                 ),
                 1,
             ),
+            f"if scope == {default_next.scope_level}:",
+            *self._indent_lines(
+                self._constructor_return_lines(
+                    plan=plan,
+                    current_scope_level=class_plan.scope_level,
+                    target_scope=default_next,
+                ),
+                1,
+            ),
+            "target_scope_level = scope",
         ]
 
         body_lines.extend(
             [
-                "target_scope_level = scope.level",
-                "if target_scope_level == self._scope_level:",
+                f"if target_scope_level == {class_plan.scope_level}:",
                 "    return self",
-                "if target_scope_level <= self._scope_level:",
+                f"if target_scope_level <= {class_plan.scope_level}:",
                 (
-                    '    msg = f"Cannot enter scope level {target_scope_level} from level '
-                    '{self._scope_level}."'
+                    f'    msg = f"Cannot enter scope level {{target_scope_level}} from level '
+                    f'{class_plan.scope_level}."'
                 ),
                 "    raise DIWireScopeMismatchError(msg)",
             ],
         )
 
         for candidate in explicit_candidates:
+            if candidate.scope_level == default_next.scope_level:
+                continue
             body_lines.append(f"if target_scope_level == {candidate.scope_level}:")
             body_lines.extend(
                 self._indent_lines(
@@ -519,8 +530,8 @@ class ResolversTemplateRenderer:
         body_lines.extend(
             [
                 (
-                    'msg = f"Scope level {target_scope_level} is not a valid next transition '
-                    'from level {self._scope_level}."'
+                    f'msg = f"Scope level {{target_scope_level}} is not a valid next transition '
+                    f'from level {class_plan.scope_level}."'
                 ),
                 "raise DIWireScopeMismatchError(msg)",
             ],
@@ -554,7 +565,9 @@ class ResolversTemplateRenderer:
         if self._uses_stateless_scope_reuse(plan=plan):
             return [f"return self._root_resolver._scope_resolver_{target_scope.scope_level}"]
 
-        arguments = ["self._root_resolver"]
+        arguments = [
+            "self" if current_scope_level == plan.root_scope_level else "self._root_resolver",
+        ]
         if plan.has_cleanup:
             arguments.append("self._cleanup_enabled")
 
@@ -610,10 +623,15 @@ class ResolversTemplateRenderer:
         ordered_workflows = self._dispatch_workflows(plan=plan, class_plan=class_plan)
         body_lines: list[str] = ["# Fast path identity checks to avoid reflective dispatch."]
         for workflow in ordered_workflows:
+            call_expression = self._dispatch_sync_call_expression(
+                plan=plan,
+                class_plan=class_plan,
+                workflow=workflow,
+            )
             body_lines.extend(
                 [
                     f"if dependency is _dep_{workflow.slot}_type:",
-                    f"    return self.resolve_{workflow.slot}()",
+                    f"    return {call_expression}",
                 ],
             )
         body_lines.extend(
@@ -644,10 +662,15 @@ class ResolversTemplateRenderer:
         ordered_workflows = self._dispatch_workflows(plan=plan, class_plan=class_plan)
         body_lines: list[str] = ["# Fast path identity checks for asynchronous resolution."]
         for workflow in ordered_workflows:
+            call_expression = self._dispatch_async_call_expression(
+                plan=plan,
+                class_plan=class_plan,
+                workflow=workflow,
+            )
             body_lines.extend(
                 [
                     f"if dependency is _dep_{workflow.slot}_type:",
-                    f"    return await self.aresolve_{workflow.slot}()",
+                    f"    return await {call_expression}",
                 ],
             )
         body_lines.extend(
@@ -666,6 +689,36 @@ class ResolversTemplateRenderer:
             ),
             body_block=self._join_lines(self._indent_lines(body_lines, 1)),
         ).strip()
+
+    def _dispatch_sync_call_expression(
+        self,
+        *,
+        plan: ResolverGenerationPlan,
+        class_plan: ScopePlan,
+        workflow: ProviderWorkflowPlan,
+    ) -> str:
+        if (
+            class_plan.is_root
+            and workflow.is_cached
+            and workflow.cache_owner_scope_level == plan.root_scope_level
+        ):
+            return f"self.resolve_{workflow.slot}()"
+        return f"{class_plan.class_name}.resolve_{workflow.slot}(self)"
+
+    def _dispatch_async_call_expression(
+        self,
+        *,
+        plan: ResolverGenerationPlan,
+        class_plan: ScopePlan,
+        workflow: ProviderWorkflowPlan,
+    ) -> str:
+        if (
+            class_plan.is_root
+            and workflow.is_cached
+            and workflow.cache_owner_scope_level == plan.root_scope_level
+        ):
+            return f"self.aresolve_{workflow.slot}()"
+        return f"{class_plan.class_name}.aresolve_{workflow.slot}(self)"
 
     def _render_sync_method(
         self,
