@@ -61,6 +61,14 @@ class _MypyAsyncDependencyConsumer:
         self.dependency = dependency
 
 
+class _MypyRequestRootAppService:
+    pass
+
+
+class _MypyRequestRootRequestService:
+    pass
+
+
 async def _provide_async_factory_service() -> _MypyAsyncFactoryService:
     return _MypyAsyncFactoryService()
 
@@ -127,6 +135,20 @@ def test_generated_code_passes_mypy_with_method_replacement_ignored(tmp_path: Pa
 
         assert exit_status == 0, (
             f"Mypy failed for {scenario} generated module.\nstdout:\n{stdout}\nstderr:\n{stderr}"
+        )
+
+        # Validate generation+write cycle stability for the same scenario artifact.
+        generated_module_path.write_text(code)
+        stdout, stderr, exit_status = mypy_api.run(
+            [
+                "--config-file",
+                str(_PYPROJECT_PATH),
+                str(generated_module_path),
+            ],
+        )
+        assert exit_status == 0, (
+            f"Mypy failed after rewrite for {scenario} generated module."
+            f"\nstdout:\n{stdout}\nstderr:\n{stderr}"
         )
 
 
@@ -230,6 +252,46 @@ def _render_generated_modules() -> dict[str, str]:
         lifetime=Lifetime.SINGLETON,
     )
 
+    mixed_async_cleanup_container = Container()
+    mixed_async_cleanup_container.register_generator(
+        _MypyAsyncGeneratorService,
+        generator=_provide_async_generator_service,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    mixed_async_cleanup_container.register_context_manager(
+        _MypySyncContextManagerService,
+        context_manager=_provide_sync_context_manager_service,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    mixed_async_cleanup_container.register_factory(
+        _MypyAsyncDependencyConsumer,
+        factory=_provide_async_dependency_consumer,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    request_root_container = Container()
+    request_root_container.register_concrete(
+        _MypyRequestRootAppService,
+        concrete_type=_MypyRequestRootAppService,
+        scope=Scope.APP,
+        lifetime=Lifetime.SINGLETON,
+    )
+    request_root_container.register_concrete(
+        _MypySession,
+        concrete_type=_MypySession,
+        scope=Scope.SESSION,
+        lifetime=Lifetime.SCOPED,
+    )
+    request_root_container.register_concrete(
+        _MypyRequestRootRequestService,
+        concrete_type=_MypyRequestRootRequestService,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
     return {
         "empty": renderer.get_providers_code(
             root_scope=Scope.APP,
@@ -266,5 +328,13 @@ def _render_generated_modules() -> dict[str, str]:
         "async_dependency_propagation": renderer.get_providers_code(
             root_scope=Scope.APP,
             registrations=async_dependency_propagation_container._providers_registrations,
+        ),
+        "mixed_async_cleanup": renderer.get_providers_code(
+            root_scope=Scope.APP,
+            registrations=mixed_async_cleanup_container._providers_registrations,
+        ),
+        "request_root_filtered": renderer.get_providers_code(
+            root_scope=Scope.REQUEST,
+            registrations=request_root_container._providers_registrations,
         ),
     }

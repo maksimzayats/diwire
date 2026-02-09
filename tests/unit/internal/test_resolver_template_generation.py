@@ -1,16 +1,27 @@
 from __future__ import annotations
 
 import inspect
+import runpy
 from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager, contextmanager
+from importlib.metadata import PackageNotFoundError
 
 import pytest
 
 from diwire.container import Container
 from diwire.exceptions import DIWireInvalidProviderSpecError
 from diwire.providers import Lifetime, ProviderDependency, ProviderSpec, ProvidersRegistrations
-from diwire.resolvers.templates.planner import LockMode, ResolverGenerationPlanner
-from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
+from diwire.resolvers.templates import renderer as renderer_module
+from diwire.resolvers.templates.planner import (
+    LockMode,
+    ProviderWorkflowPlan,
+    ResolverGenerationPlan,
+    ResolverGenerationPlanner,
+    ScopePlan,
+)
+from diwire.resolvers.templates.renderer import (
+    ResolversTemplateRenderer,
+)
 from diwire.scope import Scope
 
 
@@ -42,6 +53,11 @@ class _ContextManagerService:
 
 class _AsyncContextManagerService:
     pass
+
+
+class _AsyncDependencyConsumer:
+    def __init__(self, dependency: _AsyncGeneratorService) -> None:
+        self.dependency = dependency
 
 
 class _DependencyShapeService:
@@ -116,6 +132,37 @@ def _provide_cycle_a(dep_b: _CycleB) -> _CycleA:
 
 def _provide_cycle_b(dep_a: _CycleA) -> _CycleB:
     return _CycleB()
+
+
+def _make_workflow_plan(
+    *,
+    slot: int = 1,
+    provider_attribute: str = "instance",
+    is_provider_async: bool = False,
+    is_cached: bool = False,
+    scope_level: int = Scope.APP.level,
+) -> ProviderWorkflowPlan:
+    return ProviderWorkflowPlan(
+        slot=slot,
+        provides=int,
+        provider_attribute=provider_attribute,
+        provider_reference=1,
+        lifetime=Lifetime.TRANSIENT,
+        scope_name="app",
+        scope_level=scope_level,
+        scope_attr_name="_app_resolver",
+        is_cached=is_cached,
+        is_transient=not is_cached,
+        cache_owner_scope_level=Scope.APP.level if is_cached else None,
+        concurrency_safe=True,
+        is_provider_async=is_provider_async,
+        requires_async=is_provider_async,
+        needs_cleanup=False,
+        dependencies=(),
+        dependency_slots=(),
+        sync_arguments=(),
+        async_arguments=(),
+    )
 
 
 def test_renderer_output_is_deterministic_and_composable() -> None:
@@ -370,3 +417,247 @@ def test_renderer_filters_providers_and_scopes_when_root_scope_is_request() -> N
     assert "session:2" not in code
     assert "Provider target: " in code
     assert "_RequestRootOnlyService" in code
+
+
+def test_planner_raises_for_provider_spec_without_provider_object() -> None:
+    planner = ResolverGenerationPlanner(
+        root_scope=Scope.APP,
+        registrations=ProvidersRegistrations(),
+    )
+    invalid_spec = ProviderSpec(
+        provides=int,
+        lifetime=Lifetime.TRANSIENT,
+        scope=Scope.APP,
+        is_async=False,
+        is_any_dependency_async=False,
+        needs_cleanup=False,
+    )
+
+    with pytest.raises(
+        DIWireInvalidProviderSpecError,
+        match="does not define a provider",
+    ):
+        planner._resolve_provider_attribute(spec=invalid_spec)
+
+
+def test_planner_cache_owner_falls_back_to_root_scope_for_unknown_cached_lifetime() -> None:
+    planner = ResolverGenerationPlanner(
+        root_scope=Scope.REQUEST,
+        registrations=ProvidersRegistrations(),
+    )
+    spec = ProviderSpec(
+        provides=int,
+        lifetime=None,
+        scope=Scope.ACTION,
+        is_async=False,
+        is_any_dependency_async=False,
+        needs_cleanup=False,
+    )
+
+    assert planner._cache_owner_scope_level(spec=spec, is_cached=True) == Scope.REQUEST.level
+
+
+def test_planner_propagates_async_requirement_from_dependencies() -> None:
+    def _build_sync_consumer(dependency: _AsyncGeneratorService) -> _AsyncDependencyConsumer:
+        return _AsyncDependencyConsumer(dependency)
+
+    container = Container()
+    container.register_generator(
+        _AsyncGeneratorService,
+        generator=_provide_async_generator_service,
+        lifetime=Lifetime.SINGLETON,
+    )
+    container.register_factory(
+        _AsyncDependencyConsumer,
+        factory=_build_sync_consumer,
+        lifetime=Lifetime.SINGLETON,
+    )
+
+    plan = ResolverGenerationPlanner(
+        root_scope=Scope.APP,
+        registrations=container._providers_registrations,
+    ).build()
+
+    workflow_by_type = {workflow.provides: workflow for workflow in plan.workflows}
+    assert workflow_by_type[_AsyncDependencyConsumer].requires_async is True
+
+
+def test_renderer_enter_scope_raises_when_default_transition_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    renderer = ResolversTemplateRenderer()
+    class_plan = ScopePlan(
+        scope_name="app",
+        scope_level=Scope.APP.level,
+        class_name="RootResolver",
+        resolver_arg_name="app_resolver",
+        resolver_attr_name="_app_resolver",
+        skippable=False,
+        is_root=True,
+    )
+    next_scope = ScopePlan(
+        scope_name="session",
+        scope_level=Scope.SESSION.level,
+        class_name="_SessionResolver",
+        resolver_arg_name="session_resolver",
+        resolver_attr_name="_session_resolver",
+        skippable=True,
+        is_root=False,
+    )
+    plan = ResolverGenerationPlan(
+        root_scope_level=Scope.APP.level,
+        lock_mode=LockMode.THREAD,
+        has_cleanup=False,
+        scopes=(class_plan, next_scope),
+        workflows=(),
+    )
+    monkeypatch.setattr(
+        renderer,
+        "_next_scope_options",
+        lambda **_kwargs: (next_scope, None, (next_scope,)),
+    )
+
+    with pytest.raises(ValueError, match="Expected a default scope transition"):
+        renderer._render_enter_scope_method(plan=plan, class_plan=class_plan)
+
+
+def test_renderer_local_value_build_raises_for_unsupported_provider_attribute() -> None:
+    renderer = ResolversTemplateRenderer()
+    workflow = _make_workflow_plan(provider_attribute="unsupported")
+
+    with pytest.raises(ValueError, match="Unsupported provider attribute"):
+        renderer._render_local_value_build(workflow=workflow, is_async_call=False)
+
+
+def test_renderer_async_method_renders_non_locking_async_build_path() -> None:
+    renderer = ResolversTemplateRenderer()
+    class_plan = ScopePlan(
+        scope_name="app",
+        scope_level=Scope.APP.level,
+        class_name="RootResolver",
+        resolver_arg_name="app_resolver",
+        resolver_attr_name="_app_resolver",
+        skippable=False,
+        is_root=True,
+    )
+    workflow = _make_workflow_plan(
+        provider_attribute="factory",
+        is_provider_async=True,
+        is_cached=False,
+    )
+    plan = ResolverGenerationPlan(
+        root_scope_level=Scope.APP.level,
+        lock_mode=LockMode.ASYNC,
+        has_cleanup=False,
+        scopes=(class_plan,),
+        workflows=(workflow,),
+    )
+
+    method_code = renderer._render_async_method(
+        plan=plan,
+        class_plan=class_plan,
+        scope_by_level={class_plan.scope_level: class_plan},
+        workflow=workflow,
+    )
+
+    assert "async with _dep_1_async_lock:" not in method_code
+    assert "value = await value" in method_code
+    assert "return value" in method_code
+
+
+def test_renderer_generator_build_rejects_sync_resolution_for_async_generator_provider() -> None:
+    renderer = ResolversTemplateRenderer()
+    workflow = _make_workflow_plan(
+        provider_attribute="generator",
+        is_provider_async=True,
+    )
+
+    with pytest.raises(ValueError, match="cannot be resolved synchronously"):
+        renderer._render_generator_build(workflow=workflow, arguments=(), is_async_call=False)
+
+
+def test_renderer_provider_scope_guard_returns_scope_mismatch_for_deeper_provider_scope() -> None:
+    renderer = ResolversTemplateRenderer()
+    workflow = _make_workflow_plan(scope_level=Scope.REQUEST.level)
+
+    lines = renderer._render_provider_scope_guard(
+        class_scope_level=Scope.APP.level,
+        scope_by_level={},
+        workflow=workflow,
+    )
+
+    assert "requires opened scope level" in "\n".join(lines)
+
+
+def test_renderer_local_value_build_appends_await_for_async_factory_provider() -> None:
+    renderer = ResolversTemplateRenderer()
+    workflow = _make_workflow_plan(
+        provider_attribute="factory",
+        is_provider_async=True,
+    )
+
+    lines = renderer._render_local_value_build(workflow=workflow, is_async_call=True)
+
+    assert lines == ["value = _provider_1()", "value = await value"]
+
+
+def test_renderer_async_cache_replace_returns_empty_for_non_cached_workflow() -> None:
+    renderer = ResolversTemplateRenderer()
+    workflow = _make_workflow_plan(is_cached=False)
+
+    assert renderer._render_async_cache_replace(workflow=workflow) == []
+
+
+def test_renderer_resolve_diwire_version_returns_unknown_when_package_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _raise_missing(_dist_name: str) -> str:
+        raise PackageNotFoundError
+
+    monkeypatch.setattr(renderer_module, "version", _raise_missing)
+
+    assert ResolversTemplateRenderer()._resolve_diwire_version() == "unknown"
+
+
+def test_renderer_format_symbol_pointer_repr_falls_back_to_runtime_type_name() -> None:
+    class _PointerLike:
+        def __str__(self) -> str:
+            return "<_PointerLike object at 0xDEADBEEF>"
+
+    renderer = ResolversTemplateRenderer()
+    pointer_like = _PointerLike()
+
+    assert renderer._format_symbol(pointer_like) == (
+        f"{_PointerLike.__module__}.{_PointerLike.__qualname__}"
+    )
+
+
+def test_renderer_format_symbol_returns_text_for_non_pointer_repr() -> None:
+    class _TextOnly:
+        def __str__(self) -> str:
+            return "text-only-symbol"
+
+    renderer = ResolversTemplateRenderer()
+
+    assert renderer._format_symbol(_TextOnly()) == "text-only-symbol"
+
+
+def test_renderer_unique_ordered_filters_duplicates_without_reordering() -> None:
+    renderer = ResolversTemplateRenderer()
+
+    assert renderer._unique_ordered(["root", "request", "root", "session", "request"]) == [
+        "root",
+        "request",
+        "session",
+    ]
+
+
+def test_renderer_module_entrypoint_prints_generated_module(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    renderer_file = renderer_module.__file__
+    assert renderer_file is not None
+    runpy.run_path(renderer_file, run_name="__main__")
+
+    captured = capsys.readouterr()
+    assert "def build_root_resolver(" in captured.out

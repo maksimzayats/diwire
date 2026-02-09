@@ -77,6 +77,43 @@ class _SnapshotRequestRootRequestService:
     pass
 
 
+class _SnapshotActionRootRequestService:
+    pass
+
+
+class _SnapshotActionRootActionService:
+    pass
+
+
+class _SnapshotActionRootStepService:
+    pass
+
+
+class _SnapshotAsyncCleanupSignatureService:
+    def __init__(
+        self,
+        dependency: _SnapshotAsyncContextResource,
+        values: tuple[int, ...],
+        options: dict[str, int],
+    ) -> None:
+        self.dependency = dependency
+        self.values = values
+        self.options = options
+
+
+def _build_snapshot_async_cleanup_signature_service(
+    dependency: _SnapshotAsyncContextResource,
+    /,
+    *values: int,
+    **options: int,
+) -> _SnapshotAsyncCleanupSignatureService:
+    return _SnapshotAsyncCleanupSignatureService(
+        dependency=dependency,
+        values=tuple(values),
+        options=options,
+    )
+
+
 def test_codegen_matches_expected_for_empty_app_root_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
@@ -203,6 +240,72 @@ def test_codegen_matches_expected_for_request_root_filtered_graph() -> None:
     )
     generated = _render(container=container, root_scope=Scope.REQUEST)
     expected = _read_expected("request_root_filtered.txt")
+    assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
+
+
+def test_codegen_matches_expected_for_action_root_filtered_graph() -> None:
+    ProviderSpec.SLOT_COUNTER = 0
+    container = Container()
+    container.register_concrete(
+        _SnapshotActionRootRequestService,
+        concrete_type=_SnapshotActionRootRequestService,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_concrete(
+        _SnapshotActionRootActionService,
+        concrete_type=_SnapshotActionRootActionService,
+        scope=Scope.ACTION,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_concrete(
+        _SnapshotActionRootStepService,
+        concrete_type=_SnapshotActionRootStepService,
+        scope=Scope.STEP,
+        lifetime=Lifetime.SCOPED,
+    )
+    generated = _render(container=container, root_scope=Scope.ACTION)
+    expected = _read_expected("action_root_filtered.txt")
+    assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
+
+
+def test_codegen_matches_expected_for_async_cleanup_mixed_signature_graph() -> None:
+    signature = inspect.signature(_build_snapshot_async_cleanup_signature_service)
+    values_type = tuple[int, ...]
+    options_type = dict[str, int]
+
+    ProviderSpec.SLOT_COUNTER = 0
+    container = Container()
+    container.register_context_manager(
+        _SnapshotAsyncContextResource,
+        context_manager=_provide_async_context_resource,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_instance(provides=values_type, instance=(2, 3))
+    container.register_instance(provides=options_type, instance={"first": 1, "second": 2})
+    container.register_factory(
+        _SnapshotAsyncCleanupSignatureService,
+        factory=_build_snapshot_async_cleanup_signature_service,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+        dependencies=[
+            ProviderDependency(
+                provides=_SnapshotAsyncContextResource,
+                parameter=signature.parameters["dependency"],
+            ),
+            ProviderDependency(
+                provides=values_type,
+                parameter=signature.parameters["values"],
+            ),
+            ProviderDependency(
+                provides=options_type,
+                parameter=signature.parameters["options"],
+            ),
+        ],
+    )
+    generated = _render(container=container, root_scope=Scope.APP)
+    expected = _read_expected("app_root_async_cleanup_signature_mixed.txt")
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 

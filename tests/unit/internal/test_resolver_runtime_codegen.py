@@ -257,6 +257,20 @@ def test_request_resolver_delegates_to_session_owner_cache_when_opened_from_sess
     assert calls == 1
 
 
+def test_request_resolve_for_sync_session_service_raises_when_owner_missing() -> None:
+    container = Container()
+    container.register_factory(
+        _SessionService,
+        factory=_SessionService,
+        scope=Scope.SESSION,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with container.enter_scope() as request_scope:
+        with pytest.raises(DIWireScopeMismatchError, match="requires opened scope level"):
+            request_scope.resolve(_SessionService)
+
+
 @pytest.mark.asyncio
 async def test_request_aresolve_for_async_session_service_raises_when_owner_missing() -> None:
     async def build_session_async_service() -> _SessionAsyncService:
@@ -1153,3 +1167,83 @@ def test_build_root_resolver_rebinds_globals_for_new_registrations() -> None:
 
     # Already-cached value remains stable for the first resolver after global rebinding.
     assert first_resolver.resolve(_Resource) is first
+
+
+def test_scope_chain_transitions_cover_session_request_action_and_step_paths() -> None:
+    class _ActionService:
+        pass
+
+    class _StepService:
+        pass
+
+    container = Container()
+    container.register_concrete(
+        _SessionService,
+        concrete_type=_SessionService,
+        scope=Scope.SESSION,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_concrete(
+        _RequestService,
+        concrete_type=_RequestService,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_concrete(
+        _ActionService,
+        concrete_type=_ActionService,
+        scope=Scope.ACTION,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_concrete(
+        _StepService,
+        concrete_type=_StepService,
+        scope=Scope.STEP,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with container.enter_scope(Scope.SESSION) as session_scope:
+        assert session_scope.enter_scope(Scope.SESSION) is session_scope
+        with session_scope.enter_scope() as request_scope:
+            assert request_scope.enter_scope(Scope.REQUEST) is request_scope
+            with request_scope.enter_scope() as action_scope:
+                assert action_scope.enter_scope(Scope.ACTION) is action_scope
+                with action_scope.enter_scope() as step_scope:
+                    with pytest.raises(DIWireScopeMismatchError, match="Cannot enter deeper scope"):
+                        step_scope.enter_scope(Scope.STEP)
+                    assert isinstance(step_scope.resolve(_SessionService), _SessionService)
+                    assert isinstance(step_scope.resolve(_RequestService), _RequestService)
+                    assert isinstance(step_scope.resolve(_ActionService), _ActionService)
+                    assert isinstance(step_scope.resolve(_StepService), _StepService)
+
+
+def test_build_root_resolver_rebind_loop_preserves_each_existing_resolver_cache() -> None:
+    slot_counter = ProviderSpec.SLOT_COUNTER
+    try:
+        ProviderSpec.SLOT_COUNTER = 0
+        template_source_container = Container()
+        template_source_container.register_instance(_Resource, instance=_Resource())
+        code = ResolversTemplateRenderer().get_providers_code(
+            root_scope=Scope.APP,
+            registrations=template_source_container._providers_registrations,
+        )
+        namespace: dict[str, object] = {}
+        exec(code, namespace)  # noqa: S102
+        build_root_resolver = cast("Any", namespace["build_root_resolver"])
+
+        resolvers: list[Any] = []
+        instances: list[_Resource] = []
+        for _ in range(4):
+            ProviderSpec.SLOT_COUNTER = 0
+            container = Container()
+            current = _Resource()
+            container.register_instance(_Resource, instance=current)
+            resolver = build_root_resolver(container._providers_registrations)
+            assert resolver.resolve(_Resource) is current
+            resolvers.append(resolver)
+            instances.append(current)
+
+        for resolver, expected in zip(resolvers, instances, strict=True):
+            assert resolver.resolve(_Resource) is expected
+    finally:
+        ProviderSpec.SLOT_COUNTER = slot_counter
