@@ -386,12 +386,9 @@ class ResolversTemplateRenderer:
                 plan=plan,
                 class_scope_level=class_plan.scope_level,
             ):
-                if scope.scope_level == class_plan.scope_level:
-                    body_lines.append(f"self.{scope.resolver_attr_name} = self")
-                else:
-                    body_lines.append(
-                        f"self.{scope.resolver_attr_name} = {scope.resolver_arg_name}",
-                    )
+                body_lines.append(
+                    f"self.{scope.resolver_attr_name} = {scope.resolver_arg_name}",
+                )
 
         if uses_stateless_scope_reuse and class_plan.is_root:
             body_lines.extend(self._stateless_scope_reuse_init_lines(plan=plan))
@@ -1823,7 +1820,7 @@ class ResolversTemplateRenderer:
         return tuple(
             scope
             for scope in plan.scopes
-            if not scope.is_root and scope.scope_level <= class_scope_level
+            if not scope.is_root and scope.scope_level < class_scope_level
         )
 
     def _ancestor_non_root_scopes(
