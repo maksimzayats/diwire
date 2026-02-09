@@ -475,7 +475,7 @@ class ResolversTemplateRenderer:
             raise ValueError(msg)
 
         body_lines = [
-            "if scope is None:",
+            f"if scope == {default_next.scope_level}:",
             *self._indent_lines(
                 self._constructor_return_lines(
                     plan=plan,
@@ -484,7 +484,7 @@ class ResolversTemplateRenderer:
                 ),
                 1,
             ),
-            f"if scope == {default_next.scope_level}:",
+            "if scope is None:",
             *self._indent_lines(
                 self._constructor_return_lines(
                     plan=plan,
@@ -827,8 +827,7 @@ class ResolversTemplateRenderer:
         if workflow.is_cached:
             body_lines.extend(
                 [
-                    f"cached_value = self._cache_{workflow.slot}",
-                    "if cached_value is not _MISSING_CACHE:",
+                    f"if (cached_value := self._cache_{workflow.slot}) is not _MISSING_CACHE:",
                     "    return cached_value",
                 ],
             )
@@ -841,8 +840,7 @@ class ResolversTemplateRenderer:
             body_lines.extend(
                 self._indent_lines(
                     [
-                        f"cached_value = self._cache_{workflow.slot}",
-                        "if cached_value is not _MISSING_CACHE:",
+                        f"if (cached_value := self._cache_{workflow.slot}) is not _MISSING_CACHE:",
                         "    return cached_value",
                         *self._render_local_value_build(
                             workflow=workflow,
@@ -998,8 +996,7 @@ class ResolversTemplateRenderer:
         if workflow.is_cached:
             body_lines.extend(
                 [
-                    f"cached_value = self._cache_{workflow.slot}",
-                    "if cached_value is not _MISSING_CACHE:",
+                    f"if (cached_value := self._cache_{workflow.slot}) is not _MISSING_CACHE:",
                     "    return cached_value",
                 ],
             )
@@ -1012,8 +1009,7 @@ class ResolversTemplateRenderer:
             body_lines.extend(
                 self._indent_lines(
                     [
-                        f"cached_value = self._cache_{workflow.slot}",
-                        "if cached_value is not _MISSING_CACHE:",
+                        f"if (cached_value := self._cache_{workflow.slot}) is not _MISSING_CACHE:",
                         "    return cached_value",
                         *self._render_local_value_build(
                             workflow=workflow,
@@ -1817,10 +1813,15 @@ class ResolversTemplateRenderer:
         plan: ResolverGenerationPlan,
         class_scope_level: int,
     ) -> tuple[ScopePlan, ...]:
+        active_non_root_levels = self._active_non_root_scope_levels(plan=plan)
         return tuple(
             scope
             for scope in plan.scopes
-            if not scope.is_root and scope.scope_level < class_scope_level
+            if (
+                not scope.is_root
+                and scope.scope_level < class_scope_level
+                and scope.scope_level in active_non_root_levels
+            )
         )
 
     def _ancestor_non_root_scopes(
@@ -1829,9 +1830,23 @@ class ResolversTemplateRenderer:
         plan: ResolverGenerationPlan,
         scope_level: int,
     ) -> tuple[ScopePlan, ...]:
+        active_non_root_levels = self._active_non_root_scope_levels(plan=plan)
         return tuple(
-            scope for scope in plan.scopes if not scope.is_root and scope.scope_level < scope_level
+            scope
+            for scope in plan.scopes
+            if (
+                not scope.is_root
+                and scope.scope_level < scope_level
+                and scope.scope_level in active_non_root_levels
+            )
         )
+
+    def _active_non_root_scope_levels(self, *, plan: ResolverGenerationPlan) -> set[int]:
+        return {
+            workflow.scope_level
+            for workflow in plan.workflows
+            if workflow.scope_level > plan.root_scope_level
+        }
 
     def _uses_stateless_scope_reuse(self, *, plan: ResolverGenerationPlan) -> bool:
         return not any(workflow.scope_level > plan.root_scope_level for workflow in plan.workflows)
