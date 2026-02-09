@@ -14,7 +14,7 @@ class ResolverProtocol(Protocol):
 
     Used with the dependency injection container to resolve dependencies.
     In the case of scoped dependencies, a resolver with cache it after the first resolution.
-    The cache will replace the `resolve_<dependency_{{ slot }}>` method in the container with a `lambda` returning the cached instance.
+    The cache replaces `resolve_<slot>` with a `lambda` that returns the cached instance.
     """
 
     def __init__(
@@ -32,7 +32,16 @@ class ResolverProtocol(Protocol):
     def resolve(self, dependency: Any) -> Any:
         """Resolve the given dependency and return its instance."""
 
-    def enter_scope(self, scope: BaseScope) -> "ResolverProtocol":
+    @overload
+    async def aresolve(self, dependency: type[T]) -> T: ...
+
+    @overload
+    async def aresolve(self, dependency: Any) -> Any: ...
+
+    async def aresolve(self, dependency: Any) -> Any:
+        """Resolve the given dependency asynchronously and return its instance."""
+
+    def enter_scope(self, scope: BaseScope | None = None) -> "ResolverProtocol":
         """Enter a new scope and return a new resolver for that scope."""
 
     def __enter__(self) -> Self:
@@ -72,5 +81,7 @@ class BuildRootResolverFunctionProtocol(Protocol):
     def __call__(
         self,
         registrations: ProvidersRegistrations,
+        *,
+        cleanup_enabled: bool = True,
     ) -> ResolverProtocol:
         """Get the root resolver for the given registrations."""

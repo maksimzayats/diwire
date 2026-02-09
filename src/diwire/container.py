@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
@@ -54,9 +53,11 @@ class Container:
         if TYPE_CHECKING:
             resolver = cast("ResolverProtocol", object())
             self.resolve = resolver.resolve
+            self.aresolve = resolver.aresolve
             self.enter_scope = resolver.enter_scope
         else:
             self.resolve = self._resolve
+            self.aresolve = self._aresolve
             self.enter_scope = self._enter_scope
 
     # region Registration Methods
@@ -367,23 +368,28 @@ class Container:
 
     # endregion Registration Methods
 
+    def _ensure_root_resolver(self) -> ResolverProtocol:
+        if self._root_resolver is None:
+            self._root_resolver = self._resolvers_manager.build_root_resolver(
+                root_scope=self._root_scope,
+                registrations=self._providers_registrations,
+            )
+            self.resolve = self._root_resolver.resolve
+            self.aresolve = self._root_resolver.aresolve
+            self.enter_scope = self._root_resolver.enter_scope
+        return self._root_resolver
+
     def _resolve(self, dependency: Any) -> Any:
-        if self._root_resolver is None:
-            self._root_resolver = self._resolvers_manager.build_root_resolver(
-                root_scope=self._root_scope,
-                registrations=self._providers_registrations,
-            )
+        resolver = self._ensure_root_resolver()
+        return resolver.resolve(dependency)
 
-        return self._root_resolver.resolve(dependency)
+    def _enter_scope(self, scope: BaseScope | None = None) -> Any:
+        resolver = self._ensure_root_resolver()
+        return resolver.enter_scope(scope)
 
-    def _enter_scope(self, scope: BaseScope) -> Any:
-        if self._root_resolver is None:
-            self._root_resolver = self._resolvers_manager.build_root_resolver(
-                root_scope=self._root_scope,
-                registrations=self._providers_registrations,
-            )
-
-        return self._root_resolver.enter_scope(scope)
+    async def _aresolve(self, dependency: Any) -> Any:
+        resolver = self._ensure_root_resolver()
+        return await resolver.aresolve(dependency)
 
 
 @dataclass(slots=True, kw_only=True)
@@ -484,25 +490,3 @@ class ContextManagerRegistrationDecorator(Generic[T]):
         )
 
         return context_manager
-
-
-def main() -> None:
-    container = Container()
-    container.register_instance(int, instance=42)
-    container.register_factory(
-        float,
-        factory=lambda i: float(i) + 1,
-        dependencies=[
-            ProviderDependency(
-                provides=int,
-                parameter=inspect.Parameter(
-                    name="i",
-                    kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                ),
-            ),
-        ],
-    )
-
-
-if __name__ == "__main__":
-    main()

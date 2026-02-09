@@ -12,3 +12,15 @@ class DIWireInvalidProviderSpecError(DIWireError):
 
 class DIWireProviderDependencyInferenceError(DIWireInvalidProviderSpecError):
     """Raised when provider dependencies cannot be inferred."""
+
+
+class DIWireDependencyNotRegisteredError(DIWireError):
+    """Raised when attempting to resolve a dependency that was not registered."""
+
+
+class DIWireScopeMismatchError(DIWireError):
+    """Raised when dependency resolution requires a scope that is not currently opened."""
+
+
+class DIWireAsyncDependencyInSyncContextError(DIWireError):
+    """Raised when synchronous resolution is attempted for an async dependency chain."""
