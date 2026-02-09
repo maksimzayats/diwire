@@ -6,7 +6,12 @@ from typing import Any, cast
 
 import pytest
 
-from diwire.container import Container
+from diwire.container import (
+    ConcreteTypeRegistrationDecorator,
+    Container,
+    ContextManagerRegistrationDecorator,
+    GeneratorRegistrationDecorator,
+)
 from diwire.exceptions import DIWireInvalidRegistrationError
 from diwire.providers import ContextManagerProvider, FactoryProvider, GeneratorProvider
 
@@ -16,6 +21,14 @@ class Service:
 
 
 class ExplicitService:
+    pass
+
+
+class DecoratorService:
+    pass
+
+
+class DecoratorConcreteService:
     pass
 
 
@@ -130,3 +143,73 @@ def test_explicit_provides_bypasses_return_type_inference_for_all_provider_kinds
     container.register_context_manager(provides=ExplicitService, context_manager=typed_valid_cm)
     async_context_spec = container._providers_registrations.get_by_type(ExplicitService)
     assert async_context_spec.context_manager is typed_valid_cm
+
+
+def test_register_concrete_without_arguments_returns_decorator() -> None:
+    container = Container()
+
+    assert isinstance(container.register_concrete(), ConcreteTypeRegistrationDecorator)
+
+
+def test_register_generator_with_none_returns_decorator() -> None:
+    container = Container()
+
+    assert isinstance(container.register_generator(generator=None), GeneratorRegistrationDecorator)
+
+
+def test_register_context_manager_with_none_returns_decorator() -> None:
+    container = Container()
+
+    assert isinstance(
+        container.register_context_manager(context_manager=None),
+        ContextManagerRegistrationDecorator,
+    )
+
+
+def test_register_concrete_with_provides_only_uses_the_same_concrete_type() -> None:
+    container = Container()
+
+    container.register_concrete(provides=DecoratorConcreteService)
+
+    provider_spec = container._providers_registrations.get_by_type(DecoratorConcreteService)
+    assert provider_spec.concrete_type is DecoratorConcreteService
+
+
+def test_concrete_decorator_registers_provider() -> None:
+    container = Container()
+
+    decorator = container.register_concrete(provides=DecoratorConcreteService)
+    returned_type = decorator(DecoratorConcreteService)
+
+    assert returned_type is DecoratorConcreteService
+    provider_spec = container._providers_registrations.get_by_type(DecoratorConcreteService)
+    assert provider_spec.concrete_type is DecoratorConcreteService
+
+
+def test_generator_decorator_registers_provider() -> None:
+    def build_service() -> Generator[DecoratorService, None, None]:
+        yield DecoratorService()
+
+    container = Container()
+
+    decorator = container.register_generator(provides=DecoratorService, generator=None)
+    returned_generator = decorator(build_service)
+
+    assert returned_generator is build_service
+    provider_spec = container._providers_registrations.get_by_type(DecoratorService)
+    assert provider_spec.generator is build_service
+
+
+def test_context_manager_decorator_registers_provider() -> None:
+    @contextmanager
+    def build_service() -> Generator[DecoratorService, None, None]:
+        yield DecoratorService()
+
+    container = Container()
+
+    decorator = container.register_context_manager(provides=DecoratorService, context_manager=None)
+    returned_context_manager = decorator(build_service)
+
+    assert returned_context_manager is build_service
+    provider_spec = container._providers_registrations.get_by_type(DecoratorService)
+    assert provider_spec.context_manager is build_service

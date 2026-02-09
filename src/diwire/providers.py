@@ -622,7 +622,9 @@ class ProviderReturnTypeExtractor:
         if get_origin(annotation) is not Annotated:
             return annotation
         annotation_args = get_args(annotation)
-        if not annotation_args:
+        if (
+            not annotation_args
+        ):  # pragma: no cover - typing.Annotated always wraps at least one type
             return annotation
         return self.unwrap_annotated(annotation_args[0])
 

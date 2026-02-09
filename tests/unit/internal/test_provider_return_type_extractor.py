@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import inspect
+import typing
 from collections.abc import AsyncGenerator, Awaitable, Coroutine, Generator
 from contextlib import (
     AbstractAsyncContextManager,
@@ -172,3 +174,118 @@ def test_context_manager_with_invalid_return_type_raises_error() -> None:
 
     with pytest.raises(DIWireInvalidRegistrationError, match="context manager provider"):
         extractor.extract_from_context_manager(bad_context_manager)
+
+
+def test_factory_with_bare_awaitable_return_annotation_raises_error() -> None:
+    def build_service() -> Service:
+        return Service()
+
+    build_service.__annotations__["return"] = typing.Awaitable
+
+    extractor = ProviderReturnTypeExtractor()
+
+    with pytest.raises(DIWireInvalidRegistrationError, match="factory provider"):
+        extractor.extract_from_factory(build_service)
+
+
+def test_factory_with_bare_coroutine_return_annotation_raises_error() -> None:
+    def build_service() -> Service:
+        return Service()
+
+    build_service.__annotations__["return"] = typing.Coroutine
+
+    extractor = ProviderReturnTypeExtractor()
+
+    with pytest.raises(DIWireInvalidRegistrationError, match="factory provider"):
+        extractor.extract_from_factory(build_service)
+
+
+def test_generator_missing_return_annotation_raises_error() -> None:
+    def build_service():  # type: ignore[no-untyped-def]
+        yield Service()
+
+    extractor = ProviderReturnTypeExtractor()
+    bad_generator = cast("GeneratorProvider[Any]", build_service)
+
+    with pytest.raises(DIWireInvalidRegistrationError, match="generator provider"):
+        extractor.extract_from_generator(bad_generator)
+
+
+def test_context_manager_missing_return_annotation_raises_error() -> None:
+    @contextmanager
+    def build_service():  # type: ignore[no-untyped-def]
+        yield Service()
+
+    extractor = ProviderReturnTypeExtractor()
+    bad_context_manager = cast("ContextManagerProvider[Any]", build_service)
+
+    with pytest.raises(DIWireInvalidRegistrationError, match="context manager provider"):
+        extractor.extract_from_context_manager(bad_context_manager)
+
+
+def test_generator_with_bare_generator_annotation_raises_error() -> None:
+    def build_service() -> Generator[Service, None, None]:
+        yield Service()
+
+    build_service.__annotations__["return"] = typing.Generator
+    extractor = ProviderReturnTypeExtractor()
+    bad_generator = cast("GeneratorProvider[Any]", build_service)
+
+    with pytest.raises(DIWireInvalidRegistrationError, match="generator provider"):
+        extractor.extract_from_generator(bad_generator)
+
+
+def test_context_manager_with_bare_abstract_context_manager_annotation_raises_error() -> None:
+    def build_service() -> AbstractContextManager[Service]:
+        raise NotImplementedError
+
+    build_service.__annotations__["return"] = AbstractContextManager
+    extractor = ProviderReturnTypeExtractor()
+    bad_context_manager = cast("ContextManagerProvider[Any]", build_service)
+
+    with pytest.raises(DIWireInvalidRegistrationError, match="context manager provider"):
+        extractor.extract_from_context_manager(bad_context_manager)
+
+
+def test_resolved_return_annotation_handles_bad_signature_callables() -> None:
+    class BadSignatureCallable:
+        __annotations__ = {}
+
+        @property
+        def __signature__(self) -> inspect.Signature:
+            raise ValueError("invalid signature")
+
+        def __call__(self) -> Service:
+            return Service()
+
+    extractor = ProviderReturnTypeExtractor()
+    resolved_return_annotation, annotation_error = extractor._resolved_return_annotation(
+        BadSignatureCallable(),
+    )
+
+    assert resolved_return_annotation is not Service
+    assert isinstance(annotation_error, ValueError)
+
+
+def test_resolved_return_annotation_uses_raw_signature_after_type_hint_error() -> None:
+    def build_service(dep: Service) -> Service:
+        return Service()
+
+    build_service.__annotations__["dep"] = "MissingDependency"
+    build_service.__annotations__["return"] = Service
+    extractor = ProviderReturnTypeExtractor()
+    resolved_return_annotation, annotation_error = extractor._resolved_return_annotation(
+        build_service,
+    )
+
+    assert resolved_return_annotation is Service
+    assert isinstance(annotation_error, NameError)
+
+
+def test_unwrap_annotated_recursively_unwraps_nested_annotations() -> None:
+    extractor = ProviderReturnTypeExtractor()
+    nested_annotation = Annotated[Annotated[Service, "inner"], "outer"]
+
+    unwrapped = extractor.unwrap_annotated(nested_annotation)
+
+    assert unwrapped is Service

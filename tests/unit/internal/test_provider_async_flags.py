@@ -3,10 +3,10 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator, Awaitable, Coroutine
 from contextlib import asynccontextmanager
 from inspect import Parameter
-from typing import Any
+from typing import Any, cast
 
 from diwire.container import Container
-from diwire.providers import ProviderDependency, ProviderReturnTypeExtractor
+from diwire.providers import ContextManagerProvider, ProviderDependency, ProviderReturnTypeExtractor
 
 
 class Service:
@@ -71,3 +71,13 @@ def test_container_sets_async_flags_for_async_context_manager() -> None:
 
     assert spec.is_async
     assert not spec.is_any_dependency_async
+
+
+def test_return_type_extractor_detects_coroutine_context_manager_provider() -> None:
+    async def provide_service() -> Service:
+        return Service()
+
+    extractor = ProviderReturnTypeExtractor()
+    typed_provider = cast("ContextManagerProvider[Any]", provide_service)
+
+    assert extractor.is_context_manager_async(typed_provider)

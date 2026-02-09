@@ -109,7 +109,9 @@ class Container:
         if concrete_type is None:
             concrete_type = provides
 
-        if provides is None or concrete_type is None:
+        if (
+            provides is None or concrete_type is None
+        ):  # pragma: no cover - normalized above; defensive invariant guard
             msg = "Concrete provider registration requires either provides or concrete_type."
             raise DIWireInvalidRegistrationError(msg)
 

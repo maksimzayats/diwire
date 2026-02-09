@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import inspect
+from collections.abc import Generator
+from contextlib import contextmanager
 
 import pytest
 
@@ -19,6 +21,11 @@ class TypedDependency:
 
 class Service:
     pass
+
+
+class ConcreteService(Service):
+    def __init__(self, dep: TypedDependency) -> None:
+        self.dep = dep
 
 
 def test_explicit_dependencies_bypass_inference() -> None:
@@ -140,3 +147,65 @@ def test_explicit_dependencies_reject_kind_mismatch() -> None:
 
     with pytest.raises(DIWireInvalidProviderSpecError, match="has kind"):
         container.register_factory(Service, factory=build_service, dependencies=dependencies)
+
+
+def test_explicit_dependencies_for_concrete_type_are_validated() -> None:
+    signature = inspect.signature(ConcreteService.__init__)
+    dependencies = [
+        ProviderDependency(
+            provides=TypedDependency,
+            parameter=signature.parameters["dep"],
+        ),
+    ]
+
+    container = Container()
+    container.register_concrete(Service, concrete_type=ConcreteService, dependencies=dependencies)
+
+    provider_spec = container._providers_registrations.get_by_type(Service)
+    assert [dependency.parameter.name for dependency in provider_spec.dependencies] == ["dep"]
+    assert [dependency.provides for dependency in provider_spec.dependencies] == [TypedDependency]
+
+
+def test_explicit_dependencies_for_generator_are_validated() -> None:
+    def build_service(dep: TypedDependency) -> Generator[Service, None, None]:
+        yield Service()
+
+    signature = inspect.signature(build_service)
+    dependencies = [
+        ProviderDependency(
+            provides=TypedDependency,
+            parameter=signature.parameters["dep"],
+        ),
+    ]
+
+    container = Container()
+    container.register_generator(Service, generator=build_service, dependencies=dependencies)
+
+    provider_spec = container._providers_registrations.get_by_type(Service)
+    assert [dependency.parameter.name for dependency in provider_spec.dependencies] == ["dep"]
+    assert [dependency.provides for dependency in provider_spec.dependencies] == [TypedDependency]
+
+
+def test_explicit_dependencies_for_context_manager_are_validated() -> None:
+    @contextmanager
+    def build_service(dep: TypedDependency) -> Generator[Service, None, None]:
+        yield Service()
+
+    signature = inspect.signature(build_service)
+    dependencies = [
+        ProviderDependency(
+            provides=TypedDependency,
+            parameter=signature.parameters["dep"],
+        ),
+    ]
+
+    container = Container()
+    container.register_context_manager(
+        Service,
+        context_manager=build_service,
+        dependencies=dependencies,
+    )
+
+    provider_spec = container._providers_registrations.get_by_type(Service)
+    assert [dependency.parameter.name for dependency in provider_spec.dependencies] == ["dep"]
+    assert [dependency.provides for dependency in provider_spec.dependencies] == [TypedDependency]

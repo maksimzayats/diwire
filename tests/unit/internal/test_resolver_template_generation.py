@@ -4,6 +4,7 @@ import inspect
 import runpy
 from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager, contextmanager
+from dataclasses import replace
 from importlib.metadata import PackageNotFoundError
 
 import pytest
@@ -595,6 +596,13 @@ def test_renderer_async_cache_replace_returns_empty_for_non_cached_workflow() ->
     workflow = _make_workflow_plan(is_cached=False)
 
     assert renderer._render_async_cache_replace(workflow=workflow) == []
+
+
+def test_renderer_format_lifetime_returns_none_when_workflow_has_no_lifetime() -> None:
+    renderer = ResolversTemplateRenderer()
+    workflow = replace(_make_workflow_plan(), lifetime=None)
+
+    assert renderer._format_lifetime(workflow=workflow) == "none"
 
 
 def test_renderer_resolve_diwire_version_returns_unknown_when_package_is_missing(
