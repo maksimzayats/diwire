@@ -21,6 +21,7 @@ from diwire.providers import (
 from diwire.resolvers.manager import ResolversManager
 from diwire.resolvers.protocol import ResolverProtocol
 from diwire.scope import BaseScope, Scope
+from diwire.validators import DependecyRegistrationValidator
 
 T = TypeVar("T")
 F = TypeVar("F", bound=Callable[..., Any])
@@ -46,6 +47,7 @@ class Container:
 
         self._provider_dependencies_extractor = ProviderDependenciesExtractor()
         self._provider_return_type_extractor = ProviderReturnTypeExtractor()
+        self._dependency_registration_validator = DependecyRegistrationValidator()
         self._providers_registrations = ProvidersRegistrations()
         self._resolvers_manager = ResolversManager()
 
@@ -114,6 +116,8 @@ class Container:
         ):  # pragma: no cover - normalized above; defensive invariant guard
             msg = "Concrete provider registration requires either provides or concrete_type."
             raise DIWireInvalidRegistrationError(msg)
+
+        self._dependency_registration_validator.validate_concrete_type(concrete_type=concrete_type)
 
         dependencies_for_provider = self._resolve_concrete_registration_dependencies(
             concrete_type=concrete_type,
