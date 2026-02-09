@@ -53,6 +53,93 @@ jobs:
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  benchmarks:
+    name: Benchmarks (Python 3.14)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.14
+        run: uv python install 3.14
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run DIWire vs rodi benchmark comparison
+        run: uv run python -m tests.benchmarks.rodi_comparison
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: diwire-rodi-benchmarks
+          path: |
+            .benchmarks/rodi-comparison.md
+            .benchmarks/rodi-comparison.json
+
+      - name: Append benchmark table to job summary
+        run: |
+          {
+            echo "## DIWire vs rodi benchmarks"
+            echo
+            cat .benchmarks/rodi-comparison.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upsert sticky benchmark PR comment
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const marker = "<!-- diwire-rodi-benchmark-table -->";
+            const report = fs.readFileSync(".benchmarks/rodi-comparison.md", "utf8");
+            const body = [
+              marker,
+              "## DIWire vs rodi benchmarks",
+              "",
+              report.trimEnd(),
+            ].join("\n");
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.find((comment) => (
+              comment.user?.type === "Bot" &&
+              comment.body?.includes(marker)
+            ));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
+
   docs:
     name: Docs Build
     runs-on: ubuntu-latest

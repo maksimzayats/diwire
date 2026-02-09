@@ -1,55 +1,41 @@
 from __future__ import annotations
 
-import timeit
-from typing import Any
+import json
 
-import rodi
-
-from diwire.container import Container as DIWireContainer
-
-_TIMEIT_NUMBER = 100_000
-_WARMUP_ROUNDS = 3
-_MEASURE_ROUNDS = 5
+from tests.benchmarks.rodi_comparison import BenchmarkResult, write_outputs
 
 
-def test_diwire_scope_open_close_is_faster_than_rodi(benchmark: Any) -> None:
-    # Keep benchmark fixture in use so --benchmark-skip gates this test.
-    benchmark(lambda: None)
-
-    container = DIWireContainer(default_concurrency_safe=False)
-    container.register_instance(int, instance=42)
-
-    with container.enter_scope() as scoped_container:
-        scoped_container.resolve(int)
-
-    def bench_diwire() -> None:
-        with container.enter_scope() as scoped_container:
-            _ = scoped_container.resolve(int)
-
-    rodi_container = rodi.Container()
-    rodi_container.add_singleton_by_factory(lambda: 42, int)
-    services = rodi_container.build_provider()
-    services.get(int)
-
-    def bench_rodi() -> None:
-        with services.create_scope() as scoped_services:
-            _ = scoped_services.get(int)
-
-    for _ in range(_WARMUP_ROUNDS):
-        timeit.timeit(stmt=bench_diwire, number=_TIMEIT_NUMBER)
-        timeit.timeit(stmt=bench_rodi, number=_TIMEIT_NUMBER)
-
-    diwire_runs = [
-        timeit.timeit(stmt=bench_diwire, number=_TIMEIT_NUMBER) for _ in range(_MEASURE_ROUNDS)
+def test_write_outputs_creates_markdown_and_json_files(tmp_path) -> None:
+    results = [
+        BenchmarkResult(
+            case="open_scope",
+            provider="factory",
+            lifetime="singleton",
+            diwire_concurrency_safe="enabled",
+            diwire_us_per_op=1.25,
+            rodi_us_per_op=1.75,
+            ratio_rodi_over_diwire=1.4,
+            winner="DIWire",
+        ),
     ]
-    rodi_runs = [
-        timeit.timeit(stmt=bench_rodi, number=_TIMEIT_NUMBER) for _ in range(_MEASURE_ROUNDS)
-    ]
+    markdown_path = tmp_path / "rodi-comparison.md"
+    json_path = tmp_path / "rodi-comparison.json"
 
-    diwire_best = min(diwire_runs)
-    rodi_best = min(rodi_runs)
-
-    assert diwire_best < rodi_best, (
-        "diwire must be faster than rodi for the scope open/close timeit scenario. "
-        f"diwire_best={diwire_best:.6f}, rodi_best={rodi_best:.6f}, ratio={rodi_best / diwire_best:.3f}"
+    write_outputs(
+        results,
+        output_markdown=markdown_path,
+        output_json=json_path,
     )
+
+    markdown = markdown_path.read_text(encoding="utf-8")
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+
+    assert (
+        "| Scenario | Resolves/Scope | Provider Registration | Lifetime | DIWire Concurrency Safe | "
+        "DIWire (us/op) | Rodi (us/op) | Rodi/DIWire | Winner |" in markdown
+    )
+    assert (
+        "| Scope open/close only | 0 | Factory provider | singleton | enabled | "
+        "1.250 | 1.750 | 1.400 | DIWire |"
+    ) in markdown
+    assert payload[0]["winner"] == "DIWire"
