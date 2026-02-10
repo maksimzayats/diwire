@@ -76,7 +76,7 @@ class Container:
         Args:
             root_scope: The initial root scope for the container. All singleton providers will be tied to this scope. Defaults to Scope.APP.
             default_lifetime: The lifetime that will be used for providers if not specified. Defaults to Lifetime.TRANSIENT.
-            lock_mode: Default lock strategy for non-instance registrations. Accepts LockMode or "auto". When set to "auto", sync-only graphs use thread locks and graphs containing async specs use async locks. Defaults to "auto".
+            lock_mode: Default lock strategy for non-instance registrations. Accepts LockMode or "auto". When set to "auto", sync-only graphs use thread locks and graphs containing async specs use async locks. In mixed graphs this means auto-mode sync cached paths are not thread-locked unless you override to LockMode.THREAD. Defaults to "auto".
             autoregister: Whether to automatically register dependencies when they are resolved if not already registered. Defaults to False.
             autoregister_dependencies: Whether to automatically register provider dependencies as concrete types during registration. Defaults to False.
 

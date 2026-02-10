@@ -55,7 +55,11 @@ class _RegistrationOperation:
 
 
 class ContainerContext:
-    """Deferred-registration container context with a single active container binding."""
+    """Deferred-registration container context with one shared active container.
+
+    The active container binding is process-global for this ``ContainerContext`` instance.
+    It is not task-local or thread-local.
+    """
 
     def __init__(self) -> None:
         self._container: Container | None = None
@@ -63,12 +67,15 @@ class ContainerContext:
         self._injected_callable_inspector = InjectedCallableInspector()
 
     def set_current(self, container: Container) -> None:
-        """Set the active container and replay all deferred registrations into it."""
+        """Set the shared active container and replay deferred registrations.
+
+        This method is expected to be called once during container creation/bootstrap.
+        """
         self._container = container
         self._populate(container)
 
     def get_current(self) -> Container:
-        """Return the active container or raise when no container has been bound."""
+        """Return the shared active container or raise when not bound."""
         if self._container is None:
             msg = (
                 "Container is not set for container_context. "

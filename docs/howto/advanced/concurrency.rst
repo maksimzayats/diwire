@@ -21,6 +21,16 @@ LockMode
 - ``LockMode.ASYNC``: lock only async-required cached paths.
 - ``LockMode.NONE``: disable locks on cached paths.
 
+.. note::
+
+   In mixed graphs (both sync and async specs), ``lock_mode="auto"`` promotes to
+   ``LockMode.ASYNC`` for auto-mode registrations. That means sync cached paths using
+   ``"auto"`` do not get thread locks. This is expected and is usually fine for asyncio
+   apps that resolve on a single event-loop thread per worker.
+
+   If you resolve sync cached providers from multiple threads, set ``LockMode.THREAD``
+   at the container or registration level.
+
 Registration-level overrides are available for ``register_concrete``, ``register_factory``,
 ``register_generator``, and ``register_context_manager``:
 
