@@ -1,5 +1,5 @@
 .. meta::
-   :description: pytest integration for diwire: Injected[T] parameter injection via the built-in plugin, container/scope fixtures, using container_context safely with tokens, and cleaning up scopes.
+   :description: pytest integration for diwire: Injected[T] parameter injection via the built-in plugin and root-container resolution with an overridable diwire_container fixture.
 
 pytest
 ======
@@ -30,7 +30,7 @@ Customizing the container
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The plugin uses a ``diwire_container`` fixture. Override it to register fakes and test-specific
-configuration:
+configuration. Injected parameters are always resolved from this root container.
 
 .. code-block:: python
 
@@ -42,38 +42,12 @@ configuration:
    @pytest.fixture()
    def diwire_container() -> Container:
        container = Container(autoregister=False)
-       container.register(Service, concrete_class=FakeService, lifetime=Lifetime.SINGLETON)
+       container.register_concrete(
+           Service,
+           concrete_type=FakeService,
+           lifetime=Lifetime.SINGLETON,
+       )
        return container
-
-Scopes for injected dependencies
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-By default, injected dependencies are resolved inside ``container.enter_scope("test_function")``.
-
-You can configure the scope name in four ways (highest priority first):
-
-1. ``@pytest.mark.diwire_scope("my_scope")`` (or ``None`` to disable scoping for a single test)
-2. CLI option: ``--diwire-scope my_scope``
-3. Override the ``diwire_scope`` fixture (per test module / conftest)
-4. ``diwire_scope`` ini value (default is ``test_function``)
-
-Example (ini):
-
-.. code-block:: ini
-
-   [tool.pytest.ini_options]
-   diwire_scope = "request"
-
-To disable scoping entirely:
-
-.. code-block:: python
-
-   import pytest
-
-
-   @pytest.fixture()
-   def diwire_scope() -> str | None:
-       return None
 
 Notes
 ^^^^^
