@@ -140,6 +140,10 @@ def test_compile_returns_cached_resolver_and_rebinds_entrypoints() -> None:
     assert _bound_self(container.resolve) is container
     assert _bound_self(container.aresolve) is container
     assert _bound_self(container.enter_scope) is container
+    assert _bound_self(container.__enter__) is container
+    assert _bound_self(container.__aenter__) is container
+    assert _bound_self(container.__exit__) is container
+    assert _bound_self(container.__aexit__) is container
 
     first_resolver = container.compile()
     second_resolver = container.compile()
@@ -149,6 +153,10 @@ def test_compile_returns_cached_resolver_and_rebinds_entrypoints() -> None:
     assert _bound_self(container.resolve) is first_resolver
     assert _bound_self(container.aresolve) is first_resolver
     assert _bound_self(container.enter_scope) is first_resolver
+    assert _bound_self(container.__enter__) is first_resolver
+    assert _bound_self(container.__aenter__) is first_resolver
+    assert _bound_self(container.__exit__) is first_resolver
+    assert _bound_self(container.__aexit__) is first_resolver
 
 
 def test_resolve_auto_compiles_root_resolver_when_uncompiled() -> None:
@@ -290,13 +298,118 @@ def test_registering_after_compile_invalidates_compilation_and_rebinds_lazy_entr
         assert _bound_self(container.resolve) is container, registration_name
         assert _bound_self(container.aresolve) is container, registration_name
         assert _bound_self(container.enter_scope) is container, registration_name
+        assert _bound_self(container.__enter__) is container, registration_name
+        assert _bound_self(container.__aenter__) is container, registration_name
+        assert _bound_self(container.__exit__) is container, registration_name
+        assert _bound_self(container.__aexit__) is container, registration_name
 
         compiled_resolver = container.compile()
         assert compiled_resolver is not previous_resolver, registration_name
         assert _bound_self(container.resolve) is compiled_resolver, registration_name
         assert _bound_self(container.aresolve) is compiled_resolver, registration_name
         assert _bound_self(container.enter_scope) is compiled_resolver, registration_name
+        assert _bound_self(container.__enter__) is compiled_resolver, registration_name
+        assert _bound_self(container.__aenter__) is compiled_resolver, registration_name
+        assert _bound_self(container.__exit__) is compiled_resolver, registration_name
+        assert _bound_self(container.__aexit__) is compiled_resolver, registration_name
         previous_resolver = compiled_resolver
+
+
+def test_autoregister_keeps_container_entrypoints_and_skips_existing_registration() -> None:
+    class _AutoRegisteredService:
+        pass
+
+    container = Container(autoregister=True)
+
+    first = container.resolve(_AutoRegisteredService)
+    root_resolver = container._root_resolver
+
+    assert isinstance(first, _AutoRegisteredService)
+    assert root_resolver is not None
+    assert _bound_self(container.resolve) is container
+    assert _bound_self(container.aresolve) is container
+    assert _bound_self(container.enter_scope) is container
+    assert _bound_self(container.__enter__) is root_resolver
+    assert _bound_self(container.__aenter__) is root_resolver
+    assert _bound_self(container.__exit__) is root_resolver
+    assert _bound_self(container.__aexit__) is root_resolver
+
+    second = container.resolve(_AutoRegisteredService)
+
+    assert isinstance(second, _AutoRegisteredService)
+    assert _bound_self(container.resolve) is container
+    assert _bound_self(container.aresolve) is container
+    assert _bound_self(container.enter_scope) is container
+    assert _bound_self(container.__enter__) is root_resolver
+    assert _bound_self(container.__aenter__) is root_resolver
+    assert _bound_self(container.__exit__) is root_resolver
+    assert _bound_self(container.__aexit__) is root_resolver
+    assert container._root_resolver is root_resolver
+
+
+def test_dunder_enter_and_exit_delegate_to_root_resolver() -> None:
+    container = Container()
+    container.register_instance(_Resource, instance=_Resource())
+
+    entered = container.__enter__()
+    root_resolver = container._root_resolver
+
+    assert root_resolver is not None
+    assert entered is root_resolver
+
+    container.__exit__(None, None, None)
+
+
+def test_dunder_exit_without_matching_enter_raises_runtime_error() -> None:
+    container = Container()
+
+    with pytest.raises(RuntimeError, match="without a matching enter"):
+        container.__exit__(None, None, None)
+
+    with pytest.raises(RuntimeError, match="without a matching enter"):
+        container.close()
+
+
+def test_container_exit_wrapper_delegates_when_root_resolver_exists() -> None:
+    container = Container()
+    container.register_instance(_Resource, instance=_Resource())
+    container.compile()
+
+    Container.__exit__(container, None, None, None)
+
+
+@pytest.mark.asyncio
+async def test_dunder_aenter_and_aexit_delegate_to_root_resolver() -> None:
+    container = Container()
+    container.register_instance(_Resource, instance=_Resource())
+
+    entered = await container.__aenter__()
+    root_resolver = container._root_resolver
+
+    assert root_resolver is not None
+    assert entered is root_resolver
+
+    await container.__aexit__(None, None, None)
+
+
+@pytest.mark.asyncio
+async def test_dunder_aexit_without_matching_aenter_raises_runtime_error() -> None:
+    container = Container()
+
+    with pytest.raises(RuntimeError, match="without a matching enter"):
+        await container.__aexit__(None, None, None)
+
+    with pytest.raises(RuntimeError, match="without a matching enter"):
+        await container.aclose()
+
+
+@pytest.mark.asyncio
+async def test_container_aexit_wrapper_delegates_when_root_resolver_exists() -> None:
+    container = Container()
+    container.register_instance(_Resource, instance=_Resource())
+    container.compile()
+
+    await Container.__aexit__(container, None, None, None)
 
 
 def test_transient_provider_is_not_cached() -> None:
