@@ -4,6 +4,7 @@ import inspect
 from typing import Annotated, Any, Generic, NamedTuple, TypeVar, cast
 
 import pytest
+from pydantic_settings import BaseSettings
 
 import diwire.injection as injection_module
 from diwire.container import Container
@@ -48,6 +49,10 @@ class _AutoBranch:
 class _AutoRoot:
     def __init__(self, branch: _AutoBranch) -> None:
         self.branch = branch
+
+
+class _InjectedSettings(BaseSettings):
+    value: str = "settings"
 
 
 class _ResolverStub:
@@ -403,6 +408,25 @@ def test_inject_autoregister_true_registers_missing_dependency_chain() -> None:
     assert container._providers_registrations.find_by_type(_AutoRoot) is not None
     assert container._providers_registrations.find_by_type(_AutoBranch) is not None
     assert container._providers_registrations.find_by_type(_AutoLeaf) is not None
+
+
+def test_inject_autoregister_registers_pydantic_settings_as_singleton_factory() -> None:
+    container = Container()
+
+    @container.inject(autoregister_dependencies=True)
+    def handler(settings: Injected[_InjectedSettings]) -> _InjectedSettings:
+        return settings
+
+    injected_handler = cast("Any", handler)
+    first = injected_handler()
+    second = injected_handler()
+
+    settings_spec = container._providers_registrations.get_by_type(_InjectedSettings)
+    assert first is second
+    assert settings_spec.factory is not None
+    assert settings_spec.concrete_type is None
+    assert settings_spec.lifetime is Lifetime.SINGLETON
+    assert settings_spec.scope is Scope.APP
 
 
 def test_inject_autoregister_false_disables_default_autoregistration() -> None:

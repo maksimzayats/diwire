@@ -25,6 +25,7 @@ from diwire.injection import (
     InjectedCallableInspector,
     InjectedParameter,
 )
+from diwire.integrations.pydantic_settings import is_pydantic_settings_subclass
 from diwire.lock_mode import LockMode
 from diwire.open_generics import OpenGenericRegistry, OpenGenericResolver
 from diwire.providers import (
@@ -712,12 +713,39 @@ class Container:
             if self._providers_registrations.find_by_type(dependency.provides):
                 continue
             with suppress(Exception):
-                self.register_concrete(
-                    concrete_type=dependency.provides,
+                self._autoregister_dependency(
+                    dependency=dependency.provides,
                     scope=scope,
                     lifetime=lifetime,
                     autoregister_dependencies=True,
                 )
+
+    def _autoregister_dependency(
+        self,
+        *,
+        dependency: Any,
+        scope: BaseScope,
+        lifetime: Lifetime,
+        autoregister_dependencies: bool,
+    ) -> None:
+        if is_pydantic_settings_subclass(dependency):
+            # Settings are environment-backed configuration objects and should be
+            # auto-registered as root singletons via a no-arg factory.
+            self.register_factory(
+                provides=dependency,
+                factory=lambda dependency_type=dependency: dependency_type(),
+                scope=self._root_scope,
+                lifetime=Lifetime.SINGLETON,
+                autoregister_dependencies=autoregister_dependencies,
+            )
+            return
+
+        self.register_concrete(
+            concrete_type=dependency,
+            scope=scope,
+            lifetime=lifetime,
+            autoregister_dependencies=autoregister_dependencies,
+        )
 
     def _ensure_autoregistration(self, dependency: Any) -> None:
         if not self._autoregister:
@@ -728,7 +756,12 @@ class Container:
         if self._open_generic_registry.has_match_for_dependency(dependency):
             return
 
-        self.register_concrete(concrete_type=dependency)
+        self._autoregister_dependency(
+            dependency=dependency,
+            scope=self._root_scope,
+            lifetime=self._default_lifetime,
+            autoregister_dependencies=True,
+        )
 
     @overload
     def inject(
@@ -849,8 +882,8 @@ class Container:
             if self._providers_registrations.find_by_type(injected_parameter.dependency):
                 continue
             with suppress(Exception):
-                self.register_concrete(
-                    concrete_type=injected_parameter.dependency,
+                self._autoregister_dependency(
+                    dependency=injected_parameter.dependency,
                     scope=registration_scope,
                     lifetime=self._default_lifetime,
                     autoregister_dependencies=True,

@@ -1,14 +1,39 @@
 from __future__ import annotations
 
+import importlib
+import warnings
 from abc import ABC, abstractmethod
-from typing import NamedTuple
+from types import ModuleType
+from typing import Any, NamedTuple, cast
 
 import msgspec
 import pydantic
+import pytest
+from pydantic_settings import BaseSettings
 
 from diwire.container import Container
 from diwire.providers import Lifetime
 from diwire.scope import Scope
+
+_PYDANTIC_V1_WARNING_PATTERN = (
+    r"Core Pydantic V1 functionality isn't compatible with Python 3\.14 or greater\."
+)
+
+
+def _load_pydantic_v1() -> ModuleType | None:
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=_PYDANTIC_V1_WARNING_PATTERN,
+            category=UserWarning,
+        )
+        try:
+            return importlib.import_module("pydantic.v1")
+        except ImportError:
+            return None
+
+
+pydantic_v1 = _load_pydantic_v1()
 
 
 class DirectDependency:
@@ -100,6 +125,15 @@ class MsgspecFrameworkDependency:
 
 class PydanticFrameworkDependency:
     pass
+
+
+class PydanticSettingsDependency(BaseSettings):
+    value: str = "settings"
+
+
+class RootWithPydanticSettingsDependency:
+    def __init__(self, dependency: PydanticSettingsDependency) -> None:
+        self.dependency = dependency
 
 
 def test_container_default_autoregisters_dependencies_during_registration() -> None:
@@ -201,6 +235,64 @@ def test_resolve_autoregistration_integration_registers_dependency_chain() -> No
     assert isinstance(resolved, ResolveRoot)
     assert isinstance(resolved.dependency, ResolveDependency)
     assert container._providers_registrations.find_by_type(ResolveDependency) is not None
+
+
+def test_resolve_autoregisters_pydantic_settings_as_singleton_factory() -> None:
+    container = Container(autoregister=True)
+
+    first = container.resolve(PydanticSettingsDependency)
+    second = container.resolve(PydanticSettingsDependency)
+
+    settings_spec = container._providers_registrations.get_by_type(PydanticSettingsDependency)
+    assert first is second
+    assert settings_spec.factory is not None
+    assert settings_spec.concrete_type is None
+    assert settings_spec.lifetime is Lifetime.SINGLETON
+    assert settings_spec.scope is Scope.APP
+
+
+def test_dependency_autoregistration_registers_pydantic_settings_as_root_singleton() -> None:
+    container = Container(autoregister_dependencies=True)
+
+    container.register_concrete(
+        concrete_type=RootWithPydanticSettingsDependency,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    settings_spec = container._providers_registrations.get_by_type(PydanticSettingsDependency)
+    assert settings_spec.factory is not None
+    assert settings_spec.concrete_type is None
+    assert settings_spec.lifetime is Lifetime.SINGLETON
+    assert settings_spec.scope is Scope.APP
+
+
+def test_resolve_autoregisters_pydantic_v1_settings_as_singleton_factory() -> None:
+    if pydantic_v1 is None:
+        pytest.skip("pydantic.v1 is unavailable")
+    pydantic_v1_module = cast("Any", pydantic_v1)
+    base_settings_type = cast("type[Any]", pydantic_v1_module.BaseSettings)
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=_PYDANTIC_V1_WARNING_PATTERN,
+            category=UserWarning,
+        )
+
+        class PydanticV1SettingsDependency(base_settings_type):
+            value: int = 7
+
+        container = Container(autoregister=True)
+        first = container.resolve(PydanticV1SettingsDependency)
+        second = container.resolve(PydanticV1SettingsDependency)
+
+    settings_spec = container._providers_registrations.get_by_type(PydanticV1SettingsDependency)
+    assert first is second
+    assert settings_spec.factory is not None
+    assert settings_spec.concrete_type is None
+    assert settings_spec.lifetime is Lifetime.SINGLETON
+    assert settings_spec.scope is Scope.APP
 
 
 def test_concrete_registration_autoregisters_namedtuple_class_dependencies() -> None:
