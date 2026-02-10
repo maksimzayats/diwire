@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import AsyncGenerator, Generator
 from contextlib import contextmanager
-from typing import Any, cast
+from typing import Any, Generic, TypeVar, cast
 
 import pytest
 
@@ -33,6 +33,23 @@ class _RequestDependency:
 class _AsyncService:
     def __init__(self, value: str) -> None:
         self.value = value
+
+
+T = TypeVar("T")
+
+
+class _OpenBox(Generic[T]):
+    pass
+
+
+class _OpenBoxA(_OpenBox[T]):
+    def __init__(self, type_arg: type[T]) -> None:
+        self.type_arg = type_arg
+
+
+class _OpenBoxB(_OpenBox[T]):
+    def __init__(self, type_arg: type[T]) -> None:
+        self.type_arg = type_arg
 
 
 def test_top_level_container_context_export_is_available() -> None:
@@ -104,6 +121,18 @@ def test_register_before_bind_replays_on_set_current() -> None:
 
     resolved = container.resolve(_ConcreteService)
     assert isinstance(resolved, _ConcreteService)
+
+
+def test_replay_preserves_canonical_open_key_override_order() -> None:
+    context = ContainerContext()
+    context.register_concrete(_OpenBox, concrete_type=_OpenBoxA)
+    context.register_concrete(_OpenBox[T], concrete_type=_OpenBoxB)
+
+    container = Container()
+    context.set_current(container)
+
+    resolved = container.resolve(_OpenBox[int])
+    assert isinstance(resolved, _OpenBoxB)
 
 
 def test_register_factory_persists_and_replays_from_container_lock_mode_sentinel() -> None:

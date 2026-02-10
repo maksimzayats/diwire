@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import inspect
-from typing import Annotated, Any, NamedTuple, cast
+from typing import Annotated, Any, Generic, NamedTuple, TypeVar, cast
 
 import pytest
 
@@ -90,6 +90,18 @@ class _NestedOuterService:
     def __init__(self, inner: _NestedInnerService, dependency: _RequestDependency) -> None:
         self.inner = inner
         self.dependency = dependency
+
+
+G = TypeVar("G")
+
+
+class _InjectedOpenBox(Generic[G]):
+    pass
+
+
+class _InjectedOpenBoxImpl(_InjectedOpenBox[G]):
+    def __init__(self, type_arg: type[G]) -> None:
+        self.type_arg = type_arg
 
 
 def test_inject_wrapper_preserves_callable_metadata() -> None:
@@ -704,3 +716,16 @@ def test_infer_dependency_scope_level_uses_cache_and_handles_cycle_guard() -> No
     assert first == Scope.REQUEST.level
     assert second == first
     assert cycle_guard == Scope.REQUEST.level
+
+
+def test_inject_resolves_open_generic_dependency_via_wrapper_fallback() -> None:
+    container = Container()
+    container.register_concrete(_InjectedOpenBox, concrete_type=_InjectedOpenBoxImpl)
+
+    @container.inject
+    def handler(box: Injected[_InjectedOpenBox[str]]) -> str:
+        resolved_box = cast("Any", box)
+        return resolved_box.type_arg.__name__
+
+    injected_handler = cast("Any", handler)
+    assert injected_handler() == "str"

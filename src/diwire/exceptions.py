@@ -28,3 +28,7 @@ class DIWireScopeMismatchError(DIWireError):
 
 class DIWireAsyncDependencyInSyncContextError(DIWireError):
     """Raised when synchronous resolution is attempted for an async dependency chain."""
+
+
+class DIWireInvalidGenericTypeArgumentError(DIWireError):
+    """Raised when generic arguments do not satisfy TypeVar bounds or constraints."""

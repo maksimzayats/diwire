@@ -7,7 +7,7 @@ from collections.abc import AsyncGenerator, Callable, Generator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from types import TracebackType
-from typing import Any, cast
+from typing import Any, Generic, TypeVar, cast
 
 import pytest
 
@@ -107,6 +107,18 @@ class _MixedSyncConsumer:
 
 class _MixedAsyncGraphDependency:
     pass
+
+
+Q = TypeVar("Q")
+
+
+class _OpenRuntimeService(Generic[Q]):
+    pass
+
+
+class _OpenRuntimeServiceImpl(_OpenRuntimeService[Q]):
+    def __init__(self, type_arg: type[Q]) -> None:
+        self.type_arg = type_arg
 
 
 def _new_list_int_alias() -> Any:
@@ -247,6 +259,19 @@ async def test_aresolve_auto_compiles_root_resolver_when_uncompiled() -> None:
     assert resolved is resource
     assert root_resolver is not None
     assert _bound_self(container.aresolve) is root_resolver
+
+
+def test_compile_wraps_codegen_resolver_when_open_generic_registry_present() -> None:
+    container = Container()
+    container.register_concrete(_OpenRuntimeService, concrete_type=_OpenRuntimeServiceImpl)
+
+    compiled_resolver = container.compile()
+
+    assert type(compiled_resolver).__name__.endswith("OpenGenericResolver")
+    assert _bound_self(container.resolve) is compiled_resolver
+    resolved = container.resolve(_OpenRuntimeService[int])
+    assert isinstance(resolved, _OpenRuntimeServiceImpl)
+    assert resolved.type_arg is int
 
 
 def test_enter_scope_auto_compiles_root_resolver_when_uncompiled() -> None:

@@ -13,6 +13,8 @@ from typing import (
     Literal,
     TypeVar,
     cast,
+    get_args,
+    get_origin,
     overload,
 )
 
@@ -24,6 +26,7 @@ from diwire.injection import (
     InjectedParameter,
 )
 from diwire.lock_mode import LockMode
+from diwire.open_generics import OpenGenericRegistry, OpenGenericResolver
 from diwire.providers import (
     ContextManagerProvider,
     FactoryProvider,
@@ -45,6 +48,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 InjectableF = TypeVar("InjectableF", bound=Callable[..., Any])
 
 logger = logging.getLogger(__name__)
+_MISSING_CLOSED_GENERIC_INJECTION = object()
 
 
 class Container:
@@ -87,6 +91,7 @@ class Container:
         self._provider_return_type_extractor = ProviderReturnTypeExtractor()
         self._dependency_registration_validator = DependecyRegistrationValidator()
         self._providers_registrations = ProvidersRegistrations()
+        self._open_generic_registry = OpenGenericRegistry()
         self._resolvers_manager = ResolversManager()
         self._injected_callable_inspector = InjectedCallableInspector()
 
@@ -171,6 +176,68 @@ class Container:
 
         resolved_scope = scope or self._root_scope
         resolved_lifetime = lifetime or self._default_lifetime
+        resolved_lock_mode = self._resolve_provider_lock_mode(lock_mode)
+
+        if (
+            self._open_generic_registry.register(
+                provides=provides,
+                provider_kind="concrete_type",
+                provider=concrete_type,
+                lifetime=resolved_lifetime,
+                scope=resolved_scope,
+                lock_mode=resolved_lock_mode,
+                is_async=False,
+                is_any_dependency_async=is_any_dependency_async,
+                needs_cleanup=False,
+                dependencies=dependencies_for_provider,
+            )
+            is not None
+        ):
+            self._autoregister_provider_dependencies(
+                dependencies=dependencies_for_provider,
+                scope=resolved_scope,
+                lifetime=resolved_lifetime,
+                enabled=self._resolve_autoregister_dependencies(autoregister_dependencies),
+            )
+            self._invalidate_compilation()
+            return decorator
+
+        (
+            closed_generic_injections,
+            dependencies_for_provider,
+        ) = self._resolve_closed_concrete_generic_injections(
+            provides=provides,
+            dependencies=dependencies_for_provider,
+        )
+        is_any_dependency_async = self._provider_return_type_extractor.is_any_dependency_async(
+            dependencies_for_provider,
+        )
+        if closed_generic_injections:
+            concrete_factory = self._build_closed_concrete_factory(
+                concrete_type=concrete_type,
+                injected_arguments=closed_generic_injections,
+            )
+            self._providers_registrations.add(
+                ProviderSpec(
+                    provides=provides,
+                    factory=concrete_factory,
+                    lifetime=resolved_lifetime,
+                    scope=resolved_scope,
+                    dependencies=dependencies_for_provider,
+                    is_async=False,
+                    is_any_dependency_async=is_any_dependency_async,
+                    needs_cleanup=False,
+                    lock_mode=resolved_lock_mode,
+                ),
+            )
+            self._autoregister_provider_dependencies(
+                dependencies=dependencies_for_provider,
+                scope=resolved_scope,
+                lifetime=resolved_lifetime,
+                enabled=self._resolve_autoregister_dependencies(autoregister_dependencies),
+            )
+            self._invalidate_compilation()
+            return decorator
 
         self._providers_registrations.add(
             ProviderSpec(
@@ -182,7 +249,7 @@ class Container:
                 is_async=False,
                 is_any_dependency_async=is_any_dependency_async,
                 needs_cleanup=False,
-                lock_mode=self._resolve_provider_lock_mode(lock_mode),
+                lock_mode=resolved_lock_mode,
             ),
         )
         self._autoregister_provider_dependencies(
@@ -237,6 +304,31 @@ class Container:
 
         resolved_scope = scope or self._root_scope
         resolved_lifetime = lifetime or self._default_lifetime
+        resolved_lock_mode = self._resolve_provider_lock_mode(lock_mode)
+
+        if (
+            self._open_generic_registry.register(
+                provides=provides,
+                provider_kind="factory",
+                provider=factory,
+                lifetime=resolved_lifetime,
+                scope=resolved_scope,
+                lock_mode=resolved_lock_mode,
+                is_async=is_async,
+                is_any_dependency_async=is_any_dependency_async,
+                needs_cleanup=False,
+                dependencies=dependencies_for_provider,
+            )
+            is not None
+        ):
+            self._autoregister_provider_dependencies(
+                dependencies=dependencies_for_provider,
+                scope=resolved_scope,
+                lifetime=resolved_lifetime,
+                enabled=self._resolve_autoregister_dependencies(autoregister_dependencies),
+            )
+            self._invalidate_compilation()
+            return decorator
 
         self._providers_registrations.add(
             ProviderSpec(
@@ -248,7 +340,7 @@ class Container:
                 is_async=is_async,
                 is_any_dependency_async=is_any_dependency_async,
                 needs_cleanup=False,
-                lock_mode=self._resolve_provider_lock_mode(lock_mode),
+                lock_mode=resolved_lock_mode,
             ),
         )
         self._autoregister_provider_dependencies(
@@ -307,6 +399,31 @@ class Container:
 
         resolved_scope = scope or self._root_scope
         resolved_lifetime = lifetime or self._default_lifetime
+        resolved_lock_mode = self._resolve_provider_lock_mode(lock_mode)
+
+        if (
+            self._open_generic_registry.register(
+                provides=provides,
+                provider_kind="generator",
+                provider=generator,
+                lifetime=resolved_lifetime,
+                scope=resolved_scope,
+                lock_mode=resolved_lock_mode,
+                is_async=is_async,
+                is_any_dependency_async=is_any_dependency_async,
+                needs_cleanup=True,
+                dependencies=dependencies_for_provider,
+            )
+            is not None
+        ):
+            self._autoregister_provider_dependencies(
+                dependencies=dependencies_for_provider,
+                scope=resolved_scope,
+                lifetime=resolved_lifetime,
+                enabled=self._resolve_autoregister_dependencies(autoregister_dependencies),
+            )
+            self._invalidate_compilation()
+            return decorator
 
         self._providers_registrations.add(
             ProviderSpec(
@@ -318,7 +435,7 @@ class Container:
                 is_async=is_async,
                 is_any_dependency_async=is_any_dependency_async,
                 needs_cleanup=True,
-                lock_mode=self._resolve_provider_lock_mode(lock_mode),
+                lock_mode=resolved_lock_mode,
             ),
         )
         self._autoregister_provider_dependencies(
@@ -379,6 +496,31 @@ class Container:
 
         resolved_scope = scope or self._root_scope
         resolved_lifetime = lifetime or self._default_lifetime
+        resolved_lock_mode = self._resolve_provider_lock_mode(lock_mode)
+
+        if (
+            self._open_generic_registry.register(
+                provides=provides,
+                provider_kind="context_manager",
+                provider=context_manager,
+                lifetime=resolved_lifetime,
+                scope=resolved_scope,
+                lock_mode=resolved_lock_mode,
+                is_async=is_async,
+                is_any_dependency_async=is_any_dependency_async,
+                needs_cleanup=True,
+                dependencies=dependencies_for_provider,
+            )
+            is not None
+        ):
+            self._autoregister_provider_dependencies(
+                dependencies=dependencies_for_provider,
+                scope=resolved_scope,
+                lifetime=resolved_lifetime,
+                enabled=self._resolve_autoregister_dependencies(autoregister_dependencies),
+            )
+            self._invalidate_compilation()
+            return decorator
 
         self._providers_registrations.add(
             ProviderSpec(
@@ -390,7 +532,7 @@ class Container:
                 is_async=is_async,
                 is_any_dependency_async=is_any_dependency_async,
                 needs_cleanup=True,
-                lock_mode=self._resolve_provider_lock_mode(lock_mode),
+                lock_mode=resolved_lock_mode,
             ),
         )
         self._autoregister_provider_dependencies(
@@ -417,6 +559,84 @@ class Container:
             concrete_type=concrete_type,
             dependencies=explicit_dependencies,
         )
+
+    def _resolve_closed_concrete_generic_injections(
+        self,
+        *,
+        provides: Any,
+        dependencies: list[ProviderDependency],
+    ) -> tuple[dict[str, Any], list[ProviderDependency]]:
+        typevar_map = self._closed_generic_typevar_map(provides=provides)
+        if not typevar_map:
+            return {}, dependencies
+
+        injected_arguments: dict[str, Any] = {}
+        remaining_dependencies: list[ProviderDependency] = []
+        for dependency in dependencies:
+            injection_value = self._resolve_closed_generic_injection_value(
+                dependency_annotation=dependency.provides,
+                typevar_map=typevar_map,
+            )
+            if injection_value is _MISSING_CLOSED_GENERIC_INJECTION:
+                remaining_dependencies.append(dependency)
+                continue
+            injected_arguments[dependency.parameter.name] = injection_value
+
+        return injected_arguments, remaining_dependencies
+
+    def _closed_generic_typevar_map(self, *, provides: Any) -> dict[TypeVar, Any]:
+        origin = get_origin(provides)
+        if origin is None:
+            return {}
+
+        arguments = get_args(provides)
+        if not arguments:
+            return {}
+
+        origin_typevars = tuple(
+            parameter
+            for parameter in getattr(origin, "__parameters__", ())
+            if isinstance(parameter, TypeVar)
+        )
+        if len(origin_typevars) != len(arguments):
+            return {}
+
+        return dict(zip(origin_typevars, arguments, strict=True))
+
+    def _resolve_closed_generic_injection_value(
+        self,
+        *,
+        dependency_annotation: Any,
+        typevar_map: dict[TypeVar, Any],
+    ) -> Any:
+        if isinstance(dependency_annotation, TypeVar):
+            return typevar_map.get(dependency_annotation, _MISSING_CLOSED_GENERIC_INJECTION)
+
+        origin = get_origin(dependency_annotation)
+        arguments = get_args(dependency_annotation)
+        if origin is type and len(arguments) == 1 and isinstance(arguments[0], TypeVar):
+            return typevar_map.get(arguments[0], _MISSING_CLOSED_GENERIC_INJECTION)
+
+        return _MISSING_CLOSED_GENERIC_INJECTION
+
+    def _build_closed_concrete_factory(
+        self,
+        *,
+        concrete_type: type[Any],
+        injected_arguments: dict[str, Any],
+    ) -> Callable[..., Any]:
+        constructor_signature = inspect.signature(concrete_type)
+        factory_injected_arguments = dict(injected_arguments)
+
+        def _factory(*args: Any, **kwargs: Any) -> Any:
+            bound_arguments = constructor_signature.bind_partial(*args, **kwargs)
+            for argument_name, argument_value in factory_injected_arguments.items():
+                if argument_name in bound_arguments.arguments:
+                    continue
+                bound_arguments.arguments[argument_name] = argument_value
+            return concrete_type(*bound_arguments.args, **bound_arguments.kwargs)
+
+        return _factory
 
     def _resolve_factory_registration_dependencies(
         self,
@@ -504,6 +724,8 @@ class Container:
             return
 
         if self._providers_registrations.find_by_type(dependency):
+            return
+        if self._open_generic_registry.has_match_for_dependency(dependency):
             return
 
         self.register_concrete(concrete_type=dependency)
@@ -665,6 +887,9 @@ class Container:
 
         spec = self._providers_registrations.find_by_type(dependency)
         if spec is None:
+            open_match = self._open_generic_registry.find_best_match(dependency)
+            if open_match is not None:
+                return open_match.spec.scope.level
             return self._root_scope.level
         if dependency in in_progress:
             return spec.scope.level
@@ -704,10 +929,25 @@ class Container:
         can still register missing dependencies before resolution.
         """
         if self._root_resolver is None:
-            self._root_resolver = self._resolvers_manager.build_root_resolver(
+            root_resolver = self._resolvers_manager.build_root_resolver(
                 root_scope=self._root_scope,
                 registrations=self._providers_registrations,
             )
+            if self._open_generic_registry.has_specs():
+                has_async_specs = any(
+                    spec.is_async for spec in self._providers_registrations.values()
+                ) or any(spec.is_async for spec in self._open_generic_registry.values())
+                root_resolver = cast(
+                    "ResolverProtocol",
+                    OpenGenericResolver(
+                        base_resolver=root_resolver,
+                        registry=self._open_generic_registry,
+                        root_scope=self._root_scope,
+                        has_async_specs=has_async_specs,
+                        scope_level=self._root_scope.level,
+                    ),
+                )
+            self._root_resolver = root_resolver
         if not self._autoregister:
             self._bind_container_entrypoints(target=self._root_resolver)
 
