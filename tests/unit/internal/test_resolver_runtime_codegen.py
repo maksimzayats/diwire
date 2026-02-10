@@ -153,10 +153,10 @@ def test_compile_returns_cached_resolver_and_rebinds_entrypoints() -> None:
     assert _bound_self(container.resolve) is first_resolver
     assert _bound_self(container.aresolve) is first_resolver
     assert _bound_self(container.enter_scope) is first_resolver
-    assert _bound_self(container.__enter__) is first_resolver
-    assert _bound_self(container.__aenter__) is first_resolver
-    assert _bound_self(container.__exit__) is first_resolver
-    assert _bound_self(container.__aexit__) is first_resolver
+    assert _bound_self(container.__enter__) is container
+    assert _bound_self(container.__aenter__) is container
+    assert _bound_self(container.__exit__) is container
+    assert _bound_self(container.__aexit__) is container
 
 
 def test_resolve_auto_compiles_root_resolver_when_uncompiled() -> None:
@@ -308,10 +308,10 @@ def test_registering_after_compile_invalidates_compilation_and_rebinds_lazy_entr
         assert _bound_self(container.resolve) is compiled_resolver, registration_name
         assert _bound_self(container.aresolve) is compiled_resolver, registration_name
         assert _bound_self(container.enter_scope) is compiled_resolver, registration_name
-        assert _bound_self(container.__enter__) is compiled_resolver, registration_name
-        assert _bound_self(container.__aenter__) is compiled_resolver, registration_name
-        assert _bound_self(container.__exit__) is compiled_resolver, registration_name
-        assert _bound_self(container.__aexit__) is compiled_resolver, registration_name
+        assert _bound_self(container.__enter__) is container, registration_name
+        assert _bound_self(container.__aenter__) is container, registration_name
+        assert _bound_self(container.__exit__) is container, registration_name
+        assert _bound_self(container.__aexit__) is container, registration_name
         previous_resolver = compiled_resolver
 
 
@@ -329,10 +329,10 @@ def test_autoregister_keeps_container_entrypoints_and_skips_existing_registratio
     assert _bound_self(container.resolve) is container
     assert _bound_self(container.aresolve) is container
     assert _bound_self(container.enter_scope) is container
-    assert _bound_self(container.__enter__) is root_resolver
-    assert _bound_self(container.__aenter__) is root_resolver
-    assert _bound_self(container.__exit__) is root_resolver
-    assert _bound_self(container.__aexit__) is root_resolver
+    assert _bound_self(container.__enter__) is container
+    assert _bound_self(container.__aenter__) is container
+    assert _bound_self(container.__exit__) is container
+    assert _bound_self(container.__aexit__) is container
 
     second = container.resolve(_AutoRegisteredService)
 
@@ -340,10 +340,10 @@ def test_autoregister_keeps_container_entrypoints_and_skips_existing_registratio
     assert _bound_self(container.resolve) is container
     assert _bound_self(container.aresolve) is container
     assert _bound_self(container.enter_scope) is container
-    assert _bound_self(container.__enter__) is root_resolver
-    assert _bound_self(container.__aenter__) is root_resolver
-    assert _bound_self(container.__exit__) is root_resolver
-    assert _bound_self(container.__aexit__) is root_resolver
+    assert _bound_self(container.__enter__) is container
+    assert _bound_self(container.__aenter__) is container
+    assert _bound_self(container.__exit__) is container
+    assert _bound_self(container.__aexit__) is container
     assert container._root_resolver is root_resolver
 
 

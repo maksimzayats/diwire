@@ -33,20 +33,9 @@ logger = logging.getLogger(__name__)
 class Container:
     """A dependency injection container."""
 
-    # Methods rebound to the compiled root resolver to keep steady-state calls on the
-    # generated fast path (no extra container-level dispatch/checks per call).
+    # Hot-path methods rebound to the compiled root resolver to keep steady-state
+    # resolution/scope calls on generated fast paths.
     _ENTRYPOINT_METHOD_NAMES: tuple[str, ...] = (
-        "resolve",
-        "aresolve",
-        "enter_scope",
-        "__enter__",
-        "__aenter__",
-        "__exit__",
-        "__aexit__",
-    )
-    # With autoregistration enabled, these entrypoints must stay on Container so each
-    # call can still ensure missing dependencies are registered before resolution.
-    _AUTOREGISTER_SENSITIVE_ENTRYPOINT_METHOD_NAMES: tuple[str, ...] = (
         "resolve",
         "aresolve",
         "enter_scope",
@@ -417,28 +406,18 @@ class Container:
     def compile(self) -> ResolverProtocol:
         """Compile and cache the root resolver for current registrations.
 
-        After compilation, entrypoints are rebound to the root resolver instance so
-        steady-state resolution/context operations skip container-level indirection.
-        When autoregistration is enabled, only non-registration-sensitive methods are
-        rebound to preserve registration checks on each resolve path.
+        After compilation, entrypoints are rebounded to the root resolver instance, so
+        steady-state resolution/scope operations skip container-level indirection.
+        When autoregistration is enabled, methods stay container-bound, so each call
+        can still register missing dependencies before resolution.
         """
         if self._root_resolver is None:
             self._root_resolver = self._resolvers_manager.build_root_resolver(
                 root_scope=self._root_scope,
                 registrations=self._providers_registrations,
             )
-        if self._autoregister:
-            method_names = tuple(
-                method_name
-                for method_name in self._ENTRYPOINT_METHOD_NAMES
-                if method_name not in self._AUTOREGISTER_SENSITIVE_ENTRYPOINT_METHOD_NAMES
-            )
-            self._bind_container_entrypoints(target=self._root_resolver, method_names=method_names)
-        else:
-            self._bind_container_entrypoints(
-                target=self._root_resolver,
-                method_names=self._ENTRYPOINT_METHOD_NAMES,
-            )
+        if not self._autoregister:
+            self._bind_container_entrypoints(target=self._root_resolver)
 
         return self._root_resolver
 
@@ -455,10 +434,9 @@ class Container:
         self,
         *,
         target: ResolverProtocol,
-        method_names: tuple[str, ...],
     ) -> None:
         """Bind selected container entrypoints directly to resolver-bound methods."""
-        for method_name in method_names:
+        for method_name in self._ENTRYPOINT_METHOD_NAMES:
             setattr(self, method_name, getattr(target, method_name))
 
     def _restore_container_entrypoints(self) -> None:
