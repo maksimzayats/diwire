@@ -520,6 +520,8 @@ class Container:
 
     # endregion Compilation
 
+    # region Resolution and Scope Management
+
     @overload
     def resolve(self, dependency: type[T]) -> T: ...
 
@@ -626,6 +628,8 @@ class Container:
         Like context managers or generators.
         """
         return await self.__aexit__(exc_type, exc_value, traceback)
+
+    # endregion Resolution and Scope Management
 
 
 @dataclass(slots=True, kw_only=True)
