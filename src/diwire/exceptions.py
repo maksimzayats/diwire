@@ -18,6 +18,10 @@ class DIWireDependencyNotRegisteredError(DIWireError):
     """Raised when attempting to resolve a dependency that was not registered."""
 
 
+class DIWireContainerNotSetError(DIWireError):
+    """Raised when container_context is used before a container is bound."""
+
+
 class DIWireScopeMismatchError(DIWireError):
     """Raised when dependency resolution requires a scope that is not currently opened."""
 

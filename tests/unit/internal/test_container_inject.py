@@ -5,7 +5,7 @@ from typing import Annotated, Any, NamedTuple, cast
 
 import pytest
 
-import diwire.container as container_module
+import diwire.injection as injection_module
 from diwire.container import Container
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
@@ -669,8 +669,8 @@ def test_resolve_injected_dependency_handles_invalid_annotated_shape(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     container = Container()
-    monkeypatch.setattr(container_module, "get_origin", lambda _annotation: Annotated)
-    monkeypatch.setattr(container_module, "get_args", lambda _annotation: (int,))
+    monkeypatch.setattr(injection_module, "get_origin", lambda _annotation: Annotated)
+    monkeypatch.setattr(injection_module, "get_args", lambda _annotation: (int,))
 
     assert container._resolve_injected_dependency(annotation=object()) is None
 

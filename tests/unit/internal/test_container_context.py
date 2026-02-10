@@ -1,0 +1,351 @@
+from __future__ import annotations
+
+import inspect
+from collections.abc import AsyncGenerator, Generator
+from contextlib import contextmanager
+from typing import Any, cast
+
+import pytest
+
+import diwire
+from diwire.container import Container
+from diwire.container_context import ContainerContext
+from diwire.exceptions import (
+    DIWireContainerNotSetError,
+    DIWireInvalidRegistrationError,
+    DIWireScopeMismatchError,
+)
+from diwire.markers import Injected
+from diwire.providers import Lifetime
+from diwire.scope import Scope
+
+
+class _Service:
+    def __init__(self, value: str = "service") -> None:
+        self.value = value
+
+
+class _RequestDependency:
+    pass
+
+
+class _AsyncService:
+    def __init__(self, value: str) -> None:
+        self.value = value
+
+
+def test_top_level_container_context_export_is_available() -> None:
+    assert isinstance(diwire.container_context, ContainerContext)
+
+
+def test_get_current_raises_when_context_is_unbound() -> None:
+    context = ContainerContext()
+
+    with pytest.raises(DIWireContainerNotSetError, match="set_current"):
+        context.get_current()
+
+
+def test_resolve_raises_when_context_is_unbound() -> None:
+    context = ContainerContext()
+
+    with pytest.raises(DIWireContainerNotSetError, match="set_current"):
+        context.resolve(_Service)
+
+
+@pytest.mark.asyncio
+async def test_aresolve_raises_when_context_is_unbound() -> None:
+    context = ContainerContext()
+
+    with pytest.raises(DIWireContainerNotSetError, match="set_current"):
+        await context.aresolve(_Service)
+
+
+def test_enter_scope_raises_when_context_is_unbound() -> None:
+    context = ContainerContext()
+
+    with pytest.raises(DIWireContainerNotSetError, match="set_current"):
+        context.enter_scope()
+
+
+def test_inject_wrapper_runtime_call_raises_when_unbound() -> None:
+    context = ContainerContext()
+
+    @context.inject
+    def handler(service: Injected[_Service]) -> _Service:
+        return service
+
+    with pytest.raises(DIWireContainerNotSetError, match="set_current"):
+        cast("Any", handler)()
+
+
+@pytest.mark.asyncio
+async def test_inject_async_wrapper_runtime_call_raises_when_unbound() -> None:
+    context = ContainerContext()
+
+    @context.inject
+    async def handler(service: Injected[_AsyncService]) -> _AsyncService:
+        return service
+
+    with pytest.raises(DIWireContainerNotSetError, match="set_current"):
+        await cast("Any", handler)()
+
+
+def test_register_before_bind_replays_on_set_current() -> None:
+    context = ContainerContext()
+
+    class _ConcreteService:
+        pass
+
+    context.register_concrete(concrete_type=_ConcreteService)
+
+    container = Container()
+    context.set_current(container)
+
+    resolved = container.resolve(_ConcreteService)
+    assert isinstance(resolved, _ConcreteService)
+
+
+def test_register_concrete_supports_decorator_form() -> None:
+    context = ContainerContext()
+
+    class _DecoratedService:
+        pass
+
+    register_decorator = cast("Any", context.register_concrete())
+    register_decorator(_DecoratedService)
+
+    container = Container()
+    context.set_current(container)
+
+    assert isinstance(container.resolve(_DecoratedService), _DecoratedService)
+
+
+def test_set_current_replays_operations_for_each_bound_container() -> None:
+    context = ContainerContext()
+    context.register_instance(instance=_Service("registered"))
+
+    first = Container()
+    context.set_current(first)
+
+    second = Container()
+    context.set_current(second)
+
+    assert first.resolve(_Service).value == "registered"
+    assert second.resolve(_Service).value == "registered"
+
+
+def test_register_while_bound_applies_to_current_container_immediately() -> None:
+    context = ContainerContext()
+    container = Container()
+    context.set_current(container)
+
+    context.register_instance(instance=_Service("bound"))
+
+    assert container.resolve(_Service).value == "bound"
+
+
+def test_private_populate_is_not_exposed_publicly() -> None:
+    context = ContainerContext()
+
+    assert hasattr(context, "_populate")
+    assert not hasattr(context, "populate")
+
+
+def test_inject_signature_matches_container_signature_filtering() -> None:
+    context = ContainerContext()
+    container = Container()
+
+    def handler(
+        value: str,
+        service: Injected[_Service],
+        /,
+        *,
+        mode: str = "safe",
+        request: Injected[_RequestDependency],
+    ) -> tuple[str, str]:
+        return value, mode
+
+    container_wrapped = container.inject(handler)
+    context_wrapped = context.inject(handler)
+
+    assert inspect.signature(container_wrapped) == inspect.signature(context_wrapped)
+
+
+def test_inject_wrapper_preserves_metadata_and_marker() -> None:
+    context = ContainerContext()
+
+    def handler(value: str, service: Injected[_Service]) -> str:
+        """Context handler docstring."""
+        return f"{value}:{service.value}"
+
+    wrapped = context.inject(handler)
+    wrapped_any = cast("Any", wrapped)
+
+    assert wrapped.__name__ == handler.__name__
+    assert wrapped.__qualname__ == handler.__qualname__
+    assert wrapped.__doc__ == handler.__doc__
+    assert wrapped_any.__wrapped__ is handler
+    assert getattr(wrapped, "__diwire_inject_wrapper__", False) is True
+
+
+def test_inject_supports_factory_form() -> None:
+    context = ContainerContext()
+    context.register_instance(instance=_Service("factory"))
+    context.set_current(Container())
+
+    @context.inject()
+    def handler(service: Injected[_Service]) -> str:
+        return service.value
+
+    assert cast("Any", handler)() == "factory"
+
+
+def test_inject_rejects_reserved_internal_resolver_parameter_name() -> None:
+    context = ContainerContext()
+
+    with pytest.raises(
+        DIWireInvalidRegistrationError,
+        match="cannot declare reserved parameter",
+    ):
+
+        @context.inject
+        def _handler(__diwire_resolver: object, /, service: Injected[_Service]) -> None:
+            _ = service
+
+
+def test_inject_method_descriptor_behavior() -> None:
+    context = ContainerContext()
+    context.register_instance(instance=_Service("bound"))
+    context.set_current(Container())
+
+    class _Handler:
+        @context.inject
+        def run(self, service: Injected[_Service]) -> str:
+            return service.value
+
+    handler = _Handler()
+    bound_method = cast("Any", handler.run)
+    assert bound_method() == "bound"
+
+
+def test_inject_staticmethod_and_classmethod_descriptor_behavior() -> None:
+    context = ContainerContext()
+    context.register_instance(instance=_Service("value"))
+    context.set_current(Container())
+
+    class _Handler:
+        label = "handler"
+
+        @staticmethod
+        @context.inject
+        def run_static(value: str, service: Injected[_Service]) -> str:
+            return f"{value}:{service.value}"
+
+        @classmethod
+        @context.inject
+        def run_class(cls, service: Injected[_Service]) -> str:
+            return f"{cls.label}:{service.value}"
+
+    run_static_class = cast("Any", _Handler.run_static)
+    run_static_instance = cast("Any", _Handler().run_static)
+    run_class_class = cast("Any", _Handler.run_class)
+    run_class_instance = cast("Any", _Handler().run_class)
+
+    assert run_static_class("ok") == "ok:value"
+    assert run_static_instance("ok") == "ok:value"
+    assert run_class_class() == "handler:value"
+    assert run_class_instance() == "handler:value"
+
+
+@pytest.mark.asyncio
+async def test_aresolve_delegates_to_current_container() -> None:
+    context = ContainerContext()
+
+    async def provide_async_service() -> _AsyncService:
+        return _AsyncService("async")
+
+    context.register_factory(_AsyncService, factory=provide_async_service)
+    context.set_current(Container())
+
+    resolved = await context.aresolve(_AsyncService)
+    assert isinstance(resolved, _AsyncService)
+    assert resolved.value == "async"
+
+
+def test_enter_scope_delegates_to_current_container() -> None:
+    context = ContainerContext()
+    context.register_concrete(
+        _RequestDependency,
+        concrete_type=_RequestDependency,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    context.set_current(Container())
+
+    with context.enter_scope() as request_scope:
+        resolved = request_scope.resolve(_RequestDependency)
+
+    assert isinstance(resolved, _RequestDependency)
+
+
+def test_resolve_delegation_preserves_scope_rules() -> None:
+    context = ContainerContext()
+    context.register_concrete(
+        _RequestDependency,
+        concrete_type=_RequestDependency,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    context.set_current(Container())
+
+    with pytest.raises(DIWireScopeMismatchError, match="requires opened scope level"):
+        context.resolve(_RequestDependency)
+
+
+@pytest.mark.asyncio
+async def test_context_inject_async_wrapper_works_after_binding() -> None:
+    context = ContainerContext()
+    context.register_instance(instance=_AsyncService("ready"))
+
+    @context.inject
+    async def handler(service: Injected[_AsyncService]) -> str:
+        return service.value
+
+    context.set_current(Container())
+
+    assert await cast("Any", handler)() == "ready"
+
+
+def test_register_generator_and_context_manager_replay() -> None:
+    context = ContainerContext()
+
+    def provide_generator() -> Generator[_Service, None, None]:
+        yield _Service("generator")
+
+    @contextmanager
+    def provide_context_manager() -> Generator[_RequestDependency, None, None]:
+        yield _RequestDependency()
+
+    context.register_generator(_Service, generator=provide_generator)
+    context.register_context_manager(_RequestDependency, context_manager=provide_context_manager)
+
+    container = Container()
+    context.set_current(container)
+
+    assert container.resolve(_Service).value == "generator"
+    assert isinstance(container.resolve(_RequestDependency), _RequestDependency)
+
+
+@pytest.mark.asyncio
+async def test_register_async_generator_replay() -> None:
+    context = ContainerContext()
+
+    async def provide_async_generator() -> AsyncGenerator[_AsyncService, None]:
+        yield _AsyncService("async-generator")
+
+    context.register_generator(_AsyncService, generator=provide_async_generator)
+    context.set_current(Container())
+
+    resolved = await context.aresolve(_AsyncService)
+    assert isinstance(resolved, _AsyncService)
+    assert resolved.value == "async-generator"
