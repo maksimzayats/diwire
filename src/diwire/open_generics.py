@@ -7,9 +7,7 @@ from collections.abc import Iterable, Mapping
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any, Literal, NoReturn, TypeVar, cast, get_args, get_origin
-
-from typing_extensions import Self
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, TypeVar, cast, get_args, get_origin
 
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
@@ -29,6 +27,10 @@ from diwire.providers import (
 )
 from diwire.resolvers.protocol import ResolverProtocol
 from diwire.scope import BaseScope
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
+
 
 OpenProviderKind = Literal["concrete_type", "factory", "generator", "context_manager"]
 OpenBindingKind = Literal["dependency", "generic_argument", "generic_argument_type"]

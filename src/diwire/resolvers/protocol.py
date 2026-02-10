@@ -1,10 +1,13 @@
-from types import TracebackType
-from typing import Any, Protocol, TypeVar, overload
+from __future__ import annotations
 
-from typing_extensions import Self
+from types import TracebackType
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, overload
 
 from diwire.providers import ProvidersRegistrations
 from diwire.scope import BaseScope
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
 
 T = TypeVar("T")
 
