@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import keyword
 from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -406,7 +407,14 @@ class ResolverGenerationPlanner:
             return f"*{expression}"
         if kind is inspect.Parameter.VAR_KEYWORD:
             return f"**{expression}"
-        return f"{dependency.parameter.name}={expression}"
+        parameter_name = dependency.parameter.name
+        if not parameter_name.isidentifier() or keyword.iskeyword(parameter_name):
+            msg = (
+                f"Dependency parameter name '{parameter_name}' for slot {dependency_slot} "
+                "is not a valid identifier for generated keyword-argument wiring."
+            )
+            raise DIWireInvalidProviderSpecError(msg)
+        return f"{parameter_name}={expression}"
 
     def _dependency_expression(
         self,

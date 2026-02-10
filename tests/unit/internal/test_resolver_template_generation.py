@@ -6,7 +6,7 @@ from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import replace
 from importlib.metadata import PackageNotFoundError
-from typing import Literal
+from typing import Any, Literal, cast
 
 import pytest
 
@@ -1290,6 +1290,50 @@ def test_renderer_places_internal_resolver_before_varkw() -> None:
     )
 
     assert arguments == ["dependency", "__diwire_resolver=self", "**resolved_options"]
+
+
+def test_renderer_format_dependency_argument_raises_for_invalid_keyword_parameter_name() -> None:
+    class _FakeParameter:
+        def __init__(self) -> None:
+            self.name = "bad.name"
+            self.kind = inspect.Parameter.POSITIONAL_OR_KEYWORD
+
+    renderer = ResolversTemplateRenderer()
+    dependency = ProviderDependency(
+        provides=int,
+        parameter=cast("Any", _FakeParameter()),
+    )
+
+    with pytest.raises(DIWireInvalidProviderSpecError, match="not a valid identifier"):
+        renderer._format_dependency_argument(
+            dependency=dependency,
+            expression="self.resolve_1()",
+            prefer_positional=False,
+        )
+
+
+def test_planner_format_dependency_argument_raises_for_invalid_keyword_parameter_name() -> None:
+    class _FakeParameter:
+        def __init__(self) -> None:
+            self.name = "bad.name"
+            self.kind = inspect.Parameter.POSITIONAL_OR_KEYWORD
+
+    planner = ResolverGenerationPlanner(
+        root_scope=Scope.APP,
+        registrations=ProvidersRegistrations(),
+    )
+    dependency = ProviderDependency(
+        provides=int,
+        parameter=cast("Any", _FakeParameter()),
+    )
+
+    with pytest.raises(DIWireInvalidProviderSpecError, match="not a valid identifier"):
+        planner._format_dependency_argument(
+            dependency=dependency,
+            dependency_slot=1,
+            dependency_requires_async=False,
+            is_async_call=False,
+        )
 
 
 def test_inline_root_nested_dependency_expression_falls_back_to_root_resolve() -> None:

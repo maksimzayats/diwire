@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import inspect
+import keyword
 import logging
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 from textwrap import indent
 
+from diwire.exceptions import DIWireInvalidProviderSpecError
 from diwire.injection import INJECT_RESOLVER_KWARG
 from diwire.lock_mode import LockMode
 from diwire.providers import ProviderDependency, ProvidersRegistrations
@@ -1604,7 +1606,14 @@ class ResolversTemplateRenderer:
             return f"*{expression}"
         if kind is inspect.Parameter.VAR_KEYWORD:
             return f"**{expression}"
-        return f"{dependency.parameter.name}={expression}"
+        parameter_name = dependency.parameter.name
+        if not parameter_name.isidentifier() or keyword.iskeyword(parameter_name):
+            msg = (
+                f"Dependency parameter name '{parameter_name}' "
+                "is not a valid identifier for generated keyword-argument wiring."
+            )
+            raise DIWireInvalidProviderSpecError(msg)
+        return f"{parameter_name}={expression}"
 
     def _append_internal_resolver_argument(
         self,
