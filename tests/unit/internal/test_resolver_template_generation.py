@@ -761,6 +761,39 @@ def test_renderer_local_value_build_passes_internal_resolver_to_inject_wrapper_p
     assert lines == ["value = _provider_1(", "    __diwire_resolver=self,", ")"]
 
 
+def test_renderer_emits_resolver_kwarg_for_async_inject_wrapper() -> None:
+    renderer = ResolversTemplateRenderer()
+    class_plan = ScopePlan(
+        scope_name="app",
+        scope_level=Scope.APP.level,
+        class_name="RootResolver",
+        resolver_arg_name="app_resolver",
+        resolver_attr_name="_app_resolver",
+        skippable=False,
+        is_root=True,
+    )
+    workflow = _make_workflow_plan(
+        provider_attribute="factory",
+        is_provider_async=True,
+        provider_is_inject_wrapper=True,
+    )
+
+    lines = renderer._render_local_value_build(
+        workflow=workflow,
+        is_async_call=True,
+        class_plan=class_plan,
+        scope_by_level={class_plan.scope_level: class_plan},
+        workflow_by_slot={workflow.slot: workflow},
+    )
+
+    assert lines == [
+        "value = _provider_1(",
+        "    __diwire_resolver=self,",
+        ")",
+        "value = await value",
+    ]
+
+
 def test_renderer_local_value_build_skips_internal_resolver_for_regular_provider() -> None:
     renderer = ResolversTemplateRenderer()
     class_plan = ScopePlan(
@@ -786,6 +819,34 @@ def test_renderer_local_value_build_skips_internal_resolver_for_regular_provider
     )
 
     assert lines == ["value = _provider_1()"]
+
+
+def test_renderer_non_inject_provider_no_extra_kwarg() -> None:
+    renderer = ResolversTemplateRenderer()
+    class_plan = ScopePlan(
+        scope_name="app",
+        scope_level=Scope.APP.level,
+        class_name="RootResolver",
+        resolver_arg_name="app_resolver",
+        resolver_attr_name="_app_resolver",
+        skippable=False,
+        is_root=True,
+    )
+    workflow = _make_workflow_plan(
+        provider_attribute="factory",
+        is_provider_async=True,
+        provider_is_inject_wrapper=False,
+    )
+
+    lines = renderer._render_local_value_build(
+        workflow=workflow,
+        is_async_call=True,
+        class_plan=class_plan,
+        scope_by_level={class_plan.scope_level: class_plan},
+        workflow_by_slot={workflow.slot: workflow},
+    )
+
+    assert "__diwire_resolver" not in "\n".join(lines)
 
 
 def test_renderer_async_cache_replace_returns_empty_for_non_cached_workflow() -> None:
@@ -1049,7 +1110,56 @@ def test_inline_root_sync_dependency_expression_appends_resolver_for_inject_wrap
     assert expression == "_provider_5(__diwire_resolver=self._root_resolver)"
 
 
+def test_renderer_emits_root_resolver_expression_for_inline_nested_inject_wrapper() -> None:
+    renderer = ResolversTemplateRenderer()
+    workflow = replace(
+        _make_workflow_plan(
+            slot=5,
+            provider_attribute="factory",
+            is_cached=False,
+            scope_level=Scope.APP.level,
+            provider_is_inject_wrapper=True,
+        ),
+        max_required_scope_level=Scope.APP.level,
+    )
+    root_scope = ScopePlan(
+        scope_name="app",
+        scope_level=Scope.APP.level,
+        class_name="RootResolver",
+        resolver_arg_name="root_resolver",
+        resolver_attr_name="_root_resolver",
+        skippable=False,
+        is_root=True,
+    )
+    context = DependencyExpressionContext(
+        class_scope_level=Scope.REQUEST.level,
+        root_scope=root_scope,
+        workflow_by_slot={workflow.slot: workflow},
+    )
+
+    expression = renderer._inline_root_nested_dependency_expression(
+        slot=workflow.slot,
+        requires_async=False,
+        context=context,
+        depth=0,
+    )
+
+    assert expression == "_provider_5(__diwire_resolver=self._root_resolver)"
+
+
 def test_append_internal_resolver_argument_inserts_before_var_keyword_dependency() -> None:
+    renderer = ResolversTemplateRenderer()
+    arguments = ["dependency", "**resolved_options"]
+
+    renderer._append_internal_resolver_argument(
+        arguments=arguments,
+        resolver_expression="self",
+    )
+
+    assert arguments == ["dependency", "__diwire_resolver=self", "**resolved_options"]
+
+
+def test_renderer_places_internal_resolver_before_varkw() -> None:
     renderer = ResolversTemplateRenderer()
     arguments = ["dependency", "**resolved_options"]
 

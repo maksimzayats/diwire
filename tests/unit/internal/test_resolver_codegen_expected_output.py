@@ -130,6 +130,58 @@ def _build_snapshot_inject_wrapper_service(
     return _SnapshotInjectWrapperService(dependency=dependency)
 
 
+class _SnapshotAsyncInjectWrapperDependency:
+    pass
+
+
+class _SnapshotAsyncInjectWrapperService:
+    def __init__(self, dependency: _SnapshotAsyncInjectWrapperDependency) -> None:
+        self.dependency = dependency
+
+
+async def _build_snapshot_async_inject_wrapper_service(
+    dependency: Injected[_SnapshotAsyncInjectWrapperDependency],
+) -> _SnapshotAsyncInjectWrapperService:
+    return _SnapshotAsyncInjectWrapperService(dependency=dependency)
+
+
+class _SnapshotInlineRootInjectDependency:
+    pass
+
+
+class _SnapshotInlineRootInjectService:
+    def __init__(self, dependency: _SnapshotInlineRootInjectDependency) -> None:
+        self.dependency = dependency
+
+
+class _SnapshotInlineRootRequestService:
+    def __init__(self, dependency: _SnapshotInlineRootInjectService) -> None:
+        self.dependency = dependency
+
+
+def _build_snapshot_inline_root_inject_service(
+    dependency: Injected[_SnapshotInlineRootInjectDependency],
+) -> _SnapshotInlineRootInjectService:
+    return _SnapshotInlineRootInjectService(dependency=dependency)
+
+
+def _build_snapshot_inline_root_request_service(
+    dependency: _SnapshotInlineRootInjectService,
+) -> _SnapshotInlineRootRequestService:
+    return _SnapshotInlineRootRequestService(dependency=dependency)
+
+
+class _SnapshotInjectWrapperVarKwService:
+    def __init__(self, options: dict[str, int]) -> None:
+        self.options = options
+
+
+def _build_snapshot_inject_wrapper_varkw_service(
+    **options: int,
+) -> _SnapshotInjectWrapperVarKwService:
+    return _SnapshotInjectWrapperVarKwService(options=options)
+
+
 def test_codegen_matches_expected_for_empty_app_root_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
@@ -342,6 +394,79 @@ def test_codegen_matches_expected_for_inject_wrapper_provider_graph() -> None:
     )
     generated = _render(container=container, root_scope=Scope.APP)
     expected = _read_expected("app_root_inject_wrapper_provider.txt")
+    assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
+
+
+def test_codegen_matches_expected_for_async_inject_wrapper_provider_graph() -> None:
+    ProviderSpec.SLOT_COUNTER = 0
+    container = Container()
+    container.register_instance(
+        _SnapshotAsyncInjectWrapperDependency,
+        instance=_SnapshotAsyncInjectWrapperDependency(),
+    )
+
+    build_service = container.inject(_build_snapshot_async_inject_wrapper_service)
+
+    container.register_factory(
+        _SnapshotAsyncInjectWrapperService,
+        factory=build_service,
+        lifetime=Lifetime.TRANSIENT,
+    )
+    generated = _render(container=container, root_scope=Scope.APP)
+    expected = _read_expected("app_root_inject_wrapper_provider_async.txt")
+    assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
+
+
+def test_codegen_matches_expected_for_nested_inline_root_inject_wrapper_graph() -> None:
+    ProviderSpec.SLOT_COUNTER = 0
+    container = Container()
+    container.register_instance(
+        _SnapshotInlineRootInjectDependency,
+        instance=_SnapshotInlineRootInjectDependency(),
+    )
+
+    build_inject_service = container.inject(_build_snapshot_inline_root_inject_service)
+    container.register_factory(
+        _SnapshotInlineRootInjectService,
+        factory=build_inject_service,
+        lifetime=Lifetime.TRANSIENT,
+    )
+    container.register_factory(
+        _SnapshotInlineRootRequestService,
+        factory=_build_snapshot_inline_root_request_service,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.TRANSIENT,
+    )
+
+    generated = _render(container=container, root_scope=Scope.APP)
+    expected = _read_expected("app_root_inject_wrapper_nested_inline_root.txt")
+    assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
+
+
+def test_codegen_matches_expected_for_inject_wrapper_varkw_argument_order_graph() -> None:
+    signature = inspect.signature(_build_snapshot_inject_wrapper_varkw_service)
+    options_type = dict[str, int]
+
+    ProviderSpec.SLOT_COUNTER = 0
+    container = Container()
+    container.register_instance(provides=options_type, instance={"first": 1, "second": 2})
+
+    build_service = container.inject(_build_snapshot_inject_wrapper_varkw_service)
+
+    container.register_factory(
+        _SnapshotInjectWrapperVarKwService,
+        factory=build_service,
+        lifetime=Lifetime.TRANSIENT,
+        dependencies=[
+            ProviderDependency(
+                provides=options_type,
+                parameter=signature.parameters["options"],
+            ),
+        ],
+    )
+
+    generated = _render(container=container, root_scope=Scope.APP)
+    expected = _read_expected("app_root_inject_wrapper_varkw_order.txt")
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import threading
 from collections.abc import AsyncGenerator, Generator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from types import TracebackType
 from typing import Any, cast
@@ -75,6 +77,21 @@ class _InjectScopedDependency:
 
 class _InjectScopedConsumer:
     def __init__(self, dependency: _InjectScopedDependency) -> None:
+        self.dependency = dependency
+
+
+class _InjectNestedInnerConsumer:
+    def __init__(self, dependency: _InjectScopedDependency) -> None:
+        self.dependency = dependency
+
+
+class _InjectNestedOuterConsumer:
+    def __init__(
+        self,
+        inner: _InjectNestedInnerConsumer,
+        dependency: _InjectScopedDependency,
+    ) -> None:
+        self.inner = inner
         self.dependency = dependency
 
 
@@ -492,6 +509,177 @@ def test_codegen_passes_resolver_to_inject_wrapped_provider_calls() -> None:
         resolved = request_scope.resolve(_InjectScopedConsumer)
         assert isinstance(resolved, _InjectScopedConsumer)
         assert isinstance(resolved.dependency, _InjectScopedDependency)
+
+
+@pytest.mark.asyncio
+async def test_codegen_async_inject_wrapper_provider_receives_resolver() -> None:
+    container = Container()
+    container.register_concrete(
+        _InjectScopedDependency,
+        concrete_type=_InjectScopedDependency,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    @container.inject
+    async def build_consumer(
+        dependency: Injected[_InjectScopedDependency],
+    ) -> _InjectScopedConsumer:
+        await asyncio.sleep(0)
+        return _InjectScopedConsumer(dependency=dependency)
+
+    container.register_factory(
+        _InjectScopedConsumer,
+        factory=build_consumer,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with container.enter_scope() as request_scope:
+        resolved = await request_scope.aresolve(_InjectScopedConsumer)
+
+    assert isinstance(resolved, _InjectScopedConsumer)
+    assert isinstance(resolved.dependency, _InjectScopedDependency)
+
+
+def test_codegen_nested_inject_wrappers_runtime_scope_consistency() -> None:
+    container = Container()
+    container.register_concrete(
+        _InjectScopedDependency,
+        concrete_type=_InjectScopedDependency,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    @container.inject
+    def build_inner(
+        dependency: Injected[_InjectScopedDependency],
+    ) -> _InjectNestedInnerConsumer:
+        return _InjectNestedInnerConsumer(dependency=dependency)
+
+    @container.inject
+    def build_outer(
+        inner: Injected[_InjectNestedInnerConsumer],
+        dependency: Injected[_InjectScopedDependency],
+    ) -> _InjectNestedOuterConsumer:
+        return _InjectNestedOuterConsumer(inner=inner, dependency=dependency)
+
+    container.register_factory(
+        _InjectNestedInnerConsumer,
+        factory=build_inner,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.register_factory(
+        _InjectNestedOuterConsumer,
+        factory=build_outer,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.TRANSIENT,
+    )
+
+    with container.enter_scope() as request_scope:
+        resolved = request_scope.resolve(_InjectNestedOuterConsumer)
+
+    assert isinstance(resolved, _InjectNestedOuterConsumer)
+    assert resolved.inner.dependency is resolved.dependency
+
+
+def test_codegen_inject_wrapper_singleton_thread_safe_stress() -> None:
+    calls = 0
+    workers = 32
+
+    dependency = _Resource()
+    container = Container()
+    container.register_instance(_Resource, instance=dependency)
+
+    @container.inject
+    def build_singleton(resource: Injected[_Resource]) -> _DependsOnResource:
+        nonlocal calls
+        calls += 1
+        return _DependsOnResource(resource=resource)
+
+    container.register_factory(
+        _DependsOnResource,
+        factory=build_singleton,
+        lifetime=Lifetime.SINGLETON,
+        concurrency_safe=True,
+    )
+    container.compile()
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(container.resolve, _DependsOnResource) for _ in range(workers * 2)]
+        results = [future.result(timeout=5) for future in futures]
+
+    assert calls == 1
+    assert len({id(result) for result in results}) == 1
+
+
+@pytest.mark.asyncio
+async def test_codegen_inject_wrapper_singleton_async_stress() -> None:
+    calls = 0
+    tasks = 128
+    dependency = _Resource()
+    container = Container()
+    container.register_instance(_Resource, instance=dependency)
+
+    @container.inject
+    async def build_singleton(resource: Injected[_Resource]) -> _DependsOnResource:
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0)
+        return _DependsOnResource(resource=resource)
+
+    container.register_factory(
+        _DependsOnResource,
+        factory=build_singleton,
+        lifetime=Lifetime.SINGLETON,
+        concurrency_safe=True,
+    )
+
+    results = await asyncio.gather(
+        *(container.aresolve(_DependsOnResource) for _ in range(tasks)),
+    )
+
+    assert calls == 1
+    assert len({id(result) for result in results}) == 1
+
+
+def test_codegen_inject_wrapper_unsafe_mode_stress_no_deadlock() -> None:
+    calls = 0
+    workers = 32
+    all_started = threading.Event()
+    calls_lock = threading.Lock()
+    dependency = _Resource()
+    container = Container()
+    container.register_instance(_Resource, instance=dependency)
+
+    @container.inject
+    def build_singleton(resource: Injected[_Resource]) -> _DependsOnResource:
+        nonlocal calls
+        with calls_lock:
+            calls += 1
+            if calls == workers:
+                all_started.set()
+        did_start = all_started.wait(timeout=2)
+        assert did_start
+        return _DependsOnResource(resource=resource)
+
+    container.register_factory(
+        _DependsOnResource,
+        factory=build_singleton,
+        lifetime=Lifetime.SINGLETON,
+        concurrency_safe=False,
+    )
+    container.compile()
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(container.resolve, _DependsOnResource) for _ in range(workers)]
+        results = [future.result(timeout=5) for future in futures]
+
+    assert calls == workers
+    assert all(isinstance(result, _DependsOnResource) for result in results)
+    assert len({id(result) for result in results}) == workers
+    assert container.resolve(_DependsOnResource) is container.resolve(_DependsOnResource)
 
 
 def test_generated_dispatch_raises_for_unknown_dependency_in_sync_and_async_paths() -> None:
