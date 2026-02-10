@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from diwire.providers import Lifetime, ProviderSpec, ProvidersRegistrations
 from diwire.scope import BaseScope, Scope
 
@@ -44,3 +46,19 @@ def test_len_returns_total_registered_provider_specs() -> None:
     )
 
     assert len(registrations) == 2
+
+
+def test_add_override_removes_previous_slot_registration() -> None:
+    registrations = ProvidersRegistrations()
+    service_type = type("Service", (), {})
+    first_spec = _provider_spec(provides=service_type, scope_level=Scope.APP)
+    second_spec = _provider_spec(provides=service_type, scope_level=Scope.APP)
+
+    registrations.add(first_spec)
+    registrations.add(second_spec)
+
+    assert len(registrations) == 1
+    assert registrations.get_by_type(service_type) is second_spec
+    assert registrations.get_by_slot(second_spec.slot) is second_spec
+    with pytest.raises(KeyError):
+        registrations.get_by_slot(first_spec.slot)

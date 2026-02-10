@@ -129,6 +129,8 @@ class ProvidersRegistrations:
 
     def add(self, spec: ProviderSpec) -> None:
         """Add a new provider specification to the registrations."""
+        if previous_spec := self._registrations_by_type.get(spec.provides):
+            self._registrations_by_slot.pop(previous_spec.slot, None)
         self._registrations_by_type[spec.provides] = spec
         self._registrations_by_slot[spec.slot] = spec
         self._refresh_needs_cleanup_flags()
