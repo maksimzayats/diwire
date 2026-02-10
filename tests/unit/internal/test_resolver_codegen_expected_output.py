@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from diwire.container import Container
+from diwire.markers import Injected
 from diwire.providers import Lifetime, ProviderDependency, ProviderSpec
 from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire.scope import BaseScope, Scope
@@ -112,6 +113,21 @@ def _build_snapshot_async_cleanup_signature_service(
         values=tuple(values),
         options=options,
     )
+
+
+class _SnapshotInjectWrapperDependency:
+    pass
+
+
+class _SnapshotInjectWrapperService:
+    def __init__(self, dependency: _SnapshotInjectWrapperDependency) -> None:
+        self.dependency = dependency
+
+
+def _build_snapshot_inject_wrapper_service(
+    dependency: Injected[_SnapshotInjectWrapperDependency],
+) -> _SnapshotInjectWrapperService:
+    return _SnapshotInjectWrapperService(dependency=dependency)
 
 
 def test_codegen_matches_expected_for_empty_app_root_graph() -> None:
@@ -306,6 +322,26 @@ def test_codegen_matches_expected_for_async_cleanup_mixed_signature_graph() -> N
     )
     generated = _render(container=container, root_scope=Scope.APP)
     expected = _read_expected("app_root_async_cleanup_signature_mixed.txt")
+    assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
+
+
+def test_codegen_matches_expected_for_inject_wrapper_provider_graph() -> None:
+    ProviderSpec.SLOT_COUNTER = 0
+    container = Container()
+    container.register_instance(
+        _SnapshotInjectWrapperDependency,
+        instance=_SnapshotInjectWrapperDependency(),
+    )
+
+    build_service = container.inject(_build_snapshot_inject_wrapper_service)
+
+    container.register_factory(
+        _SnapshotInjectWrapperService,
+        factory=build_service,
+        lifetime=Lifetime.TRANSIENT,
+    )
+    generated = _render(container=container, root_scope=Scope.APP)
+    expected = _read_expected("app_root_inject_wrapper_provider.txt")
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 

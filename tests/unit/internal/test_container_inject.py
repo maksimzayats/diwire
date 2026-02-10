@@ -72,6 +72,24 @@ class _PrimaryDatabase(_Database):
     pass
 
 
+def test_inject_wrapper_preserves_callable_metadata() -> None:
+    container = Container()
+    dependency = _InjectedSyncDependency("meta")
+    container.register_instance(_InjectedSyncDependency, instance=dependency)
+
+    def _handler(value: str, dep: Injected[_InjectedSyncDependency]) -> str:
+        """Handler docstring."""
+        return f"{value}:{dep.value}"
+
+    wrapped = container.inject(_handler)
+    wrapped_any = cast("Any", wrapped)
+
+    assert wrapped.__name__ == _handler.__name__
+    assert wrapped.__qualname__ == _handler.__qualname__
+    assert wrapped.__doc__ == _handler.__doc__
+    assert wrapped_any.__wrapped__ is _handler
+
+
 def test_inject_decorator_supports_direct_form() -> None:
     container = Container()
     dependency = _InjectedSyncDependency("direct")
@@ -343,6 +361,40 @@ def test_inject_scope_mismatch_is_raised_when_no_compatible_resolver_is_provided
     injected_handler = cast("Any", handler)
     with pytest.raises(DIWireScopeMismatchError, match="requires opened scope level"):
         injected_handler()
+
+
+def test_inject_wrapper_does_not_forward_internal_resolver_kwarg_to_user_callable() -> None:
+    container = Container()
+    dependency = _InjectedSyncDependency("value")
+    resolver = _ResolverStub(dependency)
+
+    @container.inject
+    def handler(
+        dep: Injected[_InjectedSyncDependency],
+        **kwargs: object,
+    ) -> tuple[str, bool]:
+        return dep.value, "__diwire_resolver" in kwargs
+
+    injected_handler = cast("Any", handler)
+    value, has_internal_kwarg = injected_handler(__diwire_resolver=resolver)
+
+    assert value == "value"
+    assert has_internal_kwarg is False
+
+
+def test_inject_decorated_method_keeps_descriptor_binding_behavior() -> None:
+    container = Container()
+    dependency = _InjectedSyncDependency("bound")
+    container.register_instance(_InjectedSyncDependency, instance=dependency)
+
+    class _Handler:
+        @container.inject
+        def run(self, dep: Injected[_InjectedSyncDependency]) -> str:
+            return dep.value
+
+    handler = _Handler()
+    run_method = cast("Any", handler.run)
+    assert run_method() == "bound"
 
 
 def test_resolve_injected_dependency_handles_empty_and_missing_marker_annotations() -> None:

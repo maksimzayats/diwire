@@ -20,7 +20,7 @@ from typing import (
 )
 
 from diwire.exceptions import DIWireInvalidRegistrationError
-from diwire.markers import Injected, InjectedMarker
+from diwire.markers import InjectedMarker
 from diwire.providers import (
     ContextManagerProvider,
     FactoryProvider,
