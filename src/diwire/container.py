@@ -23,7 +23,7 @@ from diwire.injection import (
     InjectedCallableInspector,
     InjectedParameter,
 )
-from diwire.lock_mode import AUTO_LOCK_MODE, AutoLockMode, LockMode
+from diwire.lock_mode import LockMode
 from diwire.providers import (
     ContextManagerProvider,
     FactoryProvider,
@@ -31,7 +31,6 @@ from diwire.providers import (
     Lifetime,
     ProviderDependenciesExtractor,
     ProviderDependency,
-    ProviderLockMode,
     ProviderReturnTypeExtractor,
     ProviderSpec,
     ProvidersRegistrations,
@@ -44,11 +43,6 @@ from diwire.validators import DependecyRegistrationValidator
 T = TypeVar("T")
 F = TypeVar("F", bound=Callable[..., Any])
 InjectableF = TypeVar("InjectableF", bound=Callable[..., Any])
-
-RegistrationLockMode = LockMode | Literal["from_container"]
-ContainerDefaultLockMode = LockMode | AutoLockMode
-
-_FROM_CONTAINER_LOCK_MODE: Literal["from_container"] = "from_container"
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +63,7 @@ class Container:
         root_scope: BaseScope = Scope.APP,
         default_lifetime: Lifetime = Lifetime.TRANSIENT,
         *,
-        lock_mode: ContainerDefaultLockMode = AUTO_LOCK_MODE,
+        lock_mode: LockMode | Literal["auto"] = "auto",
         autoregister: bool = False,
         autoregister_dependencies: bool = False,
     ) -> None:
@@ -134,7 +128,7 @@ class Container:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
-        lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE,
+        lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | None = None,
     ) -> ConcreteTypeRegistrationDecorator[T]:
         """Register a concrete type provider in the container.
@@ -209,7 +203,7 @@ class Container:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
-        lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE,
+        lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | None = None,
     ) -> FactoryRegistrationDecorator[T]:
         """Register a factory provider in the container.
@@ -277,7 +271,7 @@ class Container:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
-        lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE,
+        lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | None = None,
     ) -> GeneratorRegistrationDecorator[T]:
         """Register a generator provider in the container.
@@ -349,7 +343,7 @@ class Container:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
-        lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE,
+        lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | None = None,
     ) -> ContextManagerRegistrationDecorator[T]:
         """Register a context manager provider in the container.
@@ -469,9 +463,13 @@ class Container:
             dependencies=explicit_dependencies,
         )
 
-    def _resolve_provider_lock_mode(self, lock_mode: RegistrationLockMode) -> ProviderLockMode:
-        if lock_mode == _FROM_CONTAINER_LOCK_MODE:
+    def _resolve_provider_lock_mode(
+        self,
+        lock_mode: LockMode | Literal["from_container"],
+    ) -> LockMode | Literal["auto"]:
+        if lock_mode == "from_container":
             return self._lock_mode
+
         return lock_mode
 
     def _resolve_autoregister_dependencies(self, autoregister_dependencies: bool | None) -> bool:
@@ -861,7 +859,7 @@ class ConcreteTypeRegistrationDecorator(Generic[T]):
     lifetime: Lifetime | None
     provides: type[T] | None = None
     dependencies: list[ProviderDependency] | None = None
-    lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE
+    lock_mode: LockMode | Literal["from_container"] = "from_container"
     autoregister_dependencies: bool | None = None
 
     def __call__(self, concrete_type: type[T]) -> type[T]:
@@ -888,7 +886,7 @@ class FactoryRegistrationDecorator(Generic[T]):
     lifetime: Lifetime | None
     provides: type[T] | None = None
     dependencies: list[ProviderDependency] | None = None
-    lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE
+    lock_mode: LockMode | Literal["from_container"] = "from_container"
     autoregister_dependencies: bool | None = None
 
     def __call__(self, factory: F) -> F:
@@ -915,7 +913,7 @@ class GeneratorRegistrationDecorator(Generic[T]):
     lifetime: Lifetime | None
     provides: type[T] | None = None
     dependencies: list[ProviderDependency] | None = None
-    lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE
+    lock_mode: LockMode | Literal["from_container"] = "from_container"
     autoregister_dependencies: bool | None = None
 
     def __call__(self, generator: F) -> F:
@@ -942,7 +940,7 @@ class ContextManagerRegistrationDecorator(Generic[T]):
     lifetime: Lifetime | None
     provides: type[T] | None = None
     dependencies: list[ProviderDependency] | None = None
-    lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE
+    lock_mode: LockMode | Literal["from_container"] = "from_container"
     autoregister_dependencies: bool | None = None
 
     def __call__(self, context_manager: F) -> F:

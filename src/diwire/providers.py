@@ -23,7 +23,7 @@ from diwire.exceptions import (
     DIWireInvalidRegistrationError,
     DIWireProviderDependencyInferenceError,
 )
-from diwire.lock_mode import AUTO_LOCK_MODE, LockMode
+from diwire.lock_mode import LockMode
 from diwire.scope import BaseScope
 
 T = TypeVar("T")
@@ -64,10 +64,6 @@ _ASYNC_RESOLVER_ORIGINS: tuple[type[Any], ...] = (
 )
 
 
-ProviderLockMode: TypeAlias = LockMode | Literal["auto"]
-"""Stored provider lock mode (resolved enum or container-default auto sentinel)."""
-
-
 @dataclass(kw_only=True)
 class ProviderSpec:
     """A specification of a provider in the dependency injection system."""
@@ -95,7 +91,7 @@ class ProviderSpec:
     """Indicates whether any dependency requires asynchronous resolution."""
     needs_cleanup: bool
     """True if provider itself or any dependency requires cleanup."""
-    lock_mode: ProviderLockMode = AUTO_LOCK_MODE
+    lock_mode: LockMode | Literal["auto"] = "auto"
     """Resolved locking strategy for this provider."""
 
     lifetime: Lifetime | None = None

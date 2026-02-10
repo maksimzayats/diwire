@@ -7,11 +7,10 @@ from typing import Any, Literal
 
 from diwire.exceptions import DIWireInvalidProviderSpecError
 from diwire.injection import INJECT_WRAPPER_MARKER
-from diwire.lock_mode import AUTO_LOCK_MODE, LockMode
+from diwire.lock_mode import LockMode
 from diwire.providers import (
     Lifetime,
     ProviderDependency,
-    ProviderLockMode,
     ProviderSpec,
     ProvidersRegistrations,
 )
@@ -263,10 +262,10 @@ class ResolverGenerationPlanner:
     def _resolve_effective_lock_mode(
         self,
         *,
-        lock_mode: ProviderLockMode,
+        lock_mode: LockMode | Literal["auto"],
         has_async_specs: bool,
     ) -> LockMode:
-        if lock_mode == AUTO_LOCK_MODE:
+        if lock_mode == "auto":
             if has_async_specs:
                 return LockMode.ASYNC
             return LockMode.THREAD

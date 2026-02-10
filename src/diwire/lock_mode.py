@@ -1,10 +1,6 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Literal, TypeAlias
-
-AutoLockMode: TypeAlias = Literal["auto"]
-AUTO_LOCK_MODE: AutoLockMode = "auto"
 
 
 class LockMode(Enum):
