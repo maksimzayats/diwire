@@ -10,6 +10,7 @@ from typing import (
     Annotated,
     Any,
     ClassVar,
+    Literal,
     TypeAlias,
     TypeVar,
     get_args,
@@ -22,6 +23,7 @@ from diwire.exceptions import (
     DIWireInvalidRegistrationError,
     DIWireProviderDependencyInferenceError,
 )
+from diwire.lock_mode import AUTO_LOCK_MODE, LockMode
 from diwire.scope import BaseScope
 
 T = TypeVar("T")
@@ -62,6 +64,10 @@ _ASYNC_RESOLVER_ORIGINS: tuple[type[Any], ...] = (
 )
 
 
+ProviderLockMode: TypeAlias = LockMode | Literal["auto"]
+"""Stored provider lock mode (resolved enum or container-default auto sentinel)."""
+
+
 @dataclass(kw_only=True)
 class ProviderSpec:
     """A specification of a provider in the dependency injection system."""
@@ -89,8 +95,8 @@ class ProviderSpec:
     """Indicates whether any dependency requires asynchronous resolution."""
     needs_cleanup: bool
     """True if provider itself or any dependency requires cleanup."""
-    concurrency_safe: bool = True
-    """Whether generated resolver code should use locking for this provider."""
+    lock_mode: ProviderLockMode = AUTO_LOCK_MODE
+    """Resolved locking strategy for this provider."""
 
     lifetime: Lifetime | None = None
     """The lifetime of the provided dependency. Could be none in case of instance providers."""

@@ -17,9 +17,10 @@ MODULE_TEMPLATE = dedent(
 IMPORTS_TEMPLATE = dedent(
     """
     from __future__ import annotations
-    {% if lock_mode == "async" %}
+    {% if uses_asyncio_import %}
     import asyncio
-    {% else %}
+    {% endif %}
+    {% if uses_threading_import %}
     import threading
     {% endif %}
     {% if uses_generator_context_helpers %}

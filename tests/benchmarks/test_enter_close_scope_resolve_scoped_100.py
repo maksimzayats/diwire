@@ -5,6 +5,7 @@ from typing import Any
 import rodi
 
 from diwire.container import Container as DIWireContainer
+from diwire.lock_mode import LockMode
 from diwire.providers import Lifetime
 from diwire.scope import Scope
 from tests.benchmarks.helpers import run_benchmark
@@ -15,7 +16,7 @@ class _ScopedService:
 
 
 def test_benchmark_diwire_enter_close_scope_resolve_scoped_100(benchmark: Any) -> None:
-    container = DIWireContainer(default_concurrency_safe=False)
+    container = DIWireContainer(lock_mode=LockMode.NONE)
     container.register_concrete(
         _ScopedService,
         lifetime=Lifetime.SCOPED,

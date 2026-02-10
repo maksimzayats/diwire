@@ -11,10 +11,10 @@ import pytest
 
 from diwire.container import Container
 from diwire.exceptions import DIWireInvalidProviderSpecError
+from diwire.lock_mode import LockMode
 from diwire.providers import Lifetime, ProviderDependency, ProviderSpec, ProvidersRegistrations
 from diwire.resolvers.templates import renderer as renderer_module
 from diwire.resolvers.templates.planner import (
-    LockMode,
     ProviderWorkflowPlan,
     ResolverGenerationPlan,
     ResolverGenerationPlanner,
@@ -144,7 +144,26 @@ def _make_workflow_plan(
     is_cached: bool = False,
     scope_level: int = Scope.APP.level,
     provider_is_inject_wrapper: bool = False,
+    lock_mode: LockMode = LockMode.THREAD,
+    effective_lock_mode: LockMode | None = None,
+    requires_async: bool | None = None,
+    uses_thread_lock: bool | None = None,
+    uses_async_lock: bool | None = None,
 ) -> ProviderWorkflowPlan:
+    resolved_requires_async = is_provider_async if requires_async is None else requires_async
+    resolved_effective_lock_mode = lock_mode if effective_lock_mode is None else effective_lock_mode
+    resolved_uses_thread_lock = (
+        is_cached
+        and resolved_effective_lock_mode is LockMode.THREAD
+        and not resolved_requires_async
+        if uses_thread_lock is None
+        else uses_thread_lock
+    )
+    resolved_uses_async_lock = (
+        is_cached and resolved_effective_lock_mode is LockMode.ASYNC and resolved_requires_async
+        if uses_async_lock is None
+        else uses_async_lock
+    )
     return ProviderWorkflowPlan(
         slot=slot,
         provides=int,
@@ -157,9 +176,12 @@ def _make_workflow_plan(
         is_cached=is_cached,
         is_transient=not is_cached,
         cache_owner_scope_level=Scope.APP.level if is_cached else None,
-        concurrency_safe=True,
+        lock_mode=lock_mode,
+        effective_lock_mode=resolved_effective_lock_mode,
+        uses_thread_lock=resolved_uses_thread_lock,
+        uses_async_lock=resolved_uses_async_lock,
         is_provider_async=is_provider_async,
-        requires_async=is_provider_async,
+        requires_async=resolved_requires_async,
         needs_cleanup=False,
         dependencies=(),
         dependency_slots=(),
@@ -169,6 +191,44 @@ def _make_workflow_plan(
         sync_arguments=(),
         async_arguments=(),
         provider_is_inject_wrapper=provider_is_inject_wrapper,
+    )
+
+
+def _make_generation_plan(
+    *,
+    scopes: tuple[ScopePlan, ...],
+    workflows: tuple[ProviderWorkflowPlan, ...],
+    root_scope_level: int = Scope.APP.level,
+    has_async_specs: bool = False,
+    has_cleanup: bool = False,
+) -> ResolverGenerationPlan:
+    cached_provider_count = sum(1 for workflow in workflows if workflow.is_cached)
+    thread_lock_count = sum(1 for workflow in workflows if workflow.uses_thread_lock)
+    async_lock_count = sum(1 for workflow in workflows if workflow.uses_async_lock)
+    return ResolverGenerationPlan(
+        root_scope_level=root_scope_level,
+        has_async_specs=has_async_specs,
+        provider_count=len(workflows),
+        cached_provider_count=cached_provider_count,
+        thread_lock_count=thread_lock_count,
+        async_lock_count=async_lock_count,
+        effective_mode_counts=(
+            (
+                LockMode.THREAD,
+                sum(1 for workflow in workflows if workflow.effective_lock_mode is LockMode.THREAD),
+            ),
+            (
+                LockMode.ASYNC,
+                sum(1 for workflow in workflows if workflow.effective_lock_mode is LockMode.ASYNC),
+            ),
+            (
+                LockMode.NONE,
+                sum(1 for workflow in workflows if workflow.effective_lock_mode is LockMode.NONE),
+            ),
+        ),
+        has_cleanup=has_cleanup,
+        scopes=scopes,
+        workflows=workflows,
     )
 
 
@@ -234,7 +294,28 @@ def test_renderer_output_avoids_reflective_hot_path_tokens() -> None:
     assert "cast(" not in code
 
 
-def test_planner_selects_async_lock_mode_when_async_specs_exist() -> None:
+def test_renderer_logs_lock_strategy_once_per_compile_cache_miss(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    container = Container()
+    container.register_factory(
+        _Service,
+        factory=lambda: _Service(_Config()),
+        lifetime=Lifetime.SINGLETON,
+    )
+
+    caplog.set_level("INFO", logger="diwire.resolvers.templates.renderer")
+
+    container.compile()
+    container.compile()
+
+    records = [
+        record for record in caplog.records if "Resolver codegen strategy:" in record.getMessage()
+    ]
+    assert len(records) == 1
+
+
+def test_planner_selects_async_effective_lock_mode_when_async_specs_exist() -> None:
     container = Container()
     container.register_factory(int, factory=_provide_int, lifetime=Lifetime.SINGLETON)
     container.register_factory(
@@ -248,7 +329,8 @@ def test_planner_selects_async_lock_mode_when_async_specs_exist() -> None:
         registrations=container._providers_registrations,
     ).build()
 
-    assert plan.lock_mode is LockMode.ASYNC
+    assert plan.has_async_specs is True
+    assert all(workflow.effective_lock_mode is LockMode.ASYNC for workflow in plan.workflows)
 
 
 def test_renderer_includes_generator_context_helpers_for_generator_graphs() -> None:
@@ -607,13 +689,7 @@ def test_renderer_enter_scope_raises_when_default_transition_is_missing(
         skippable=True,
         is_root=False,
     )
-    plan = ResolverGenerationPlan(
-        root_scope_level=Scope.APP.level,
-        lock_mode=LockMode.THREAD,
-        has_cleanup=False,
-        scopes=(class_plan, next_scope),
-        workflows=(),
-    )
+    plan = _make_generation_plan(scopes=(class_plan, next_scope), workflows=())
     monkeypatch.setattr(
         renderer,
         "_next_scope_options",
@@ -663,13 +739,7 @@ def test_renderer_async_method_renders_non_locking_async_build_path() -> None:
         is_provider_async=True,
         is_cached=False,
     )
-    plan = ResolverGenerationPlan(
-        root_scope_level=Scope.APP.level,
-        lock_mode=LockMode.ASYNC,
-        has_cleanup=False,
-        scopes=(class_plan,),
-        workflows=(workflow,),
-    )
+    plan = _make_generation_plan(scopes=(class_plan,), workflows=(workflow,))
 
     method_code = renderer._render_async_method(
         plan=plan,
@@ -861,13 +931,7 @@ def test_renderer_async_cache_replace_returns_empty_for_non_cached_workflow() ->
         is_root=True,
     )
     workflow = _make_workflow_plan(is_cached=False)
-    plan = ResolverGenerationPlan(
-        root_scope_level=Scope.APP.level,
-        lock_mode=LockMode.ASYNC,
-        has_cleanup=False,
-        scopes=(class_plan,),
-        workflows=(workflow,),
-    )
+    plan = _make_generation_plan(scopes=(class_plan,), workflows=(workflow,))
 
     assert renderer._render_async_cache_replace(plan=plan, workflow=workflow) == []
 
@@ -913,10 +977,7 @@ def test_renderer_async_method_delegates_to_non_root_owner_for_async_workflow() 
         requires_async=True,
         max_required_scope_level=Scope.SESSION.level,
     )
-    plan = ResolverGenerationPlan(
-        root_scope_level=Scope.APP.level,
-        lock_mode=LockMode.ASYNC,
-        has_cleanup=False,
+    plan = _make_generation_plan(
         scopes=(root_scope, owner_scope, class_plan),
         workflows=(workflow,),
     )

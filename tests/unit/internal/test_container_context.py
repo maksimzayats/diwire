@@ -15,6 +15,7 @@ from diwire.exceptions import (
     DIWireInvalidRegistrationError,
     DIWireScopeMismatchError,
 )
+from diwire.lock_mode import LockMode
 from diwire.markers import Injected
 from diwire.providers import Lifetime, ProviderDependency
 from diwire.scope import Scope
@@ -103,6 +104,23 @@ def test_register_before_bind_replays_on_set_current() -> None:
 
     resolved = container.resolve(_ConcreteService)
     assert isinstance(resolved, _ConcreteService)
+
+
+def test_register_factory_persists_and_replays_from_container_lock_mode_sentinel() -> None:
+    context = ContainerContext()
+
+    def build_service() -> _Service:
+        return _Service("factory")
+
+    context.register_factory(_Service, factory=build_service)
+    operation = context._operations[0]
+    assert operation.kwargs["lock_mode"] == "from_container"
+
+    container = Container(lock_mode=LockMode.NONE)
+    context.set_current(container)
+
+    spec = container._providers_registrations.get_by_type(_Service)
+    assert spec.lock_mode is LockMode.NONE
 
 
 def test_register_concrete_supports_decorator_form() -> None:

@@ -10,6 +10,7 @@ from diwire.exceptions import (
     DIWireProviderDependencyInferenceError,
     DIWireScopeMismatchError,
 )
+from diwire.lock_mode import LockMode
 from diwire.markers import Component, Injected
 from diwire.providers import Lifetime
 from diwire.scope import BaseScope, Scope
@@ -29,6 +30,7 @@ __all__ = [
     "DIWireScopeMismatchError",
     "Injected",
     "Lifetime",
+    "LockMode",
     "Scope",
     "container_context",
 ]

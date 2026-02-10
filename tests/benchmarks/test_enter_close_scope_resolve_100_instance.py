@@ -5,6 +5,7 @@ from typing import Any
 import rodi
 
 from diwire.container import Container as DIWireContainer
+from diwire.lock_mode import LockMode
 
 _BENCHMARK_ITERATIONS = 1_000
 _BENCHMARK_WARMUP_ROUNDS = 3
@@ -12,7 +13,7 @@ _BENCHMARK_ROUNDS = 5
 
 
 def test_benchmark_diwire_enter_close_scope_resolve_100(benchmark: Any) -> None:
-    container = DIWireContainer(default_concurrency_safe=False)
+    container = DIWireContainer(lock_mode=LockMode.NONE)
     container.register_instance(int, instance=42)
     assert container.resolve(int) == 42
     with container.enter_scope() as scope:

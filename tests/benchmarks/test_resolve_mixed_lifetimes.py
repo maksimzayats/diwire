@@ -5,6 +5,7 @@ from typing import Any
 import rodi
 
 from diwire.container import Container as DIWireContainer
+from diwire.lock_mode import LockMode
 from diwire.providers import Lifetime
 from diwire.scope import Scope
 from tests.benchmarks.helpers import run_benchmark
@@ -25,7 +26,7 @@ class _RootScopedService:
 
 
 def test_benchmark_diwire_resolve_mixed_lifetimes(benchmark: Any) -> None:
-    container = DIWireContainer(default_concurrency_safe=False)
+    container = DIWireContainer(lock_mode=LockMode.NONE)
     container.register_concrete(_SharedDependency, lifetime=Lifetime.SINGLETON)
     container.register_concrete(_PerResolveDependency, lifetime=Lifetime.TRANSIENT)
     container.register_concrete(

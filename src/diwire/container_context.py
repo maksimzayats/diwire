@@ -14,6 +14,7 @@ from diwire.injection import (
     INJECT_WRAPPER_MARKER,
     InjectedCallableInspector,
 )
+from diwire.lock_mode import LockMode
 from diwire.providers import (
     ContextManagerProvider,
     FactoryProvider,
@@ -31,6 +32,8 @@ _CONTAINER_NOT_SET_MESSAGE = (
     "Container is not set for container_context. "
     "Call container_context.set_current(container) before using container_context."
 )
+_FROM_CONTAINER_LOCK_MODE: Literal["from_container"] = "from_container"
+RegistrationLockMode = LockMode | Literal["from_container"]
 
 _RegistrationMethod = Literal[
     "register_instance",
@@ -108,7 +111,6 @@ class ContainerContext:
         provides: type[T] | None = None,
         *,
         instance: T,
-        concurrency_safe: bool | None = None,
     ) -> None:
         """Register an instance provider for replay and immediate binding when available."""
         self._record_registration(
@@ -116,7 +118,6 @@ class ContainerContext:
             registration_kwargs={
                 "provides": provides,
                 "instance": instance,
-                "concurrency_safe": concurrency_safe,
             },
         )
 
@@ -128,10 +129,13 @@ class ContainerContext:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
-        concurrency_safe: bool | None = None,
+        lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE,
         autoregister_dependencies: bool | None = None,
     ) -> Callable[[type[T]], type[T]]:
-        """Register a concrete provider with direct and decorator forms."""
+        """Register a concrete provider with direct and decorator forms.
+
+        ``lock_mode="from_container"`` is persisted and replayed unchanged.
+        """
 
         def decorator(decorated_concrete: type[T]) -> type[T]:
             self.register_concrete(
@@ -140,7 +144,7 @@ class ContainerContext:
                 scope=scope,
                 lifetime=lifetime,
                 dependencies=dependencies,
-                concurrency_safe=concurrency_safe,
+                lock_mode=lock_mode,
                 autoregister_dependencies=autoregister_dependencies,
             )
             return decorated_concrete
@@ -159,7 +163,7 @@ class ContainerContext:
                 "scope": scope,
                 "lifetime": lifetime,
                 "dependencies": dependencies,
-                "concurrency_safe": concurrency_safe,
+                "lock_mode": lock_mode,
                 "autoregister_dependencies": autoregister_dependencies,
             },
         )
@@ -173,10 +177,13 @@ class ContainerContext:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
-        concurrency_safe: bool | None = None,
+        lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE,
         autoregister_dependencies: bool | None = None,
     ) -> Callable[[F], F]:
-        """Register a factory provider with direct and decorator forms."""
+        """Register a factory provider with direct and decorator forms.
+
+        ``lock_mode="from_container"`` is persisted and replayed unchanged.
+        """
 
         def decorator(decorated_factory: F) -> F:
             self.register_factory(
@@ -185,7 +192,7 @@ class ContainerContext:
                 scope=scope,
                 lifetime=lifetime,
                 dependencies=dependencies,
-                concurrency_safe=concurrency_safe,
+                lock_mode=lock_mode,
                 autoregister_dependencies=autoregister_dependencies,
             )
             return decorated_factory
@@ -201,7 +208,7 @@ class ContainerContext:
                 "scope": scope,
                 "lifetime": lifetime,
                 "dependencies": dependencies,
-                "concurrency_safe": concurrency_safe,
+                "lock_mode": lock_mode,
                 "autoregister_dependencies": autoregister_dependencies,
             },
         )
@@ -217,10 +224,13 @@ class ContainerContext:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
-        concurrency_safe: bool | None = None,
+        lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE,
         autoregister_dependencies: bool | None = None,
     ) -> Callable[[F], F]:
-        """Register a generator provider with direct and decorator forms."""
+        """Register a generator provider with direct and decorator forms.
+
+        ``lock_mode="from_container"`` is persisted and replayed unchanged.
+        """
 
         def decorator(decorated_generator: F) -> F:
             self.register_generator(
@@ -232,7 +242,7 @@ class ContainerContext:
                 scope=scope,
                 lifetime=lifetime,
                 dependencies=dependencies,
-                concurrency_safe=concurrency_safe,
+                lock_mode=lock_mode,
                 autoregister_dependencies=autoregister_dependencies,
             )
             return decorated_generator
@@ -248,7 +258,7 @@ class ContainerContext:
                 "scope": scope,
                 "lifetime": lifetime,
                 "dependencies": dependencies,
-                "concurrency_safe": concurrency_safe,
+                "lock_mode": lock_mode,
                 "autoregister_dependencies": autoregister_dependencies,
             },
         )
@@ -266,10 +276,13 @@ class ContainerContext:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
-        concurrency_safe: bool | None = None,
+        lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE,
         autoregister_dependencies: bool | None = None,
     ) -> Callable[[F], F]:
-        """Register a context manager provider with direct and decorator forms."""
+        """Register a context manager provider with direct and decorator forms.
+
+        ``lock_mode="from_container"`` is persisted and replayed unchanged.
+        """
 
         def decorator(decorated_context_manager: F) -> F:
             self.register_context_manager(
@@ -282,7 +295,7 @@ class ContainerContext:
                 scope=scope,
                 lifetime=lifetime,
                 dependencies=dependencies,
-                concurrency_safe=concurrency_safe,
+                lock_mode=lock_mode,
                 autoregister_dependencies=autoregister_dependencies,
             )
             return decorated_context_manager
@@ -298,7 +311,7 @@ class ContainerContext:
                 "scope": scope,
                 "lifetime": lifetime,
                 "dependencies": dependencies,
-                "concurrency_safe": concurrency_safe,
+                "lock_mode": lock_mode,
                 "autoregister_dependencies": autoregister_dependencies,
             },
         )

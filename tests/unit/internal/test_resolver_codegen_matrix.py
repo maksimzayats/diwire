@@ -9,6 +9,7 @@ import pytest
 
 from diwire.container import Container
 from diwire.exceptions import DIWireAsyncDependencyInSyncContextError, DIWireScopeMismatchError
+from diwire.lock_mode import LockMode
 from diwire.providers import Lifetime, ProviderDependency
 from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire.scope import Scope
@@ -259,16 +260,23 @@ async def test_codegen_matrix_async_dependency_chain_requires_aresolve() -> None
         assert isinstance(resolved.value, _MatrixAsyncDependency)
 
 
-@pytest.mark.parametrize("concurrency_safe", [True, False])
-def test_codegen_matrix_cached_path_lock_generation_follows_concurrency_safe_flag(
-    concurrency_safe: Any,
+@pytest.mark.parametrize(
+    ("lock_mode", "has_thread_lock"),
+    [
+        (LockMode.THREAD, True),
+        (LockMode.NONE, False),
+    ],
+)
+def test_codegen_matrix_cached_sync_path_lock_generation_follows_lock_mode(
+    lock_mode: LockMode,
+    has_thread_lock: Any,
 ) -> None:
     container = Container()
     container.register_factory(
         _MatrixService,
         factory=_MatrixService,
         lifetime=Lifetime.SINGLETON,
-        concurrency_safe=concurrency_safe,
+        lock_mode=lock_mode,
     )
     slot = container._providers_registrations.get_by_type(_MatrixService).slot
 
@@ -277,8 +285,7 @@ def test_codegen_matrix_cached_path_lock_generation_follows_concurrency_safe_fla
         registrations=container._providers_registrations,
     )
 
-    has_thread_lock = f"_dep_{slot}_thread_lock" in generated
-    assert has_thread_lock is bool(concurrency_safe)
+    assert (f"_dep_{slot}_thread_lock" in generated) is has_thread_lock
 
 
 @pytest.mark.parametrize("signature_kind", ["positional", "positional_only", "keyword_only"])

@@ -5,6 +5,7 @@ from typing import Any
 import rodi
 
 from diwire.container import Container as DIWireContainer
+from diwire.lock_mode import LockMode
 from diwire.providers import Lifetime
 from tests.benchmarks.helpers import run_benchmark
 
@@ -14,7 +15,7 @@ class _TransientService:
 
 
 def test_benchmark_diwire_resolve_transient(benchmark: Any) -> None:
-    container = DIWireContainer(default_concurrency_safe=False)
+    container = DIWireContainer(lock_mode=LockMode.NONE)
     container.register_concrete(_TransientService, lifetime=Lifetime.TRANSIENT)
     first = container.resolve(_TransientService)
     second = container.resolve(_TransientService)

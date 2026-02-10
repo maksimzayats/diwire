@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import inspect
+import logging
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 from textwrap import indent
 
 from diwire.injection import INJECT_RESOLVER_KWARG
+from diwire.lock_mode import LockMode
 from diwire.providers import ProviderDependency, ProvidersRegistrations
 from diwire.resolvers.templates.mini_jinja import Environment, Template
 from diwire.resolvers.templates.planner import (
-    LockMode,
     ProviderWorkflowPlan,
     ResolverGenerationPlan,
     ResolverGenerationPlanner,
@@ -42,6 +43,7 @@ _MAX_INLINE_ROOT_DEPENDENCY_DEPTH = 3
 _GENERATOR_SOURCE = (
     "diwire.resolvers.templates.renderer.ResolversTemplateRenderer.get_providers_code"
 )
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +109,7 @@ class ResolversTemplateRenderer:
             root_scope=root_scope,
             registrations=registrations,
         ).build()
+        self._log_plan_strategy(plan=plan)
 
         module_docstring_block = self._render_module_docstring(plan=plan)
         imports_block = self._render_imports(plan=plan)
@@ -127,9 +130,28 @@ class ResolversTemplateRenderer:
             workflow.provider_attribute == "generator" for workflow in plan.workflows
         )
         return self._imports_template.render(
-            lock_mode=plan.lock_mode.value,
+            uses_threading_import=plan.thread_lock_count > 0,
+            uses_asyncio_import=plan.async_lock_count > 0,
             uses_generator_context_helpers=uses_generator_context_helpers,
         ).strip()
+
+    def _log_plan_strategy(self, *, plan: ResolverGenerationPlan) -> None:
+        effective_mode_counts = dict(plan.effective_mode_counts)
+        logger.info(
+            (
+                "Resolver codegen strategy: graph_has_async_specs=%s provider_count=%d "
+                "cached_provider_count=%d mode_counts={thread:%d,async:%d,none:%d} "
+                "thread_lock_count=%d async_lock_count=%d"
+            ),
+            plan.has_async_specs,
+            plan.provider_count,
+            plan.cached_provider_count,
+            effective_mode_counts.get(LockMode.THREAD, 0),
+            effective_mode_counts.get(LockMode.ASYNC, 0),
+            effective_mode_counts.get(LockMode.NONE, 0),
+            plan.thread_lock_count,
+            plan.async_lock_count,
+        )
 
     def _render_module_docstring(self, *, plan: ResolverGenerationPlan) -> str:
         scope_summary = ", ".join(
@@ -145,9 +167,12 @@ class ResolversTemplateRenderer:
             "Generation configuration:",
             f"- root scope level: {plan.root_scope_level}",
             f"- managed scopes: {scope_summary}",
-            f"- lock mode: {plan.lock_mode.value}",
+            f"- graph has async specs: {plan.has_async_specs}",
             f"- cleanup support enabled in graph: {plan.has_cleanup}",
-            f"- provider count: {len(plan.workflows)}",
+            f"- provider count: {plan.provider_count}",
+            f"- cached provider count: {plan.cached_provider_count}",
+            f"- thread lock count: {plan.thread_lock_count}",
+            f"- async lock count: {plan.async_lock_count}",
             f"- provider slots: {slots}",
             "",
             "Examples:",
@@ -174,11 +199,9 @@ class ResolversTemplateRenderer:
 
         lock_lines: list[str] = []
         for workflow in plan.workflows:
-            if not workflow.is_cached or not workflow.concurrency_safe:
-                continue
-            if plan.lock_mode is LockMode.THREAD:
+            if workflow.uses_thread_lock:
                 lock_lines.append(f"_dep_{workflow.slot}_thread_lock = threading.Lock()")
-            elif workflow.requires_async:
+            if workflow.uses_async_lock:
                 lock_lines.append(f"_dep_{workflow.slot}_async_lock = asyncio.Lock()")
 
         return self._globals_template.render(
@@ -847,10 +870,7 @@ class ResolversTemplateRenderer:
                 body_block=self._join_lines(self._indent_lines(body_lines, 1)),
             ).strip()
 
-        uses_thread_lock = (
-            workflow.is_cached and workflow.concurrency_safe and plan.lock_mode is LockMode.THREAD
-        )
-        if uses_thread_lock:
+        if workflow.uses_thread_lock:
             body_lines.extend(
                 [
                     f"cached_value = self._cache_{workflow.slot}",
@@ -1046,10 +1066,7 @@ class ResolversTemplateRenderer:
         behavior_note = (
             "Builds the provider value in this resolver, enforcing scope guards and cache policy."
         )
-        uses_async_lock = (
-            workflow.is_cached and workflow.concurrency_safe and plan.lock_mode is LockMode.ASYNC
-        )
-        if uses_async_lock:
+        if workflow.uses_async_lock:
             body_lines.extend(
                 [
                     f"cached_value = self._cache_{workflow.slot}",
@@ -1841,7 +1858,10 @@ class ResolversTemplateRenderer:
             f"Declared lifetime: {self._format_lifetime(workflow=workflow)}",
             f"Cache policy: {'cached' if workflow.is_cached else 'transient'}",
             f"Cache owner scope: {cache_owner}",
-            f"Concurrency-safe provider: {workflow.concurrency_safe}",
+            f"Declared lock mode: {self._format_lock_mode(workflow.lock_mode)}",
+            f"Effective lock mode: {workflow.effective_lock_mode.value}",
+            f"Sync path thread lock: {workflow.uses_thread_lock}",
+            f"Async path async lock: {workflow.uses_async_lock}",
             f"Provider declared async: {workflow.is_provider_async}",
             f"Graph requires async: {workflow.requires_async}",
             f"Cleanup callbacks required: {workflow.needs_cleanup}",
@@ -1891,6 +1911,11 @@ class ResolversTemplateRenderer:
         if workflow.lifetime is None:
             return "none"
         return workflow.lifetime.name.lower()
+
+    def _format_lock_mode(self, lock_mode: LockMode | str) -> str:
+        if isinstance(lock_mode, LockMode):
+            return lock_mode.value
+        return lock_mode
 
     def _cache_owner_scope_label(self, *, workflow: ProviderWorkflowPlan) -> str:
         if workflow.cache_owner_scope_level is None:

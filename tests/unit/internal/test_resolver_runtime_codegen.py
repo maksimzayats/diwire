@@ -17,6 +17,7 @@ from diwire.exceptions import (
     DIWireDependencyNotRegisteredError,
     DIWireScopeMismatchError,
 )
+from diwire.lock_mode import LockMode
 from diwire.markers import Injected
 from diwire.providers import Lifetime, ProviderDependency, ProviderSpec
 from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
@@ -602,7 +603,7 @@ def test_codegen_inject_wrapper_singleton_thread_safe_stress() -> None:
         _DependsOnResource,
         factory=build_singleton,
         lifetime=Lifetime.SINGLETON,
-        concurrency_safe=True,
+        lock_mode=LockMode.THREAD,
     )
     container.compile()
 
@@ -633,7 +634,7 @@ async def test_codegen_inject_wrapper_singleton_async_stress() -> None:
         _DependsOnResource,
         factory=build_singleton,
         lifetime=Lifetime.SINGLETON,
-        concurrency_safe=True,
+        lock_mode=LockMode.ASYNC,
     )
 
     results = await asyncio.gather(
@@ -668,7 +669,7 @@ def test_codegen_inject_wrapper_unsafe_mode_stress_no_deadlock() -> None:
         _DependsOnResource,
         factory=build_singleton,
         lifetime=Lifetime.SINGLETON,
-        concurrency_safe=False,
+        lock_mode=LockMode.NONE,
     )
     container.compile()
 
@@ -829,12 +830,11 @@ async def test_request_resolver_async_delegates_to_session_owner_cache() -> None
 
 
 def test_renderer_emits_thread_locks_for_sync_graph() -> None:
-    container = Container()
+    container = Container(lock_mode="auto")
     container.register_factory(
         _SingletonService,
         factory=_SingletonService,
         lifetime=Lifetime.SINGLETON,
-        concurrency_safe=True,
     )
 
     slot = container._providers_registrations.get_by_type(_SingletonService).slot
@@ -852,18 +852,16 @@ async def test_renderer_emits_async_locks_only_for_async_cached_paths() -> None:
     async def build_async() -> _SingletonService:
         return _SingletonService()
 
-    container = Container()
+    container = Container(lock_mode="auto")
     container.register_factory(
         _SingletonService,
         factory=build_async,
         lifetime=Lifetime.SINGLETON,
-        concurrency_safe=True,
     )
     container.register_factory(
         _TransientService,
         factory=_TransientService,
         lifetime=Lifetime.SINGLETON,
-        concurrency_safe=True,
     )
 
     async_slot = container._providers_registrations.get_by_type(_SingletonService).slot
@@ -880,6 +878,97 @@ async def test_renderer_emits_async_locks_only_for_async_cached_paths() -> None:
 
     resolved = await container.aresolve(_TransientService)
     assert isinstance(resolved, _TransientService)
+
+
+def test_renderer_lock_mode_none_emits_no_lock_globals() -> None:
+    container = Container()
+    container.register_factory(
+        _SingletonService,
+        factory=_SingletonService,
+        lifetime=Lifetime.SINGLETON,
+        lock_mode=LockMode.NONE,
+    )
+
+    code = ResolversTemplateRenderer().get_providers_code(
+        root_scope=Scope.APP,
+        registrations=container._providers_registrations,
+    )
+
+    assert "_thread_lock" not in code
+    assert "_async_lock" not in code
+
+
+def test_mixed_graph_thread_override_keeps_sync_singleton_thread_safe() -> None:
+    calls = 0
+    workers = 24
+
+    def build_sync_singleton() -> _SingletonService:
+        nonlocal calls
+        calls += 1
+        return _SingletonService()
+
+    async def build_async_singleton() -> _TransientService:
+        return _TransientService()
+
+    container = Container()
+    container.register_factory(
+        _SingletonService,
+        factory=build_sync_singleton,
+        lifetime=Lifetime.SINGLETON,
+        lock_mode=LockMode.THREAD,
+    )
+    container.register_factory(
+        _TransientService,
+        factory=build_async_singleton,
+        lifetime=Lifetime.SINGLETON,
+    )
+    container.compile()
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(container.resolve, _SingletonService) for _ in range(workers * 2)]
+        results = [future.result(timeout=5) for future in futures]
+
+    assert calls == 1
+    assert len({id(result) for result in results}) == 1
+
+
+def test_lock_mode_async_on_sync_cached_provider_leaves_sync_path_unlocked() -> None:
+    calls = 0
+    workers = 12
+    all_started = threading.Event()
+    calls_lock = threading.Lock()
+
+    def build_singleton() -> _SingletonService:
+        nonlocal calls
+        with calls_lock:
+            calls += 1
+            if calls == workers:
+                all_started.set()
+        did_start = all_started.wait(timeout=2)
+        assert did_start
+        return _SingletonService()
+
+    container = Container()
+    container.register_factory(
+        _SingletonService,
+        factory=build_singleton,
+        lifetime=Lifetime.SINGLETON,
+        lock_mode=LockMode.ASYNC,
+    )
+    slot = container._providers_registrations.get_by_type(_SingletonService).slot
+    code = ResolversTemplateRenderer().get_providers_code(
+        root_scope=Scope.APP,
+        registrations=container._providers_registrations,
+    )
+    assert f"_dep_{slot}_thread_lock" not in code
+    container.compile()
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(container.resolve, _SingletonService) for _ in range(workers)]
+        results = [future.result(timeout=5) for future in futures]
+
+    assert calls == workers
+    assert len({id(result) for result in results}) == workers
 
 
 def test_sync_generator_runs_cleanup_on_scope_exit() -> None:

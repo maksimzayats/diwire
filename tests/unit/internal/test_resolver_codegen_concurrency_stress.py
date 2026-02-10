@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from diwire.container import Container
+from diwire.lock_mode import LockMode
 from diwire.providers import Lifetime
 from diwire.scope import Scope
 
@@ -43,7 +44,7 @@ def test_concurrency_stress_thread_safe_singleton_constructs_once() -> None:
         _ThreadSingleton,
         factory=build_singleton,
         lifetime=Lifetime.SINGLETON,
-        concurrency_safe=True,
+        lock_mode=LockMode.THREAD,
     )
     container._root_resolver = container._resolvers_manager.build_root_resolver(
         container._root_scope,
@@ -80,7 +81,7 @@ def test_concurrency_stress_thread_unsafe_singleton_allows_parallel_construction
         _ThreadSingleton,
         factory=build_singleton,
         lifetime=Lifetime.SINGLETON,
-        concurrency_safe=False,
+        lock_mode=LockMode.NONE,
     )
     container._root_resolver = container._resolvers_manager.build_root_resolver(
         container._root_scope,
@@ -110,7 +111,7 @@ def test_concurrency_stress_thread_safe_scoped_constructs_once_per_scope() -> No
         factory=build_scoped,
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
-        concurrency_safe=True,
+        lock_mode=LockMode.THREAD,
     )
     container._root_resolver = container._resolvers_manager.build_root_resolver(
         container._root_scope,
@@ -158,7 +159,7 @@ def test_concurrency_stress_thread_unsafe_scoped_allows_parallel_construction() 
         factory=build_scoped,
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
-        concurrency_safe=False,
+        lock_mode=LockMode.NONE,
     )
     container._root_resolver = container._resolvers_manager.build_root_resolver(
         container._root_scope,
@@ -194,7 +195,7 @@ def test_concurrency_stress_thread_unsafe_scoped_from_default_allows_parallel_co
         assert did_start
         return _ThreadScoped()
 
-    container = Container(default_concurrency_safe=False)
+    container = Container(lock_mode=LockMode.NONE)
     container.register_factory(
         _ThreadScoped,
         factory=build_scoped,
@@ -233,7 +234,7 @@ async def test_concurrency_stress_async_safe_singleton_constructs_once() -> None
         _AsyncSingleton,
         factory=build_singleton,
         lifetime=Lifetime.SINGLETON,
-        concurrency_safe=True,
+        lock_mode=LockMode.ASYNC,
     )
 
     results = await asyncio.gather(
@@ -262,7 +263,7 @@ async def test_concurrency_stress_async_unsafe_singleton_allows_parallel_constru
         _AsyncSingleton,
         factory=build_singleton,
         lifetime=Lifetime.SINGLETON,
-        concurrency_safe=False,
+        lock_mode=LockMode.NONE,
     )
 
     results = await asyncio.gather(
@@ -290,7 +291,7 @@ async def test_concurrency_stress_async_safe_scoped_constructs_once_per_scope() 
         factory=build_scoped,
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
-        concurrency_safe=True,
+        lock_mode=LockMode.ASYNC,
     )
 
     async with container.enter_scope(Scope.REQUEST) as request_scope:
@@ -329,7 +330,7 @@ async def test_concurrency_stress_async_unsafe_scoped_allows_parallel_constructi
         factory=build_scoped,
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
-        concurrency_safe=False,
+        lock_mode=LockMode.NONE,
     )
 
     async with container.enter_scope(Scope.REQUEST) as request_scope:
@@ -359,7 +360,7 @@ async def test_concurrency_stress_async_unsafe_scoped_from_default_allows_parall
         await asyncio.wait_for(all_started.wait(), timeout=2)
         return _AsyncScoped()
 
-    container = Container(default_concurrency_safe=False)
+    container = Container(lock_mode=LockMode.NONE)
     container.register_factory(
         _AsyncScoped,
         factory=build_scoped,

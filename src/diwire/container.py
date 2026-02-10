@@ -10,6 +10,7 @@ from types import TracebackType
 from typing import (
     Any,
     Generic,
+    Literal,
     TypeVar,
     cast,
     overload,
@@ -22,6 +23,7 @@ from diwire.injection import (
     InjectedCallableInspector,
     InjectedParameter,
 )
+from diwire.lock_mode import AUTO_LOCK_MODE, AutoLockMode, LockMode
 from diwire.providers import (
     ContextManagerProvider,
     FactoryProvider,
@@ -29,6 +31,7 @@ from diwire.providers import (
     Lifetime,
     ProviderDependenciesExtractor,
     ProviderDependency,
+    ProviderLockMode,
     ProviderReturnTypeExtractor,
     ProviderSpec,
     ProvidersRegistrations,
@@ -41,6 +44,11 @@ from diwire.validators import DependecyRegistrationValidator
 T = TypeVar("T")
 F = TypeVar("F", bound=Callable[..., Any])
 InjectableF = TypeVar("InjectableF", bound=Callable[..., Any])
+
+RegistrationLockMode = LockMode | Literal["from_container"]
+ContainerDefaultLockMode = LockMode | AutoLockMode
+
+_FROM_CONTAINER_LOCK_MODE: Literal["from_container"] = "from_container"
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +69,7 @@ class Container:
         root_scope: BaseScope = Scope.APP,
         default_lifetime: Lifetime = Lifetime.TRANSIENT,
         *,
-        # Define whether the container is safe for concurrent use.
-        # For thread-safety and async-safety, appropriate locks will be used
-        default_concurrency_safe: bool = True,
+        lock_mode: ContainerDefaultLockMode = AUTO_LOCK_MODE,
         autoregister: bool = False,
         autoregister_dependencies: bool = False,
     ) -> None:
@@ -72,14 +78,14 @@ class Container:
         Args:
             root_scope: The initial root scope for the container. All singleton providers will be tied to this scope. Defaults to Scope.APP.
             default_lifetime: The lifetime that will be used for providers if not specified. Defaults to Lifetime.TRANSIENT.
-            default_concurrency_safe: Whether the container is safe for concurrent use. Defaults to True.
+            lock_mode: Default lock strategy for non-instance registrations. Accepts LockMode or "auto". When set to "auto", sync-only graphs use thread locks and graphs containing async specs use async locks. Defaults to "auto".
             autoregister: Whether to automatically register dependencies when they are resolved if not already registered. Defaults to False.
             autoregister_dependencies: Whether to automatically register provider dependencies as concrete types during registration. Defaults to False.
 
         """
         self._root_scope = root_scope
         self._default_lifetime = default_lifetime
-        self._default_concurrency_safe = default_concurrency_safe
+        self._lock_mode = lock_mode
         self._autoregister = autoregister
         self._autoregister_dependencies = autoregister_dependencies
 
@@ -101,9 +107,11 @@ class Container:
         provides: type[T] | None = None,
         *,
         instance: T,
-        concurrency_safe: bool | None = None,
     ) -> None:
-        """Register an instance provider in the container."""
+        """Register an instance provider in the container.
+
+        Instance providers always use ``LockMode.NONE``.
+        """
         self._providers_registrations.add(
             ProviderSpec(
                 provides=provides or type(instance),
@@ -113,7 +121,7 @@ class Container:
                 is_async=False,
                 is_any_dependency_async=False,
                 needs_cleanup=False,
-                concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
+                lock_mode=LockMode.NONE,
             ),
         )
         self._invalidate_compilation()
@@ -126,17 +134,20 @@ class Container:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
-        concurrency_safe: bool | None = None,
+        lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE,
         autoregister_dependencies: bool | None = None,
     ) -> ConcreteTypeRegistrationDecorator[T]:
-        """Register a concrete type provider in the container."""
+        """Register a concrete type provider in the container.
+
+        ``lock_mode="from_container"`` inherits the container-level mode.
+        """
         decorator = ConcreteTypeRegistrationDecorator(
             container=self,
             scope=scope,
             lifetime=lifetime,
             provides=provides,
             dependencies=dependencies,
-            concurrency_safe=concurrency_safe,
+            lock_mode=lock_mode,
             autoregister_dependencies=autoregister_dependencies,
         )
 
@@ -177,7 +188,7 @@ class Container:
                 is_async=False,
                 is_any_dependency_async=is_any_dependency_async,
                 needs_cleanup=False,
-                concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
+                lock_mode=self._resolve_provider_lock_mode(lock_mode),
             ),
         )
         self._autoregister_provider_dependencies(
@@ -198,17 +209,20 @@ class Container:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
-        concurrency_safe: bool | None = None,
+        lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE,
         autoregister_dependencies: bool | None = None,
     ) -> FactoryRegistrationDecorator[T]:
-        """Register a factory provider in the container."""
+        """Register a factory provider in the container.
+
+        ``lock_mode="from_container"`` inherits the container-level mode.
+        """
         decorator = FactoryRegistrationDecorator(
             container=self,
             scope=scope,
             lifetime=lifetime,
             provides=provides,
             dependencies=dependencies,
-            concurrency_safe=concurrency_safe,
+            lock_mode=lock_mode,
             autoregister_dependencies=autoregister_dependencies,
         )
 
@@ -240,7 +254,7 @@ class Container:
                 is_async=is_async,
                 is_any_dependency_async=is_any_dependency_async,
                 needs_cleanup=False,
-                concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
+                lock_mode=self._resolve_provider_lock_mode(lock_mode),
             ),
         )
         self._autoregister_provider_dependencies(
@@ -263,17 +277,20 @@ class Container:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
-        concurrency_safe: bool | None = None,
+        lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE,
         autoregister_dependencies: bool | None = None,
     ) -> GeneratorRegistrationDecorator[T]:
-        """Register a generator provider in the container."""
+        """Register a generator provider in the container.
+
+        ``lock_mode="from_container"`` inherits the container-level mode.
+        """
         decorator = GeneratorRegistrationDecorator(
             container=self,
             scope=scope,
             lifetime=lifetime,
             provides=provides,
             dependencies=dependencies,
-            concurrency_safe=concurrency_safe,
+            lock_mode=lock_mode,
             autoregister_dependencies=autoregister_dependencies,
         )
 
@@ -307,7 +324,7 @@ class Container:
                 is_async=is_async,
                 is_any_dependency_async=is_any_dependency_async,
                 needs_cleanup=True,
-                concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
+                lock_mode=self._resolve_provider_lock_mode(lock_mode),
             ),
         )
         self._autoregister_provider_dependencies(
@@ -332,17 +349,20 @@ class Container:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
-        concurrency_safe: bool | None = None,
+        lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE,
         autoregister_dependencies: bool | None = None,
     ) -> ContextManagerRegistrationDecorator[T]:
-        """Register a context manager provider in the container."""
+        """Register a context manager provider in the container.
+
+        ``lock_mode="from_container"`` inherits the container-level mode.
+        """
         decorator = ContextManagerRegistrationDecorator(
             container=self,
             scope=scope,
             lifetime=lifetime,
             provides=provides,
             dependencies=dependencies,
-            concurrency_safe=concurrency_safe,
+            lock_mode=lock_mode,
             autoregister_dependencies=autoregister_dependencies,
         )
 
@@ -376,7 +396,7 @@ class Container:
                 is_async=is_async,
                 is_any_dependency_async=is_any_dependency_async,
                 needs_cleanup=True,
-                concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
+                lock_mode=self._resolve_provider_lock_mode(lock_mode),
             ),
         )
         self._autoregister_provider_dependencies(
@@ -449,10 +469,10 @@ class Container:
             dependencies=explicit_dependencies,
         )
 
-    def _resolve_provider_concurrency_safe(self, concurrency_safe: bool | None) -> bool:
-        if concurrency_safe is None:
-            return self._default_concurrency_safe
-        return concurrency_safe
+    def _resolve_provider_lock_mode(self, lock_mode: RegistrationLockMode) -> ProviderLockMode:
+        if lock_mode == _FROM_CONTAINER_LOCK_MODE:
+            return self._lock_mode
+        return lock_mode
 
     def _resolve_autoregister_dependencies(self, autoregister_dependencies: bool | None) -> bool:
         if autoregister_dependencies is None:
@@ -841,7 +861,7 @@ class ConcreteTypeRegistrationDecorator(Generic[T]):
     lifetime: Lifetime | None
     provides: type[T] | None = None
     dependencies: list[ProviderDependency] | None = None
-    concurrency_safe: bool | None = None
+    lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE
     autoregister_dependencies: bool | None = None
 
     def __call__(self, concrete_type: type[T]) -> type[T]:
@@ -852,7 +872,7 @@ class ConcreteTypeRegistrationDecorator(Generic[T]):
             scope=self.scope,
             lifetime=self.lifetime,
             dependencies=self.dependencies,
-            concurrency_safe=self.concurrency_safe,
+            lock_mode=self.lock_mode,
             autoregister_dependencies=self.autoregister_dependencies,
         )
 
@@ -868,7 +888,7 @@ class FactoryRegistrationDecorator(Generic[T]):
     lifetime: Lifetime | None
     provides: type[T] | None = None
     dependencies: list[ProviderDependency] | None = None
-    concurrency_safe: bool | None = None
+    lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE
     autoregister_dependencies: bool | None = None
 
     def __call__(self, factory: F) -> F:
@@ -879,7 +899,7 @@ class FactoryRegistrationDecorator(Generic[T]):
             scope=self.scope,
             lifetime=self.lifetime,
             dependencies=self.dependencies,
-            concurrency_safe=self.concurrency_safe,
+            lock_mode=self.lock_mode,
             autoregister_dependencies=self.autoregister_dependencies,
         )
 
@@ -895,7 +915,7 @@ class GeneratorRegistrationDecorator(Generic[T]):
     lifetime: Lifetime | None
     provides: type[T] | None = None
     dependencies: list[ProviderDependency] | None = None
-    concurrency_safe: bool | None = None
+    lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE
     autoregister_dependencies: bool | None = None
 
     def __call__(self, generator: F) -> F:
@@ -906,7 +926,7 @@ class GeneratorRegistrationDecorator(Generic[T]):
             scope=self.scope,
             lifetime=self.lifetime,
             dependencies=self.dependencies,
-            concurrency_safe=self.concurrency_safe,
+            lock_mode=self.lock_mode,
             autoregister_dependencies=self.autoregister_dependencies,
         )
 
@@ -922,7 +942,7 @@ class ContextManagerRegistrationDecorator(Generic[T]):
     lifetime: Lifetime | None
     provides: type[T] | None = None
     dependencies: list[ProviderDependency] | None = None
-    concurrency_safe: bool | None = None
+    lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE
     autoregister_dependencies: bool | None = None
 
     def __call__(self, context_manager: F) -> F:
@@ -933,7 +953,7 @@ class ContextManagerRegistrationDecorator(Generic[T]):
             scope=self.scope,
             lifetime=self.lifetime,
             dependencies=self.dependencies,
-            concurrency_safe=self.concurrency_safe,
+            lock_mode=self.lock_mode,
             autoregister_dependencies=self.autoregister_dependencies,
         )
 

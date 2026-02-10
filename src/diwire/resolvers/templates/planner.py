@@ -1,21 +1,21 @@
 from __future__ import annotations
 
 import inspect
+from collections import Counter
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from diwire.exceptions import DIWireInvalidProviderSpecError
 from diwire.injection import INJECT_WRAPPER_MARKER
-from diwire.providers import Lifetime, ProviderDependency, ProviderSpec, ProvidersRegistrations
+from diwire.lock_mode import AUTO_LOCK_MODE, LockMode
+from diwire.providers import (
+    Lifetime,
+    ProviderDependency,
+    ProviderLockMode,
+    ProviderSpec,
+    ProvidersRegistrations,
+)
 from diwire.scope import BaseScope
-
-
-class LockMode(Enum):
-    """Locking strategy used by generated resolvers."""
-
-    THREAD = "thread"
-    ASYNC = "async"
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,7 +46,10 @@ class ProviderWorkflowPlan:
     is_cached: bool
     is_transient: bool
     cache_owner_scope_level: int | None
-    concurrency_safe: bool
+    lock_mode: LockMode | Literal["auto"]
+    effective_lock_mode: LockMode
+    uses_thread_lock: bool
+    uses_async_lock: bool
     is_provider_async: bool
     requires_async: bool
     needs_cleanup: bool
@@ -65,7 +68,12 @@ class ResolverGenerationPlan:
     """Deterministic plan consumed by the renderer."""
 
     root_scope_level: int
-    lock_mode: LockMode
+    has_async_specs: bool
+    provider_count: int
+    cached_provider_count: int
+    thread_lock_count: int
+    async_lock_count: int
+    effective_mode_counts: tuple[tuple[LockMode, int], ...]
     has_cleanup: bool
     scopes: tuple[ScopePlan, ...]
     workflows: tuple[ProviderWorkflowPlan, ...]
@@ -94,18 +102,36 @@ class ResolverGenerationPlanner:
         # - hot path avoids reflective dispatch or dynamic attribute lookup helpers.
         scopes = self._build_scope_plans()
         scope_by_level = {scope.scope_level: scope for scope in scopes}
+        has_async_specs = any(spec.is_async for spec in self._work_specs)
 
         workflows = tuple(
-            self._build_workflow_plan(spec=spec, scope_by_level=scope_by_level)
+            self._build_workflow_plan(
+                spec=spec,
+                scope_by_level=scope_by_level,
+                has_async_specs=has_async_specs,
+            )
             for spec in self._work_specs
         )
 
-        has_async_specs = any(spec.is_async for spec in self._work_specs)
         has_cleanup = any(spec.needs_cleanup for spec in self._work_specs)
+        provider_count = len(workflows)
+        cached_provider_count = sum(1 for workflow in workflows if workflow.is_cached)
+        thread_lock_count = sum(1 for workflow in workflows if workflow.uses_thread_lock)
+        async_lock_count = sum(1 for workflow in workflows if workflow.uses_async_lock)
+        effective_mode_counter = Counter(workflow.effective_lock_mode for workflow in workflows)
+        effective_mode_counts = tuple(
+            (mode, effective_mode_counter.get(mode, 0))
+            for mode in (LockMode.THREAD, LockMode.ASYNC, LockMode.NONE)
+        )
 
         return ResolverGenerationPlan(
             root_scope_level=self._root_scope.level,
-            lock_mode=LockMode.ASYNC if has_async_specs else LockMode.THREAD,
+            has_async_specs=has_async_specs,
+            provider_count=provider_count,
+            cached_provider_count=cached_provider_count,
+            thread_lock_count=thread_lock_count,
+            async_lock_count=async_lock_count,
+            effective_mode_counts=effective_mode_counts,
             has_cleanup=has_cleanup,
             scopes=scopes,
             workflows=workflows,
@@ -157,6 +183,7 @@ class ResolverGenerationPlanner:
         *,
         spec: ProviderSpec,
         scope_by_level: dict[int, ScopePlan],
+        has_async_specs: bool,
     ) -> ProviderWorkflowPlan:
         provider_attribute = self._resolve_provider_attribute(spec=spec)
         provider_reference = getattr(spec, provider_attribute)
@@ -187,6 +214,16 @@ class ResolverGenerationPlanner:
         )
 
         scope_plan = scope_by_level[spec.scope.level]
+        requires_async = self._requires_async_by_slot[spec.slot]
+        effective_lock_mode = self._resolve_effective_lock_mode(
+            lock_mode=spec.lock_mode,
+            has_async_specs=has_async_specs,
+        )
+        uses_thread_lock = (
+            is_cached and effective_lock_mode is LockMode.THREAD and not requires_async
+        )
+        uses_async_lock = is_cached and effective_lock_mode is LockMode.ASYNC and requires_async
+
         return ProviderWorkflowPlan(
             slot=spec.slot,
             provides=spec.provides,
@@ -199,9 +236,12 @@ class ResolverGenerationPlanner:
             is_cached=is_cached,
             is_transient=not is_cached,
             cache_owner_scope_level=cache_owner_scope_level,
-            concurrency_safe=spec.concurrency_safe,
+            lock_mode=spec.lock_mode,
+            effective_lock_mode=effective_lock_mode,
+            uses_thread_lock=uses_thread_lock,
+            uses_async_lock=uses_async_lock,
             is_provider_async=spec.is_async,
-            requires_async=self._requires_async_by_slot[spec.slot],
+            requires_async=requires_async,
             needs_cleanup=spec.needs_cleanup,
             dependencies=tuple(spec.dependencies),
             dependency_slots=tuple(dependency_spec.slot for dependency_spec in dependency_specs),
@@ -219,6 +259,18 @@ class ResolverGenerationPlanner:
                 getattr(provider_reference, INJECT_WRAPPER_MARKER, False),
             ),
         )
+
+    def _resolve_effective_lock_mode(
+        self,
+        *,
+        lock_mode: ProviderLockMode,
+        has_async_specs: bool,
+    ) -> LockMode:
+        if lock_mode == AUTO_LOCK_MODE:
+            if has_async_specs:
+                return LockMode.ASYNC
+            return LockMode.THREAD
+        return lock_mode
 
     def _resolve_provider_attribute(self, *, spec: ProviderSpec) -> str:
         if spec.instance is not None:

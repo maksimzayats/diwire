@@ -5,6 +5,7 @@ from typing import Any
 import rodi
 
 from diwire.container import Container as DIWireContainer
+from diwire.lock_mode import LockMode
 from diwire.providers import Lifetime
 from tests.benchmarks.helpers import run_benchmark
 
@@ -39,7 +40,7 @@ class _Root:
 
 
 def test_benchmark_diwire_resolve_deep_transient_chain(benchmark: Any) -> None:
-    container = DIWireContainer(default_concurrency_safe=False)
+    container = DIWireContainer(lock_mode=LockMode.NONE)
     container.register_concrete(_Dep0, lifetime=Lifetime.TRANSIENT)
     container.register_concrete(_Dep1, lifetime=Lifetime.TRANSIENT)
     container.register_concrete(_Dep2, lifetime=Lifetime.TRANSIENT)
