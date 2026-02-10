@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import threading
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Generator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from types import TracebackType
@@ -107,6 +107,22 @@ class _MixedSyncConsumer:
 
 class _MixedAsyncGraphDependency:
     pass
+
+
+def _new_list_int_alias() -> Any:
+    return list[int]
+
+
+def _new_dict_str_int_alias() -> Any:
+    return dict[str, int]
+
+
+def _new_tuple_int_var_alias() -> Any:
+    return tuple[int, ...]
+
+
+def _new_int_or_str_alias() -> Any:
+    return int | str
 
 
 def _bound_self(method: Any) -> Any:
@@ -704,6 +720,59 @@ def test_generated_dispatch_raises_for_unknown_dependency_in_sync_and_async_path
 
     with pytest.raises(DIWireDependencyNotRegisteredError):
         asyncio.run(container.aresolve(object))
+
+    with pytest.raises(DIWireDependencyNotRegisteredError):
+        container.resolve(_new_list_int_alias())
+
+    with pytest.raises(DIWireDependencyNotRegisteredError):
+        asyncio.run(container.aresolve(_new_list_int_alias()))
+
+
+@pytest.mark.parametrize(
+    "alias_factory",
+    [
+        _new_list_int_alias,
+        _new_dict_str_int_alias,
+        _new_tuple_int_var_alias,
+        _new_int_or_str_alias,
+    ],
+)
+def test_generated_dispatch_resolves_equal_non_identical_generic_alias_keys(
+    alias_factory: Callable[[], Any],
+) -> None:
+    registration_key = alias_factory()
+    lookup_key = alias_factory()
+    instance = object()
+    container = Container()
+    container.register_instance(provides=registration_key, instance=instance)
+
+    assert lookup_key == registration_key
+    assert lookup_key is not registration_key
+    assert container.resolve(lookup_key) is instance
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "alias_factory",
+    [
+        _new_list_int_alias,
+        _new_dict_str_int_alias,
+        _new_tuple_int_var_alias,
+        _new_int_or_str_alias,
+    ],
+)
+async def test_generated_aresolve_resolves_equal_non_identical_generic_alias_keys(
+    alias_factory: Callable[[], Any],
+) -> None:
+    registration_key = alias_factory()
+    lookup_key = alias_factory()
+    instance = object()
+    container = Container()
+    container.register_instance(provides=registration_key, instance=instance)
+
+    assert lookup_key == registration_key
+    assert lookup_key is not registration_key
+    assert await container.aresolve(lookup_key) is instance
 
 
 def test_enter_scope_can_choose_skippable_or_next_non_skippable_scope() -> None:

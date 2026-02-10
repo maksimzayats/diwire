@@ -6,6 +6,7 @@ from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import replace
 from importlib.metadata import PackageNotFoundError
+from typing import Literal
 
 import pytest
 
@@ -139,6 +140,7 @@ def _provide_cycle_b(dep_a: _CycleA) -> _CycleB:
 def _make_workflow_plan(
     *,
     slot: int = 1,
+    provides: object = int,
     provider_attribute: str = "instance",
     is_provider_async: bool = False,
     is_cached: bool = False,
@@ -149,6 +151,7 @@ def _make_workflow_plan(
     requires_async: bool | None = None,
     uses_thread_lock: bool | None = None,
     uses_async_lock: bool | None = None,
+    dispatch_kind: Literal["identity", "equality_map"] = "identity",
 ) -> ProviderWorkflowPlan:
     resolved_requires_async = is_provider_async if requires_async is None else requires_async
     resolved_effective_lock_mode = lock_mode if effective_lock_mode is None else effective_lock_mode
@@ -166,7 +169,7 @@ def _make_workflow_plan(
     )
     return ProviderWorkflowPlan(
         slot=slot,
-        provides=int,
+        provides=provides,
         provider_attribute=provider_attribute,
         provider_reference=1,
         lifetime=Lifetime.TRANSIENT,
@@ -188,6 +191,7 @@ def _make_workflow_plan(
         dependency_requires_async=(),
         dependency_order_is_signature_order=True,
         max_required_scope_level=scope_level,
+        dispatch_kind=dispatch_kind,
         sync_arguments=(),
         async_arguments=(),
         provider_is_inject_wrapper=provider_is_inject_wrapper,
@@ -205,6 +209,12 @@ def _make_generation_plan(
     cached_provider_count = sum(1 for workflow in workflows if workflow.is_cached)
     thread_lock_count = sum(1 for workflow in workflows if workflow.uses_thread_lock)
     async_lock_count = sum(1 for workflow in workflows if workflow.uses_async_lock)
+    identity_dispatch_slots = tuple(
+        workflow.slot for workflow in workflows if workflow.dispatch_kind == "identity"
+    )
+    equality_dispatch_slots = tuple(
+        workflow.slot for workflow in workflows if workflow.dispatch_kind == "equality_map"
+    )
     return ResolverGenerationPlan(
         root_scope_level=root_scope_level,
         has_async_specs=has_async_specs,
@@ -227,6 +237,8 @@ def _make_generation_plan(
             ),
         ),
         has_cleanup=has_cleanup,
+        identity_dispatch_slots=identity_dispatch_slots,
+        equality_dispatch_slots=equality_dispatch_slots,
         scopes=scopes,
         workflows=workflows,
     )
@@ -436,6 +448,54 @@ def test_renderer_dependency_wiring_supports_positional_varargs_and_varkw() -> N
     assert "positional=self.resolve_" not in code
     assert "*self." in code
     assert "**self." in code
+
+
+def test_planner_classifies_dispatch_strategy_for_class_and_non_class_keys() -> None:
+    container = Container()
+    container.register_instance(provides=int, instance=1)
+    container.register_instance(provides=dict[str, int], instance={"first": 1})
+
+    plan = ResolverGenerationPlanner(
+        root_scope=Scope.APP,
+        registrations=container._providers_registrations,
+    ).build()
+
+    workflow_by_type = {workflow.provides: workflow for workflow in plan.workflows}
+    assert workflow_by_type[int].dispatch_kind == "identity"
+    assert workflow_by_type[dict[str, int]].dispatch_kind == "equality_map"
+    assert len(plan.identity_dispatch_slots) == 1
+    assert len(plan.equality_dispatch_slots) == 1
+
+
+def test_renderer_emits_equality_fallback_when_non_class_keys_exist() -> None:
+    container = Container()
+    container.register_instance(provides=int, instance=1)
+    container.register_instance(provides=dict[str, int], instance={"first": 1})
+
+    code = ResolversTemplateRenderer().get_providers_code(
+        root_scope=Scope.APP,
+        registrations=container._providers_registrations,
+    )
+
+    assert "_dep_eq_slot_by_key: dict[Any, int] = {}" in code
+    assert "_dep_eq_slot_by_key = {}" in code
+    assert "_dep_eq_slot_by_key.get(dependency, _MISSING_DEP_SLOT)" in code
+    assert "Then it performs one equality-map lookup for non-class dependency keys." in code
+
+
+def test_renderer_omits_equality_fallback_for_pure_class_key_graphs() -> None:
+    container = Container()
+    container.register_instance(provides=_Config, instance=_Config())
+    container.register_instance(provides=_Service, instance=_Service(_Config()))
+
+    code = ResolversTemplateRenderer().get_providers_code(
+        root_scope=Scope.APP,
+        registrations=container._providers_registrations,
+    )
+
+    assert "_dep_eq_slot_by_key" not in code
+    assert "_MISSING_DEP_SLOT" not in code
+    assert "equality-map lookup" not in code
 
 
 def test_renderer_raises_for_circular_dependency_graph() -> None:

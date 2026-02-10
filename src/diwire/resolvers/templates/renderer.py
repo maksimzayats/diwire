@@ -196,6 +196,13 @@ class ResolversTemplateRenderer:
                     f"_provider_{workflow.slot}: Any = _MISSING_PROVIDER",
                 ],
             )
+        if plan.equality_dispatch_slots:
+            provider_lines.extend(
+                [
+                    "_MISSING_DEP_SLOT: Any = object()",
+                    "_dep_eq_slot_by_key: dict[Any, int] = {}",
+                ],
+            )
 
         lock_lines: list[str] = []
         for workflow in plan.workflows:
@@ -664,8 +671,17 @@ class ResolversTemplateRenderer:
         class_plan: ScopePlan,
     ) -> str:
         ordered_workflows = self._dispatch_workflows(plan=plan, class_plan=class_plan)
-        body_lines: list[str] = ["# Fast path identity checks to avoid reflective dispatch."]
-        for workflow in ordered_workflows:
+        identity_workflows = tuple(
+            workflow for workflow in ordered_workflows if workflow.dispatch_kind == "identity"
+        )
+        equality_workflows = tuple(
+            workflow for workflow in ordered_workflows if workflow.dispatch_kind == "equality_map"
+        )
+
+        body_lines: list[str] = []
+        if identity_workflows or not equality_workflows:
+            body_lines.append("# Fast path identity checks to avoid reflective dispatch.")
+        for workflow in identity_workflows:
             call_expression = self._dispatch_sync_call_expression(
                 plan=plan,
                 class_plan=class_plan,
@@ -675,6 +691,23 @@ class ResolversTemplateRenderer:
                 [
                     f"if dependency is _dep_{workflow.slot}_type:",
                     f"    return {call_expression}",
+                ],
+            )
+        if equality_workflows:
+            body_lines.extend(
+                [
+                    "# Fallback map handles equality-based keys for non-class dependencies.",
+                    "slot = _dep_eq_slot_by_key.get(dependency, _MISSING_DEP_SLOT)",
+                    "if slot is not _MISSING_DEP_SLOT:",
+                    *self._indent_lines(
+                        self._dispatch_slot_switch_lines(
+                            plan=plan,
+                            class_plan=class_plan,
+                            workflows=equality_workflows,
+                            is_async=False,
+                        ),
+                        1,
+                    ),
                 ],
             )
         body_lines.extend(
@@ -703,8 +736,17 @@ class ResolversTemplateRenderer:
         class_plan: ScopePlan,
     ) -> str:
         ordered_workflows = self._dispatch_workflows(plan=plan, class_plan=class_plan)
-        body_lines: list[str] = ["# Fast path identity checks for asynchronous resolution."]
-        for workflow in ordered_workflows:
+        identity_workflows = tuple(
+            workflow for workflow in ordered_workflows if workflow.dispatch_kind == "identity"
+        )
+        equality_workflows = tuple(
+            workflow for workflow in ordered_workflows if workflow.dispatch_kind == "equality_map"
+        )
+
+        body_lines: list[str] = []
+        if identity_workflows or not equality_workflows:
+            body_lines.append("# Fast path identity checks for asynchronous resolution.")
+        for workflow in identity_workflows:
             call_expression = self._dispatch_async_call_expression(
                 plan=plan,
                 class_plan=class_plan,
@@ -714,6 +756,23 @@ class ResolversTemplateRenderer:
                 [
                     f"if dependency is _dep_{workflow.slot}_type:",
                     f"    return await {call_expression}",
+                ],
+            )
+        if equality_workflows:
+            body_lines.extend(
+                [
+                    "# Fallback map handles equality-based keys for non-class dependencies.",
+                    "slot = _dep_eq_slot_by_key.get(dependency, _MISSING_DEP_SLOT)",
+                    "if slot is not _MISSING_DEP_SLOT:",
+                    *self._indent_lines(
+                        self._dispatch_slot_switch_lines(
+                            plan=plan,
+                            class_plan=class_plan,
+                            workflows=equality_workflows,
+                            is_async=True,
+                        ),
+                        1,
+                    ),
                 ],
             )
         body_lines.extend(
@@ -762,6 +821,39 @@ class ResolversTemplateRenderer:
         ):
             return f"self.aresolve_{workflow.slot}()"
         return f"{class_plan.class_name}.aresolve_{workflow.slot}(self)"
+
+    def _dispatch_slot_switch_lines(
+        self,
+        *,
+        plan: ResolverGenerationPlan,
+        class_plan: ScopePlan,
+        workflows: tuple[ProviderWorkflowPlan, ...],
+        is_async: bool,
+    ) -> list[str]:
+        lines: list[str] = []
+        for index, workflow in enumerate(workflows):
+            prefix = "if" if index == 0 else "elif"
+            if is_async:
+                call_expression = self._dispatch_async_call_expression(
+                    plan=plan,
+                    class_plan=class_plan,
+                    workflow=workflow,
+                )
+                return_line = f"return await {call_expression}"
+            else:
+                call_expression = self._dispatch_sync_call_expression(
+                    plan=plan,
+                    class_plan=class_plan,
+                    workflow=workflow,
+                )
+                return_line = f"return {call_expression}"
+            lines.extend(
+                [
+                    f"{prefix} slot == {workflow.slot}:",
+                    f"    {return_line}",
+                ],
+            )
+        return lines
 
     def _render_sync_method(
         self,
@@ -1705,10 +1797,21 @@ class ResolversTemplateRenderer:
                 f"global _dep_{workflow.slot}_type, _provider_{workflow.slot}"
                 for workflow in plan.workflows
             )
+            if plan.equality_dispatch_slots:
+                body_lines.append("global _dep_eq_slot_by_key")
             body_lines.append("")
         else:
             body_lines.append("# No provider registrations are active for the selected root scope.")
             body_lines.append("")
+
+        if plan.equality_dispatch_slots:
+            body_lines.extend(
+                [
+                    "# Rebuild equality dispatch table for non-class dependency keys.",
+                    "_dep_eq_slot_by_key = {}",
+                    "",
+                ],
+            )
 
         for workflow in plan.workflows:
             body_lines.extend(
@@ -1723,9 +1826,16 @@ class ResolversTemplateRenderer:
                         f"_provider_{workflow.slot} = "
                         f"registration_{workflow.slot}.{workflow.provider_attribute}"
                     ),
-                    "",
                 ],
             )
+            if workflow.dispatch_kind == "equality_map":
+                body_lines.extend(
+                    [
+                        "# Non-class dependency keys dispatch via equality-map fallback.",
+                        f"_dep_eq_slot_by_key[_dep_{workflow.slot}_type] = {workflow.slot}",
+                    ],
+                )
+            body_lines.append("")
 
         body_lines.extend(
             [
@@ -1813,7 +1923,19 @@ class ResolversTemplateRenderer:
             f"Route a dependency token to a generated {mode} provider resolver method.",
             "",
             f"Known provider slots: {slots}.",
-            "Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.",
+            *self._dispatch_strategy_docstring_lines(plan=plan),
+        ]
+
+    def _dispatch_strategy_docstring_lines(self, *, plan: ResolverGenerationPlan) -> list[str]:
+        if not plan.equality_dispatch_slots:
+            return [
+                "Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.",
+            ]
+        equality_slots = ", ".join(str(slot) for slot in plan.equality_dispatch_slots)
+        return [
+            "Dispatch first uses identity checks against module-level `_dep_<slot>_type` globals.",
+            "Then it performs one equality-map lookup for non-class dependency keys.",
+            f"Equality-map slots: {equality_slots}.",
         ]
 
     def _resolver_docstring_block(

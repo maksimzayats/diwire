@@ -16,6 +16,8 @@ from diwire.providers import (
 )
 from diwire.scope import BaseScope
 
+DispatchKind = Literal["identity", "equality_map"]
+
 
 @dataclass(frozen=True, slots=True)
 class ScopePlan:
@@ -57,6 +59,7 @@ class ProviderWorkflowPlan:
     dependency_requires_async: tuple[bool, ...]
     dependency_order_is_signature_order: bool
     max_required_scope_level: int
+    dispatch_kind: DispatchKind
     sync_arguments: tuple[str, ...]
     async_arguments: tuple[str, ...]
     provider_is_inject_wrapper: bool = False
@@ -74,6 +77,8 @@ class ResolverGenerationPlan:
     async_lock_count: int
     effective_mode_counts: tuple[tuple[LockMode, int], ...]
     has_cleanup: bool
+    identity_dispatch_slots: tuple[int, ...]
+    equality_dispatch_slots: tuple[int, ...]
     scopes: tuple[ScopePlan, ...]
     workflows: tuple[ProviderWorkflowPlan, ...]
 
@@ -122,6 +127,12 @@ class ResolverGenerationPlanner:
             (mode, effective_mode_counter.get(mode, 0))
             for mode in (LockMode.THREAD, LockMode.ASYNC, LockMode.NONE)
         )
+        identity_dispatch_slots = tuple(
+            workflow.slot for workflow in workflows if workflow.dispatch_kind == "identity"
+        )
+        equality_dispatch_slots = tuple(
+            workflow.slot for workflow in workflows if workflow.dispatch_kind == "equality_map"
+        )
 
         return ResolverGenerationPlan(
             root_scope_level=self._root_scope.level,
@@ -132,6 +143,8 @@ class ResolverGenerationPlanner:
             async_lock_count=async_lock_count,
             effective_mode_counts=effective_mode_counts,
             has_cleanup=has_cleanup,
+            identity_dispatch_slots=identity_dispatch_slots,
+            equality_dispatch_slots=equality_dispatch_slots,
             scopes=scopes,
             workflows=workflows,
         )
@@ -222,6 +235,7 @@ class ResolverGenerationPlanner:
             is_cached and effective_lock_mode is LockMode.THREAD and not requires_async
         )
         uses_async_lock = is_cached and effective_lock_mode is LockMode.ASYNC and requires_async
+        dispatch_kind = self._resolve_dispatch_kind(provides=spec.provides)
 
         return ProviderWorkflowPlan(
             slot=spec.slot,
@@ -252,12 +266,18 @@ class ResolverGenerationPlanner:
                 spec=spec,
             ),
             max_required_scope_level=self._max_required_scope_level_by_slot[spec.slot],
+            dispatch_kind=dispatch_kind,
             sync_arguments=sync_arguments,
             async_arguments=async_arguments,
             provider_is_inject_wrapper=bool(
                 getattr(provider_reference, INJECT_WRAPPER_MARKER, False),
             ),
         )
+
+    def _resolve_dispatch_kind(self, *, provides: Any) -> DispatchKind:
+        if isinstance(provides, type):
+            return "identity"
+        return "equality_map"
 
     def _resolve_effective_lock_mode(
         self,
