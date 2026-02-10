@@ -2067,7 +2067,10 @@ class ResolversTemplateRenderer:
         return text
 
     def _docstring_lines(self, lines: list[str]) -> list[str]:
-        return ['"""', *lines, '"""']
+        return ['"""', *[self._escape_docstring_line(line) for line in lines], '"""']
+
+    def _escape_docstring_line(self, line: str) -> str:
+        return line.replace("\\", "\\\\").replace('"""', r"\"\"\"")
 
     def _docstring_block(self, *, lines: list[str], depth: int) -> str:
         return self._join_lines(self._indent_lines(self._docstring_lines(lines), depth))

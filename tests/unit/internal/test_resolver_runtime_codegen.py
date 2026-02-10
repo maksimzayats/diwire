@@ -800,6 +800,25 @@ async def test_generated_aresolve_resolves_equal_non_identical_generic_alias_key
     assert await container.aresolve(lookup_key) is instance
 
 
+def test_codegen_exec_handles_escaped_module_and_qualname_in_docstrings() -> None:
+    bad_symbol = type('Bad"""Name', (), {"__module__": 'bad"""module'})
+    bad_instance = bad_symbol()
+    container = Container()
+    container.register_instance(provides=bad_symbol, instance=bad_instance)
+
+    code = ResolversTemplateRenderer().get_providers_code(
+        root_scope=Scope.APP,
+        registrations=container._providers_registrations,
+    )
+    namespace: dict[str, object] = {}
+    exec(code, namespace)  # noqa: S102
+    build_root_resolver = cast("Any", namespace["build_root_resolver"])
+    root_resolver = build_root_resolver(container._providers_registrations)
+
+    assert '\\"\\"\\"' in code
+    assert root_resolver.resolve(bad_symbol) is bad_instance
+
+
 def test_enter_scope_can_choose_skippable_or_next_non_skippable_scope() -> None:
     container = Container()
     container.register_concrete(
