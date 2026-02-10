@@ -5,7 +5,7 @@ import inspect
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass
-from typing import Any, Literal, TypeVar, cast, overload
+from typing import Any, Literal, TypeAlias, TypeVar, cast, overload
 
 from diwire.container import Container
 from diwire.exceptions import DIWireContainerNotSetError, DIWireInvalidRegistrationError
@@ -28,14 +28,8 @@ from diwire.scope import BaseScope
 T = TypeVar("T")
 F = TypeVar("F", bound=Callable[..., Any])
 InjectableF = TypeVar("InjectableF", bound=Callable[..., Any])
-_CONTAINER_NOT_SET_MESSAGE = (
-    "Container is not set for container_context. "
-    "Call container_context.set_current(container) before using container_context."
-)
-_FROM_CONTAINER_LOCK_MODE: Literal["from_container"] = "from_container"
-RegistrationLockMode = LockMode | Literal["from_container"]
 
-_RegistrationMethod = Literal[
+_RegistrationMethod: TypeAlias = Literal[
     "register_instance",
     "register_concrete",
     "register_factory",
@@ -76,7 +70,11 @@ class ContainerContext:
     def get_current(self) -> Container:
         """Return the active container or raise when no container has been bound."""
         if self._container is None:
-            raise DIWireContainerNotSetError(_CONTAINER_NOT_SET_MESSAGE)
+            msg = (
+                "Container is not set for container_context. "
+                "Call container_context.set_current(container) before using container_context."
+            )
+            raise DIWireContainerNotSetError(msg)
         return self._container
 
     def _populate(self, container: Container) -> None:
@@ -129,7 +127,7 @@ class ContainerContext:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
-        lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE,
+        lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | None = None,
     ) -> Callable[[type[T]], type[T]]:
         """Register a concrete provider with direct and decorator forms.
@@ -177,7 +175,7 @@ class ContainerContext:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
-        lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE,
+        lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | None = None,
     ) -> Callable[[F], F]:
         """Register a factory provider with direct and decorator forms.
@@ -224,7 +222,7 @@ class ContainerContext:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
-        lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE,
+        lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | None = None,
     ) -> Callable[[F], F]:
         """Register a generator provider with direct and decorator forms.
@@ -276,7 +274,7 @@ class ContainerContext:
         scope: BaseScope | None = None,
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
-        lock_mode: RegistrationLockMode = _FROM_CONTAINER_LOCK_MODE,
+        lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | None = None,
     ) -> Callable[[F], F]:
         """Register a context manager provider with direct and decorator forms.
@@ -288,8 +286,7 @@ class ContainerContext:
             self.register_context_manager(
                 provides=provides,
                 context_manager=cast(
-                    "Callable[..., AbstractContextManager[T]]"
-                    " | Callable[..., AbstractAsyncContextManager[T]]",
+                    "Callable[..., AbstractContextManager[T]] | Callable[..., AbstractAsyncContextManager[T]]",
                     decorated_context_manager,
                 ),
                 scope=scope,

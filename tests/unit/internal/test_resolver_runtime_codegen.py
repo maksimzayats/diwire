@@ -96,6 +96,19 @@ class _InjectNestedOuterConsumer:
         self.dependency = dependency
 
 
+class _MixedSharedSyncDependency:
+    pass
+
+
+class _MixedSyncConsumer:
+    def __init__(self, dependency: _MixedSharedSyncDependency) -> None:
+        self.dependency = dependency
+
+
+class _MixedAsyncGraphDependency:
+    pass
+
+
 def _bound_self(method: Any) -> Any:
     return cast("Any", method).__self__
 
@@ -930,6 +943,67 @@ def test_mixed_graph_thread_override_keeps_sync_singleton_thread_safe() -> None:
 
     assert calls == 1
     assert len({id(result) for result in results}) == 1
+
+
+def test_mixed_graph_thread_override_keeps_sync_dependency_chain_thread_safe() -> None:
+    shared_calls = 0
+    consumer_calls = 0
+    workers = 24
+
+    def build_shared_dependency() -> _MixedSharedSyncDependency:
+        nonlocal shared_calls
+        shared_calls += 1
+        return _MixedSharedSyncDependency()
+
+    def build_consumer(dependency: _MixedSharedSyncDependency) -> _MixedSyncConsumer:
+        nonlocal consumer_calls
+        consumer_calls += 1
+        return _MixedSyncConsumer(dependency=dependency)
+
+    async def build_async_graph_dependency() -> _MixedAsyncGraphDependency:
+        return _MixedAsyncGraphDependency()
+
+    container = Container(lock_mode="auto")
+    container.register_factory(
+        _MixedSharedSyncDependency,
+        factory=build_shared_dependency,
+        lifetime=Lifetime.SINGLETON,
+        lock_mode=LockMode.THREAD,
+    )
+    container.register_factory(
+        _MixedSyncConsumer,
+        factory=build_consumer,
+        lifetime=Lifetime.SINGLETON,
+        lock_mode=LockMode.THREAD,
+    )
+    container.register_factory(
+        _MixedAsyncGraphDependency,
+        factory=build_async_graph_dependency,
+        lifetime=Lifetime.SINGLETON,
+    )
+
+    shared_slot = container._providers_registrations.get_by_type(_MixedSharedSyncDependency).slot
+    consumer_slot = container._providers_registrations.get_by_type(_MixedSyncConsumer).slot
+    async_slot = container._providers_registrations.get_by_type(_MixedAsyncGraphDependency).slot
+    code = ResolversTemplateRenderer().get_providers_code(
+        root_scope=Scope.APP,
+        registrations=container._providers_registrations,
+    )
+
+    assert f"_dep_{shared_slot}_thread_lock" in code
+    assert f"_dep_{consumer_slot}_thread_lock" in code
+    assert f"_dep_{async_slot}_async_lock" in code
+
+    container.compile()
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(container.resolve, _MixedSyncConsumer) for _ in range(workers * 2)]
+        results = [future.result(timeout=5) for future in futures]
+
+    assert shared_calls == 1
+    assert consumer_calls == 1
+    assert len({id(result) for result in results}) == 1
+    assert len({id(result.dependency) for result in results}) == 1
 
 
 def test_lock_mode_async_on_sync_cached_provider_leaves_sync_path_unlocked() -> None:
