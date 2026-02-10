@@ -4,7 +4,8 @@ import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
+from types import TracebackType
+from typing import Any, Generic, TypeVar, overload
 
 from diwire.exceptions import DIWireInvalidRegistrationError
 from diwire.providers import (
@@ -40,10 +41,21 @@ class Container:
         # Define whether the container is safe for concurrent use.
         # For thread-safety and async-safety, appropriate locks will be used
         default_concurrency_safe: bool = True,
+        autoregister: bool = False,
     ) -> None:
+        """Initialize the container with an optional configuration.
+
+        Args:
+            root_scope: The initial root scope for the container. All singleton providers will be tied to this scope. Defaults to Scope.APP.
+            default_lifetime: The lifetime that will be used for providers if not specified. Defaults to Lifetime.TRANSIENT.
+            default_concurrency_safe: Whether the container is safe for concurrent use. Defaults to True.
+            autoregister: Whether to automatically register dependencies when they are resolved if not already registered. Defaults to False.
+
+        """
         self._root_scope = root_scope
         self._default_lifetime = default_lifetime
         self._default_concurrency_safe = default_concurrency_safe
+        self._autoregister = autoregister
 
         self._provider_dependencies_extractor = ProviderDependenciesExtractor()
         self._provider_return_type_extractor = ProviderReturnTypeExtractor()
@@ -52,13 +64,6 @@ class Container:
         self._resolvers_manager = ResolversManager()
 
         self._root_resolver: ResolverProtocol | None = None
-        if TYPE_CHECKING:
-            resolver = cast("ResolverProtocol", object())
-            self.resolve = resolver.resolve
-            self.aresolve = resolver.aresolve
-            self.enter_scope = resolver.enter_scope
-        else:
-            self._bind_lazy_entrypoints()
 
     # region Registration Methods
     def register_instance(
@@ -375,50 +380,139 @@ class Container:
             return self._default_concurrency_safe
         return concurrency_safe
 
+    def _ensure_autoregistration(self, dependency: Any) -> None:
+        if not self._autoregister:
+            return
+
+        if self._providers_registrations.find_by_type(dependency):
+            return
+
+        self.register_concrete(concrete_type=dependency)
+
     # endregion Registration Methods
 
     # region Compilation
     def compile(self) -> ResolverProtocol:
         """Compile and cache the root resolver for current registrations."""
         if self._root_resolver is None:
-            resolver = self._resolvers_manager.build_root_resolver(
+            self._root_resolver = self._resolvers_manager.build_root_resolver(
                 root_scope=self._root_scope,
                 registrations=self._providers_registrations,
             )
-            self._root_resolver = resolver
-            self._bind_compiled_entrypoints(resolver)
+
         return self._root_resolver
-
-    def _bind_lazy_entrypoints(self) -> None:
-        self.resolve = self._resolve
-        self.aresolve = self._aresolve
-        self.enter_scope = self._enter_scope
-
-    def _bind_compiled_entrypoints(self, resolver: ResolverProtocol) -> None:
-        self.resolve = resolver.resolve
-        self.aresolve = resolver.aresolve
-        self.enter_scope = resolver.enter_scope
 
     def _invalidate_compilation(self) -> None:
         self._root_resolver = None
-        self._bind_lazy_entrypoints()
-
-    def _ensure_root_resolver(self) -> ResolverProtocol:
-        return self.compile()
 
     # endregion Compilation
 
-    def _resolve(self, dependency: Any) -> Any:
-        resolver = self._ensure_root_resolver()
+    @overload
+    def resolve(self, dependency: type[T]) -> T: ...
+
+    @overload
+    def resolve(self, dependency: Any) -> Any: ...
+
+    def resolve(self, dependency: Any) -> Any:
+        """Resolve the given dependency and return its instance.
+
+        If autoregistration is enabled, it will automatically register the dependency if not already registered.
+        """
+        self._ensure_autoregistration(dependency)
+        resolver = self.compile()
+
         return resolver.resolve(dependency)
 
-    def _enter_scope(self, scope: BaseScope | None = None) -> Any:
-        resolver = self._ensure_root_resolver()
+    @overload
+    async def aresolve(self, dependency: type[T]) -> T: ...
+
+    @overload
+    async def aresolve(self, dependency: Any) -> Any: ...
+
+    async def aresolve(self, dependency: Any) -> Any:
+        """Resolve the given dependency asynchronously and return its instance.
+
+        If autoregistration is enabled, it will automatically register the dependency if not already registered.
+        """
+        self._ensure_autoregistration(dependency)
+        resolver = self.compile()
+
+        return await resolver.aresolve(dependency)
+
+    def enter_scope(self, scope: BaseScope | None = None) -> ResolverProtocol:
+        """Enter a new scope and return a new resolver for that scope."""
+        resolver = self.compile()
         return resolver.enter_scope(scope)
 
-    async def _aresolve(self, dependency: Any) -> Any:
-        resolver = self._ensure_root_resolver()
-        return await resolver.aresolve(dependency)
+    def __enter__(self) -> ResolverProtocol:
+        """Enter the resolver context."""
+        resolver = self.compile()
+        return resolver.__enter__()
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Exit the resolver context and perform any necessary cleanup.
+
+        Cleanup will happen ONLY if the resolver created resources that need to be cleaned up.
+        Like context managers or generators.
+        """
+        if self._root_resolver is None:
+            msg = "Container context exit called without a matching enter."
+            raise RuntimeError(msg)
+
+        return self._root_resolver.__exit__(exc_type, exc_value, traceback)
+
+    def __aenter__(self) -> ResolverProtocol:
+        """Asynchronously enter the resolver context."""
+        resolver = self.compile()
+        return resolver.__aenter__()
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Asynchronously exit the resolver context and perform any necessary cleanup.
+
+        Cleanup will happen ONLY if the resolver created resources that need to be cleaned up.
+        Like context managers or generators.
+        """
+        if self._root_resolver is None:
+            msg = "Container async context exit called without a matching enter."
+            raise RuntimeError(msg)
+
+        return await self._root_resolver.__aexit__(exc_type, exc_value, traceback)
+
+    def close(
+        self,
+        exc_type: type[BaseException] | None = None,
+        exc_value: BaseException | None = None,
+        traceback: TracebackType | None = None,
+    ) -> None:
+        """Close the container and perform any necessary cleanup.
+
+        Cleanup will happen ONLY if the resolver created resources that need to be cleaned up.
+        Like context managers or generators.
+        """
+        return self.__exit__(exc_type, exc_value, traceback)
+
+    async def aclose(
+        self,
+        exc_type: type[BaseException] | None = None,
+        exc_value: BaseException | None = None,
+        traceback: TracebackType | None = None,
+    ) -> None:
+        """Asynchronously close the container and perform any necessary cleanup.
+
+        Cleanup will happen ONLY if the resolver created resources that need to be cleaned up.
+        Like context managers or generators.
+        """
+        return await self.__aexit__(exc_type, exc_value, traceback)
 
 
 @dataclass(slots=True, kw_only=True)

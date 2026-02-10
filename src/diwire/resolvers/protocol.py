@@ -10,18 +10,7 @@ T = TypeVar("T")
 
 
 class ResolverProtocol(Protocol):
-    """Protocol for a dependency resolver.
-
-    Used with the dependency injection container to resolve dependencies.
-    In the case of scoped dependencies, a resolver with cache it after the first resolution.
-    The cache replaces `resolve_<slot>` with a `lambda` that returns the cached instance.
-    """
-
-    def __init__(
-        self,
-        **previous_resolvers: "ResolverProtocol",
-    ) -> None:
-        """Initialize the resolver with any previous resolvers it may depend on."""
+    """Protocol for a dependency resolver."""
 
     @overload
     def resolve(self, dependency: type[T]) -> T: ...
