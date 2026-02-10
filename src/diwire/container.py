@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
-from contextlib import AbstractAsyncContextManager, AbstractContextManager
+from contextlib import AbstractAsyncContextManager, AbstractContextManager, suppress
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Any, Generic, TypeVar, overload
@@ -50,6 +50,7 @@ class Container:
         # For thread-safety and async-safety, appropriate locks will be used
         default_concurrency_safe: bool = True,
         autoregister: bool = False,
+        autoregister_dependencies: bool = False,
     ) -> None:
         """Initialize the container with an optional configuration.
 
@@ -58,12 +59,14 @@ class Container:
             default_lifetime: The lifetime that will be used for providers if not specified. Defaults to Lifetime.TRANSIENT.
             default_concurrency_safe: Whether the container is safe for concurrent use. Defaults to True.
             autoregister: Whether to automatically register dependencies when they are resolved if not already registered. Defaults to False.
+            autoregister_dependencies: Whether to automatically register provider dependencies as concrete types during registration. Defaults to False.
 
         """
         self._root_scope = root_scope
         self._default_lifetime = default_lifetime
         self._default_concurrency_safe = default_concurrency_safe
         self._autoregister = autoregister
+        self._autoregister_dependencies = autoregister_dependencies
 
         self._provider_dependencies_extractor = ProviderDependenciesExtractor()
         self._provider_return_type_extractor = ProviderReturnTypeExtractor()
@@ -108,6 +111,7 @@ class Container:
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
         concurrency_safe: bool | None = None,
+        autoregister_dependencies: bool | None = None,
     ) -> ConcreteTypeRegistrationDecorator[T]:
         """Register a concrete type provider in the container."""
         decorator = ConcreteTypeRegistrationDecorator(
@@ -117,6 +121,7 @@ class Container:
             provides=provides,
             dependencies=dependencies,
             concurrency_safe=concurrency_safe,
+            autoregister_dependencies=autoregister_dependencies,
         )
 
         if provides is None and concrete_type is None:
@@ -143,18 +148,27 @@ class Container:
             dependencies_for_provider,
         )
 
+        resolved_scope = scope or self._root_scope
+        resolved_lifetime = lifetime or self._default_lifetime
+
         self._providers_registrations.add(
             ProviderSpec(
                 provides=provides,
                 concrete_type=concrete_type,
-                lifetime=lifetime or self._default_lifetime,
-                scope=scope or self._root_scope,
+                lifetime=resolved_lifetime,
+                scope=resolved_scope,
                 dependencies=dependencies_for_provider,
                 is_async=False,
                 is_any_dependency_async=is_any_dependency_async,
                 needs_cleanup=False,
                 concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
             ),
+        )
+        self._autoregister_provider_dependencies(
+            dependencies=dependencies_for_provider,
+            scope=resolved_scope,
+            lifetime=resolved_lifetime,
+            enabled=self._resolve_autoregister_dependencies(autoregister_dependencies),
         )
         self._invalidate_compilation()
 
@@ -169,6 +183,7 @@ class Container:
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
         concurrency_safe: bool | None = None,
+        autoregister_dependencies: bool | None = None,
     ) -> FactoryRegistrationDecorator[T]:
         """Register a factory provider in the container."""
         decorator = FactoryRegistrationDecorator(
@@ -178,6 +193,7 @@ class Container:
             provides=provides,
             dependencies=dependencies,
             concurrency_safe=concurrency_safe,
+            autoregister_dependencies=autoregister_dependencies,
         )
 
         if factory is None:
@@ -195,18 +211,27 @@ class Container:
             dependencies_for_provider,
         )
 
+        resolved_scope = scope or self._root_scope
+        resolved_lifetime = lifetime or self._default_lifetime
+
         self._providers_registrations.add(
             ProviderSpec(
                 provides=provides,
                 factory=factory,
-                lifetime=lifetime or self._default_lifetime,
-                scope=scope or self._root_scope,
+                lifetime=resolved_lifetime,
+                scope=resolved_scope,
                 dependencies=dependencies_for_provider,
                 is_async=is_async,
                 is_any_dependency_async=is_any_dependency_async,
                 needs_cleanup=False,
                 concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
             ),
+        )
+        self._autoregister_provider_dependencies(
+            dependencies=dependencies_for_provider,
+            scope=resolved_scope,
+            lifetime=resolved_lifetime,
+            enabled=self._resolve_autoregister_dependencies(autoregister_dependencies),
         )
         self._invalidate_compilation()
 
@@ -223,6 +248,7 @@ class Container:
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
         concurrency_safe: bool | None = None,
+        autoregister_dependencies: bool | None = None,
     ) -> GeneratorRegistrationDecorator[T]:
         """Register a generator provider in the container."""
         decorator = GeneratorRegistrationDecorator(
@@ -232,6 +258,7 @@ class Container:
             provides=provides,
             dependencies=dependencies,
             concurrency_safe=concurrency_safe,
+            autoregister_dependencies=autoregister_dependencies,
         )
 
         if generator is None:
@@ -251,18 +278,27 @@ class Container:
             dependencies_for_provider,
         )
 
+        resolved_scope = scope or self._root_scope
+        resolved_lifetime = lifetime or self._default_lifetime
+
         self._providers_registrations.add(
             ProviderSpec(
                 provides=provides,
                 generator=generator,
-                lifetime=lifetime or self._default_lifetime,
-                scope=scope or self._root_scope,
+                lifetime=resolved_lifetime,
+                scope=resolved_scope,
                 dependencies=dependencies_for_provider,
                 is_async=is_async,
                 is_any_dependency_async=is_any_dependency_async,
                 needs_cleanup=True,
                 concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
             ),
+        )
+        self._autoregister_provider_dependencies(
+            dependencies=dependencies_for_provider,
+            scope=resolved_scope,
+            lifetime=resolved_lifetime,
+            enabled=self._resolve_autoregister_dependencies(autoregister_dependencies),
         )
         self._invalidate_compilation()
 
@@ -281,6 +317,7 @@ class Container:
         lifetime: Lifetime | None = None,
         dependencies: list[ProviderDependency] | None = None,
         concurrency_safe: bool | None = None,
+        autoregister_dependencies: bool | None = None,
     ) -> ContextManagerRegistrationDecorator[T]:
         """Register a context manager provider in the container."""
         decorator = ContextManagerRegistrationDecorator(
@@ -290,6 +327,7 @@ class Container:
             provides=provides,
             dependencies=dependencies,
             concurrency_safe=concurrency_safe,
+            autoregister_dependencies=autoregister_dependencies,
         )
 
         if context_manager is None:
@@ -309,18 +347,27 @@ class Container:
             dependencies_for_provider,
         )
 
+        resolved_scope = scope or self._root_scope
+        resolved_lifetime = lifetime or self._default_lifetime
+
         self._providers_registrations.add(
             ProviderSpec(
                 provides=provides,
                 context_manager=context_manager,
-                lifetime=lifetime or self._default_lifetime,
-                scope=scope or self._root_scope,
+                lifetime=resolved_lifetime,
+                scope=resolved_scope,
                 dependencies=dependencies_for_provider,
                 is_async=is_async,
                 is_any_dependency_async=is_any_dependency_async,
                 needs_cleanup=True,
                 concurrency_safe=self._resolve_provider_concurrency_safe(concurrency_safe),
             ),
+        )
+        self._autoregister_provider_dependencies(
+            dependencies=dependencies_for_provider,
+            scope=resolved_scope,
+            lifetime=resolved_lifetime,
+            enabled=self._resolve_autoregister_dependencies(autoregister_dependencies),
         )
         self._invalidate_compilation()
 
@@ -390,6 +437,33 @@ class Container:
         if concurrency_safe is None:
             return self._default_concurrency_safe
         return concurrency_safe
+
+    def _resolve_autoregister_dependencies(self, autoregister_dependencies: bool | None) -> bool:
+        if autoregister_dependencies is None:
+            return self._autoregister_dependencies
+        return autoregister_dependencies
+
+    def _autoregister_provider_dependencies(
+        self,
+        *,
+        dependencies: list[ProviderDependency],
+        scope: BaseScope,
+        lifetime: Lifetime,
+        enabled: bool,
+    ) -> None:
+        if not enabled:
+            return
+
+        for dependency in dependencies:
+            if self._providers_registrations.find_by_type(dependency.provides):
+                continue
+            with suppress(Exception):
+                self.register_concrete(
+                    concrete_type=dependency.provides,
+                    scope=scope,
+                    lifetime=lifetime,
+                    autoregister_dependencies=True,
+                )
 
     def _ensure_autoregistration(self, dependency: Any) -> None:
         if not self._autoregister:
@@ -564,6 +638,7 @@ class ConcreteTypeRegistrationDecorator(Generic[T]):
     provides: type[T] | None = None
     dependencies: list[ProviderDependency] | None = None
     concurrency_safe: bool | None = None
+    autoregister_dependencies: bool | None = None
 
     def __call__(self, concrete_type: type[T]) -> type[T]:
         """Register the concrete type provider in the container."""
@@ -574,6 +649,7 @@ class ConcreteTypeRegistrationDecorator(Generic[T]):
             lifetime=self.lifetime,
             dependencies=self.dependencies,
             concurrency_safe=self.concurrency_safe,
+            autoregister_dependencies=self.autoregister_dependencies,
         )
 
         return concrete_type
@@ -589,6 +665,7 @@ class FactoryRegistrationDecorator(Generic[T]):
     provides: type[T] | None = None
     dependencies: list[ProviderDependency] | None = None
     concurrency_safe: bool | None = None
+    autoregister_dependencies: bool | None = None
 
     def __call__(self, factory: F) -> F:
         """Register the factory provider in the container."""
@@ -599,6 +676,7 @@ class FactoryRegistrationDecorator(Generic[T]):
             lifetime=self.lifetime,
             dependencies=self.dependencies,
             concurrency_safe=self.concurrency_safe,
+            autoregister_dependencies=self.autoregister_dependencies,
         )
 
         return factory
@@ -614,6 +692,7 @@ class GeneratorRegistrationDecorator(Generic[T]):
     provides: type[T] | None = None
     dependencies: list[ProviderDependency] | None = None
     concurrency_safe: bool | None = None
+    autoregister_dependencies: bool | None = None
 
     def __call__(self, generator: F) -> F:
         """Register the generator provider in the container."""
@@ -624,6 +703,7 @@ class GeneratorRegistrationDecorator(Generic[T]):
             lifetime=self.lifetime,
             dependencies=self.dependencies,
             concurrency_safe=self.concurrency_safe,
+            autoregister_dependencies=self.autoregister_dependencies,
         )
 
         return generator
@@ -639,6 +719,7 @@ class ContextManagerRegistrationDecorator(Generic[T]):
     provides: type[T] | None = None
     dependencies: list[ProviderDependency] | None = None
     concurrency_safe: bool | None = None
+    autoregister_dependencies: bool | None = None
 
     def __call__(self, context_manager: F) -> F:
         """Register the context manager provider in the container."""
@@ -649,6 +730,7 @@ class ContextManagerRegistrationDecorator(Generic[T]):
             lifetime=self.lifetime,
             dependencies=self.dependencies,
             concurrency_safe=self.concurrency_safe,
+            autoregister_dependencies=self.autoregister_dependencies,
         )
 
         return context_manager
