@@ -1,5 +1,5 @@
 .. meta::
-   :description: Function injection in diwire using Injected[T]. Learn how container.resolve() wraps callables and can create per-call scopes.
+   :description: Function injection in diwire using Injected[T] and Container.inject.
 
 Function injection
 ==================
@@ -9,37 +9,51 @@ In addition to constructor injection, diwire can inject dependencies into functi
 The building blocks are:
 
 - :class:`diwire.Injected` - a type wrapper used as ``Injected[T]`` to mark injected parameters
-- :meth:`diwire.Container.resolve` - when given a function, returns an injected callable wrapper
+- :meth:`diwire.Container.inject` - a decorator that returns an injected callable wrapper
 
-Basic injection with ``Injected[T]``
-------------------------------------
+Basic usage
+-----------
 
 Mark injectable parameters using ``Injected[T]``.
 All other parameters remain caller-provided.
 
 See the runnable scripts in :doc:`/howto/examples/function-injection` (Injected marker section).
 
-Per-call scopes for request handlers
-------------------------------------
-
-If your function needs scoped services (for example a request-scoped DB session), resolve the function with a scope:
-
-See the runnable scripts in :doc:`/howto/examples/function-injection` (Per-call scope section).
-
 Decorator style
 ---------------
 
-You can also use ``resolve()`` as a decorator:
+``Container.inject`` supports all decorator forms:
+
+- ``@container.inject``
+- ``@container.inject()``
+- ``@container.inject(scope=Scope.REQUEST, autoregister_dependencies=True)``
+
+Example:
 
 .. code-block:: python
 
-   from diwire import Container, Injected
+   from diwire import Container, Injected, Scope
 
    container = Container()
 
 
-   @container.resolve()
+   @container.inject(scope=Scope.REQUEST)
    def handler(service: Injected["Service"]) -> str:
        return service.run()
+
+Behavior notes
+--------------
+
+- injected parameters are removed from runtime ``__signature__``
+- callers can still override injected values by passing explicit keyword arguments
+- no implicit scope chain opening happens inside the wrapper
+
+Generated resolver code passes an internal kwarg (``__diwire_resolver``) only for inject-wrapped providers.
+This is an internal mechanism; user code should not pass it directly unless integrating at a low level.
+
+Naming note
+-----------
+
+The API name is ``inject``. Considered alternatives were ``wire``, ``autowire``, ``inject_call``, and ``inject_params``.
 
 For framework integration (FastAPI/Starlette), also see :doc:`container-context` and :doc:`../howto/web/fastapi`.

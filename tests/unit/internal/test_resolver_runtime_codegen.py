@@ -15,6 +15,7 @@ from diwire.exceptions import (
     DIWireDependencyNotRegisteredError,
     DIWireScopeMismatchError,
 )
+from diwire.markers import Injected
 from diwire.providers import Lifetime, ProviderDependency, ProviderSpec
 from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire.scope import Scope
@@ -66,6 +67,15 @@ class _KwArgsService:
 
 class _SessionAsyncService:
     pass
+
+
+class _InjectScopedDependency:
+    pass
+
+
+class _InjectScopedConsumer:
+    def __init__(self, dependency: _InjectScopedDependency) -> None:
+        self.dependency = dependency
 
 
 def _bound_self(method: Any) -> Any:
@@ -454,6 +464,34 @@ def test_scope_resolution_requires_explicit_opened_scope_chain() -> None:
             from_request = request_scope.resolve(_RequestService)
             from_action = action_scope.resolve(_RequestService)
             assert from_request is from_action
+
+
+def test_codegen_passes_resolver_to_inject_wrapped_provider_calls() -> None:
+    container = Container()
+    container.register_concrete(
+        _InjectScopedDependency,
+        concrete_type=_InjectScopedDependency,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    @container.inject
+    def build_consumer(
+        dependency: Injected[_InjectScopedDependency],
+    ) -> _InjectScopedConsumer:
+        return _InjectScopedConsumer(dependency=dependency)
+
+    container.register_factory(
+        _InjectScopedConsumer,
+        factory=build_consumer,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with container.enter_scope() as request_scope:
+        resolved = request_scope.resolve(_InjectScopedConsumer)
+        assert isinstance(resolved, _InjectScopedConsumer)
+        assert isinstance(resolved.dependency, _InjectScopedDependency)
 
 
 def test_generated_dispatch_raises_for_unknown_dependency_in_sync_and_async_paths() -> None:

@@ -1,13 +1,26 @@
 from __future__ import annotations
 
+import functools
+import inspect
 import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from contextlib import AbstractAsyncContextManager, AbstractContextManager, suppress
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any, Generic, TypeVar, overload
+from typing import (
+    Annotated,
+    Any,
+    Generic,
+    TypeVar,
+    cast,
+    get_args,
+    get_origin,
+    get_type_hints,
+    overload,
+)
 
 from diwire.exceptions import DIWireInvalidRegistrationError
+from diwire.markers import Injected, InjectedMarker
 from diwire.providers import (
     ContextManagerProvider,
     FactoryProvider,
@@ -26,8 +39,21 @@ from diwire.validators import DependecyRegistrationValidator
 
 T = TypeVar("T")
 F = TypeVar("F", bound=Callable[..., Any])
+InjectableF = TypeVar("InjectableF", bound=Callable[..., Any])
+
+_INJECT_RESOLVER_KWARG = "__diwire_resolver"
+_INJECT_WRAPPER_MARKER = "__diwire_inject_wrapper__"
+_ANNOTATED_DEPENDENCY_MIN_ARGS = 2
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class _InjectedParameter:
+    """Injected parameter metadata for callable wrapper generation."""
+
+    name: str
+    dependency: Any
 
 
 class Container:
@@ -473,6 +499,270 @@ class Container:
             return
 
         self.register_concrete(concrete_type=dependency)
+
+    @overload
+    def inject(
+        self,
+        func: InjectableF,
+    ) -> InjectableF: ...
+
+    @overload
+    def inject(
+        self,
+        func: None = None,
+        *,
+        scope: BaseScope | None = None,
+        autoregister_dependencies: bool | None = None,
+    ) -> Callable[[InjectableF], InjectableF]: ...
+
+    def inject(
+        self,
+        func: InjectableF | None = None,
+        *,
+        scope: BaseScope | None = None,
+        autoregister_dependencies: bool | None = None,
+    ) -> InjectableF | Callable[[InjectableF], InjectableF]:
+        """Decorate a callable to auto-inject parameters marked with Injected[T]."""
+
+        def decorator(callable_obj: InjectableF) -> InjectableF:
+            return self._inject_callable(
+                callable_obj=callable_obj,
+                scope=scope,
+                autoregister_dependencies=autoregister_dependencies,
+            )
+
+        if func is None:
+            return decorator
+        return decorator(func)
+
+    def _inject_callable(
+        self,
+        *,
+        callable_obj: InjectableF,
+        scope: BaseScope | None,
+        autoregister_dependencies: bool | None,
+    ) -> InjectableF:
+        signature = inspect.signature(callable_obj)
+        if _INJECT_RESOLVER_KWARG in signature.parameters:
+            msg = (
+                f"Callable '{self._callable_name(callable_obj)}' cannot declare reserved parameter "
+                f"'{_INJECT_RESOLVER_KWARG}'."
+            )
+            raise DIWireInvalidRegistrationError(msg)
+
+        injected_parameters = self._extract_injected_parameters(callable_obj=callable_obj)
+        resolved_autoregister = self._resolve_autoregister_dependencies(autoregister_dependencies)
+        if resolved_autoregister:
+            self._autoregister_injected_dependencies(
+                injected_parameters=injected_parameters,
+                scope=scope,
+            )
+
+        inferred_scope_level = self._infer_injected_scope_level(
+            injected_parameters=injected_parameters,
+        )
+        if scope is not None and scope.level < inferred_scope_level:
+            msg = (
+                f"Callable '{self._callable_name(callable_obj)}' scope level {scope.level} is "
+                f"shallower than required dependency scope level {inferred_scope_level}."
+            )
+            raise DIWireInvalidRegistrationError(msg)
+
+        injected_parameter_names = {
+            injected_parameter.name for injected_parameter in injected_parameters
+        }
+        public_signature = self._build_public_injected_signature(
+            signature=signature,
+            injected_parameter_names=injected_parameter_names,
+        )
+
+        if inspect.iscoroutinefunction(callable_obj):
+
+            @functools.wraps(callable_obj)
+            async def _async_injected(*args: Any, **kwargs: Any) -> Any:
+                resolver = self._resolve_inject_resolver(kwargs)
+                bound_arguments = signature.bind_partial(*args, **kwargs)
+                for injected_parameter in injected_parameters:
+                    if injected_parameter.name in bound_arguments.arguments:
+                        continue
+                    bound_arguments.arguments[injected_parameter.name] = await resolver.aresolve(
+                        injected_parameter.dependency,
+                    )
+                async_callable = cast("Callable[..., Awaitable[Any]]", callable_obj)
+                return await async_callable(*bound_arguments.args, **bound_arguments.kwargs)
+
+            wrapped_callable: Callable[..., Any] = _async_injected
+        else:
+
+            @functools.wraps(callable_obj)
+            def _sync_injected(*args: Any, **kwargs: Any) -> Any:
+                resolver = self._resolve_inject_resolver(kwargs)
+                bound_arguments = signature.bind_partial(*args, **kwargs)
+                for injected_parameter in injected_parameters:
+                    if injected_parameter.name in bound_arguments.arguments:
+                        continue
+                    bound_arguments.arguments[injected_parameter.name] = resolver.resolve(
+                        injected_parameter.dependency,
+                    )
+                return callable_obj(*bound_arguments.args, **bound_arguments.kwargs)
+
+            wrapped_callable = _sync_injected
+
+        wrapped_callable.__signature__ = public_signature  # type: ignore[attr-defined]
+        wrapped_callable.__dict__[_INJECT_WRAPPER_MARKER] = True
+        return cast("InjectableF", wrapped_callable)
+
+    def _extract_injected_parameters(
+        self,
+        *,
+        callable_obj: Callable[..., Any],
+    ) -> tuple[_InjectedParameter, ...]:
+        signature = inspect.signature(callable_obj)
+        resolved_annotations = self._resolved_annotations_for_injection(callable_obj=callable_obj)
+        injected_parameters: list[_InjectedParameter] = []
+        for parameter in signature.parameters.values():
+            annotation = resolved_annotations.get(parameter.name, parameter.annotation)
+            dependency = self._resolve_injected_dependency(annotation=annotation)
+            if dependency is None:
+                continue
+            injected_parameters.append(
+                _InjectedParameter(
+                    name=parameter.name,
+                    dependency=dependency,
+                ),
+            )
+
+        return tuple(injected_parameters)
+
+    def _resolved_annotations_for_injection(
+        self,
+        *,
+        callable_obj: Callable[..., Any],
+    ) -> dict[str, Any]:
+        try:
+            return get_type_hints(callable_obj, include_extras=True)
+        except (AttributeError, NameError, TypeError):
+            return {}
+
+    def _resolve_injected_dependency(self, *, annotation: Any) -> Any | None:
+        if annotation is inspect.Signature.empty or isinstance(annotation, str):
+            return None
+        if get_origin(annotation) is not Annotated:
+            return None
+
+        annotation_args = get_args(annotation)
+        if len(annotation_args) < _ANNOTATED_DEPENDENCY_MIN_ARGS:
+            return None
+        parameter_type = annotation_args[0]
+        metadata = annotation_args[1:]
+        if not any(isinstance(item, InjectedMarker) for item in metadata):
+            return None
+
+        filtered_metadata = tuple(item for item in metadata if not isinstance(item, InjectedMarker))
+        if not filtered_metadata:
+            return parameter_type
+        return self._build_annotated_type(parameter_type=parameter_type, metadata=filtered_metadata)
+
+    def _build_annotated_type(
+        self,
+        *,
+        parameter_type: Any,
+        metadata: tuple[Any, ...],
+    ) -> Any:
+        annotation_params = (parameter_type, *metadata)
+        try:
+            return Annotated.__class_getitem__(annotation_params)  # type: ignore[attr-defined]
+        except AttributeError:
+            return Annotated.__getitem__(annotation_params)  # type: ignore[attr-defined]
+
+    def _build_public_injected_signature(
+        self,
+        *,
+        signature: inspect.Signature,
+        injected_parameter_names: set[str],
+    ) -> inspect.Signature:
+        filtered_parameters = [
+            parameter
+            for parameter in signature.parameters.values()
+            if parameter.name not in injected_parameter_names
+        ]
+        return signature.replace(parameters=filtered_parameters)
+
+    def _autoregister_injected_dependencies(
+        self,
+        *,
+        injected_parameters: tuple[_InjectedParameter, ...],
+        scope: BaseScope | None,
+    ) -> None:
+        registration_scope = scope or self._root_scope
+        for injected_parameter in injected_parameters:
+            if self._providers_registrations.find_by_type(injected_parameter.dependency):
+                continue
+            with suppress(Exception):
+                self.register_concrete(
+                    concrete_type=injected_parameter.dependency,
+                    scope=registration_scope,
+                    lifetime=self._default_lifetime,
+                    autoregister_dependencies=True,
+                )
+
+    def _infer_injected_scope_level(
+        self,
+        *,
+        injected_parameters: tuple[_InjectedParameter, ...],
+    ) -> int:
+        max_scope_level = self._root_scope.level
+        cache: dict[Any, int] = {}
+        for injected_parameter in injected_parameters:
+            max_scope_level = max(
+                max_scope_level,
+                self._infer_dependency_scope_level(
+                    dependency=injected_parameter.dependency,
+                    cache=cache,
+                    in_progress=set(),
+                ),
+            )
+        return max_scope_level
+
+    def _infer_dependency_scope_level(
+        self,
+        *,
+        dependency: Any,
+        cache: dict[Any, int],
+        in_progress: set[Any],
+    ) -> int:
+        known_level = cache.get(dependency)
+        if known_level is not None:
+            return known_level
+
+        spec = self._providers_registrations.find_by_type(dependency)
+        if spec is None:
+            return self._root_scope.level
+        if dependency in in_progress:
+            return spec.scope.level
+
+        in_progress.add(dependency)
+        max_scope_level = spec.scope.level
+        for nested_dependency in spec.dependencies:
+            max_scope_level = max(
+                max_scope_level,
+                self._infer_dependency_scope_level(
+                    dependency=nested_dependency.provides,
+                    cache=cache,
+                    in_progress=in_progress,
+                ),
+            )
+        in_progress.remove(dependency)
+        cache[dependency] = max_scope_level
+        return max_scope_level
+
+    def _resolve_inject_resolver(self, kwargs: dict[str, Any]) -> ResolverProtocol:
+        if _INJECT_RESOLVER_KWARG in kwargs:
+            return cast("ResolverProtocol", kwargs.pop(_INJECT_RESOLVER_KWARG))
+        return self.compile()
+
+    def _callable_name(self, callable_obj: Callable[..., Any]) -> str:
+        return getattr(callable_obj, "__qualname__", repr(callable_obj))
 
     # endregion Registration Methods
 

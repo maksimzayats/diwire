@@ -1259,9 +1259,6 @@ class ResolversTemplateRenderer:
         scope_by_level: dict[int, ScopePlan],
         workflow_by_slot: dict[int, ProviderWorkflowPlan],
     ) -> tuple[str, ...]:
-        if not workflow.dependencies:
-            return ()
-
         arguments: list[str] = []
         root_scope_level = min(scope_by_level)
         root_scope = scope_by_level[root_scope_level]
@@ -1300,6 +1297,12 @@ class ResolversTemplateRenderer:
                     expression=expression,
                     prefer_positional=workflow.dependency_order_is_signature_order,
                 ),
+            )
+
+        if workflow.provider_is_inject_wrapper:
+            self._append_internal_resolver_argument(
+                arguments=arguments,
+                resolver_expression="self",
             )
 
         return tuple(arguments)
@@ -1373,10 +1376,16 @@ class ResolversTemplateRenderer:
         )
         if arguments is None:
             return None
+        rendered_arguments = list(arguments)
+        if dependency_workflow.provider_is_inject_wrapper:
+            self._append_internal_resolver_argument(
+                arguments=rendered_arguments,
+                resolver_expression=root_resolver_expression,
+            )
 
         return self._render_callable_expression(
             callable_expression=f"_provider_{dependency_slot}",
-            arguments=arguments,
+            arguments=tuple(rendered_arguments),
         )
 
     def _can_inline_root_sync_dependency(
@@ -1486,6 +1495,22 @@ class ResolversTemplateRenderer:
         if kind is inspect.Parameter.VAR_KEYWORD:
             return f"**{expression}"
         return f"{dependency.parameter.name}={expression}"
+
+    def _append_internal_resolver_argument(
+        self,
+        *,
+        arguments: list[str],
+        resolver_expression: str,
+    ) -> None:
+        resolver_argument = f"__diwire_resolver={resolver_expression}"
+        var_keyword_index = next(
+            (index for index, argument in enumerate(arguments) if argument.startswith("**")),
+            None,
+        )
+        if var_keyword_index is None:
+            arguments.append(resolver_argument)
+            return
+        arguments.insert(var_keyword_index, resolver_argument)
 
     def _render_generator_build(
         self,

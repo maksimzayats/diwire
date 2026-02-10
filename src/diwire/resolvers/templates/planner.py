@@ -9,6 +9,8 @@ from diwire.exceptions import DIWireInvalidProviderSpecError
 from diwire.providers import Lifetime, ProviderDependency, ProviderSpec, ProvidersRegistrations
 from diwire.scope import BaseScope
 
+_INJECT_WRAPPER_MARKER = "__diwire_inject_wrapper__"
+
 
 class LockMode(Enum):
     """Locking strategy used by generated resolvers."""
@@ -56,6 +58,7 @@ class ProviderWorkflowPlan:
     max_required_scope_level: int
     sync_arguments: tuple[str, ...]
     async_arguments: tuple[str, ...]
+    provider_is_inject_wrapper: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,6 +160,7 @@ class ResolverGenerationPlanner:
         scope_by_level: dict[int, ScopePlan],
     ) -> ProviderWorkflowPlan:
         provider_attribute = self._resolve_provider_attribute(spec=spec)
+        provider_reference = getattr(spec, provider_attribute)
         is_cached = self._is_cached(spec=spec)
         cache_owner_scope_level = self._cache_owner_scope_level(spec=spec, is_cached=is_cached)
 
@@ -188,7 +192,7 @@ class ResolverGenerationPlanner:
             slot=spec.slot,
             provides=spec.provides,
             provider_attribute=provider_attribute,
-            provider_reference=getattr(spec, provider_attribute),
+            provider_reference=provider_reference,
             lifetime=spec.lifetime,
             scope_name=scope_plan.scope_name,
             scope_level=scope_plan.scope_level,
@@ -212,6 +216,9 @@ class ResolverGenerationPlanner:
             max_required_scope_level=self._max_required_scope_level_by_slot[spec.slot],
             sync_arguments=sync_arguments,
             async_arguments=async_arguments,
+            provider_is_inject_wrapper=bool(
+                getattr(provider_reference, _INJECT_WRAPPER_MARKER, False),
+            ),
         )
 
     def _resolve_provider_attribute(self, *, spec: ProviderSpec) -> str:
