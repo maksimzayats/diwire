@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+import importlib
 import inspect
+import sys
 from collections.abc import Generator
 from contextlib import contextmanager
+from dataclasses import dataclass
+from types import ModuleType
+from typing import NamedTuple
 
+import attrs
+import msgspec
+import pydantic
 import pytest
+from pydantic import dataclasses as pydantic_dataclasses
 
 from diwire.exceptions import DIWireProviderDependencyInferenceError
 from diwire.providers import ProviderDependenciesExtractor, ProviderDependency
@@ -24,6 +33,23 @@ class ServiceC:
 
 DEFAULT_SERVICE_A = ServiceA()
 
+pydantic_v1: ModuleType | None = None
+if sys.version_info < (3, 14):
+    try:
+        pydantic_v1 = importlib.import_module("pydantic.v1")
+    except ImportError:
+        pydantic_v1 = None
+
+
+def _assert_dependencies(
+    dependencies: list[ProviderDependency],
+    *,
+    expected_names: list[str],
+    expected_types: list[type[object]],
+) -> None:
+    assert [dependency.parameter.name for dependency in dependencies] == expected_names
+    assert [dependency.provides for dependency in dependencies] == expected_types
+
 
 def test_extracts_dependencies_from_concrete_type() -> None:
     class ConcreteService:
@@ -35,8 +61,169 @@ def test_extracts_dependencies_from_concrete_type() -> None:
 
     dependencies = extractor.extract_from_concrete_type(ConcreteService)
 
-    assert [dependency.parameter.name for dependency in dependencies] == ["first", "second"]
-    assert [dependency.provides for dependency in dependencies] == [ServiceA, ServiceB]
+    _assert_dependencies(
+        dependencies,
+        expected_names=["first", "second"],
+        expected_types=[ServiceA, ServiceB],
+    )
+
+
+def test_extracts_dependencies_from_dataclass_concrete_type() -> None:
+    @dataclass
+    class ConcreteService:
+        first: ServiceA
+        second: ServiceB
+
+    extractor = ProviderDependenciesExtractor()
+
+    dependencies = extractor.extract_from_concrete_type(ConcreteService)
+
+    _assert_dependencies(
+        dependencies,
+        expected_names=["first", "second"],
+        expected_types=[ServiceA, ServiceB],
+    )
+
+
+def test_extracts_dependencies_from_namedtuple_class_concrete_type() -> None:
+    class ConcreteService(NamedTuple):
+        first: ServiceA
+        second: ServiceB
+
+    extractor = ProviderDependenciesExtractor()
+
+    dependencies = extractor.extract_from_concrete_type(ConcreteService)
+
+    _assert_dependencies(
+        dependencies,
+        expected_names=["first", "second"],
+        expected_types=[ServiceA, ServiceB],
+    )
+
+
+def test_extracts_dependencies_from_namedtuple_functional_concrete_type() -> None:
+    # Ruff UP014 prefers class syntax, but this test intentionally exercises functional syntax.
+    ConcreteService = NamedTuple(  # noqa: UP014
+        "ConcreteService",
+        [("first", ServiceA), ("second", ServiceB)],
+    )
+    extractor = ProviderDependenciesExtractor()
+
+    dependencies = extractor.extract_from_concrete_type(ConcreteService)
+
+    _assert_dependencies(
+        dependencies,
+        expected_names=["first", "second"],
+        expected_types=[ServiceA, ServiceB],
+    )
+
+
+def test_extracts_dependencies_from_attrs_define_concrete_type() -> None:
+    @attrs.define
+    class ConcreteService:
+        first: ServiceA
+        second: ServiceB
+
+    extractor = ProviderDependenciesExtractor()
+
+    dependencies = extractor.extract_from_concrete_type(ConcreteService)
+
+    _assert_dependencies(
+        dependencies,
+        expected_names=["first", "second"],
+        expected_types=[ServiceA, ServiceB],
+    )
+
+
+def test_extracts_dependencies_from_msgspec_struct_concrete_type() -> None:
+    class ConcreteService(msgspec.Struct):
+        first: ServiceA
+        second: ServiceB
+
+    extractor = ProviderDependenciesExtractor()
+
+    dependencies = extractor.extract_from_concrete_type(ConcreteService)
+
+    _assert_dependencies(
+        dependencies,
+        expected_names=["first", "second"],
+        expected_types=[ServiceA, ServiceB],
+    )
+
+
+def test_extracts_dependencies_from_msgspec_kw_only_struct_concrete_type() -> None:
+    class ConcreteService(msgspec.Struct, kw_only=True):
+        first: ServiceA
+        second: ServiceB = ServiceB()
+
+    extractor = ProviderDependenciesExtractor()
+
+    dependencies = extractor.extract_from_concrete_type(ConcreteService)
+
+    _assert_dependencies(
+        dependencies,
+        expected_names=["first", "second"],
+        expected_types=[ServiceA, ServiceB],
+    )
+
+
+def test_extracts_dependencies_from_pydantic_v2_basemodel_concrete_type() -> None:
+    class ConcreteService(pydantic.BaseModel):
+        model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+        first: ServiceA
+        second: ServiceB
+
+    extractor = ProviderDependenciesExtractor()
+
+    dependencies = extractor.extract_from_concrete_type(ConcreteService)
+
+    _assert_dependencies(
+        dependencies,
+        expected_names=["first", "second"],
+        expected_types=[ServiceA, ServiceB],
+    )
+
+
+def test_extracts_dependencies_from_pydantic_dataclass_concrete_type() -> None:
+    @pydantic_dataclasses.dataclass(config=pydantic.ConfigDict(arbitrary_types_allowed=True))
+    class ConcreteService:
+        first: ServiceA
+        second: ServiceB
+
+    extractor = ProviderDependenciesExtractor()
+
+    dependencies = extractor.extract_from_concrete_type(ConcreteService)
+
+    _assert_dependencies(
+        dependencies,
+        expected_names=["first", "second"],
+        expected_types=[ServiceA, ServiceB],
+    )
+
+
+def test_extracts_dependencies_from_pydantic_v1_basemodel_concrete_type() -> None:
+    if sys.version_info >= (3, 14):
+        pytest.skip("pydantic.v1 is not supported on Python 3.14+")
+    if pydantic_v1 is None:
+        pytest.skip("pydantic.v1 is unavailable")
+
+    config_type = type("Config", (), {"arbitrary_types_allowed": True})
+    concrete_service_type = pydantic_v1.create_model(
+        "ConcreteService",
+        __config__=config_type,
+        first=(ServiceA, ...),
+        second=(ServiceB, ...),
+    )
+
+    extractor = ProviderDependenciesExtractor()
+
+    dependencies = extractor.extract_from_concrete_type(concrete_service_type)
+
+    _assert_dependencies(
+        dependencies,
+        expected_names=["first", "second"],
+        expected_types=[ServiceA, ServiceB],
+    )
 
 
 def test_extracts_dependencies_from_factory() -> None:
@@ -47,8 +234,11 @@ def test_extracts_dependencies_from_factory() -> None:
 
     dependencies = extractor.extract_from_factory(build_service)
 
-    assert [dependency.parameter.name for dependency in dependencies] == ["first", "second"]
-    assert [dependency.provides for dependency in dependencies] == [ServiceA, ServiceB]
+    _assert_dependencies(
+        dependencies,
+        expected_names=["first", "second"],
+        expected_types=[ServiceA, ServiceB],
+    )
 
 
 def test_extracts_dependencies_from_generator() -> None:
@@ -59,8 +249,11 @@ def test_extracts_dependencies_from_generator() -> None:
 
     dependencies = extractor.extract_from_generator(build_generator)
 
-    assert [dependency.parameter.name for dependency in dependencies] == ["dep"]
-    assert [dependency.provides for dependency in dependencies] == [ServiceA]
+    _assert_dependencies(
+        dependencies,
+        expected_names=["dep"],
+        expected_types=[ServiceA],
+    )
 
 
 def test_extracts_dependencies_from_context_manager() -> None:
@@ -72,8 +265,11 @@ def test_extracts_dependencies_from_context_manager() -> None:
 
     dependencies = extractor.extract_from_context_manager(build_context_manager)
 
-    assert [dependency.parameter.name for dependency in dependencies] == ["dep"]
-    assert [dependency.provides for dependency in dependencies] == [ServiceA]
+    _assert_dependencies(
+        dependencies,
+        expected_names=["dep"],
+        expected_types=[ServiceA],
+    )
 
 
 def test_includes_typed_params_with_defaults() -> None:
@@ -84,8 +280,23 @@ def test_includes_typed_params_with_defaults() -> None:
 
     dependencies = extractor.extract_from_factory(build_service)
 
-    assert [dependency.parameter.name for dependency in dependencies] == ["dep"]
-    assert [dependency.provides for dependency in dependencies] == [ServiceA]
+    _assert_dependencies(
+        dependencies,
+        expected_names=["dep"],
+        expected_types=[ServiceA],
+    )
+
+
+def test_concrete_type_skips_untyped_optional_parameter() -> None:
+    class ConcreteService:
+        def __init__(self, dep=DEFAULT_SERVICE_A) -> None:  # type: ignore[no-untyped-def]
+            self.dep = dep
+
+    extractor = ProviderDependenciesExtractor()
+
+    dependencies = extractor.extract_from_concrete_type(ConcreteService)
+
+    assert dependencies == []
 
 
 def test_required_untyped_param_raises_inference_error() -> None:
@@ -115,7 +326,7 @@ def test_validate_explicit_dependencies_for_concrete_type_uses_constructor_signa
             self.dep = dep
 
     extractor = ProviderDependenciesExtractor()
-    signature = inspect.signature(ConcreteService.__init__)
+    signature = inspect.signature(ConcreteService)
     dependencies = [
         ProviderDependency(
             provides=ServiceA,
@@ -125,8 +336,11 @@ def test_validate_explicit_dependencies_for_concrete_type_uses_constructor_signa
 
     validated = extractor.validate_explicit_for_concrete_type(ConcreteService, dependencies)
 
-    assert [dependency.parameter.name for dependency in validated] == ["dep"]
-    assert [dependency.provides for dependency in validated] == [ServiceA]
+    _assert_dependencies(
+        validated,
+        expected_names=["dep"],
+        expected_types=[ServiceA],
+    )
 
 
 def test_validate_explicit_dependencies_for_generator_wrapper() -> None:
@@ -144,8 +358,11 @@ def test_validate_explicit_dependencies_for_generator_wrapper() -> None:
 
     validated = extractor.validate_explicit_for_generator(build_service, dependencies)
 
-    assert [dependency.parameter.name for dependency in validated] == ["dep"]
-    assert [dependency.provides for dependency in validated] == [ServiceA]
+    _assert_dependencies(
+        validated,
+        expected_names=["dep"],
+        expected_types=[ServiceA],
+    )
 
 
 def test_validate_explicit_dependencies_for_context_manager_wrapper() -> None:
@@ -164,8 +381,11 @@ def test_validate_explicit_dependencies_for_context_manager_wrapper() -> None:
 
     validated = extractor.validate_explicit_for_context_manager(build_service, dependencies)
 
-    assert [dependency.parameter.name for dependency in validated] == ["dep"]
-    assert [dependency.provides for dependency in validated] == [ServiceA]
+    _assert_dependencies(
+        validated,
+        expected_names=["dep"],
+        expected_types=[ServiceA],
+    )
 
 
 def test_validate_explicit_dependencies_rejects_incomplete_required_parameters() -> None:
@@ -200,8 +420,11 @@ def test_extract_dependencies_uses_raw_signature_annotation_when_type_hint_resol
 
     dependencies = extractor.extract_from_factory(build_service)
 
-    assert [dependency.parameter.name for dependency in dependencies] == ["dep"]
-    assert [dependency.provides for dependency in dependencies] == [ServiceA]
+    _assert_dependencies(
+        dependencies,
+        expected_names=["dep"],
+        expected_types=[ServiceA],
+    )
 
 
 def test_extract_dependencies_preserves_original_annotation_error_for_required_param() -> None:
@@ -213,3 +436,18 @@ def test_extract_dependencies_preserves_original_annotation_error_for_required_p
 
     with pytest.raises(DIWireProviderDependencyInferenceError, match="Original annotation error"):
         extractor.extract_from_factory(build_service)
+
+
+def test_extract_concrete_type_preserves_first_annotation_error_when_merging_callable_hints() -> (
+    None
+):
+    class ConcreteService:
+        def __init__(self, dep) -> None:  # type: ignore[no-untyped-def]
+            self.dep = dep
+
+    ConcreteService.__annotations__["broken_attr"] = "MissingClassType"
+    ConcreteService.__init__.__annotations__["dep"] = "MissingInitType"
+    extractor = ProviderDependenciesExtractor()
+
+    with pytest.raises(DIWireProviderDependencyInferenceError, match="Original annotation error"):
+        extractor.extract_from_concrete_type(ConcreteService)

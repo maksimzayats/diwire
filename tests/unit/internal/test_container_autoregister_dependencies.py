@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import NamedTuple
+
+import msgspec
+import pydantic
 
 from diwire.container import Container
 from diwire.providers import Lifetime
@@ -84,6 +88,18 @@ class ExistingDependency:
 class RootWithExistingDependency:
     def __init__(self, dependency: ExistingDependency) -> None:
         self.dependency = dependency
+
+
+class NamedTupleFrameworkDependency:
+    pass
+
+
+class MsgspecFrameworkDependency:
+    pass
+
+
+class PydanticFrameworkDependency:
+    pass
 
 
 def test_container_default_autoregisters_dependencies_during_registration() -> None:
@@ -185,3 +201,58 @@ def test_resolve_autoregistration_integration_registers_dependency_chain() -> No
     assert isinstance(resolved, ResolveRoot)
     assert isinstance(resolved.dependency, ResolveDependency)
     assert container._providers_registrations.find_by_type(ResolveDependency) is not None
+
+
+def test_concrete_registration_autoregisters_namedtuple_class_dependencies() -> None:
+    class NamedTupleRoot(NamedTuple):
+        dependency: NamedTupleFrameworkDependency
+
+    container = Container()
+
+    container.register_concrete(
+        concrete_type=NamedTupleRoot,
+        autoregister_dependencies=True,
+    )
+
+    dependency_spec = container._providers_registrations.find_by_type(
+        NamedTupleFrameworkDependency,
+    )
+    assert dependency_spec is not None
+    assert dependency_spec.concrete_type is NamedTupleFrameworkDependency
+
+
+def test_concrete_registration_autoregisters_msgspec_struct_dependencies() -> None:
+    class MsgspecRoot(msgspec.Struct):
+        dependency: MsgspecFrameworkDependency
+
+    container = Container()
+
+    container.register_concrete(
+        concrete_type=MsgspecRoot,
+        autoregister_dependencies=True,
+    )
+
+    dependency_spec = container._providers_registrations.find_by_type(
+        MsgspecFrameworkDependency,
+    )
+    assert dependency_spec is not None
+    assert dependency_spec.concrete_type is MsgspecFrameworkDependency
+
+
+def test_concrete_registration_autoregisters_pydantic_basemodel_v2_dependencies() -> None:
+    class PydanticRoot(pydantic.BaseModel):
+        model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+        dependency: PydanticFrameworkDependency
+
+    container = Container()
+
+    container.register_concrete(
+        concrete_type=PydanticRoot,
+        autoregister_dependencies=True,
+    )
+
+    dependency_spec = container._providers_registrations.find_by_type(
+        PydanticFrameworkDependency,
+    )
+    assert dependency_spec is not None
+    assert dependency_spec.concrete_type is PydanticFrameworkDependency

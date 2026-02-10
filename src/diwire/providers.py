@@ -189,11 +189,10 @@ class ProviderDependenciesExtractor:
         concrete_type: ConcreteTypeProvider[Any],
     ) -> list[ProviderDependency]:
         """Extract dependencies from a concrete type-based provider."""
-        init_callable = concrete_type.__init__
         return self._extract_dependencies(
-            provider=init_callable,
+            provider=concrete_type,
             provider_name=concrete_type.__qualname__,
-            skip_first_parameter=True,
+            skip_first_parameter=False,
         )
 
     def extract_from_factory(
@@ -235,12 +234,11 @@ class ProviderDependenciesExtractor:
         dependencies: list[ProviderDependency],
     ) -> list[ProviderDependency]:
         """Validate explicit dependencies for a concrete type-based provider."""
-        init_callable = concrete_type.__init__
         return self._validate_explicit_dependencies(
-            provider=init_callable,
+            provider=concrete_type,
             provider_name=concrete_type.__qualname__,
             dependencies=dependencies,
-            skip_first_parameter=True,
+            skip_first_parameter=False,
         )
 
     def validate_explicit_for_factory(
@@ -425,10 +423,45 @@ class ProviderDependenciesExtractor:
         self,
         provider: Callable[..., Any],
     ) -> tuple[dict[str, Any], Exception | None]:
+        annotations: dict[str, Any] = {}
+        annotation_error: Exception | None = None
+
         try:
-            return get_type_hints(provider, include_extras=True), None
+            annotations = get_type_hints(provider, include_extras=True)
         except (AttributeError, NameError, TypeError) as error:
-            return {}, error
+            annotation_error = error
+
+        if inspect.isclass(provider):
+            annotations, annotation_error = self._merge_concrete_type_callable_hints(
+                concrete_type=provider,
+                annotations=annotations,
+                annotation_error=annotation_error,
+            )
+
+        return annotations, annotation_error
+
+    def _merge_concrete_type_callable_hints(
+        self,
+        *,
+        concrete_type: type[Any],
+        annotations: dict[str, Any],
+        annotation_error: Exception | None,
+    ) -> tuple[dict[str, Any], Exception | None]:
+        merged_annotations = dict(annotations)
+        merged_error = annotation_error
+
+        for callable_member_name in ("__call__", "__new__", "__init__"):
+            callable_member = getattr(concrete_type, callable_member_name)
+            try:
+                member_annotations = get_type_hints(callable_member, include_extras=True)
+            except (AttributeError, NameError, TypeError) as error:
+                if merged_error is None:
+                    merged_error = error
+                continue
+            for parameter_name, parameter_annotation in member_annotations.items():
+                merged_annotations.setdefault(parameter_name, parameter_annotation)
+
+        return merged_annotations, merged_error
 
     def _is_required_parameter(self, parameter: Parameter) -> bool:
         return (
