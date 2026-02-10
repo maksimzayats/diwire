@@ -16,7 +16,7 @@ from diwire.exceptions import (
     DIWireScopeMismatchError,
 )
 from diwire.markers import Injected
-from diwire.providers import Lifetime
+from diwire.providers import Lifetime, ProviderDependency
 from diwire.scope import Scope
 
 
@@ -333,6 +333,36 @@ def test_register_generator_and_context_manager_replay() -> None:
     context.set_current(container)
 
     assert container.resolve(_Service).value == "generator"
+    assert isinstance(container.resolve(_RequestDependency), _RequestDependency)
+
+
+def test_registration_dependencies_are_copied_for_replay() -> None:
+    context = ContainerContext()
+    context.register_instance(instance=_Service("dep"))
+
+    def provide_request(service: _Service) -> _RequestDependency:
+        _ = service
+        return _RequestDependency()
+
+    explicit_dependencies = [
+        ProviderDependency(
+            provides=_Service,
+            parameter=inspect.Parameter(
+                "service",
+                kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            ),
+        ),
+    ]
+    context.register_factory(
+        _RequestDependency,
+        factory=provide_request,
+        dependencies=explicit_dependencies,
+    )
+    explicit_dependencies.clear()
+
+    container = Container()
+    context.set_current(container)
+
     assert isinstance(container.resolve(_RequestDependency), _RequestDependency)
 
 

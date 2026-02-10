@@ -16,7 +16,12 @@ from typing import (
 )
 
 from diwire.exceptions import DIWireInvalidRegistrationError
-from diwire.injection import InjectedCallableInspector, InjectedParameter
+from diwire.injection import (
+    INJECT_RESOLVER_KWARG,
+    INJECT_WRAPPER_MARKER,
+    InjectedCallableInspector,
+    InjectedParameter,
+)
 from diwire.providers import (
     ContextManagerProvider,
     FactoryProvider,
@@ -36,9 +41,6 @@ from diwire.validators import DependecyRegistrationValidator
 T = TypeVar("T")
 F = TypeVar("F", bound=Callable[..., Any])
 InjectableF = TypeVar("InjectableF", bound=Callable[..., Any])
-
-_INJECT_RESOLVER_KWARG = "__diwire_resolver"
-_INJECT_WRAPPER_MARKER = "__diwire_inject_wrapper__"
 
 logger = logging.getLogger(__name__)
 
@@ -531,10 +533,10 @@ class Container:
         autoregister_dependencies: bool | None,
     ) -> InjectableF:
         signature = inspect.signature(callable_obj)
-        if _INJECT_RESOLVER_KWARG in signature.parameters:
+        if INJECT_RESOLVER_KWARG in signature.parameters:
             msg = (
                 f"Callable '{self._callable_name(callable_obj)}' cannot declare reserved parameter "
-                f"'{_INJECT_RESOLVER_KWARG}'."
+                f"'{INJECT_RESOLVER_KWARG}'."
             )
             raise DIWireInvalidRegistrationError(msg)
 
@@ -590,7 +592,7 @@ class Container:
             wrapped_callable = _sync_injected
 
         wrapped_callable.__signature__ = inspected_callable.public_signature  # type: ignore[attr-defined]
-        wrapped_callable.__dict__[_INJECT_WRAPPER_MARKER] = True
+        wrapped_callable.__dict__[INJECT_WRAPPER_MARKER] = True
         return cast("InjectableF", wrapped_callable)
 
     def _resolve_injected_dependency(self, *, annotation: Any) -> Any | None:
@@ -665,8 +667,8 @@ class Container:
         return max_scope_level
 
     def _resolve_inject_resolver(self, kwargs: dict[str, Any]) -> ResolverProtocol:
-        if _INJECT_RESOLVER_KWARG in kwargs:
-            return cast("ResolverProtocol", kwargs.pop(_INJECT_RESOLVER_KWARG))
+        if INJECT_RESOLVER_KWARG in kwargs:
+            return cast("ResolverProtocol", kwargs.pop(INJECT_RESOLVER_KWARG))
         return self.compile()
 
     def _callable_name(self, callable_obj: Callable[..., Any]) -> str:

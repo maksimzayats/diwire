@@ -6,10 +6,9 @@ from enum import Enum
 from typing import Any
 
 from diwire.exceptions import DIWireInvalidProviderSpecError
+from diwire.injection import INJECT_WRAPPER_MARKER
 from diwire.providers import Lifetime, ProviderDependency, ProviderSpec, ProvidersRegistrations
 from diwire.scope import BaseScope
-
-_INJECT_WRAPPER_MARKER = "__diwire_inject_wrapper__"
 
 
 class LockMode(Enum):
@@ -217,7 +216,7 @@ class ResolverGenerationPlanner:
             sync_arguments=sync_arguments,
             async_arguments=async_arguments,
             provider_is_inject_wrapper=bool(
-                getattr(provider_reference, _INJECT_WRAPPER_MARKER, False),
+                getattr(provider_reference, INJECT_WRAPPER_MARKER, False),
             ),
         )
 

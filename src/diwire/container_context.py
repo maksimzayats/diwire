@@ -5,11 +5,15 @@ import inspect
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass
-from typing import Any, Protocol, TypeVar, cast, overload
+from typing import Any, Literal, TypeVar, cast, overload
 
 from diwire.container import Container
 from diwire.exceptions import DIWireContainerNotSetError, DIWireInvalidRegistrationError
-from diwire.injection import InjectedCallableInspector
+from diwire.injection import (
+    INJECT_RESOLVER_KWARG,
+    INJECT_WRAPPER_MARKER,
+    InjectedCallableInspector,
+)
 from diwire.providers import (
     ContextManagerProvider,
     FactoryProvider,
@@ -23,122 +27,34 @@ from diwire.scope import BaseScope
 T = TypeVar("T")
 F = TypeVar("F", bound=Callable[..., Any])
 InjectableF = TypeVar("InjectableF", bound=Callable[..., Any])
-
-_INJECT_RESOLVER_KWARG = "__diwire_resolver"
-_INJECT_WRAPPER_MARKER = "__diwire_inject_wrapper__"
 _CONTAINER_NOT_SET_MESSAGE = (
     "Container is not set for container_context. "
     "Call container_context.set_current(container) before using container_context."
 )
 
+_RegistrationMethod = Literal[
+    "register_instance",
+    "register_concrete",
+    "register_factory",
+    "register_generator",
+    "register_context_manager",
+]
 
-class _RegistrationOperation(Protocol):
+
+@dataclass(frozen=True, slots=True)
+class _RegistrationOperation:
     """Container registration operation replayed by ContainerContext."""
 
-    def apply(self, container: Container) -> None:
-        """Apply the operation to a target container."""
-
-
-@dataclass(frozen=True, slots=True)
-class _RegisterInstanceOperation:
-    provides: type[Any] | None
-    instance: Any
-    concurrency_safe: bool | None
+    method_name: _RegistrationMethod
+    kwargs: dict[str, Any]
 
     def apply(self, container: Container) -> None:
-        container.register_instance(
-            provides=self.provides,
-            instance=self.instance,
-            concurrency_safe=self.concurrency_safe,
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class _RegisterConcreteOperation:
-    provides: type[Any]
-    concrete_type: type[Any]
-    scope: BaseScope | None
-    lifetime: Lifetime | None
-    dependencies: tuple[ProviderDependency, ...] | None
-    concurrency_safe: bool | None
-    autoregister_dependencies: bool | None
-
-    def apply(self, container: Container) -> None:
-        container.register_concrete(
-            provides=self.provides,
-            concrete_type=self.concrete_type,
-            scope=self.scope,
-            lifetime=self.lifetime,
-            dependencies=list(self.dependencies) if self.dependencies is not None else None,
-            concurrency_safe=self.concurrency_safe,
-            autoregister_dependencies=self.autoregister_dependencies,
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class _RegisterFactoryOperation:
-    provides: type[Any] | None
-    factory: FactoryProvider[Any]
-    scope: BaseScope | None
-    lifetime: Lifetime | None
-    dependencies: tuple[ProviderDependency, ...] | None
-    concurrency_safe: bool | None
-    autoregister_dependencies: bool | None
-
-    def apply(self, container: Container) -> None:
-        container.register_factory(
-            provides=self.provides,
-            factory=self.factory,
-            scope=self.scope,
-            lifetime=self.lifetime,
-            dependencies=list(self.dependencies) if self.dependencies is not None else None,
-            concurrency_safe=self.concurrency_safe,
-            autoregister_dependencies=self.autoregister_dependencies,
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class _RegisterGeneratorOperation:
-    provides: type[Any] | None
-    generator: GeneratorProvider[Any]
-    scope: BaseScope | None
-    lifetime: Lifetime | None
-    dependencies: tuple[ProviderDependency, ...] | None
-    concurrency_safe: bool | None
-    autoregister_dependencies: bool | None
-
-    def apply(self, container: Container) -> None:
-        container.register_generator(
-            provides=self.provides,
-            generator=self.generator,
-            scope=self.scope,
-            lifetime=self.lifetime,
-            dependencies=list(self.dependencies) if self.dependencies is not None else None,
-            concurrency_safe=self.concurrency_safe,
-            autoregister_dependencies=self.autoregister_dependencies,
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class _RegisterContextManagerOperation:
-    provides: type[Any] | None
-    context_manager: ContextManagerProvider[Any]
-    scope: BaseScope | None
-    lifetime: Lifetime | None
-    dependencies: tuple[ProviderDependency, ...] | None
-    concurrency_safe: bool | None
-    autoregister_dependencies: bool | None
-
-    def apply(self, container: Container) -> None:
-        container.register_context_manager(
-            provides=self.provides,
-            context_manager=self.context_manager,
-            scope=self.scope,
-            lifetime=self.lifetime,
-            dependencies=list(self.dependencies) if self.dependencies is not None else None,
-            concurrency_safe=self.concurrency_safe,
-            autoregister_dependencies=self.autoregister_dependencies,
-        )
+        registration_kwargs = {
+            key: list(value) if key == "dependencies" and value is not None else value
+            for key, value in self.kwargs.items()
+        }
+        registration_method = cast("Callable[..., Any]", getattr(container, self.method_name))
+        registration_method(**registration_kwargs)
 
 
 class ContainerContext:
@@ -169,6 +85,24 @@ class ContainerContext:
         if self._container is not None:
             operation.apply(self._container)
 
+    def _record_registration(
+        self,
+        *,
+        method_name: _RegistrationMethod,
+        registration_kwargs: dict[str, Any],
+    ) -> None:
+        normalized_kwargs = registration_kwargs.copy()
+        dependencies = normalized_kwargs.get("dependencies")
+        if dependencies is not None:
+            normalized_kwargs["dependencies"] = tuple(dependencies)
+
+        self._record_operation(
+            _RegistrationOperation(
+                method_name=method_name,
+                kwargs=normalized_kwargs,
+            ),
+        )
+
     def register_instance(
         self,
         provides: type[T] | None = None,
@@ -177,12 +111,13 @@ class ContainerContext:
         concurrency_safe: bool | None = None,
     ) -> None:
         """Register an instance provider for replay and immediate binding when available."""
-        self._record_operation(
-            _RegisterInstanceOperation(
-                provides=cast("type[Any] | None", provides),
-                instance=instance,
-                concurrency_safe=concurrency_safe,
-            ),
+        self._record_registration(
+            method_name="register_instance",
+            registration_kwargs={
+                "provides": provides,
+                "instance": instance,
+                "concurrency_safe": concurrency_safe,
+            },
         )
 
     def register_concrete(  # noqa: PLR0913
@@ -216,16 +151,17 @@ class ContainerContext:
         normalized_provides = provides if provides is not None else concrete_type
         normalized_concrete = concrete_type if concrete_type is not None else provides
 
-        self._record_operation(
-            _RegisterConcreteOperation(
-                provides=cast("type[Any]", normalized_provides),
-                concrete_type=cast("type[Any]", normalized_concrete),
-                scope=scope,
-                lifetime=lifetime,
-                dependencies=tuple(dependencies) if dependencies is not None else None,
-                concurrency_safe=concurrency_safe,
-                autoregister_dependencies=autoregister_dependencies,
-            ),
+        self._record_registration(
+            method_name="register_concrete",
+            registration_kwargs={
+                "provides": normalized_provides,
+                "concrete_type": normalized_concrete,
+                "scope": scope,
+                "lifetime": lifetime,
+                "dependencies": dependencies,
+                "concurrency_safe": concurrency_safe,
+                "autoregister_dependencies": autoregister_dependencies,
+            },
         )
         return decorator
 
@@ -257,16 +193,17 @@ class ContainerContext:
         if factory is None:
             return decorator
 
-        self._record_operation(
-            _RegisterFactoryOperation(
-                provides=cast("type[Any] | None", provides),
-                factory=cast("FactoryProvider[Any]", factory),
-                scope=scope,
-                lifetime=lifetime,
-                dependencies=tuple(dependencies) if dependencies is not None else None,
-                concurrency_safe=concurrency_safe,
-                autoregister_dependencies=autoregister_dependencies,
-            ),
+        self._record_registration(
+            method_name="register_factory",
+            registration_kwargs={
+                "provides": provides,
+                "factory": cast("FactoryProvider[Any]", factory),
+                "scope": scope,
+                "lifetime": lifetime,
+                "dependencies": dependencies,
+                "concurrency_safe": concurrency_safe,
+                "autoregister_dependencies": autoregister_dependencies,
+            },
         )
         return decorator
 
@@ -303,16 +240,17 @@ class ContainerContext:
         if generator is None:
             return decorator
 
-        self._record_operation(
-            _RegisterGeneratorOperation(
-                provides=cast("type[Any] | None", provides),
-                generator=cast("GeneratorProvider[Any]", generator),
-                scope=scope,
-                lifetime=lifetime,
-                dependencies=tuple(dependencies) if dependencies is not None else None,
-                concurrency_safe=concurrency_safe,
-                autoregister_dependencies=autoregister_dependencies,
-            ),
+        self._record_registration(
+            method_name="register_generator",
+            registration_kwargs={
+                "provides": provides,
+                "generator": cast("GeneratorProvider[Any]", generator),
+                "scope": scope,
+                "lifetime": lifetime,
+                "dependencies": dependencies,
+                "concurrency_safe": concurrency_safe,
+                "autoregister_dependencies": autoregister_dependencies,
+            },
         )
         return decorator
 
@@ -352,16 +290,17 @@ class ContainerContext:
         if context_manager is None:
             return decorator
 
-        self._record_operation(
-            _RegisterContextManagerOperation(
-                provides=cast("type[Any] | None", provides),
-                context_manager=cast("ContextManagerProvider[Any]", context_manager),
-                scope=scope,
-                lifetime=lifetime,
-                dependencies=tuple(dependencies) if dependencies is not None else None,
-                concurrency_safe=concurrency_safe,
-                autoregister_dependencies=autoregister_dependencies,
-            ),
+        self._record_registration(
+            method_name="register_context_manager",
+            registration_kwargs={
+                "provides": provides,
+                "context_manager": cast("ContextManagerProvider[Any]", context_manager),
+                "scope": scope,
+                "lifetime": lifetime,
+                "dependencies": dependencies,
+                "concurrency_safe": concurrency_safe,
+                "autoregister_dependencies": autoregister_dependencies,
+            },
         )
         return decorator
 
@@ -397,6 +336,20 @@ class ContainerContext:
             return decorator
         return decorator(func)
 
+    def _resolve_container_injected_callable(
+        self,
+        *,
+        callable_obj: InjectableF,
+        scope: BaseScope | None,
+        autoregister_dependencies: bool | None,
+    ) -> Callable[..., Any]:
+        container = self.get_current()
+        injected_decorator = container.inject(
+            scope=scope,
+            autoregister_dependencies=autoregister_dependencies,
+        )
+        return injected_decorator(callable_obj)
+
     def _inject_callable(
         self,
         *,
@@ -405,10 +358,10 @@ class ContainerContext:
         autoregister_dependencies: bool | None,
     ) -> InjectableF:
         signature = inspect.signature(callable_obj)
-        if _INJECT_RESOLVER_KWARG in signature.parameters:
+        if INJECT_RESOLVER_KWARG in signature.parameters:
             msg = (
                 f"Callable '{self._callable_name(callable_obj)}' cannot declare reserved parameter "
-                f"'{_INJECT_RESOLVER_KWARG}'."
+                f"'{INJECT_RESOLVER_KWARG}'."
             )
             raise DIWireInvalidRegistrationError(msg)
 
@@ -418,12 +371,11 @@ class ContainerContext:
 
             @functools.wraps(callable_obj)
             async def _async_injected(*args: Any, **kwargs: Any) -> Any:
-                container = self.get_current()
-                injected_decorator = container.inject(
+                injected = self._resolve_container_injected_callable(
+                    callable_obj=callable_obj,
                     scope=scope,
                     autoregister_dependencies=autoregister_dependencies,
                 )
-                injected = injected_decorator(callable_obj)
                 async_injected = cast("Callable[..., Awaitable[Any]]", injected)
                 return await async_injected(*args, **kwargs)
 
@@ -432,19 +384,17 @@ class ContainerContext:
 
             @functools.wraps(callable_obj)
             def _sync_injected(*args: Any, **kwargs: Any) -> Any:
-                container = self.get_current()
-                injected_decorator = container.inject(
+                injected = self._resolve_container_injected_callable(
+                    callable_obj=callable_obj,
                     scope=scope,
                     autoregister_dependencies=autoregister_dependencies,
                 )
-                injected = injected_decorator(callable_obj)
-                sync_injected = cast("Callable[..., Any]", injected)
-                return sync_injected(*args, **kwargs)
+                return injected(*args, **kwargs)
 
             wrapped_callable = _sync_injected
 
         wrapped_callable.__signature__ = inspected_callable.public_signature  # type: ignore[attr-defined]
-        wrapped_callable.__dict__[_INJECT_WRAPPER_MARKER] = True
+        wrapped_callable.__dict__[INJECT_WRAPPER_MARKER] = True
         return cast("InjectableF", wrapped_callable)
 
     @overload

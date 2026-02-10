@@ -8,6 +8,8 @@ from typing import Annotated, Any, get_args, get_origin, get_type_hints
 from diwire.markers import InjectedMarker
 
 _ANNOTATED_DEPENDENCY_MIN_ARGS = 2
+INJECT_RESOLVER_KWARG = "__diwire_resolver"
+INJECT_WRAPPER_MARKER = "__diwire_inject_wrapper__"
 
 
 @dataclass(frozen=True, slots=True)

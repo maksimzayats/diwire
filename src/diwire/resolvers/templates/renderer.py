@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 from textwrap import indent
 
+from diwire.injection import INJECT_RESOLVER_KWARG
 from diwire.providers import ProviderDependency, ProvidersRegistrations
 from diwire.resolvers.templates.mini_jinja import Environment, Template
 from diwire.resolvers.templates.planner import (
@@ -1502,7 +1503,7 @@ class ResolversTemplateRenderer:
         arguments: list[str],
         resolver_expression: str,
     ) -> None:
-        resolver_argument = f"__diwire_resolver={resolver_expression}"
+        resolver_argument = f"{INJECT_RESOLVER_KWARG}={resolver_expression}"
         var_keyword_index = next(
             (index for index, argument in enumerate(arguments) if argument.startswith("**")),
             None,
