@@ -13,7 +13,7 @@ class Component(NamedTuple):
         Primary: TypeAlias = Annotated[Database, Component("primary")]
     """
 
-    value: str
+    value: Any
 
 
 class InjectedMarker:
