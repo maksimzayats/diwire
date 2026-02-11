@@ -123,6 +123,29 @@ By default, inject wrappers can open and close the requested scope automatically
 
    print(handler())
 
+Advanced: FromContext values via __diwire_context
+-------------------------------------------------
+
+``FromContext[T]`` can be used in injected callables. Provide values with
+``__diwire_context`` when the wrapper opens a scope.
+
+.. code-block:: python
+   :class: diwire-example py-run
+
+   from diwire import Container, FromContext, Scope
+
+
+   container = Container()
+
+
+   @container.inject(scope=Scope.REQUEST)
+   def handler(value: FromContext[int]) -> int:
+       return value
+
+
+   print(handler(__diwire_context={int: 7}))
+   print(handler(value=8))
+
 Read more
 ---------
 

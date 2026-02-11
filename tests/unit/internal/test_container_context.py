@@ -16,7 +16,7 @@ from diwire.exceptions import (
     DIWireScopeMismatchError,
 )
 from diwire.lock_mode import LockMode
-from diwire.markers import Injected
+from diwire.markers import FromContext, Injected
 from diwire.providers import Lifetime, ProviderDependency
 from diwire.scope import Scope
 
@@ -278,6 +278,19 @@ def test_inject_rejects_reserved_internal_resolver_parameter_name() -> None:
             _ = service
 
 
+def test_inject_rejects_reserved_internal_context_parameter_name() -> None:
+    context = ContainerContext()
+
+    with pytest.raises(
+        DIWireInvalidRegistrationError,
+        match="cannot declare reserved parameter",
+    ):
+
+        @context.inject
+        def _handler(__diwire_context: object, /, service: Injected[_Service]) -> None:
+            _ = service
+
+
 def test_inject_method_descriptor_behavior() -> None:
     context = ContainerContext()
     context.register_instance(instance=_Service("bound"))
@@ -351,6 +364,14 @@ def test_enter_scope_delegates_to_current_container() -> None:
         resolved = request_scope.resolve(_RequestDependency)
 
     assert isinstance(resolved, _RequestDependency)
+
+
+def test_enter_scope_delegates_context_to_current_container() -> None:
+    context = ContainerContext()
+    context.set_current(Container())
+
+    with context.enter_scope(Scope.REQUEST, context={int: 42}) as request_scope:
+        assert request_scope.resolve(FromContext[int]) == 42
 
 
 def test_resolve_delegation_preserves_scope_rules() -> None:

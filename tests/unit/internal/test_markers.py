@@ -3,8 +3,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated, Protocol, TypeAlias, get_args, get_origin
 
+import pytest
+
+import diwire.markers as markers_module
 from diwire.container import Container
-from diwire.markers import Component, Injected, InjectedMarker
+from diwire.markers import (
+    Component,
+    FromContext,
+    FromContextMarker,
+    Injected,
+    InjectedMarker,
+    is_from_context_annotation,
+    strip_from_context_annotation,
+)
 from diwire.providers import ProviderDependenciesExtractor
 
 
@@ -74,6 +85,43 @@ def test_injected_preserves_component_marker_metadata_when_nested() -> None:
     assert annotation_args[0] is Database
     assert annotation_args[1] == Component("primary")
     assert isinstance(annotation_args[2], InjectedMarker)
+
+
+def test_from_context_wraps_dependency_with_marker() -> None:
+    dependency = FromContext[Database]
+
+    assert get_origin(dependency) is Annotated
+    annotation_args = get_args(dependency)
+    assert annotation_args[0] is Database
+    assert isinstance(annotation_args[1], FromContextMarker)
+
+
+def test_from_context_preserves_component_marker_metadata_when_nested() -> None:
+    dependency = FromContext[PrimaryDatabaseComponent]
+
+    assert get_origin(dependency) is Annotated
+    annotation_args = get_args(dependency)
+    assert annotation_args[0] is Database
+    assert annotation_args[1] == Component("primary")
+    assert isinstance(annotation_args[2], FromContextMarker)
+
+
+def test_from_context_helpers_detect_and_strip_marker() -> None:
+    dependency = FromContext[PrimaryDatabaseComponent]
+
+    assert is_from_context_annotation(dependency) is True
+    assert strip_from_context_annotation(dependency) == PrimaryDatabaseComponent
+    assert is_from_context_annotation(int) is False
+    assert strip_from_context_annotation(int) is int
+
+
+def test_is_from_context_annotation_handles_invalid_annotated_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(markers_module, "get_origin", lambda _annotation: Annotated)
+    monkeypatch.setattr(markers_module, "get_args", lambda _annotation: (int,))
+
+    assert markers_module.is_from_context_annotation(object()) is False
 
 
 def test_provider_dependencies_extractor_preserves_injected_component_dependency() -> None:

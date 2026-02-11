@@ -9,6 +9,7 @@ from typing import Any, Literal
 from diwire.exceptions import DIWireDependencyNotRegisteredError, DIWireInvalidProviderSpecError
 from diwire.injection import INJECT_WRAPPER_MARKER
 from diwire.lock_mode import LockMode
+from diwire.markers import is_from_context_annotation
 from diwire.providers import (
     Lifetime,
     ProviderDependency,
@@ -18,6 +19,7 @@ from diwire.providers import (
 from diwire.scope import BaseScope
 
 DispatchKind = Literal["identity", "equality_map"]
+DependencyPlanKind = Literal["provider", "context"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +33,18 @@ class ScopePlan:
     resolver_attr_name: str
     skippable: bool
     is_root: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderDependencyPlan:
+    """Provider dependency plan item for generated wiring."""
+
+    kind: DependencyPlanKind
+    dependency: ProviderDependency
+    dependency_index: int
+    dependency_slot: int | None = None
+    dependency_requires_async: bool = False
+    ctx_key_global_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,7 +70,7 @@ class ProviderWorkflowPlan:
     requires_async: bool
     needs_cleanup: bool
     dependencies: tuple[ProviderDependency, ...]
-    dependency_slots: tuple[int, ...]
+    dependency_slots: tuple[int | None, ...]
     dependency_requires_async: tuple[bool, ...]
     dependency_order_is_signature_order: bool
     max_required_scope_level: int
@@ -64,6 +78,7 @@ class ProviderWorkflowPlan:
     sync_arguments: tuple[str, ...]
     async_arguments: tuple[str, ...]
     provider_is_inject_wrapper: bool = False
+    dependency_plans: tuple[ProviderDependencyPlan, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,32 +218,73 @@ class ResolverGenerationPlanner:
         is_cached = self._is_cached(spec=spec)
         cache_owner_scope_level = self._cache_owner_scope_level(spec=spec, is_cached=is_cached)
 
-        dependency_specs = [
-            self._dependency_spec_or_error(
+        dependency_plans: list[ProviderDependencyPlan] = []
+        dependency_slots: list[int | None] = []
+        dependency_requires_async: list[bool] = []
+        sync_arguments: list[str] = []
+        async_arguments: list[str] = []
+        for dependency_index, dependency in enumerate(spec.dependencies):
+            if is_from_context_annotation(dependency.provides):
+                ctx_key_global_name = f"_ctx_{spec.slot}_{dependency_index}_key"
+                dependency_plans.append(
+                    ProviderDependencyPlan(
+                        kind="context",
+                        dependency=dependency,
+                        dependency_index=dependency_index,
+                        dependency_slot=None,
+                        dependency_requires_async=False,
+                        ctx_key_global_name=ctx_key_global_name,
+                    ),
+                )
+                dependency_slots.append(None)
+                dependency_requires_async.append(False)
+                expression = f"self._resolve_from_context({ctx_key_global_name})"
+                sync_arguments.append(
+                    self._format_dependency_argument_for_expression(
+                        dependency=dependency,
+                        expression=expression,
+                    ),
+                )
+                async_arguments.append(
+                    self._format_dependency_argument_for_expression(
+                        dependency=dependency,
+                        expression=expression,
+                    ),
+                )
+                continue
+
+            dependency_spec = self._dependency_spec_or_error(
                 dependency_provides=dependency.provides,
                 requiring_provider=spec.provides,
             )
-            for dependency in spec.dependencies
-        ]
-
-        sync_arguments = tuple(
-            self._format_dependency_argument(
-                dependency=dependency,
-                dependency_slot=dependency_spec.slot,
-                dependency_requires_async=self._requires_async_by_slot[dependency_spec.slot],
-                is_async_call=False,
+            requires_async = self._requires_async_by_slot[dependency_spec.slot]
+            dependency_plans.append(
+                ProviderDependencyPlan(
+                    kind="provider",
+                    dependency=dependency,
+                    dependency_index=dependency_index,
+                    dependency_slot=dependency_spec.slot,
+                    dependency_requires_async=requires_async,
+                ),
             )
-            for dependency, dependency_spec in zip(spec.dependencies, dependency_specs, strict=True)
-        )
-        async_arguments = tuple(
-            self._format_dependency_argument(
-                dependency=dependency,
-                dependency_slot=dependency_spec.slot,
-                dependency_requires_async=self._requires_async_by_slot[dependency_spec.slot],
-                is_async_call=True,
+            dependency_slots.append(dependency_spec.slot)
+            dependency_requires_async.append(requires_async)
+            sync_arguments.append(
+                self._format_dependency_argument(
+                    dependency=dependency,
+                    dependency_slot=dependency_spec.slot,
+                    dependency_requires_async=requires_async,
+                    is_async_call=False,
+                ),
             )
-            for dependency, dependency_spec in zip(spec.dependencies, dependency_specs, strict=True)
-        )
+            async_arguments.append(
+                self._format_dependency_argument(
+                    dependency=dependency,
+                    dependency_slot=dependency_spec.slot,
+                    dependency_requires_async=requires_async,
+                    is_async_call=True,
+                ),
+            )
 
         scope_plan = scope_by_level[spec.scope.level]
         requires_async = self._requires_async_by_slot[spec.slot]
@@ -262,21 +318,19 @@ class ResolverGenerationPlanner:
             requires_async=requires_async,
             needs_cleanup=spec.needs_cleanup,
             dependencies=tuple(spec.dependencies),
-            dependency_slots=tuple(dependency_spec.slot for dependency_spec in dependency_specs),
-            dependency_requires_async=tuple(
-                self._requires_async_by_slot[dependency_spec.slot]
-                for dependency_spec in dependency_specs
-            ),
+            dependency_slots=tuple(dependency_slots),
+            dependency_requires_async=tuple(dependency_requires_async),
             dependency_order_is_signature_order=self._dependency_order_is_signature_order(
                 spec=spec,
             ),
             max_required_scope_level=self._max_required_scope_level_by_slot[spec.slot],
             dispatch_kind=dispatch_kind,
-            sync_arguments=sync_arguments,
-            async_arguments=async_arguments,
+            sync_arguments=tuple(sync_arguments),
+            async_arguments=tuple(async_arguments),
             provider_is_inject_wrapper=bool(
                 getattr(provider_reference, INJECT_WRAPPER_MARKER, False),
             ),
+            dependency_plans=tuple(dependency_plans),
         )
 
     def _resolve_dispatch_kind(self, *, provides: Any) -> DispatchKind:
@@ -376,6 +430,8 @@ class ResolverGenerationPlanner:
         requires_async = spec.is_async
         if not requires_async:
             for dependency in spec.dependencies:
+                if is_from_context_annotation(dependency.provides):
+                    continue
                 dependency_spec = self._dependency_spec_or_error(
                     dependency_provides=dependency.provides,
                     requiring_provider=spec.provides,
@@ -406,7 +462,18 @@ class ResolverGenerationPlanner:
             dependency_requires_async=dependency_requires_async,
             is_async_call=is_async_call,
         )
+        return self._format_dependency_argument_for_expression(
+            dependency=dependency,
+            expression=expression,
+        )
 
+    def _format_dependency_argument_for_expression(
+        self,
+        *,
+        dependency: ProviderDependency,
+        expression: str,
+    ) -> str:
+        """Format dependency value expression according to original parameter shape."""
         kind = dependency.parameter.kind
         if kind is inspect.Parameter.POSITIONAL_ONLY:
             return expression
@@ -417,7 +484,7 @@ class ResolverGenerationPlanner:
         parameter_name = dependency.parameter.name
         if not parameter_name.isidentifier() or keyword.iskeyword(parameter_name):
             msg = (
-                f"Dependency parameter name '{parameter_name}' for slot {dependency_slot} "
+                f"Dependency parameter name '{parameter_name}' "
                 "is not a valid identifier for generated keyword-argument wiring."
             )
             raise DIWireInvalidProviderSpecError(msg)
@@ -502,6 +569,8 @@ class ResolverGenerationPlanner:
         max_scope_level = spec.scope.level
 
         for dependency in spec.dependencies:
+            if is_from_context_annotation(dependency.provides):
+                continue
             dependency_spec = self._dependency_spec_or_error(
                 dependency_provides=dependency.provides,
                 requiring_provider=spec.provides,

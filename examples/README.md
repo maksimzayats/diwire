@@ -30,6 +30,8 @@ Each topic lives in a grouped folder named `ex_XX_<topic>/`.
 - `ex_15_fastapi`: FastAPI request-scope injection via `TestClient`
 - `ex_16_errors_and_troubleshooting`: representative error type examples
   - focused: `02_missing_dependency_error.py` ... `07_invalid_registration_error.py`
+- `ex_17_scope_context_values`: `FromContext[T]`, scope context inheritance/override, direct resolver access
+  - focused: `02_injected_callable_context.py` ... `04_context_without_scope_open.py`
 
 Run one example:
 

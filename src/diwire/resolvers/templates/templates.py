@@ -34,6 +34,7 @@ IMPORTS_TEMPLATE = dedent(
         DIWireDependencyNotRegisteredError,
         DIWireScopeMismatchError,
     )
+    from diwire.markers import is_from_context_annotation, strip_from_context_annotation
     from diwire.providers import ProvidersRegistrations
     """,
 ).strip()
@@ -71,6 +72,8 @@ CLASS_TEMPLATE = dedent(
 
     {{ aresolve_method_block }}
 
+    {{ resolve_from_context_method_block }}
+
     {{ enter_method_block }}
 
     {{ exit_method_block }}
@@ -100,7 +103,12 @@ INIT_METHOD_TEMPLATE = dedent(
 
 ENTER_SCOPE_METHOD_TEMPLATE = dedent(
     """
-    def enter_scope(self, scope: Any | None = None) -> {{ return_annotation }}:
+    def enter_scope(
+        self,
+        scope: Any | None = None,
+        *,
+        context: Any | None = None,
+    ) -> {{ return_annotation }}:
     {% if docstring_block %}
     {{ docstring_block }}
     {% endif %}

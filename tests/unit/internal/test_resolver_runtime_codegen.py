@@ -18,7 +18,7 @@ from diwire.exceptions import (
     DIWireScopeMismatchError,
 )
 from diwire.lock_mode import LockMode
-from diwire.markers import Injected
+from diwire.markers import FromContext, Injected
 from diwire.providers import Lifetime, ProviderDependency, ProviderSpec
 from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire.scope import Scope
@@ -94,6 +94,26 @@ class _InjectNestedOuterConsumer:
     ) -> None:
         self.inner = inner
         self.dependency = dependency
+
+
+class _ContextValueConsumer:
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+
+class _RequestContextValue:
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+
+class _ActionContextValue:
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+
+class _StepContextValue:
+    def __init__(self, value: int) -> None:
+        self.value = value
 
 
 class _MixedSharedSyncDependency:
@@ -538,6 +558,73 @@ def test_scope_resolution_requires_explicit_opened_scope_chain() -> None:
             from_request = request_scope.resolve(_RequestService)
             from_action = action_scope.resolve(_RequestService)
             assert from_request is from_action
+
+
+def test_provider_context_dependency_is_resolved_and_missing_value_errors() -> None:
+    def build_consumer(value: FromContext[int]) -> _ContextValueConsumer:
+        return _ContextValueConsumer(value=value)
+
+    container = Container()
+    container.register_factory(
+        _ContextValueConsumer,
+        factory=build_consumer,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.TRANSIENT,
+    )
+
+    with container.enter_scope(Scope.REQUEST, context={int: 123}) as request_scope:
+        resolved = request_scope.resolve(_ContextValueConsumer)
+        assert resolved.value == 123
+
+    with container.enter_scope(Scope.REQUEST) as request_scope:
+        with pytest.raises(DIWireDependencyNotRegisteredError, match="Context value"):
+            request_scope.resolve(_ContextValueConsumer)
+
+
+def test_context_visibility_includes_scope_and_children_with_nearest_override() -> None:
+    def build_request_value(value: FromContext[int]) -> _RequestContextValue:
+        return _RequestContextValue(value=value)
+
+    def build_action_value(value: FromContext[int]) -> _ActionContextValue:
+        return _ActionContextValue(value=value)
+
+    def build_step_value(value: FromContext[int]) -> _StepContextValue:
+        return _StepContextValue(value=value)
+
+    container = Container()
+    container.register_factory(
+        _RequestContextValue,
+        factory=build_request_value,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.TRANSIENT,
+    )
+    container.register_factory(
+        _ActionContextValue,
+        factory=build_action_value,
+        scope=Scope.ACTION,
+        lifetime=Lifetime.TRANSIENT,
+    )
+    container.register_factory(
+        _StepContextValue,
+        factory=build_step_value,
+        scope=Scope.STEP,
+        lifetime=Lifetime.TRANSIENT,
+    )
+
+    with container.enter_scope(Scope.REQUEST, context={int: 1}) as request_scope:
+        assert request_scope.resolve(_RequestContextValue).value == 1
+        with request_scope.enter_scope(Scope.ACTION) as action_scope:
+            assert action_scope.resolve(_ActionContextValue).value == 1
+            with action_scope.enter_scope(Scope.STEP, context={int: 2}) as step_scope:
+                assert step_scope.resolve(_StepContextValue).value == 2
+                assert step_scope.resolve(_RequestContextValue).value == 1
+
+
+def test_scope_resolver_can_directly_resolve_from_context_marker() -> None:
+    container = Container()
+
+    with container.enter_scope(Scope.REQUEST, context={int: 9}) as request_scope:
+        assert request_scope.resolve(FromContext[int]) == 9
 
 
 def test_codegen_passes_resolver_to_inject_wrapped_provider_calls() -> None:

@@ -9,11 +9,11 @@ Generation configuration:
 - managed scopes: app:1, session:2, request:3, action:4, step:5
 - graph has async specs: False
 - cleanup support enabled in graph: False
-- provider count: 2
-- cached provider count: 1
+- provider count: 1
+- cached provider count: 0
 - thread lock count: 0
 - async lock count: 0
-- provider slots: 1, 2
+- provider slots: 1
 
 Examples:
 >>> root = build_root_resolver(registrations)
@@ -49,10 +49,7 @@ _scope_obj_4: Any = 4
 _scope_obj_5: Any = 5
 _dep_1_type: Any = _MISSING_PROVIDER
 _provider_1: Any = _MISSING_PROVIDER
-_dep_2_type: Any = _MISSING_PROVIDER
-_provider_2: Any = _MISSING_PROVIDER
-_MISSING_DEP_SLOT: Any = object()
-_dep_eq_slot_by_key: dict[Any, int] = {}
+_ctx_1_0_key: Any = _MISSING_PROVIDER
 
 class RootResolver:
 
@@ -60,8 +57,8 @@ class RootResolver:
     Generated resolver for scope 'app' (level 1).
 
     This class is generated and optimized for direct slot-based dependency resolution.
-    All visible provider slots: 1, 2.
-    Providers declared in this exact scope: 1, 2.
+    All visible provider slots: 1.
+    Providers declared in this exact scope: none.
     """
 
 
@@ -72,11 +69,6 @@ class RootResolver:
         "_parent_context_resolver",
         "__dict__",
         "_owned_scope_resolvers",
-        "_scope_resolver_2",
-        "_scope_resolver_3",
-        "_scope_resolver_4",
-        "_scope_resolver_5",
-        "_cache_1",
     )
 
 
@@ -91,18 +83,13 @@ class RootResolver:
 
         The constructor wires scope ancestry references, cache slots, and optional cleanup state.
         Root scope class: RootResolver.
-        Stateless scope reuse enabled: True.
+        Stateless scope reuse enabled: False.
         """
 
         self._root_resolver = self
         self._context = context
         self._parent_context_resolver = parent_context_resolver
         self._owned_scope_resolvers: tuple[Any, ...] = ()
-        self._scope_resolver_2 = _SessionResolver(self._root_resolver)
-        self._scope_resolver_3 = _RequestResolver(self._root_resolver)
-        self._scope_resolver_4 = _ActionResolver(self._root_resolver)
-        self._scope_resolver_5 = _StepResolver(self._root_resolver)
-        self._cache_1 = _MISSING_CACHE
 
     def enter_scope(
         self,
@@ -121,18 +108,14 @@ class RootResolver:
         """
 
         if scope is _scope_obj_3 or scope == 3:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_3
             return _RequestResolver(
-                self._root_resolver,
+                self,
                 context,
                 self,
             )
         if scope is None:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_3
             return _RequestResolver(
-                self._root_resolver,
+                self,
                 context,
                 self,
             )
@@ -143,29 +126,45 @@ class RootResolver:
             msg = f"Cannot enter scope level {target_scope_level} from level 1."
             raise DIWireScopeMismatchError(msg)
         if target_scope_level is _scope_obj_2 or target_scope_level == 2:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_2
             return _SessionResolver(
-                self._root_resolver,
+                self,
                 context,
                 self,
             )
         if target_scope_level is _scope_obj_4 or target_scope_level == 4:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_4
-            return _ActionResolver(
-                self._root_resolver,
-                context,
+            request_resolver = _RequestResolver(
+                self,
+                None,
                 self,
             )
+            action_resolver = _ActionResolver(
+                request_resolver._root_resolver,
+                context,
+                request_resolver,
+                request_resolver,
+            )
+            action_resolver._owned_scope_resolvers = (request_resolver,)
+            return action_resolver
         if target_scope_level is _scope_obj_5 or target_scope_level == 5:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_5
-            return _StepResolver(
-                self._root_resolver,
-                context,
+            request_resolver = _RequestResolver(
+                self,
+                None,
                 self,
             )
+            action_resolver = _ActionResolver(
+                request_resolver._root_resolver,
+                None,
+                request_resolver,
+                request_resolver,
+            )
+            step_resolver = _StepResolver(
+                action_resolver._root_resolver,
+                context,
+                action_resolver,
+                request_resolver,
+            )
+            step_resolver._owned_scope_resolvers = (request_resolver, action_resolver)
+            return step_resolver
         msg = f"Scope level {target_scope_level} is not a valid next transition from level 1."
         raise DIWireScopeMismatchError(msg)
 
@@ -174,20 +173,13 @@ class RootResolver:
         """
         Route a dependency token to a generated synchronous provider resolver method.
 
-        Known provider slots: 1, 2.
-        Dispatch first uses identity checks against module-level `_dep_<slot>_type` globals.
-        Then it performs one equality-map lookup for non-class dependency keys.
-        Equality-map slots: 1.
+        Known provider slots: 1.
+        Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks to avoid reflective dispatch.
-        if dependency is _dep_2_type:
-            return RootResolver.resolve_2(self)
-        # Fallback map handles equality-based keys for non-class dependencies.
-        slot = _dep_eq_slot_by_key.get(dependency, _MISSING_DEP_SLOT)
-        if slot is not _MISSING_DEP_SLOT:
-            if slot == 1:
-                return self.resolve_1()
+        if dependency is _dep_1_type:
+            return RootResolver.resolve_1(self)
         if is_from_context_annotation(dependency):
             key = strip_from_context_annotation(dependency)
             return self._resolve_from_context(key)
@@ -200,20 +192,13 @@ class RootResolver:
         """
         Route a dependency token to a generated asynchronous provider resolver method.
 
-        Known provider slots: 1, 2.
-        Dispatch first uses identity checks against module-level `_dep_<slot>_type` globals.
-        Then it performs one equality-map lookup for non-class dependency keys.
-        Equality-map slots: 1.
+        Known provider slots: 1.
+        Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks for asynchronous resolution.
-        if dependency is _dep_2_type:
-            return await RootResolver.aresolve_2(self)
-        # Fallback map handles equality-based keys for non-class dependencies.
-        slot = _dep_eq_slot_by_key.get(dependency, _MISSING_DEP_SLOT)
-        if slot is not _MISSING_DEP_SLOT:
-            if slot == 1:
-                return await self.aresolve_1()
+        if dependency is _dep_1_type:
+            return await RootResolver.aresolve_1(self)
         if is_from_context_annotation(dependency):
             key = strip_from_context_annotation(dependency)
             return self._resolve_from_context(key)
@@ -262,119 +247,57 @@ class RootResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: dict
-        Provider spec kind: instance
-        Provider target: instance of dict
-        Declared scope: app (level 1)
+        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Provider spec kind: factory
+        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Declared scope: request (level 3)
         Declared lifetime: transient
-        Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache policy: transient
+        Cache owner scope: none
+        Declared lock mode: auto
+        Effective lock mode: thread
         Sync path thread lock: False
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: RootResolver
-        Dependency wiring: none
+        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
         Behavior: Builds the provider value in this resolver, enforcing scope guards and cache policy.
         """
 
-        cached_value = self._cache_1
-        if cached_value is _MISSING_CACHE:
-            value = _provider_1
-            self._cache_1 = value
-            self.resolve_1 = lambda: value  # type: ignore[method-assign]
-
-            async def _cached() -> Any:
-                return value
-
-            self.aresolve_1 = _cached  # type: ignore[method-assign]
-            return value
-        return cached_value
+        msg = "Provider slot 1 requires opened scope level 3."
+        raise DIWireScopeMismatchError(msg)
+        value = _provider_1(
+            self._resolve_from_context(_ctx_1_0_key),
+        )
+        return value
 
     async def aresolve_1(self) -> Any:
 
         """
         Provider slot 1 resolver (async method).
 
-        Returns: dict
-        Provider spec kind: instance
-        Provider target: instance of dict
-        Declared scope: app (level 1)
+        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Provider spec kind: factory
+        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Declared scope: request (level 3)
         Declared lifetime: transient
-        Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache policy: transient
+        Cache owner scope: none
+        Declared lock mode: auto
+        Effective lock mode: thread
         Sync path thread lock: False
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: RootResolver
-        Dependency wiring: none
+        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
         Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
         """
 
         return self.resolve_1()
-
-    def resolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (sync method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotInjectWrapperVarKwService
-        Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_inject_wrapper_varkw_service
-        Declared scope: app (level 1)
-        Declared lifetime: transient
-        Cache policy: transient
-        Cache owner scope: none
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: RootResolver
-        Dependency wiring: options (var_keyword) -> slot 1 [dict]
-        Behavior: Builds the provider value in this resolver, enforcing scope guards and cache policy.
-        """
-
-        value = _provider_2(
-            __diwire_resolver=self,
-            **self._cache_1 if self._cache_1 is not _MISSING_CACHE else self.resolve_1(),
-        )
-        return value
-
-    async def aresolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (async method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotInjectWrapperVarKwService
-        Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_inject_wrapper_varkw_service
-        Declared scope: app (level 1)
-        Declared lifetime: transient
-        Cache policy: transient
-        Cache owner scope: none
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: RootResolver
-        Dependency wiring: options (var_keyword) -> slot 1 [dict]
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
-        """
-
-        return self.resolve_2()
 
 
 class _SessionResolver:
@@ -383,7 +306,7 @@ class _SessionResolver:
     Generated resolver for scope 'session' (level 2).
 
     This class is generated and optimized for direct slot-based dependency resolution.
-    All visible provider slots: 1, 2.
+    All visible provider slots: 1.
     Providers declared in this exact scope: none.
     """
 
@@ -409,7 +332,7 @@ class _SessionResolver:
 
         The constructor wires scope ancestry references, cache slots, and optional cleanup state.
         Root scope class: RootResolver.
-        Stateless scope reuse enabled: True.
+        Stateless scope reuse enabled: False.
         """
 
         self._root_resolver = root_resolver
@@ -434,16 +357,12 @@ class _SessionResolver:
         """
 
         if scope is _scope_obj_3 or scope == 3:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_3
             return _RequestResolver(
                 self._root_resolver,
                 context,
                 self,
             )
         if scope is None:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_3
             return _RequestResolver(
                 self._root_resolver,
                 context,
@@ -456,21 +375,39 @@ class _SessionResolver:
             msg = f"Cannot enter scope level {target_scope_level} from level 2."
             raise DIWireScopeMismatchError(msg)
         if target_scope_level is _scope_obj_4 or target_scope_level == 4:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_4
-            return _ActionResolver(
+            request_resolver = _RequestResolver(
                 self._root_resolver,
-                context,
+                None,
                 self,
             )
+            action_resolver = _ActionResolver(
+                request_resolver._root_resolver,
+                context,
+                request_resolver,
+                request_resolver,
+            )
+            action_resolver._owned_scope_resolvers = (request_resolver,)
+            return action_resolver
         if target_scope_level is _scope_obj_5 or target_scope_level == 5:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_5
-            return _StepResolver(
+            request_resolver = _RequestResolver(
                 self._root_resolver,
-                context,
+                None,
                 self,
             )
+            action_resolver = _ActionResolver(
+                request_resolver._root_resolver,
+                None,
+                request_resolver,
+                request_resolver,
+            )
+            step_resolver = _StepResolver(
+                action_resolver._root_resolver,
+                context,
+                action_resolver,
+                request_resolver,
+            )
+            step_resolver._owned_scope_resolvers = (request_resolver, action_resolver)
+            return step_resolver
         msg = f"Scope level {target_scope_level} is not a valid next transition from level 2."
         raise DIWireScopeMismatchError(msg)
 
@@ -479,20 +416,13 @@ class _SessionResolver:
         """
         Route a dependency token to a generated synchronous provider resolver method.
 
-        Known provider slots: 1, 2.
-        Dispatch first uses identity checks against module-level `_dep_<slot>_type` globals.
-        Then it performs one equality-map lookup for non-class dependency keys.
-        Equality-map slots: 1.
+        Known provider slots: 1.
+        Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks to avoid reflective dispatch.
-        if dependency is _dep_2_type:
-            return _SessionResolver.resolve_2(self)
-        # Fallback map handles equality-based keys for non-class dependencies.
-        slot = _dep_eq_slot_by_key.get(dependency, _MISSING_DEP_SLOT)
-        if slot is not _MISSING_DEP_SLOT:
-            if slot == 1:
-                return _SessionResolver.resolve_1(self)
+        if dependency is _dep_1_type:
+            return _SessionResolver.resolve_1(self)
         if is_from_context_annotation(dependency):
             key = strip_from_context_annotation(dependency)
             return self._resolve_from_context(key)
@@ -505,20 +435,13 @@ class _SessionResolver:
         """
         Route a dependency token to a generated asynchronous provider resolver method.
 
-        Known provider slots: 1, 2.
-        Dispatch first uses identity checks against module-level `_dep_<slot>_type` globals.
-        Then it performs one equality-map lookup for non-class dependency keys.
-        Equality-map slots: 1.
+        Known provider slots: 1.
+        Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks for asynchronous resolution.
-        if dependency is _dep_2_type:
-            return await _SessionResolver.aresolve_2(self)
-        # Fallback map handles equality-based keys for non-class dependencies.
-        slot = _dep_eq_slot_by_key.get(dependency, _MISSING_DEP_SLOT)
-        if slot is not _MISSING_DEP_SLOT:
-            if slot == 1:
-                return await _SessionResolver.aresolve_1(self)
+        if dependency is _dep_1_type:
+            return await _SessionResolver.aresolve_1(self)
         if is_from_context_annotation(dependency):
             key = strip_from_context_annotation(dependency)
             return self._resolve_from_context(key)
@@ -567,104 +490,57 @@ class _SessionResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: dict
-        Provider spec kind: instance
-        Provider target: instance of dict
-        Declared scope: app (level 1)
+        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Provider spec kind: factory
+        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Declared scope: request (level 3)
         Declared lifetime: transient
-        Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache policy: transient
+        Cache owner scope: none
+        Declared lock mode: auto
+        Effective lock mode: thread
         Sync path thread lock: False
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: _SessionResolver
-        Dependency wiring: none
-        Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
+        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
+        Behavior: Builds the provider value in this resolver, enforcing scope guards and cache policy.
         """
 
-        return self._root_resolver.resolve_1()
+        msg = "Provider slot 1 requires opened scope level 3."
+        raise DIWireScopeMismatchError(msg)
+        value = _provider_1(
+            self._resolve_from_context(_ctx_1_0_key),
+        )
+        return value
 
     async def aresolve_1(self) -> Any:
 
         """
         Provider slot 1 resolver (async method).
 
-        Returns: dict
-        Provider spec kind: instance
-        Provider target: instance of dict
-        Declared scope: app (level 1)
+        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Provider spec kind: factory
+        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Declared scope: request (level 3)
         Declared lifetime: transient
-        Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache policy: transient
+        Cache owner scope: none
+        Declared lock mode: auto
+        Effective lock mode: thread
         Sync path thread lock: False
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: _SessionResolver
-        Dependency wiring: none
+        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
         Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
         """
 
         return self.resolve_1()
-
-    def resolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (sync method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotInjectWrapperVarKwService
-        Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_inject_wrapper_varkw_service
-        Declared scope: app (level 1)
-        Declared lifetime: transient
-        Cache policy: transient
-        Cache owner scope: none
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: _SessionResolver
-        Dependency wiring: options (var_keyword) -> slot 1 [dict]
-        Behavior: This resolver delegates to the provider declaration scope because the dependency graph does not require deeper scope access.
-        """
-
-        return self._root_resolver.resolve_2()
-
-    async def aresolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (async method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotInjectWrapperVarKwService
-        Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_inject_wrapper_varkw_service
-        Declared scope: app (level 1)
-        Declared lifetime: transient
-        Cache policy: transient
-        Cache owner scope: none
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: _SessionResolver
-        Dependency wiring: options (var_keyword) -> slot 1 [dict]
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
-        """
-
-        return self.resolve_2()
 
 
 class _RequestResolver:
@@ -673,8 +549,8 @@ class _RequestResolver:
     Generated resolver for scope 'request' (level 3).
 
     This class is generated and optimized for direct slot-based dependency resolution.
-    All visible provider slots: 1, 2.
-    Providers declared in this exact scope: none.
+    All visible provider slots: 1.
+    Providers declared in this exact scope: 1.
     """
 
 
@@ -699,7 +575,7 @@ class _RequestResolver:
 
         The constructor wires scope ancestry references, cache slots, and optional cleanup state.
         Root scope class: RootResolver.
-        Stateless scope reuse enabled: True.
+        Stateless scope reuse enabled: False.
         """
 
         self._root_resolver = root_resolver
@@ -724,19 +600,17 @@ class _RequestResolver:
         """
 
         if scope is _scope_obj_4 or scope == 4:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_4
             return _ActionResolver(
                 self._root_resolver,
                 context,
                 self,
+                self,
             )
         if scope is None:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_4
             return _ActionResolver(
                 self._root_resolver,
                 context,
+                self,
                 self,
             )
         target_scope_level = scope
@@ -746,13 +620,20 @@ class _RequestResolver:
             msg = f"Cannot enter scope level {target_scope_level} from level 3."
             raise DIWireScopeMismatchError(msg)
         if target_scope_level is _scope_obj_5 or target_scope_level == 5:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_5
-            return _StepResolver(
+            action_resolver = _ActionResolver(
                 self._root_resolver,
-                context,
+                None,
+                self,
                 self,
             )
+            step_resolver = _StepResolver(
+                action_resolver._root_resolver,
+                context,
+                action_resolver,
+                action_resolver._request_resolver,
+            )
+            step_resolver._owned_scope_resolvers = (action_resolver,)
+            return step_resolver
         msg = f"Scope level {target_scope_level} is not a valid next transition from level 3."
         raise DIWireScopeMismatchError(msg)
 
@@ -761,20 +642,13 @@ class _RequestResolver:
         """
         Route a dependency token to a generated synchronous provider resolver method.
 
-        Known provider slots: 1, 2.
-        Dispatch first uses identity checks against module-level `_dep_<slot>_type` globals.
-        Then it performs one equality-map lookup for non-class dependency keys.
-        Equality-map slots: 1.
+        Known provider slots: 1.
+        Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks to avoid reflective dispatch.
-        if dependency is _dep_2_type:
-            return _RequestResolver.resolve_2(self)
-        # Fallback map handles equality-based keys for non-class dependencies.
-        slot = _dep_eq_slot_by_key.get(dependency, _MISSING_DEP_SLOT)
-        if slot is not _MISSING_DEP_SLOT:
-            if slot == 1:
-                return _RequestResolver.resolve_1(self)
+        if dependency is _dep_1_type:
+            return _RequestResolver.resolve_1(self)
         if is_from_context_annotation(dependency):
             key = strip_from_context_annotation(dependency)
             return self._resolve_from_context(key)
@@ -787,20 +661,13 @@ class _RequestResolver:
         """
         Route a dependency token to a generated asynchronous provider resolver method.
 
-        Known provider slots: 1, 2.
-        Dispatch first uses identity checks against module-level `_dep_<slot>_type` globals.
-        Then it performs one equality-map lookup for non-class dependency keys.
-        Equality-map slots: 1.
+        Known provider slots: 1.
+        Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks for asynchronous resolution.
-        if dependency is _dep_2_type:
-            return await _RequestResolver.aresolve_2(self)
-        # Fallback map handles equality-based keys for non-class dependencies.
-        slot = _dep_eq_slot_by_key.get(dependency, _MISSING_DEP_SLOT)
-        if slot is not _MISSING_DEP_SLOT:
-            if slot == 1:
-                return await _RequestResolver.aresolve_1(self)
+        if dependency is _dep_1_type:
+            return await _RequestResolver.aresolve_1(self)
         if is_from_context_annotation(dependency):
             key = strip_from_context_annotation(dependency)
             return self._resolve_from_context(key)
@@ -849,104 +716,55 @@ class _RequestResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: dict
-        Provider spec kind: instance
-        Provider target: instance of dict
-        Declared scope: app (level 1)
+        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Provider spec kind: factory
+        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Declared scope: request (level 3)
         Declared lifetime: transient
-        Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache policy: transient
+        Cache owner scope: none
+        Declared lock mode: auto
+        Effective lock mode: thread
         Sync path thread lock: False
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: _RequestResolver
-        Dependency wiring: none
-        Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
+        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
+        Behavior: Builds the provider value in this resolver, enforcing scope guards and cache policy.
         """
 
-        return self._root_resolver.resolve_1()
+        value = _provider_1(
+            self._resolve_from_context(_ctx_1_0_key),
+        )
+        return value
 
     async def aresolve_1(self) -> Any:
 
         """
         Provider slot 1 resolver (async method).
 
-        Returns: dict
-        Provider spec kind: instance
-        Provider target: instance of dict
-        Declared scope: app (level 1)
+        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Provider spec kind: factory
+        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Declared scope: request (level 3)
         Declared lifetime: transient
-        Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache policy: transient
+        Cache owner scope: none
+        Declared lock mode: auto
+        Effective lock mode: thread
         Sync path thread lock: False
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: _RequestResolver
-        Dependency wiring: none
+        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
         Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
         """
 
         return self.resolve_1()
-
-    def resolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (sync method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotInjectWrapperVarKwService
-        Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_inject_wrapper_varkw_service
-        Declared scope: app (level 1)
-        Declared lifetime: transient
-        Cache policy: transient
-        Cache owner scope: none
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: _RequestResolver
-        Dependency wiring: options (var_keyword) -> slot 1 [dict]
-        Behavior: This resolver delegates to the provider declaration scope because the dependency graph does not require deeper scope access.
-        """
-
-        return self._root_resolver.resolve_2()
-
-    async def aresolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (async method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotInjectWrapperVarKwService
-        Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_inject_wrapper_varkw_service
-        Declared scope: app (level 1)
-        Declared lifetime: transient
-        Cache policy: transient
-        Cache owner scope: none
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: _RequestResolver
-        Dependency wiring: options (var_keyword) -> slot 1 [dict]
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
-        """
-
-        return self.resolve_2()
 
 
 class _ActionResolver:
@@ -955,7 +773,7 @@ class _ActionResolver:
     Generated resolver for scope 'action' (level 4).
 
     This class is generated and optimized for direct slot-based dependency resolution.
-    All visible provider slots: 1, 2.
+    All visible provider slots: 1.
     Providers declared in this exact scope: none.
     """
 
@@ -966,6 +784,7 @@ class _ActionResolver:
         "_context",
         "_parent_context_resolver",
         "_owned_scope_resolvers",
+        "_request_resolver",
     )
 
 
@@ -974,6 +793,7 @@ class _ActionResolver:
         root_resolver: RootResolver,
         context: Any | None = None,
         parent_context_resolver: Any = None,
+        request_resolver: Any = _MISSING_RESOLVER,
     ) -> None:
 
         """
@@ -981,13 +801,14 @@ class _ActionResolver:
 
         The constructor wires scope ancestry references, cache slots, and optional cleanup state.
         Root scope class: RootResolver.
-        Stateless scope reuse enabled: True.
+        Stateless scope reuse enabled: False.
         """
 
         self._root_resolver = root_resolver
         self._context = context
         self._parent_context_resolver = parent_context_resolver
         self._owned_scope_resolvers: tuple[Any, ...] = ()
+        self._request_resolver = request_resolver
 
     def enter_scope(
         self,
@@ -1006,20 +827,18 @@ class _ActionResolver:
         """
 
         if scope is _scope_obj_5 or scope == 5:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_5
             return _StepResolver(
                 self._root_resolver,
                 context,
                 self,
+                self._request_resolver,
             )
         if scope is None:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_5
             return _StepResolver(
                 self._root_resolver,
                 context,
                 self,
+                self._request_resolver,
             )
         target_scope_level = scope
         if target_scope_level is _scope_obj_4 or target_scope_level == 4:
@@ -1035,20 +854,13 @@ class _ActionResolver:
         """
         Route a dependency token to a generated synchronous provider resolver method.
 
-        Known provider slots: 1, 2.
-        Dispatch first uses identity checks against module-level `_dep_<slot>_type` globals.
-        Then it performs one equality-map lookup for non-class dependency keys.
-        Equality-map slots: 1.
+        Known provider slots: 1.
+        Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks to avoid reflective dispatch.
-        if dependency is _dep_2_type:
-            return _ActionResolver.resolve_2(self)
-        # Fallback map handles equality-based keys for non-class dependencies.
-        slot = _dep_eq_slot_by_key.get(dependency, _MISSING_DEP_SLOT)
-        if slot is not _MISSING_DEP_SLOT:
-            if slot == 1:
-                return _ActionResolver.resolve_1(self)
+        if dependency is _dep_1_type:
+            return _ActionResolver.resolve_1(self)
         if is_from_context_annotation(dependency):
             key = strip_from_context_annotation(dependency)
             return self._resolve_from_context(key)
@@ -1061,20 +873,13 @@ class _ActionResolver:
         """
         Route a dependency token to a generated asynchronous provider resolver method.
 
-        Known provider slots: 1, 2.
-        Dispatch first uses identity checks against module-level `_dep_<slot>_type` globals.
-        Then it performs one equality-map lookup for non-class dependency keys.
-        Equality-map slots: 1.
+        Known provider slots: 1.
+        Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks for asynchronous resolution.
-        if dependency is _dep_2_type:
-            return await _ActionResolver.aresolve_2(self)
-        # Fallback map handles equality-based keys for non-class dependencies.
-        slot = _dep_eq_slot_by_key.get(dependency, _MISSING_DEP_SLOT)
-        if slot is not _MISSING_DEP_SLOT:
-            if slot == 1:
-                return await _ActionResolver.aresolve_1(self)
+        if dependency is _dep_1_type:
+            return await _ActionResolver.aresolve_1(self)
         if is_from_context_annotation(dependency):
             key = strip_from_context_annotation(dependency)
             return self._resolve_from_context(key)
@@ -1123,104 +928,56 @@ class _ActionResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: dict
-        Provider spec kind: instance
-        Provider target: instance of dict
-        Declared scope: app (level 1)
+        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Provider spec kind: factory
+        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Declared scope: request (level 3)
         Declared lifetime: transient
-        Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache policy: transient
+        Cache owner scope: none
+        Declared lock mode: auto
+        Effective lock mode: thread
         Sync path thread lock: False
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: _ActionResolver
-        Dependency wiring: none
-        Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
+        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
+        Behavior: This resolver delegates to the provider declaration scope because the dependency graph does not require deeper scope access.
         """
 
-        return self._root_resolver.resolve_1()
+        owner_resolver = self._request_resolver
+        if owner_resolver is _MISSING_RESOLVER:
+            msg = "Provider slot 1 requires opened scope level 3."
+            raise DIWireScopeMismatchError(msg)
+        return owner_resolver.resolve_1()
 
     async def aresolve_1(self) -> Any:
 
         """
         Provider slot 1 resolver (async method).
 
-        Returns: dict
-        Provider spec kind: instance
-        Provider target: instance of dict
-        Declared scope: app (level 1)
+        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Provider spec kind: factory
+        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Declared scope: request (level 3)
         Declared lifetime: transient
-        Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache policy: transient
+        Cache owner scope: none
+        Declared lock mode: auto
+        Effective lock mode: thread
         Sync path thread lock: False
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: _ActionResolver
-        Dependency wiring: none
+        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
         Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
         """
 
         return self.resolve_1()
-
-    def resolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (sync method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotInjectWrapperVarKwService
-        Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_inject_wrapper_varkw_service
-        Declared scope: app (level 1)
-        Declared lifetime: transient
-        Cache policy: transient
-        Cache owner scope: none
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: _ActionResolver
-        Dependency wiring: options (var_keyword) -> slot 1 [dict]
-        Behavior: This resolver delegates to the provider declaration scope because the dependency graph does not require deeper scope access.
-        """
-
-        return self._root_resolver.resolve_2()
-
-    async def aresolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (async method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotInjectWrapperVarKwService
-        Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_inject_wrapper_varkw_service
-        Declared scope: app (level 1)
-        Declared lifetime: transient
-        Cache policy: transient
-        Cache owner scope: none
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: _ActionResolver
-        Dependency wiring: options (var_keyword) -> slot 1 [dict]
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
-        """
-
-        return self.resolve_2()
 
 
 class _StepResolver:
@@ -1229,7 +986,7 @@ class _StepResolver:
     Generated resolver for scope 'step' (level 5).
 
     This class is generated and optimized for direct slot-based dependency resolution.
-    All visible provider slots: 1, 2.
+    All visible provider slots: 1.
     Providers declared in this exact scope: none.
     """
 
@@ -1240,6 +997,7 @@ class _StepResolver:
         "_context",
         "_parent_context_resolver",
         "_owned_scope_resolvers",
+        "_request_resolver",
     )
 
 
@@ -1248,6 +1006,7 @@ class _StepResolver:
         root_resolver: RootResolver,
         context: Any | None = None,
         parent_context_resolver: Any = None,
+        request_resolver: Any = _MISSING_RESOLVER,
     ) -> None:
 
         """
@@ -1255,13 +1014,14 @@ class _StepResolver:
 
         The constructor wires scope ancestry references, cache slots, and optional cleanup state.
         Root scope class: RootResolver.
-        Stateless scope reuse enabled: True.
+        Stateless scope reuse enabled: False.
         """
 
         self._root_resolver = root_resolver
         self._context = context
         self._parent_context_resolver = parent_context_resolver
         self._owned_scope_resolvers: tuple[Any, ...] = ()
+        self._request_resolver = request_resolver
 
     def enter_scope(
         self,
@@ -1287,20 +1047,13 @@ class _StepResolver:
         """
         Route a dependency token to a generated synchronous provider resolver method.
 
-        Known provider slots: 1, 2.
-        Dispatch first uses identity checks against module-level `_dep_<slot>_type` globals.
-        Then it performs one equality-map lookup for non-class dependency keys.
-        Equality-map slots: 1.
+        Known provider slots: 1.
+        Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks to avoid reflective dispatch.
-        if dependency is _dep_2_type:
-            return _StepResolver.resolve_2(self)
-        # Fallback map handles equality-based keys for non-class dependencies.
-        slot = _dep_eq_slot_by_key.get(dependency, _MISSING_DEP_SLOT)
-        if slot is not _MISSING_DEP_SLOT:
-            if slot == 1:
-                return _StepResolver.resolve_1(self)
+        if dependency is _dep_1_type:
+            return _StepResolver.resolve_1(self)
         if is_from_context_annotation(dependency):
             key = strip_from_context_annotation(dependency)
             return self._resolve_from_context(key)
@@ -1313,20 +1066,13 @@ class _StepResolver:
         """
         Route a dependency token to a generated asynchronous provider resolver method.
 
-        Known provider slots: 1, 2.
-        Dispatch first uses identity checks against module-level `_dep_<slot>_type` globals.
-        Then it performs one equality-map lookup for non-class dependency keys.
-        Equality-map slots: 1.
+        Known provider slots: 1.
+        Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks for asynchronous resolution.
-        if dependency is _dep_2_type:
-            return await _StepResolver.aresolve_2(self)
-        # Fallback map handles equality-based keys for non-class dependencies.
-        slot = _dep_eq_slot_by_key.get(dependency, _MISSING_DEP_SLOT)
-        if slot is not _MISSING_DEP_SLOT:
-            if slot == 1:
-                return await _StepResolver.aresolve_1(self)
+        if dependency is _dep_1_type:
+            return await _StepResolver.aresolve_1(self)
         if is_from_context_annotation(dependency):
             key = strip_from_context_annotation(dependency)
             return self._resolve_from_context(key)
@@ -1375,104 +1121,56 @@ class _StepResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: dict
-        Provider spec kind: instance
-        Provider target: instance of dict
-        Declared scope: app (level 1)
+        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Provider spec kind: factory
+        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Declared scope: request (level 3)
         Declared lifetime: transient
-        Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache policy: transient
+        Cache owner scope: none
+        Declared lock mode: auto
+        Effective lock mode: thread
         Sync path thread lock: False
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: _StepResolver
-        Dependency wiring: none
-        Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
+        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
+        Behavior: This resolver delegates to the provider declaration scope because the dependency graph does not require deeper scope access.
         """
 
-        return self._root_resolver.resolve_1()
+        owner_resolver = self._request_resolver
+        if owner_resolver is _MISSING_RESOLVER:
+            msg = "Provider slot 1 requires opened scope level 3."
+            raise DIWireScopeMismatchError(msg)
+        return owner_resolver.resolve_1()
 
     async def aresolve_1(self) -> Any:
 
         """
         Provider slot 1 resolver (async method).
 
-        Returns: dict
-        Provider spec kind: instance
-        Provider target: instance of dict
-        Declared scope: app (level 1)
+        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Provider spec kind: factory
+        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Declared scope: request (level 3)
         Declared lifetime: transient
-        Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache policy: transient
+        Cache owner scope: none
+        Declared lock mode: auto
+        Effective lock mode: thread
         Sync path thread lock: False
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: _StepResolver
-        Dependency wiring: none
+        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
         Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
         """
 
         return self.resolve_1()
-
-    def resolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (sync method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotInjectWrapperVarKwService
-        Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_inject_wrapper_varkw_service
-        Declared scope: app (level 1)
-        Declared lifetime: transient
-        Cache policy: transient
-        Cache owner scope: none
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: _StepResolver
-        Dependency wiring: options (var_keyword) -> slot 1 [dict]
-        Behavior: This resolver delegates to the provider declaration scope because the dependency graph does not require deeper scope access.
-        """
-
-        return self._root_resolver.resolve_2()
-
-    async def aresolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (async method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotInjectWrapperVarKwService
-        Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_inject_wrapper_varkw_service
-        Declared scope: app (level 1)
-        Declared lifetime: transient
-        Cache policy: transient
-        Cache owner scope: none
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: _StepResolver
-        Dependency wiring: options (var_keyword) -> slot 1 [dict]
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
-        """
-
-        return self.resolve_2()
 
 def build_root_resolver(
     registrations: ProvidersRegistrations,
@@ -1485,7 +1183,7 @@ def build_root_resolver(
 
     This function rebinds module-level provider globals for the supplied registrations.
     Global rebinding makes `resolve_<slot>` methods run without registration lookups.
-    Provider slots configured during bootstrap: 1, 2.
+    Provider slots configured during bootstrap: 1.
     Root resolver class: RootResolver.
 
     Examples:
@@ -1498,11 +1196,7 @@ def build_root_resolver(
     # Bind module-level globals to this container registration snapshot.
     # This keeps hot paths in resolver methods free from dictionary lookups.
     global _dep_1_type, _provider_1
-    global _dep_2_type, _provider_2
-    global _dep_eq_slot_by_key
-
-    # Rebuild equality dispatch table for non-class dependency keys.
-    _dep_eq_slot_by_key = {}
+    global _ctx_1_0_key
 
     # --- Provider slot 1 bootstrap metadata ---
     # Read provider spec by stable slot id from registrations.
@@ -1510,17 +1204,9 @@ def build_root_resolver(
     # Capture dependency identity token used by `resolve`/`aresolve` dispatch.
     _dep_1_type = registration_1.provides
     # Capture provider object (instance/type/factory/generator/context manager).
-    _provider_1 = registration_1.instance
-    # Non-class dependency keys dispatch via equality-map fallback.
-    _dep_eq_slot_by_key[_dep_1_type] = 1
-
-    # --- Provider slot 2 bootstrap metadata ---
-    # Read provider spec by stable slot id from registrations.
-    registration_2 = registrations.get_by_slot(2)
-    # Capture dependency identity token used by `resolve`/`aresolve` dispatch.
-    _dep_2_type = registration_2.provides
-    # Capture provider object (instance/type/factory/generator/context manager).
-    _provider_2 = registration_2.factory
+    _provider_1 = registration_1.factory
+    # Capture context key token used by FromContext dependencies.
+    _ctx_1_0_key = strip_from_context_annotation(registration_1.dependencies[0].provides)
 
     # Construct a fresh root resolver configured with optional cleanup callbacks.
     return RootResolver()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, overload
 
@@ -33,7 +34,12 @@ class ResolverProtocol(Protocol):
     async def aresolve(self, dependency: Any) -> Any:
         """Resolve the given dependency asynchronously and return its instance."""
 
-    def enter_scope(self, scope: BaseScope | None = None) -> ResolverProtocol:
+    def enter_scope(
+        self,
+        scope: BaseScope | None = None,
+        *,
+        context: Mapping[Any, Any] | None = None,
+    ) -> ResolverProtocol:
         """Enter a new scope and return a new resolver for that scope."""
 
     def __enter__(self) -> Self:

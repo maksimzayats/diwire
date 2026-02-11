@@ -312,7 +312,12 @@ class _OpenGenericResolver:  # pragma: no cover
                 match=open_match,
             )
 
-    def enter_scope(self, scope: BaseScope | None = None) -> _OpenGenericResolver:
+    def enter_scope(
+        self,
+        scope: BaseScope | None = None,
+        *,
+        context: Mapping[Any, Any] | None = None,
+    ) -> _OpenGenericResolver:
         transition_path = _resolve_scope_transition_path(
             root_scope=self._root_scope,
             current_scope_level=self._scope_level,
@@ -325,8 +330,14 @@ class _OpenGenericResolver:  # pragma: no cover
         current_base_resolver = self._base_resolver
         created_wrappers: list[_OpenGenericResolver] = []
 
-        for next_scope in transition_path:
-            current_base_resolver = current_base_resolver.enter_scope(next_scope)
+        for index, next_scope in enumerate(transition_path):
+            if index == len(transition_path) - 1:
+                current_base_resolver = current_base_resolver.enter_scope(
+                    next_scope,
+                    context=context,
+                )
+            else:
+                current_base_resolver = current_base_resolver.enter_scope(next_scope)
             current_wrapper = _OpenGenericResolver(
                 base_resolver=current_base_resolver,
                 registry=self._registry,

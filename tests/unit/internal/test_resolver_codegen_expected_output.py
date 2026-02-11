@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from diwire.container import Container
-from diwire.markers import Injected
+from diwire.markers import FromContext, Injected
 from diwire.providers import Lifetime, ProviderDependency, ProviderSpec
 from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire.scope import BaseScope, Scope
@@ -180,6 +180,17 @@ def _build_snapshot_inject_wrapper_varkw_service(
     **options: int,
 ) -> _SnapshotInjectWrapperVarKwService:
     return _SnapshotInjectWrapperVarKwService(options=options)
+
+
+class _SnapshotFromContextService:
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+
+def _build_snapshot_from_context_service(
+    value: FromContext[int],
+) -> _SnapshotFromContextService:
+    return _SnapshotFromContextService(value=value)
 
 
 def test_codegen_matches_expected_for_empty_app_root_graph() -> None:
@@ -467,6 +478,21 @@ def test_codegen_matches_expected_for_inject_wrapper_varkw_argument_order_graph(
 
     generated = _render(container=container, root_scope=Scope.APP)
     expected = _read_expected("app_root_inject_wrapper_varkw_order.txt")
+    assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
+
+
+def test_codegen_matches_expected_for_from_context_dependency_graph() -> None:
+    ProviderSpec.SLOT_COUNTER = 0
+    container = Container()
+    container.register_factory(
+        _SnapshotFromContextService,
+        factory=_build_snapshot_from_context_service,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.TRANSIENT,
+    )
+
+    generated = _render(container=container, root_scope=Scope.APP)
+    expected = _read_expected("app_root_from_context_provider.txt")
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 import inspect
-from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator, Mapping
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass
 from typing import Any, Literal, TypeAlias, TypeVar, cast, overload
@@ -10,6 +10,7 @@ from typing import Any, Literal, TypeAlias, TypeVar, cast, overload
 from diwire.container import Container
 from diwire.exceptions import DIWireContainerNotSetError, DIWireInvalidRegistrationError
 from diwire.injection import (
+    INJECT_CONTEXT_KWARG,
     INJECT_RESOLVER_KWARG,
     INJECT_WRAPPER_MARKER,
     InjectedCallableInspector,
@@ -591,6 +592,12 @@ class ContainerContext:
                 f"'{INJECT_RESOLVER_KWARG}'."
             )
             raise DIWireInvalidRegistrationError(msg)
+        if INJECT_CONTEXT_KWARG in signature.parameters:
+            msg = (
+                f"Callable '{self._callable_name(callable_obj)}' cannot declare reserved parameter "
+                f"'{INJECT_CONTEXT_KWARG}'."
+            )
+            raise DIWireInvalidRegistrationError(msg)
 
         inspected_callable = self._injected_callable_inspector.inspect_callable(callable_obj)
 
@@ -646,9 +653,14 @@ class ContainerContext:
         """Resolve dependency asynchronously via the current bound container."""
         return await self.get_current().aresolve(dependency)
 
-    def enter_scope(self, scope: BaseScope | None = None) -> ResolverProtocol:
+    def enter_scope(
+        self,
+        scope: BaseScope | None = None,
+        *,
+        context: Mapping[Any, Any] | None = None,
+    ) -> ResolverProtocol:
         """Enter a scope on the current bound container."""
-        return self.get_current().enter_scope(scope)
+        return self.get_current().enter_scope(scope, context=context)
 
     def _callable_name(self, callable_obj: Callable[..., Any]) -> str:
         return getattr(callable_obj, "__qualname__", repr(callable_obj))

@@ -13,6 +13,7 @@ from diwire.lock_mode import LockMode
 from diwire.providers import ProviderDependency, ProvidersRegistrations
 from diwire.resolvers.templates.mini_jinja import Environment, Template
 from diwire.resolvers.templates.planner import (
+    ProviderDependencyPlan,
     ProviderWorkflowPlan,
     ResolverGenerationPlan,
     ResolverGenerationPlanner,
@@ -40,7 +41,7 @@ from diwire.resolvers.templates.templates import (
 from diwire.scope import BaseScope, BaseScopes, Scope
 
 _INDENT = " " * 4
-_MIN_CONSTRUCTOR_BASE_ARGUMENTS = 2
+_MIN_CONSTRUCTOR_BASE_ARGUMENTS = 4
 _MAX_INLINE_ROOT_DEPENDENCY_DEPTH = 3
 _GENERATOR_SOURCE = (
     "diwire.resolvers.templates.renderer.ResolversTemplateRenderer.get_providers_code"
@@ -198,6 +199,10 @@ class ResolversTemplateRenderer:
                     f"_provider_{workflow.slot}: Any = _MISSING_PROVIDER",
                 ],
             )
+        provider_lines.extend(
+            f"{ctx_key_global_name}: Any = _MISSING_PROVIDER"
+            for ctx_key_global_name in self._context_key_global_names(plan=plan)
+        )
         if plan.equality_dispatch_slots:
             provider_lines.extend(
                 [
@@ -258,6 +263,9 @@ class ResolversTemplateRenderer:
         aresolve_method_block = self._indent_block(
             self._render_dispatch_aresolve_method(plan=plan, class_plan=class_plan),
         )
+        resolve_from_context_method_block = self._indent_block(
+            self._render_resolve_from_context_method(),
+        )
 
         if plan.has_cleanup:
             exit_method_block = self._indent_block(CONTEXT_EXIT_WITH_CLEANUP_TEMPLATE)
@@ -302,6 +310,7 @@ class ResolversTemplateRenderer:
             enter_scope_method_block=enter_scope_method_block,
             resolve_method_block=resolve_method_block,
             aresolve_method_block=aresolve_method_block,
+            resolve_from_context_method_block=resolve_from_context_method_block,
             enter_method_block=self._indent_block(enter_method_block),
             exit_method_block=exit_method_block,
             aenter_method_block=self._indent_block(aenter_method_block),
@@ -345,12 +354,27 @@ class ResolversTemplateRenderer:
         class_plan: ScopePlan,
     ) -> list[str]:
         if class_plan.is_root:
-            return ["cleanup_enabled: bool = True,"] if plan.has_cleanup else []
+            signature_lines: list[str] = []
+            if plan.has_cleanup:
+                signature_lines.append("cleanup_enabled: bool = True,")
+            signature_lines.extend(
+                [
+                    "context: Any | None = None,",
+                    "parent_context_resolver: Any = None,",
+                ],
+            )
+            return signature_lines
 
         if self._uses_stateless_scope_reuse(plan=plan):
             signature_lines = ["root_resolver: RootResolver,"]
             if plan.has_cleanup:
                 signature_lines.append("cleanup_enabled: bool = True,")
+            signature_lines.extend(
+                [
+                    "context: Any | None = None,",
+                    "parent_context_resolver: Any = None,",
+                ],
+            )
             return signature_lines
 
         ancestor_lines = [
@@ -363,6 +387,12 @@ class ResolversTemplateRenderer:
         signature_lines = ["root_resolver: RootResolver,"]
         if plan.has_cleanup:
             signature_lines.append("cleanup_enabled: bool = True,")
+        signature_lines.extend(
+            [
+                "context: Any | None = None,",
+                "parent_context_resolver: Any = None,",
+            ],
+        )
         signature_lines.extend(ancestor_lines)
         return signature_lines
 
@@ -384,7 +414,7 @@ class ResolversTemplateRenderer:
         plan: ResolverGenerationPlan,
         class_plan: ScopePlan,
     ) -> tuple[str, ...]:
-        slots: list[str] = ["_root_resolver"]
+        slots: list[str] = ["_root_resolver", "_context", "_parent_context_resolver"]
         if plan.has_cleanup:
             slots.append("_cleanup_enabled")
         if class_plan.is_root:
@@ -459,6 +489,8 @@ class ResolversTemplateRenderer:
             if class_plan.is_root
             else "self._root_resolver = root_resolver",
         )
+        body_lines.append("self._context = context")
+        body_lines.append("self._parent_context_resolver = parent_context_resolver")
         if plan.has_cleanup:
             body_lines.append("self._cleanup_callbacks: list[tuple[int, Any]] = []")
         body_lines.append("self._owned_scope_resolvers: tuple[Any, ...] = ()")
@@ -661,13 +693,23 @@ class ResolversTemplateRenderer:
         target_scope: ScopePlan,
     ) -> list[str]:
         if self._uses_stateless_scope_reuse(plan=plan):
-            return [f"return self._root_resolver._scope_resolver_{target_scope.scope_level}"]
+            return [
+                "if context is None and self._context is None and self._parent_context_resolver is None:",
+                f"    return self._root_resolver._scope_resolver_{target_scope.scope_level}",
+                f"return {target_scope.class_name}(",
+                "    self._root_resolver,",
+                *(["    self._cleanup_enabled,"] if plan.has_cleanup else []),
+                "    context,",
+                "    self,",
+                ")",
+            ]
 
         arguments = [
             "self" if current_scope_level == plan.root_scope_level else "self._root_resolver",
         ]
         if plan.has_cleanup:
             arguments.append("self._cleanup_enabled")
+        arguments.extend(["context", "self"])
 
         constructor_base_arguments = (
             _MIN_CONSTRUCTOR_BASE_ARGUMENTS
@@ -723,6 +765,9 @@ class ResolversTemplateRenderer:
                 current_ref=current_ref,
                 target_scope=scope,
                 local_ref_by_level=local_ref_by_level,
+                context_expression="context"
+                if scope.scope_level == transition_plan[-1].scope_level
+                else "None",
             )
             lines.append(f"{scope_local_ref} = {constructor_call_lines[0]}")
             lines.extend(constructor_call_lines[1:])
@@ -739,7 +784,7 @@ class ResolversTemplateRenderer:
         lines.append(f"return {deepest_ref}")
         return lines
 
-    def _constructor_call_lines(
+    def _constructor_call_lines(  # noqa: PLR0913
         self,
         *,
         plan: ResolverGenerationPlan,
@@ -747,6 +792,7 @@ class ResolversTemplateRenderer:
         current_ref: str,
         target_scope: ScopePlan,
         local_ref_by_level: dict[int, str],
+        context_expression: str,
     ) -> list[str]:
         arguments = [
             current_ref
@@ -755,6 +801,7 @@ class ResolversTemplateRenderer:
         ]
         if plan.has_cleanup:
             arguments.append(f"{current_ref}._cleanup_enabled")
+        arguments.extend([context_expression, current_ref])
 
         constructor_base_arguments = (
             _MIN_CONSTRUCTOR_BASE_ARGUMENTS
@@ -904,6 +951,9 @@ class ResolversTemplateRenderer:
             )
         body_lines.extend(
             [
+                "if is_from_context_annotation(dependency):",
+                "    key = strip_from_context_annotation(dependency)",
+                "    return self._resolve_from_context(key)",
                 "# Any dependency not pre-bound in build_root_resolver is unknown here.",
                 'msg = f"Dependency {dependency!r} is not registered."',
                 "raise DIWireDependencyNotRegisteredError(msg)",
@@ -969,6 +1019,9 @@ class ResolversTemplateRenderer:
             )
         body_lines.extend(
             [
+                "if is_from_context_annotation(dependency):",
+                "    key = strip_from_context_annotation(dependency)",
+                "    return self._resolve_from_context(key)",
                 "# Any dependency not pre-bound in build_root_resolver is unknown here.",
                 'msg = f"Dependency {dependency!r} is not registered."',
                 "raise DIWireDependencyNotRegisteredError(msg)",
@@ -983,6 +1036,27 @@ class ResolversTemplateRenderer:
             ),
             body_block=self._join_lines(self._indent_lines(body_lines, 1)),
         ).strip()
+
+    def _render_resolve_from_context_method(self) -> str:
+        lines = [
+            "def _resolve_from_context(self, key: Any) -> Any:",
+            "    context = self._context",
+            "    if context is not None and key in context:",
+            "        return context[key]",
+            "    parent_context_resolver = self._parent_context_resolver",
+            "    while parent_context_resolver is not None:",
+            "        parent_context = parent_context_resolver._context",
+            "        if parent_context is not None and key in parent_context:",
+            "            return parent_context[key]",
+            "        parent_context_resolver = parent_context_resolver._parent_context_resolver",
+            (
+                '    msg = (f"Context value for {key!r} is not provided. Pass it via '
+                "`enter_scope(..., context={...})` (or `__diwire_context` for injected callables)."
+                '")'
+            ),
+            "    raise DIWireDependencyNotRegisteredError(msg)",
+        ]
+        return self._join_lines(lines)
 
     def _dispatch_sync_call_expression(
         self,
@@ -1573,26 +1647,40 @@ class ResolversTemplateRenderer:
             workflow_by_slot=workflow_by_slot,
         )
 
-        for dependency, dependency_slot, dependency_requires_async in zip(
-            workflow.dependencies,
-            workflow.dependency_slots,
-            workflow.dependency_requires_async,
-            strict=True,
-        ):
-            dependency_workflow = workflow_by_slot[dependency_slot]
-            expression = self._inline_root_sync_dependency_expression(
-                dependency_workflow=dependency_workflow,
-                dependency_requires_async=dependency_requires_async,
-                context=expression_context,
-                depth=0,
-            )
-            if expression is None:
-                expression = self._dependency_expression_for_class(
+        for dependency_plan in self._dependency_plans_for_workflow(workflow=workflow):
+            dependency = dependency_plan.dependency
+            expression: str | None
+            if dependency_plan.kind == "context":
+                if dependency_plan.ctx_key_global_name is None:
+                    msg = (
+                        f"Missing context key binding global for provider slot {workflow.slot} "
+                        f"dependency index {dependency_plan.dependency_index}."
+                    )
+                    raise ValueError(msg)
+                expression = f"self._resolve_from_context({dependency_plan.ctx_key_global_name})"
+            else:
+                dependency_slot = dependency_plan.dependency_slot
+                if dependency_slot is None:
+                    msg = (
+                        f"Provider dependency plan for slot {workflow.slot} "
+                        f"dependency index {dependency_plan.dependency_index} "
+                        "is missing dependency slot."
+                    )
+                    raise ValueError(msg)
+                dependency_workflow = workflow_by_slot[dependency_slot]
+                expression = self._inline_root_sync_dependency_expression(
                     dependency_workflow=dependency_workflow,
-                    dependency_requires_async=dependency_requires_async,
-                    is_async_call=is_async_call,
+                    dependency_requires_async=dependency_plan.dependency_requires_async,
                     context=expression_context,
+                    depth=0,
                 )
+                if expression is None:
+                    expression = self._dependency_expression_for_class(
+                        dependency_workflow=dependency_workflow,
+                        dependency_requires_async=dependency_plan.dependency_requires_async,
+                        is_async_call=is_async_call,
+                        context=expression_context,
+                    )
             arguments.append(
                 self._format_dependency_argument(
                     dependency=dependency,
@@ -1729,18 +1817,26 @@ class ResolversTemplateRenderer:
         depth: int,
     ) -> tuple[str, ...] | None:
         arguments: list[str] = []
-        for dependency, slot, requires_async in zip(
-            dependency_workflow.dependencies,
-            dependency_workflow.dependency_slots,
-            dependency_workflow.dependency_requires_async,
-            strict=True,
-        ):
-            nested_expression = self._inline_root_nested_dependency_expression(
-                slot=slot,
-                requires_async=requires_async,
-                context=context,
-                depth=depth,
-            )
+        for dependency_plan in self._dependency_plans_for_workflow(workflow=dependency_workflow):
+            dependency = dependency_plan.dependency
+            nested_expression: str | None
+            if dependency_plan.kind == "context":
+                if dependency_plan.ctx_key_global_name is None:
+                    return None
+                nested_expression = (
+                    f"{context.root_resolver_expr}._resolve_from_context("
+                    f"{dependency_plan.ctx_key_global_name})"
+                )
+            else:
+                slot = dependency_plan.dependency_slot
+                if slot is None:
+                    return None
+                nested_expression = self._inline_root_nested_dependency_expression(
+                    slot=slot,
+                    requires_async=dependency_plan.dependency_requires_async,
+                    context=context,
+                    depth=depth,
+                )
             if nested_expression is None:
                 return None
             arguments.append(
@@ -1779,6 +1875,35 @@ class ResolversTemplateRenderer:
         if nested_workflow.max_required_scope_level > root_scope_level:
             return None
         return f"{root_resolver_expression}.resolve_{slot}()"
+
+    def _dependency_plans_for_workflow(
+        self,
+        *,
+        workflow: ProviderWorkflowPlan,
+    ) -> tuple[ProviderDependencyPlan, ...]:
+        if workflow.dependency_plans:
+            return workflow.dependency_plans
+
+        fallback_plans: list[ProviderDependencyPlan] = []
+        for dependency_index, (dependency, slot, requires_async) in enumerate(
+            zip(
+                workflow.dependencies,
+                workflow.dependency_slots,
+                workflow.dependency_requires_async,
+                strict=True,
+            ),
+        ):
+            resolved_slot = slot if slot is not None and slot >= 0 else None
+            fallback_plans.append(
+                ProviderDependencyPlan(
+                    kind="provider" if resolved_slot is not None else "context",
+                    dependency=dependency,
+                    dependency_index=dependency_index,
+                    dependency_slot=resolved_slot,
+                    dependency_requires_async=requires_async,
+                ),
+            )
+        return tuple(fallback_plans)
 
     def _format_dependency_argument(
         self,
@@ -1987,6 +2112,7 @@ class ResolversTemplateRenderer:
         return f"{callable_expression}({joined_arguments})"
 
     def _render_build_function(self, *, plan: ResolverGenerationPlan) -> str:
+        context_key_global_names = self._context_key_global_names(plan=plan)
         body_lines = [
             "# Bind module-level globals to this container registration snapshot.",
             "# This keeps hot paths in resolver methods free from dictionary lookups.",
@@ -1998,6 +2124,9 @@ class ResolversTemplateRenderer:
             )
             if plan.equality_dispatch_slots:
                 body_lines.append("global _dep_eq_slot_by_key")
+            body_lines.extend(
+                f"global {ctx_key_global_name}" for ctx_key_global_name in context_key_global_names
+            )
             body_lines.append("")
         else:
             body_lines.append("# No provider registrations are active for the selected root scope.")
@@ -2032,6 +2161,25 @@ class ResolversTemplateRenderer:
                     [
                         "# Non-class dependency keys dispatch via equality-map fallback.",
                         f"_dep_eq_slot_by_key[_dep_{workflow.slot}_type] = {workflow.slot}",
+                    ],
+                )
+            for dependency_plan in self._dependency_plans_for_workflow(workflow=workflow):
+                if dependency_plan.kind != "context":
+                    continue
+                if dependency_plan.ctx_key_global_name is None:
+                    msg = (
+                        f"Context dependency for provider slot {workflow.slot} at index "
+                        f"{dependency_plan.dependency_index} is missing global key name."
+                    )
+                    raise ValueError(msg)
+                body_lines.extend(
+                    [
+                        "# Capture context key token used by FromContext dependencies.",
+                        (
+                            f"{dependency_plan.ctx_key_global_name} = strip_from_context_annotation("
+                            f"registration_{workflow.slot}.dependencies"
+                            f"[{dependency_plan.dependency_index}].provides)"
+                        ),
                     ],
                 )
             body_lines.append("")
@@ -2108,6 +2256,7 @@ class ResolversTemplateRenderer:
             f"Current scope: {class_plan.scope_name}:{class_plan.scope_level}.",
             f"Allowed explicit transitions: {transitions}.",
             "Passing None follows the default transition for the scope graph.",
+            "Optional context mapping is attached to the opened target scope.",
         ]
 
     def _dispatch_docstring_lines(
@@ -2218,14 +2367,24 @@ class ResolversTemplateRenderer:
             return "none"
 
         parts: list[str] = []
-        for dependency, slot in zip(workflow.dependencies, workflow.dependency_slots, strict=True):
+        for dependency_plan in self._dependency_plans_for_workflow(workflow=workflow):
+            dependency = dependency_plan.dependency
             kind_name = dependency.parameter.kind.name.lower()
-            parts.append(
-                (
-                    f"{dependency.parameter.name} ({kind_name}) -> slot {slot} "
-                    f"[{self._format_symbol(dependency.provides)}]"
-                ),
-            )
+            if dependency_plan.kind == "context":
+                parts.append(
+                    (
+                        f"{dependency.parameter.name} ({kind_name}) -> context "
+                        f"[{self._format_symbol(dependency.provides)}]"
+                    ),
+                )
+            else:
+                parts.append(
+                    (
+                        f"{dependency.parameter.name} ({kind_name}) -> slot "
+                        f"{dependency_plan.dependency_slot} "
+                        f"[{self._format_symbol(dependency.provides)}]"
+                    ),
+                )
         return "; ".join(parts)
 
     def _format_lifetime(self, *, workflow: ProviderWorkflowPlan) -> str:
@@ -2314,6 +2473,17 @@ class ResolversTemplateRenderer:
             for workflow in plan.workflows
             if workflow.scope_level > plan.root_scope_level
         }
+
+    def _context_key_global_names(self, *, plan: ResolverGenerationPlan) -> tuple[str, ...]:
+        names: list[str] = []
+        for workflow in plan.workflows:
+            for dependency_plan in self._dependency_plans_for_workflow(workflow=workflow):
+                if dependency_plan.kind != "context":
+                    continue
+                if dependency_plan.ctx_key_global_name is None:
+                    continue
+                names.append(dependency_plan.ctx_key_global_name)
+        return tuple(self._unique_ordered(names))
 
     def _uses_stateless_scope_reuse(self, *, plan: ResolverGenerationPlan) -> bool:
         return not any(workflow.scope_level > plan.root_scope_level for workflow in plan.workflows)

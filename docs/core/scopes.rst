@@ -54,6 +54,40 @@ Scopes can be nested. A nested scope can still access services registered for it
 
 See the runnable scripts in :doc:`/howto/examples/scopes` (Nested scopes section).
 
+Scope context values
+--------------------
+
+You can attach per-scope context values when entering a scope and resolve them via
+``FromContext[T]`` in providers or injected callables.
+
+- Context values are visible to the scope where they were provided and all child scopes.
+- Child scopes can override parent values by passing the same key again.
+- Keys are unwrapped dependency tokens:
+  ``FromContext[int]`` uses key ``int``.
+  ``FromContext[Annotated[Db, Component("replica")]]`` uses that full ``Annotated`` token.
+
+.. code-block:: python
+
+   from diwire import Container, FromContext, Lifetime, Scope
+
+   class RequestValue:
+       def __init__(self, value: int) -> None:
+           self.value = value
+
+   def build_request_value(value: FromContext[int]) -> RequestValue:
+       return RequestValue(value=value)
+
+   container = Container()
+   container.register_factory(
+       RequestValue,
+       factory=build_request_value,
+       scope=Scope.REQUEST,
+       lifetime=Lifetime.TRANSIENT,
+   )
+
+   with container.enter_scope(Scope.REQUEST, context={int: 123}) as request_scope:
+       assert request_scope.resolve(RequestValue).value == 123
+
 Imperative close
 ----------------
 

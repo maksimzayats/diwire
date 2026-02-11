@@ -14,7 +14,7 @@ from diwire.exceptions import (
     DIWireInvalidRegistrationError,
     DIWireScopeMismatchError,
 )
-from diwire.markers import Component, Injected
+from diwire.markers import Component, FromContext, Injected
 from diwire.providers import Lifetime
 from diwire.scope import Scope
 
@@ -174,6 +174,21 @@ def test_inject_signature_removes_injected_parameters() -> None:
     assert parameters == ("value", "mode")
 
 
+def test_inject_signature_removes_from_context_parameters() -> None:
+    container = Container()
+
+    @container.inject(scope=Scope.REQUEST)
+    def handler(
+        value: str,
+        context_value: FromContext[int],
+        mode: str = "safe",
+    ) -> tuple[str, int, str]:
+        return value, context_value, mode
+
+    parameters = tuple(inspect.signature(handler).parameters)
+    assert parameters == ("value", "mode")
+
+
 def test_inject_allows_explicit_override_for_injected_parameter() -> None:
     container = Container()
     dependency = _InjectedSyncDependency("container")
@@ -269,6 +284,33 @@ def test_inject_falls_back_to_compiled_root_resolver() -> None:
 
     assert result is dependency
     assert container._root_resolver is not None
+
+
+def test_inject_resolves_from_context_when_scope_is_opened_with_internal_context_kwarg() -> None:
+    container = Container()
+
+    @container.inject(scope=Scope.REQUEST)
+    def handler(value: FromContext[int]) -> int:
+        return value
+
+    injected_handler = cast("Any", handler)
+    assert injected_handler(__diwire_context={int: 7}) == 7
+    assert injected_handler(value=8) == 8
+
+
+def test_inject_context_kwarg_without_scope_opening_raises_clear_error() -> None:
+    container = Container()
+
+    @container.inject(auto_open_scope=False)
+    def handler(value: FromContext[int]) -> int:
+        return value
+
+    injected_handler = cast("Any", handler)
+    with pytest.raises(
+        DIWireInvalidRegistrationError,
+        match="was provided but no new scope was opened",
+    ):
+        injected_handler(__diwire_context={int: 7})
 
 
 def test_inject_sync_raises_for_async_dependency_chain() -> None:
@@ -798,6 +840,23 @@ def test_inject_rejects_reserved_internal_resolver_parameter_name() -> None:
             _ = dep
 
 
+def test_inject_rejects_reserved_internal_context_parameter_name() -> None:
+    container = Container()
+
+    with pytest.raises(
+        DIWireInvalidRegistrationError,
+        match="cannot declare reserved parameter",
+    ):
+
+        @container.inject
+        def _handler(
+            __diwire_context: object,
+            /,
+            dep: Injected[_InjectedSyncDependency],
+        ) -> None:
+            _ = dep
+
+
 def test_inject_preserves_component_annotated_dependency_key() -> None:
     container = Container()
 
@@ -1002,6 +1061,39 @@ def test_resolve_injected_dependency_handles_invalid_annotated_shape(
     monkeypatch.setattr(injection_module, "get_args", lambda _annotation: (int,))
 
     assert container._resolve_injected_dependency(annotation=object()) is None
+
+
+def test_pop_inject_context_handles_none_and_invalid_mapping_values() -> None:
+    container = Container()
+    kwargs_with_none = {injection_module.INJECT_CONTEXT_KWARG: None}
+
+    assert container._pop_inject_context(kwargs_with_none) is None
+    assert injection_module.INJECT_CONTEXT_KWARG not in kwargs_with_none
+
+    kwargs_with_invalid = {injection_module.INJECT_CONTEXT_KWARG: "not-a-mapping"}
+    with pytest.raises(
+        DIWireInvalidRegistrationError,
+        match="must be a mapping or None",
+    ):
+        container._pop_inject_context(kwargs_with_invalid)
+
+
+def test_enter_scope_if_needed_raises_for_legacy_resolver_with_context_kwarg() -> None:
+    container = Container()
+
+    class _LegacyResolver:
+        def enter_scope(self, _scope: object) -> object:
+            return object()
+
+    with pytest.raises(
+        DIWireInvalidRegistrationError,
+        match="does not support context-aware scope entry",
+    ):
+        container._enter_scope_if_needed(
+            base_resolver=cast("Any", _LegacyResolver()),
+            target_scope=Scope.REQUEST,
+            context={int: 1},
+        )
 
 
 def test_infer_dependency_scope_level_uses_cache_and_handles_cycle_guard() -> None:

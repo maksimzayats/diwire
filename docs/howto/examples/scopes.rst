@@ -272,6 +272,42 @@ scope and cleaned up when you call ``container.close()`` or ``container.aclose()
    if __name__ == "__main__":
        main()
 
+Scope context values (FromContext)
+----------------------------------
+
+Attach request-scoped values with ``enter_scope(..., context={...})`` and consume
+them via ``FromContext[T]``.
+
+.. code-block:: python
+   :class: diwire-example py-run
+
+   from diwire import Container, FromContext, Lifetime, Scope
+
+
+   class RequestValue:
+       def __init__(self, value: int) -> None:
+           self.value = value
+
+
+   def build_request_value(value: FromContext[int]) -> RequestValue:
+       return RequestValue(value=value)
+
+
+   container = Container()
+   container.register_factory(
+       RequestValue,
+       factory=build_request_value,
+       scope=Scope.REQUEST,
+       lifetime=Lifetime.TRANSIENT,
+   )
+
+   with container.enter_scope(Scope.REQUEST, context={int: 123}) as request_scope:
+       print(request_scope.resolve(RequestValue).value)
+
+   with container.enter_scope(Scope.REQUEST, context={int: 1}) as request_scope:
+       with request_scope.enter_scope(Scope.STEP, context={int: 2}) as step_scope:
+           print(step_scope.resolve(FromContext[int]))
+
 Read more
 ---------
 

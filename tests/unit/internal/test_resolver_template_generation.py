@@ -16,6 +16,7 @@ from diwire.lock_mode import LockMode
 from diwire.providers import Lifetime, ProviderDependency, ProviderSpec, ProvidersRegistrations
 from diwire.resolvers.templates import renderer as renderer_module
 from diwire.resolvers.templates.planner import (
+    ProviderDependencyPlan,
     ProviderWorkflowPlan,
     ResolverGenerationPlan,
     ResolverGenerationPlanner,
@@ -266,11 +267,13 @@ def test_renderer_output_is_deterministic_and_composable() -> None:
     assert ") -> RootResolver:" in code_first
     assert "def __enter__(self) -> RootResolver:" in code_first
     assert "async def __aenter__(self) -> RootResolver:" in code_first
+    assert "def enter_scope(" in code_first
+    assert "scope: Any | None = None," in code_first
+    assert "context: Any | None = None," in code_first
     assert (
-        "def enter_scope(self, scope: Any | None = None) -> "
-        "RootResolver | _SessionResolver | _RequestResolver | _ActionResolver | _StepResolver:"
+        ") -> RootResolver | _SessionResolver | _RequestResolver | _ActionResolver | _StepResolver:"
     ) in code_first
-    assert "def enter_scope(self, scope: Any | None = None) -> NoReturn:" in code_first
+    assert ") -> NoReturn:" in code_first
     assert "def resolve(self, dependency: Any) -> Any:" in code_first
     assert "async def aresolve(self, dependency: Any) -> Any:" in code_first
     assert code_first.startswith('"""')
@@ -1618,6 +1621,44 @@ def test_renderer_unique_ordered_filters_duplicates_without_reordering() -> None
         "request",
         "session",
     ]
+
+
+def test_render_build_function_raises_for_context_dependency_without_key_binding() -> None:
+    renderer = ResolversTemplateRenderer()
+    parameter = inspect.Parameter(
+        "value",
+        kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+    )
+    dependency = ProviderDependency(provides=int, parameter=parameter)
+    workflow = replace(
+        _make_workflow_plan(slot=1),
+        dependencies=(dependency,),
+        dependency_plans=(
+            ProviderDependencyPlan(
+                kind="context",
+                dependency=dependency,
+                dependency_index=0,
+                ctx_key_global_name=None,
+            ),
+        ),
+    )
+    plan = _make_generation_plan(
+        scopes=(
+            ScopePlan(
+                scope_name="app",
+                scope_level=Scope.APP.level,
+                class_name="RootResolver",
+                resolver_arg_name="root_resolver",
+                resolver_attr_name="_root_resolver",
+                skippable=False,
+                is_root=True,
+            ),
+        ),
+        workflows=(workflow,),
+    )
+
+    with pytest.raises(ValueError, match="missing global key name"):
+        renderer._render_build_function(plan=plan)
 
 
 def test_renderer_module_entrypoint_prints_generated_module(
