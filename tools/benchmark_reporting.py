@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final, cast
 
-BENCHMARK_LIBRARIES: Final[tuple[str, str]] = ("diwire", "rodi")
+BENCHMARK_LIBRARIES: Final[tuple[str, ...]] = ("diwire", "rodi", "dishka")
 _BENCHMARK_NAME_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^test_benchmark_(?P<library>[a-z0-9]+)_",
 )
@@ -34,11 +34,12 @@ class BenchmarkReport:
     """Normalized benchmark comparison data."""
 
     metadata: BenchmarkMetadata
-    libraries: tuple[str, str]
+    libraries: tuple[str, ...]
     scenarios: tuple[str, ...]
     files: dict[str, str]
     ops: dict[str, dict[str, float]]
     speedup_diwire_over_rodi: dict[str, float]
+    speedup_diwire_over_dishka: dict[str, float]
 
     def as_json_dict(self) -> dict[str, object]:
         """Convert report into the normalized JSON artifact schema."""
@@ -55,6 +56,7 @@ class BenchmarkReport:
             "files": self.files,
             "ops": self.ops,
             "speedup_diwire_over_rodi": self.speedup_diwire_over_rodi,
+            "speedup_diwire_over_dishka": self.speedup_diwire_over_dishka,
         }
 
 
@@ -82,7 +84,16 @@ def normalize_benchmark_report(
 
     _validate_complete_matrix(ops_by_library=ops_by_library, scenarios=scenarios)
 
-    speedup = _compute_speedup(ops_by_library=ops_by_library, scenarios=scenarios)
+    speedup_over_rodi = _compute_speedup(
+        ops_by_library=ops_by_library,
+        scenarios=scenarios,
+        baseline_library="rodi",
+    )
+    speedup_over_dishka = _compute_speedup(
+        ops_by_library=ops_by_library,
+        scenarios=scenarios,
+        baseline_library="dishka",
+    )
     metadata = _build_metadata(raw_payload=raw_payload, source_raw_file=source_raw_file)
 
     return BenchmarkReport(
@@ -91,7 +102,8 @@ def normalize_benchmark_report(
         scenarios=scenarios,
         files=files_by_scenario,
         ops=ops_by_library,
-        speedup_diwire_over_rodi=speedup,
+        speedup_diwire_over_rodi=speedup_over_rodi,
+        speedup_diwire_over_dishka=speedup_over_dishka,
     )
 
 
@@ -105,14 +117,19 @@ def render_benchmark_markdown(report: BenchmarkReport) -> str:
         f"- Python: `{report.metadata.python_version}`",
         f"- Datetime (UTC): `{report.metadata.datetime_utc}`",
         "",
-        "| Scenario | diwire | rodi | speedup diwire/rodi |",
-        "| --- | --- | --- | --- |",
+        "| Scenario | diwire | rodi | dishka | speedup diwire/rodi | speedup diwire/dishka |",
+        "| --- | --- | --- | --- | --- | --- |",
     ]
     for scenario in report.scenarios:
         diwire_ops = _format_ops(report.ops["diwire"][scenario])
         rodi_ops = _format_ops(report.ops["rodi"][scenario])
-        speedup = f"{report.speedup_diwire_over_rodi[scenario]:.2f}x"
-        lines.append(f"| {scenario} | {diwire_ops} | {rodi_ops} | {speedup} |")
+        dishka_ops = _format_ops(report.ops["dishka"][scenario])
+        speedup_over_rodi = f"{report.speedup_diwire_over_rodi[scenario]:.2f}x"
+        speedup_over_dishka = f"{report.speedup_diwire_over_dishka[scenario]:.2f}x"
+        lines.append(
+            f"| {scenario} | {diwire_ops} | {rodi_ops} | {dishka_ops} "
+            f"| {speedup_over_rodi} | {speedup_over_dishka} |",
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -279,15 +296,19 @@ def _compute_speedup(
     *,
     ops_by_library: dict[str, dict[str, float]],
     scenarios: tuple[str, ...],
+    baseline_library: str,
 ) -> dict[str, float]:
     speedup: dict[str, float] = {}
     for scenario in scenarios:
         diwire_ops = ops_by_library["diwire"][scenario]
-        rodi_ops = ops_by_library["rodi"][scenario]
-        if rodi_ops == 0:
-            msg = f"Cannot compute speedup for scenario '{scenario}' because rodi OPS is zero."
+        baseline_ops = ops_by_library[baseline_library][scenario]
+        if baseline_ops == 0:
+            msg = (
+                f"Cannot compute speedup for scenario '{scenario}' because "
+                f"{baseline_library} OPS is zero."
+            )
             raise BenchmarkReportError(msg)
-        speedup[scenario] = diwire_ops / rodi_ops
+        speedup[scenario] = diwire_ops / baseline_ops
     return speedup
 
 

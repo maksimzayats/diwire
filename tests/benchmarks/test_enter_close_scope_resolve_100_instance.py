@@ -6,6 +6,7 @@ import rodi
 
 from diwire.container import Container as DIWireContainer
 from diwire.lock_mode import LockMode
+from tests.benchmarks.dishka_helpers import DishkaBenchmarkScope, make_dishka_benchmark_container
 
 _BENCHMARK_ITERATIONS = 1_000
 _BENCHMARK_WARMUP_ROUNDS = 3
@@ -49,6 +50,26 @@ def test_benchmark_rodi_enter_close_scope_resolve_100(benchmark: Any) -> None:
 
     benchmark.pedantic(
         target=bench_rodi_enter_close_scope_resolve_100,
+        warmup_rounds=_BENCHMARK_WARMUP_ROUNDS,
+        rounds=_BENCHMARK_ROUNDS,
+        iterations=_BENCHMARK_ITERATIONS,
+    )
+
+
+def test_benchmark_dishka_enter_close_scope_resolve_100(benchmark: Any) -> None:
+    container = make_dishka_benchmark_container(context={int: 42})
+    assert container.get(int) == 42
+    with container(scope=DishkaBenchmarkScope.REQUEST) as scope:
+        values = [scope.get(int) for _ in range(3)]
+    assert values == [42, 42, 42]
+
+    def bench_dishka_enter_close_scope_resolve_100() -> None:
+        with container(scope=DishkaBenchmarkScope.REQUEST) as scope:
+            for _ in range(100):
+                _value = scope.get(int)
+
+    benchmark.pedantic(
+        target=bench_dishka_enter_close_scope_resolve_100,
         warmup_rounds=_BENCHMARK_WARMUP_ROUNDS,
         rounds=_BENCHMARK_ROUNDS,
         iterations=_BENCHMARK_ITERATIONS,

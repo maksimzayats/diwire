@@ -44,6 +44,14 @@ def _raw_payload() -> dict[str, object]:
                 "stats": {"ops": 400.0},
             },
             {
+                "name": "test_benchmark_dishka_resolve_transient",
+                "fullname": (
+                    "tests/benchmarks/test_resolve_transient.py"
+                    "::test_benchmark_dishka_resolve_transient"
+                ),
+                "stats": {"ops": 250.0},
+            },
+            {
                 "name": "test_benchmark_diwire_resolve_singleton",
                 "fullname": (
                     "tests/benchmarks/test_resolve_singleton.py"
@@ -59,6 +67,14 @@ def _raw_payload() -> dict[str, object]:
                 ),
                 "stats": {"ops": 500.0},
             },
+            {
+                "name": "test_benchmark_dishka_resolve_singleton",
+                "fullname": (
+                    "tests/benchmarks/test_resolve_singleton.py"
+                    "::test_benchmark_dishka_resolve_singleton"
+                ),
+                "stats": {"ops": 800.0},
+            },
         ],
     }
 
@@ -69,7 +85,7 @@ def test_normalize_benchmark_report_builds_expected_matrix() -> None:
         source_raw_file="benchmark-results/raw-benchmark.json",
     )
 
-    assert report.libraries == ("diwire", "rodi")
+    assert report.libraries == ("diwire", "rodi", "dishka")
     assert report.scenarios == ("resolve_singleton", "resolve_transient")
     assert report.files == {
         "resolve_singleton": "tests/benchmarks/test_resolve_singleton.py",
@@ -83,9 +99,17 @@ def test_normalize_benchmark_report_builds_expected_matrix() -> None:
         "resolve_singleton": 500.0,
         "resolve_transient": 400.0,
     }
+    assert report.ops["dishka"] == {
+        "resolve_singleton": 800.0,
+        "resolve_transient": 250.0,
+    }
     assert report.speedup_diwire_over_rodi == {
         "resolve_singleton": 2.0,
         "resolve_transient": 1.25,
+    }
+    assert report.speedup_diwire_over_dishka == {
+        "resolve_singleton": 1.25,
+        "resolve_transient": 2.0,
     }
 
 
@@ -100,9 +124,12 @@ def test_render_benchmark_markdown_renders_rows_and_metadata() -> None:
     assert "## Benchmark Results" in markdown
     assert "- Commit: `abc123`" in markdown
     assert "- Python: `3.14.0`" in markdown
-    assert "| Scenario | diwire | rodi | speedup diwire/rodi |" in markdown
-    assert "| resolve_singleton | 1,000 | 500 | 2.00x |" in markdown
-    assert "| resolve_transient | 500 | 400 | 1.25x |" in markdown
+    assert (
+        "| Scenario | diwire | rodi | dishka | speedup diwire/rodi | speedup diwire/dishka |"
+        in markdown
+    )
+    assert "| resolve_singleton | 1,000 | 500 | 800 | 2.00x | 1.25x |" in markdown
+    assert "| resolve_transient | 500 | 400 | 250 | 1.25x | 2.00x |" in markdown
 
 
 def test_normalize_benchmark_report_raises_for_missing_library_entry() -> None:
@@ -110,7 +137,7 @@ def test_normalize_benchmark_report_raises_for_missing_library_entry() -> None:
     benchmarks = payload["benchmarks"]
     assert isinstance(benchmarks, list)
     payload["benchmarks"] = [
-        entry for entry in benchmarks if "test_benchmark_rodi_resolve_transient" not in str(entry)
+        entry for entry in benchmarks if "test_benchmark_dishka_resolve_transient" not in str(entry)
     ]
 
     with pytest.raises(BenchmarkReportError, match="Missing benchmark entry"):
@@ -174,6 +201,19 @@ def test_normalize_benchmark_report_raises_for_zero_rodi_ops() -> None:
             break
 
     with pytest.raises(BenchmarkReportError, match="rodi OPS is zero"):
+        normalize_benchmark_report(payload, source_raw_file="benchmark-results/raw-benchmark.json")
+
+
+def test_normalize_benchmark_report_raises_for_zero_dishka_ops() -> None:
+    payload = copy.deepcopy(_raw_payload())
+    benchmarks = payload["benchmarks"]
+    assert isinstance(benchmarks, list)
+    for entry in benchmarks:
+        if entry["name"] == "test_benchmark_dishka_resolve_singleton":
+            entry["stats"]["ops"] = 0.0
+            break
+
+    with pytest.raises(BenchmarkReportError, match="dishka OPS is zero"):
         normalize_benchmark_report(payload, source_raw_file="benchmark-results/raw-benchmark.json")
 
 
@@ -362,9 +402,10 @@ def test_write_benchmark_outputs_writes_expected_files(tmp_path: Path) -> None:
 
     report_json = json.loads(json_path.read_text(encoding="utf-8"))
     assert report_json["metadata"]["commit"] == "abc123"
-    assert report_json["libraries"] == ["diwire", "rodi"]
+    assert report_json["libraries"] == ["diwire", "rodi", "dishka"]
     assert report_json["scenarios"] == ["resolve_singleton", "resolve_transient"]
     assert report_json["speedup_diwire_over_rodi"]["resolve_singleton"] == 2.0
+    assert report_json["speedup_diwire_over_dishka"]["resolve_singleton"] == 1.25
 
 
 def test_main_generates_report_files(tmp_path: Path) -> None:

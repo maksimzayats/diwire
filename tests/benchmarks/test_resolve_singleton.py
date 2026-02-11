@@ -3,10 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 import rodi
+from dishka import Provider
 
 from diwire.container import Container as DIWireContainer
 from diwire.lock_mode import LockMode
 from diwire.providers import Lifetime
+from tests.benchmarks.dishka_helpers import DishkaBenchmarkScope, make_dishka_benchmark_container
 from tests.benchmarks.helpers import run_benchmark
 
 
@@ -39,3 +41,17 @@ def test_benchmark_rodi_resolve_singleton(benchmark: Any) -> None:
         _ = services.get(_SingletonService)
 
     run_benchmark(benchmark, bench_rodi_singleton)
+
+
+def test_benchmark_dishka_resolve_singleton(benchmark: Any) -> None:
+    provider = Provider(scope=DishkaBenchmarkScope.APP)
+    provider.provide(_SingletonService, scope=DishkaBenchmarkScope.APP)
+    container = make_dishka_benchmark_container(provider)
+    first = container.get(_SingletonService)
+    second = container.get(_SingletonService)
+    assert first is second
+
+    def bench_dishka_singleton() -> None:
+        _ = container.get(_SingletonService)
+
+    run_benchmark(benchmark, bench_dishka_singleton)

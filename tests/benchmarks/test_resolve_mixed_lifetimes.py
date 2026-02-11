@@ -3,11 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 import rodi
+from dishka import Provider
 
 from diwire.container import Container as DIWireContainer
 from diwire.lock_mode import LockMode
 from diwire.providers import Lifetime
 from diwire.scope import Scope
+from tests.benchmarks.dishka_helpers import DishkaBenchmarkScope, make_dishka_benchmark_container
 from tests.benchmarks.helpers import run_benchmark
 
 
@@ -74,3 +76,27 @@ def test_benchmark_rodi_resolve_mixed_lifetimes(benchmark: Any) -> None:
             _ = scope.get(_RootScopedService)
 
     run_benchmark(benchmark, bench_rodi_mixed_lifetimes)
+
+
+def test_benchmark_dishka_resolve_mixed_lifetimes(benchmark: Any) -> None:
+    provider = Provider(scope=DishkaBenchmarkScope.APP)
+    provider.provide(_SharedDependency, scope=DishkaBenchmarkScope.APP)
+    provider.provide(_PerResolveDependency, scope=DishkaBenchmarkScope.REQUEST, cache=False)
+    provider.provide(_RootScopedService, scope=DishkaBenchmarkScope.REQUEST)
+    container = make_dishka_benchmark_container(provider)
+    with container(scope=DishkaBenchmarkScope.REQUEST) as first_scope:
+        first = first_scope.get(_RootScopedService)
+        second = first_scope.get(_RootScopedService)
+    with container(scope=DishkaBenchmarkScope.REQUEST) as second_scope:
+        third = second_scope.get(_RootScopedService)
+    assert first is second
+    assert first is not third
+    assert first.dependency is second.dependency
+    assert first.dependency is not third.dependency
+    assert first.dependency.shared is third.dependency.shared
+
+    def bench_dishka_mixed_lifetimes() -> None:
+        with container(scope=DishkaBenchmarkScope.REQUEST) as scope:
+            _ = scope.get(_RootScopedService)
+
+    run_benchmark(benchmark, bench_dishka_mixed_lifetimes)
