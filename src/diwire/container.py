@@ -109,7 +109,7 @@ class Container:
     # region Registration Methods
     def register_instance(
         self,
-        provides: type[T] | None = None,
+        provides: type[T] | Literal["infer"] = "infer",
         *,
         instance: T,
     ) -> None:
@@ -117,10 +117,19 @@ class Container:
 
         Instance providers always use ``LockMode.NONE``.
         """
+        provides_value = cast("Any", provides)
+        if provides_value == "infer":
+            resolved_provides: type[T] = type(instance)
+        elif provides_value is not None:
+            resolved_provides = cast("type[T]", provides_value)
+        else:
+            msg = "register_instance() parameter 'provides' must not be None; use 'infer'."
+            raise DIWireInvalidRegistrationError(msg)
+
         with self._registration_mutation():
             self._providers_registrations.add(
                 ProviderSpec(
-                    provides=provides or type(instance),
+                    provides=resolved_provides,
                     instance=instance,
                     lifetime=self._default_lifetime,
                     scope=self._root_scope,
@@ -134,14 +143,14 @@ class Container:
 
     def register_concrete(
         self,
-        provides: type[T] | None = None,
+        provides: type[T] | Literal["infer"] = "infer",
         *,
-        concrete_type: type[T] | None = None,
-        scope: BaseScope | None = None,
-        lifetime: Lifetime | None = None,
-        dependencies: list[ProviderDependency] | None = None,
+        concrete_type: type[T] | Literal["infer"] = "infer",
+        scope: BaseScope | Literal["from_container"] = "from_container",
+        lifetime: Lifetime | Literal["from_container"] = "from_container",
+        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | None = None,
+        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> ConcreteTypeRegistrationDecorator[T]:
         """Register a concrete type provider in the container.
 
@@ -157,40 +166,50 @@ class Container:
             autoregister_dependencies=autoregister_dependencies,
         )
 
-        if provides is None and concrete_type is None:
+        if provides == "infer" and concrete_type == "infer":
             return decorator
 
-        if provides is None:
-            provides = concrete_type
-        if concrete_type is None:
-            concrete_type = provides
+        resolved_provides, resolved_concrete_type = self._resolve_concrete_registration_types(
+            provides=provides,
+            concrete_type=concrete_type,
+        )
+        resolved_scope = self._resolve_registration_scope(
+            scope=scope,
+            method_name="register_concrete",
+        )
+        resolved_lifetime = self._resolve_registration_lifetime(
+            lifetime=lifetime,
+            method_name="register_concrete",
+        )
+        explicit_dependencies = self._resolve_registration_dependencies(
+            dependencies=dependencies,
+            method_name="register_concrete",
+        )
+        resolved_autoregister_dependencies = self._resolve_registration_autoregister_dependencies(
+            autoregister_dependencies=autoregister_dependencies,
+            method_name="register_concrete",
+        )
 
-        if (
-            provides is None or concrete_type is None
-        ):  # pragma: no cover - normalized above; defensive invariant guard
-            msg = "Concrete provider registration requires either provides or concrete_type."
-            raise DIWireInvalidRegistrationError(msg)
-
-        self._dependency_registration_validator.validate_concrete_type(concrete_type=concrete_type)
+        self._dependency_registration_validator.validate_concrete_type(
+            concrete_type=resolved_concrete_type,
+        )
 
         dependencies_for_provider = self._resolve_concrete_registration_dependencies(
-            concrete_type=concrete_type,
-            explicit_dependencies=dependencies,
+            concrete_type=resolved_concrete_type,
+            explicit_dependencies=explicit_dependencies,
         )
         is_any_dependency_async = self._provider_return_type_extractor.is_any_dependency_async(
             dependencies_for_provider,
         )
 
-        resolved_scope = scope or self._root_scope
-        resolved_lifetime = lifetime or self._default_lifetime
         resolved_lock_mode = self._resolve_provider_lock_mode(lock_mode)
 
         with self._registration_mutation():
             if (
                 self._open_generic_registry.register(
-                    provides=provides,
+                    provides=resolved_provides,
                     provider_kind="concrete_type",
-                    provider=concrete_type,
+                    provider=resolved_concrete_type,
                     lifetime=resolved_lifetime,
                     scope=resolved_scope,
                     lock_mode=resolved_lock_mode,
@@ -205,7 +224,9 @@ class Container:
                     dependencies=dependencies_for_provider,
                     scope=resolved_scope,
                     lifetime=resolved_lifetime,
-                    enabled=self._resolve_autoregister_dependencies(autoregister_dependencies),
+                    enabled=self._resolve_autoregister_dependencies(
+                        resolved_autoregister_dependencies,
+                    ),
                 )
                 self._invalidate_compilation()
                 return decorator
@@ -214,7 +235,7 @@ class Container:
                 closed_generic_injections,
                 dependencies_for_provider,
             ) = self._resolve_closed_concrete_generic_injections(
-                provides=provides,
+                provides=resolved_provides,
                 dependencies=dependencies_for_provider,
             )
             is_any_dependency_async = self._provider_return_type_extractor.is_any_dependency_async(
@@ -222,12 +243,12 @@ class Container:
             )
             if closed_generic_injections:
                 concrete_factory = self._build_closed_concrete_factory(
-                    concrete_type=concrete_type,
+                    concrete_type=resolved_concrete_type,
                     injected_arguments=closed_generic_injections,
                 )
                 self._providers_registrations.add(
                     ProviderSpec(
-                        provides=provides,
+                        provides=resolved_provides,
                         factory=concrete_factory,
                         lifetime=resolved_lifetime,
                         scope=resolved_scope,
@@ -242,15 +263,17 @@ class Container:
                     dependencies=dependencies_for_provider,
                     scope=resolved_scope,
                     lifetime=resolved_lifetime,
-                    enabled=self._resolve_autoregister_dependencies(autoregister_dependencies),
+                    enabled=self._resolve_autoregister_dependencies(
+                        resolved_autoregister_dependencies,
+                    ),
                 )
                 self._invalidate_compilation()
                 return decorator
 
             self._providers_registrations.add(
                 ProviderSpec(
-                    provides=provides,
-                    concrete_type=concrete_type,
+                    provides=resolved_provides,
+                    concrete_type=resolved_concrete_type,
                     lifetime=resolved_lifetime,
                     scope=resolved_scope,
                     dependencies=dependencies_for_provider,
@@ -264,7 +287,9 @@ class Container:
                 dependencies=dependencies_for_provider,
                 scope=resolved_scope,
                 lifetime=resolved_lifetime,
-                enabled=self._resolve_autoregister_dependencies(autoregister_dependencies),
+                enabled=self._resolve_autoregister_dependencies(
+                    resolved_autoregister_dependencies,
+                ),
             )
             self._invalidate_compilation()
 
@@ -272,14 +297,16 @@ class Container:
 
     def register_factory(
         self,
-        provides: type[T] | None = None,
+        provides: type[T] | Literal["infer"] = "infer",
         *,
-        factory: Callable[..., T] | Callable[..., Awaitable[T]] | None = None,
-        scope: BaseScope | None = None,
-        lifetime: Lifetime | None = None,
-        dependencies: list[ProviderDependency] | None = None,
+        factory: (Callable[..., T] | Callable[..., Awaitable[T]]) | Literal["from_decorator"] = (
+            "from_decorator"
+        ),
+        scope: BaseScope | Literal["from_container"] = "from_container",
+        lifetime: Lifetime | Literal["from_container"] = "from_container",
+        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | None = None,
+        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> FactoryRegistrationDecorator[T]:
         """Register a factory provider in the container.
 
@@ -295,85 +322,85 @@ class Container:
             autoregister_dependencies=autoregister_dependencies,
         )
 
-        if factory is None:
+        factory_value = cast("Any", factory)
+        if factory_value == "from_decorator":
             return decorator
 
-        if provides is None:
-            provides = self._provider_return_type_extractor.extract_from_factory(factory=factory)
+        if not callable(factory_value):
+            msg = "register_factory() parameter 'factory' must be callable or 'from_decorator'."
+            raise DIWireInvalidRegistrationError(msg)
+
+        factory_provider = cast("FactoryProvider[Any]", factory_value)
+        resolved_provides = cast(
+            "type[T]",
+            self._resolve_registration_provides(
+                provides=provides,
+                method_name="register_factory",
+                infer_from=lambda: self._provider_return_type_extractor.extract_from_factory(
+                    factory=factory_provider,
+                ),
+            ),
+        )
+        resolved_scope = self._resolve_registration_scope(
+            scope=scope,
+            method_name="register_factory",
+        )
+        resolved_lifetime = self._resolve_registration_lifetime(
+            lifetime=lifetime,
+            method_name="register_factory",
+        )
+        explicit_dependencies = self._resolve_registration_dependencies(
+            dependencies=dependencies,
+            method_name="register_factory",
+        )
+        resolved_autoregister_dependencies = self._resolve_registration_autoregister_dependencies(
+            autoregister_dependencies=autoregister_dependencies,
+            method_name="register_factory",
+        )
 
         dependencies_for_provider = self._resolve_factory_registration_dependencies(
-            factory=factory,
-            explicit_dependencies=dependencies,
+            factory=factory_provider,
+            explicit_dependencies=explicit_dependencies,
         )
-        is_async = self._provider_return_type_extractor.is_factory_async(factory)
+        is_async = self._provider_return_type_extractor.is_factory_async(factory_provider)
         is_any_dependency_async = self._provider_return_type_extractor.is_any_dependency_async(
             dependencies_for_provider,
         )
 
-        resolved_scope = scope or self._root_scope
-        resolved_lifetime = lifetime or self._default_lifetime
         resolved_lock_mode = self._resolve_provider_lock_mode(lock_mode)
 
-        with self._registration_mutation():
-            if (
-                self._open_generic_registry.register(
-                    provides=provides,
-                    provider_kind="factory",
-                    provider=factory,
-                    lifetime=resolved_lifetime,
-                    scope=resolved_scope,
-                    lock_mode=resolved_lock_mode,
-                    is_async=is_async,
-                    is_any_dependency_async=is_any_dependency_async,
-                    needs_cleanup=False,
-                    dependencies=dependencies_for_provider,
-                )
-                is not None
-            ):
-                self._autoregister_provider_dependencies(
-                    dependencies=dependencies_for_provider,
-                    scope=resolved_scope,
-                    lifetime=resolved_lifetime,
-                    enabled=self._resolve_autoregister_dependencies(autoregister_dependencies),
-                )
-                self._invalidate_compilation()
-                return decorator
-
-            self._providers_registrations.add(
-                ProviderSpec(
-                    provides=provides,
-                    factory=factory,
-                    lifetime=resolved_lifetime,
-                    scope=resolved_scope,
-                    dependencies=dependencies_for_provider,
-                    is_async=is_async,
-                    is_any_dependency_async=is_any_dependency_async,
-                    needs_cleanup=False,
-                    lock_mode=resolved_lock_mode,
-                ),
-            )
-            self._autoregister_provider_dependencies(
-                dependencies=dependencies_for_provider,
-                scope=resolved_scope,
+        return cast(
+            "FactoryRegistrationDecorator[T]",
+            self._register_non_concrete_provider(
+                decorator=decorator,
+                provides=resolved_provides,
+                provider_kind="factory",
+                provider=factory_provider,
+                provider_field="factory",
                 lifetime=resolved_lifetime,
-                enabled=self._resolve_autoregister_dependencies(autoregister_dependencies),
-            )
-            self._invalidate_compilation()
-
-            return decorator
+                scope=resolved_scope,
+                lock_mode=resolved_lock_mode,
+                is_async=is_async,
+                is_any_dependency_async=is_any_dependency_async,
+                needs_cleanup=False,
+                dependencies=dependencies_for_provider,
+                resolved_autoregister_dependencies=resolved_autoregister_dependencies,
+            ),
+        )
 
     def register_generator(
         self,
-        provides: type[T] | None = None,
+        provides: type[T] | Literal["infer"] = "infer",
         *,
         generator: (
-            Callable[..., Generator[T, None, None]] | Callable[..., AsyncGenerator[T, None]] | None
-        ),
-        scope: BaseScope | None = None,
-        lifetime: Lifetime | None = None,
-        dependencies: list[ProviderDependency] | None = None,
+            Callable[..., Generator[T, None, None]] | Callable[..., AsyncGenerator[T, None]]
+        )
+        | Literal["from_decorator"] = "from_decorator",
+        scope: BaseScope | Literal["from_container"] = "from_container",
+        lifetime: Lifetime | Literal["from_container"] = "from_container",
+        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | None = None,
+        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> GeneratorRegistrationDecorator[T]:
         """Register a generator provider in the container.
 
@@ -389,89 +416,86 @@ class Container:
             autoregister_dependencies=autoregister_dependencies,
         )
 
-        if generator is None:
+        generator_value = cast("Any", generator)
+        if generator_value == "from_decorator":
             return decorator
 
-        if provides is None:
-            provides = self._provider_return_type_extractor.extract_from_generator(
-                generator=generator,
-            )
+        if not callable(generator_value):
+            msg = "register_generator() parameter 'generator' must be callable or 'from_decorator'."
+            raise DIWireInvalidRegistrationError(msg)
+
+        generator_provider = cast("GeneratorProvider[Any]", generator_value)
+        resolved_provides = cast(
+            "type[T]",
+            self._resolve_registration_provides(
+                provides=provides,
+                method_name="register_generator",
+                infer_from=lambda: self._provider_return_type_extractor.extract_from_generator(
+                    generator=generator_provider,
+                ),
+            ),
+        )
+        resolved_scope = self._resolve_registration_scope(
+            scope=scope,
+            method_name="register_generator",
+        )
+        resolved_lifetime = self._resolve_registration_lifetime(
+            lifetime=lifetime,
+            method_name="register_generator",
+        )
+        explicit_dependencies = self._resolve_registration_dependencies(
+            dependencies=dependencies,
+            method_name="register_generator",
+        )
+        resolved_autoregister_dependencies = self._resolve_registration_autoregister_dependencies(
+            autoregister_dependencies=autoregister_dependencies,
+            method_name="register_generator",
+        )
 
         dependencies_for_provider = self._resolve_generator_registration_dependencies(
-            generator=generator,
-            explicit_dependencies=dependencies,
+            generator=generator_provider,
+            explicit_dependencies=explicit_dependencies,
         )
-        is_async = self._provider_return_type_extractor.is_generator_async(generator)
+        is_async = self._provider_return_type_extractor.is_generator_async(generator_provider)
         is_any_dependency_async = self._provider_return_type_extractor.is_any_dependency_async(
             dependencies_for_provider,
         )
 
-        resolved_scope = scope or self._root_scope
-        resolved_lifetime = lifetime or self._default_lifetime
         resolved_lock_mode = self._resolve_provider_lock_mode(lock_mode)
 
-        with self._registration_mutation():
-            if (
-                self._open_generic_registry.register(
-                    provides=provides,
-                    provider_kind="generator",
-                    provider=generator,
-                    lifetime=resolved_lifetime,
-                    scope=resolved_scope,
-                    lock_mode=resolved_lock_mode,
-                    is_async=is_async,
-                    is_any_dependency_async=is_any_dependency_async,
-                    needs_cleanup=True,
-                    dependencies=dependencies_for_provider,
-                )
-                is not None
-            ):
-                self._autoregister_provider_dependencies(
-                    dependencies=dependencies_for_provider,
-                    scope=resolved_scope,
-                    lifetime=resolved_lifetime,
-                    enabled=self._resolve_autoregister_dependencies(autoregister_dependencies),
-                )
-                self._invalidate_compilation()
-                return decorator
-
-            self._providers_registrations.add(
-                ProviderSpec(
-                    provides=provides,
-                    generator=generator,
-                    lifetime=resolved_lifetime,
-                    scope=resolved_scope,
-                    dependencies=dependencies_for_provider,
-                    is_async=is_async,
-                    is_any_dependency_async=is_any_dependency_async,
-                    needs_cleanup=True,
-                    lock_mode=resolved_lock_mode,
-                ),
-            )
-            self._autoregister_provider_dependencies(
-                dependencies=dependencies_for_provider,
-                scope=resolved_scope,
+        return cast(
+            "GeneratorRegistrationDecorator[T]",
+            self._register_non_concrete_provider(
+                decorator=decorator,
+                provides=resolved_provides,
+                provider_kind="generator",
+                provider=generator_provider,
+                provider_field="generator",
                 lifetime=resolved_lifetime,
-                enabled=self._resolve_autoregister_dependencies(autoregister_dependencies),
-            )
-            self._invalidate_compilation()
-
-            return decorator
+                scope=resolved_scope,
+                lock_mode=resolved_lock_mode,
+                is_async=is_async,
+                is_any_dependency_async=is_any_dependency_async,
+                needs_cleanup=True,
+                dependencies=dependencies_for_provider,
+                resolved_autoregister_dependencies=resolved_autoregister_dependencies,
+            ),
+        )
 
     def register_context_manager(
         self,
-        provides: type[T] | None = None,
+        provides: type[T] | Literal["infer"] = "infer",
         *,
         context_manager: (
             Callable[..., AbstractContextManager[T]]
             | Callable[..., AbstractAsyncContextManager[T]]
-            | None
-        ) = None,
-        scope: BaseScope | None = None,
-        lifetime: Lifetime | None = None,
-        dependencies: list[ProviderDependency] | None = None,
+            | Literal["from_decorator"]
+        ) = "from_decorator",
+        scope: BaseScope | Literal["from_container"] = "from_container",
+        lifetime: Lifetime | Literal["from_container"] = "from_container",
+        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | None = None,
+        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> ContextManagerRegistrationDecorator[T]:
         """Register a context manager provider in the container.
 
@@ -487,73 +511,281 @@ class Container:
             autoregister_dependencies=autoregister_dependencies,
         )
 
-        if context_manager is None:
+        context_manager_value = cast("Any", context_manager)
+        if context_manager_value == "from_decorator":
             return decorator
 
-        if provides is None:
-            provides = self._provider_return_type_extractor.extract_from_context_manager(
-                context_manager=context_manager,
+        if not callable(context_manager_value):
+            msg = (
+                "register_context_manager() parameter 'context_manager' must be callable or "
+                "'from_decorator'."
             )
+            raise DIWireInvalidRegistrationError(msg)
+
+        context_manager_provider = cast("ContextManagerProvider[Any]", context_manager_value)
+        resolved_provides = cast(
+            "type[T]",
+            self._resolve_registration_provides(
+                provides=provides,
+                method_name="register_context_manager",
+                infer_from=lambda: (
+                    self._provider_return_type_extractor.extract_from_context_manager(
+                        context_manager=context_manager_provider,
+                    )
+                ),
+            ),
+        )
+        resolved_scope = self._resolve_registration_scope(
+            scope=scope,
+            method_name="register_context_manager",
+        )
+        resolved_lifetime = self._resolve_registration_lifetime(
+            lifetime=lifetime,
+            method_name="register_context_manager",
+        )
+        explicit_dependencies = self._resolve_registration_dependencies(
+            dependencies=dependencies,
+            method_name="register_context_manager",
+        )
+        resolved_autoregister_dependencies = self._resolve_registration_autoregister_dependencies(
+            autoregister_dependencies=autoregister_dependencies,
+            method_name="register_context_manager",
+        )
 
         dependencies_for_provider = self._resolve_context_manager_registration_dependencies(
-            context_manager=context_manager,
-            explicit_dependencies=dependencies,
+            context_manager=context_manager_provider,
+            explicit_dependencies=explicit_dependencies,
         )
-        is_async = self._provider_return_type_extractor.is_context_manager_async(context_manager)
+        is_async = self._provider_return_type_extractor.is_context_manager_async(
+            context_manager_provider,
+        )
         is_any_dependency_async = self._provider_return_type_extractor.is_any_dependency_async(
             dependencies_for_provider,
         )
 
-        resolved_scope = scope or self._root_scope
-        resolved_lifetime = lifetime or self._default_lifetime
         resolved_lock_mode = self._resolve_provider_lock_mode(lock_mode)
 
+        return cast(
+            "ContextManagerRegistrationDecorator[T]",
+            self._register_non_concrete_provider(
+                decorator=decorator,
+                provides=resolved_provides,
+                provider_kind="context_manager",
+                provider=context_manager_provider,
+                provider_field="context_manager",
+                lifetime=resolved_lifetime,
+                scope=resolved_scope,
+                lock_mode=resolved_lock_mode,
+                is_async=is_async,
+                is_any_dependency_async=is_any_dependency_async,
+                needs_cleanup=True,
+                dependencies=dependencies_for_provider,
+                resolved_autoregister_dependencies=resolved_autoregister_dependencies,
+            ),
+        )
+
+    def _resolve_concrete_registration_types(
+        self,
+        *,
+        provides: type[T] | Literal["infer"],
+        concrete_type: type[T] | Literal["infer"],
+    ) -> tuple[Any, Any]:
+        provides_value = cast("Any", provides)
+        concrete_type_value = cast("Any", concrete_type)
+
+        if provides_value == "infer":
+            resolved_provides = concrete_type_value
+        elif provides_value is not None:
+            resolved_provides = provides_value
+        else:
+            msg = "register_concrete() parameter 'provides' must not be None; use 'infer'."
+            raise DIWireInvalidRegistrationError(msg)
+
+        if concrete_type_value == "infer":
+            if isinstance(resolved_provides, type):
+                return resolved_provides, resolved_provides
+
+            msg = (
+                "register_concrete() parameter 'concrete_type' must be provided when "
+                "'provides' is not a class."
+            )
+            raise DIWireInvalidRegistrationError(msg)
+
+        if concrete_type_value is None:
+            msg = "register_concrete() parameter 'concrete_type' must not be None; use 'infer'."
+            raise DIWireInvalidRegistrationError(msg)
+
+        return resolved_provides, concrete_type_value
+
+    def _resolve_registration_provides(
+        self,
+        *,
+        provides: Any,
+        method_name: str,
+        infer_from: Callable[[], Any],
+    ) -> Any:
+        if provides == "infer":
+            return infer_from()
+        if provides is not None:
+            return provides
+
+        msg = f"{method_name}() parameter 'provides' must not be None; use 'infer'."
+        raise DIWireInvalidRegistrationError(msg)
+
+    def _resolve_registration_scope(
+        self,
+        *,
+        scope: BaseScope | Literal["from_container"],
+        method_name: str,
+    ) -> BaseScope:
+        scope_value = cast("Any", scope)
+        if scope_value == "from_container":
+            return self._root_scope
+        if isinstance(scope_value, BaseScope):
+            return scope_value
+
+        msg = f"{method_name}() parameter 'scope' must be BaseScope or 'from_container'."
+        raise DIWireInvalidRegistrationError(msg)
+
+    def _resolve_registration_lifetime(
+        self,
+        *,
+        lifetime: Lifetime | Literal["from_container"],
+        method_name: str,
+    ) -> Lifetime:
+        lifetime_value = cast("Any", lifetime)
+        if lifetime_value == "from_container":
+            return self._default_lifetime
+        if isinstance(lifetime_value, Lifetime):
+            return lifetime_value
+
+        msg = f"{method_name}() parameter 'lifetime' must be Lifetime or 'from_container'."
+        raise DIWireInvalidRegistrationError(msg)
+
+    def _resolve_registration_dependencies(
+        self,
+        *,
+        dependencies: list[ProviderDependency] | Literal["infer"],
+        method_name: str,
+    ) -> list[ProviderDependency] | None:
+        dependencies_value = cast("Any", dependencies)
+        if dependencies_value == "infer":
+            return None
+        if isinstance(dependencies_value, list):
+            return cast("list[ProviderDependency]", dependencies_value)
+
+        msg = f"{method_name}() parameter 'dependencies' must be a list or 'infer'."
+        raise DIWireInvalidRegistrationError(msg)
+
+    def _resolve_registration_autoregister_dependencies(
+        self,
+        *,
+        autoregister_dependencies: bool | Literal["from_container"],
+        method_name: str,
+    ) -> bool | None:
+        autoregister_dependencies_value = cast("Any", autoregister_dependencies)
+        if autoregister_dependencies_value == "from_container":
+            return None
+        if isinstance(autoregister_dependencies_value, bool):
+            return autoregister_dependencies_value
+
+        msg = (
+            f"{method_name}() parameter 'autoregister_dependencies' must be bool or "
+            "'from_container'."
+        )
+        raise DIWireInvalidRegistrationError(msg)
+
+    def _register_non_concrete_provider(
+        self,
+        *,
+        decorator: Any,
+        provides: type[Any],
+        provider_kind: Literal["factory", "generator", "context_manager"],
+        provider: Any,
+        provider_field: Literal["factory", "generator", "context_manager"],
+        lifetime: Lifetime,
+        scope: BaseScope,
+        lock_mode: LockMode | Literal["auto"],
+        is_async: bool,
+        is_any_dependency_async: bool,
+        needs_cleanup: bool,
+        dependencies: list[ProviderDependency],
+        resolved_autoregister_dependencies: bool | None,
+    ) -> Any:
         with self._registration_mutation():
             if (
                 self._open_generic_registry.register(
                     provides=provides,
-                    provider_kind="context_manager",
-                    provider=context_manager,
-                    lifetime=resolved_lifetime,
-                    scope=resolved_scope,
-                    lock_mode=resolved_lock_mode,
+                    provider_kind=provider_kind,
+                    provider=provider,
+                    lifetime=lifetime,
+                    scope=scope,
+                    lock_mode=lock_mode,
                     is_async=is_async,
                     is_any_dependency_async=is_any_dependency_async,
-                    needs_cleanup=True,
-                    dependencies=dependencies_for_provider,
+                    needs_cleanup=needs_cleanup,
+                    dependencies=dependencies,
                 )
                 is not None
             ):
                 self._autoregister_provider_dependencies(
-                    dependencies=dependencies_for_provider,
-                    scope=resolved_scope,
-                    lifetime=resolved_lifetime,
-                    enabled=self._resolve_autoregister_dependencies(autoregister_dependencies),
+                    dependencies=dependencies,
+                    scope=scope,
+                    lifetime=lifetime,
+                    enabled=self._resolve_autoregister_dependencies(
+                        resolved_autoregister_dependencies,
+                    ),
                 )
                 self._invalidate_compilation()
                 return decorator
 
-            self._providers_registrations.add(
-                ProviderSpec(
+            if provider_field == "factory":
+                provider_spec = ProviderSpec(
                     provides=provides,
-                    context_manager=context_manager,
-                    lifetime=resolved_lifetime,
-                    scope=resolved_scope,
-                    dependencies=dependencies_for_provider,
+                    factory=cast("FactoryProvider[Any]", provider),
+                    lifetime=lifetime,
+                    scope=scope,
+                    dependencies=dependencies,
                     is_async=is_async,
                     is_any_dependency_async=is_any_dependency_async,
-                    needs_cleanup=True,
-                    lock_mode=resolved_lock_mode,
+                    needs_cleanup=needs_cleanup,
+                    lock_mode=lock_mode,
+                )
+            elif provider_field == "generator":
+                provider_spec = ProviderSpec(
+                    provides=provides,
+                    generator=cast("GeneratorProvider[Any]", provider),
+                    lifetime=lifetime,
+                    scope=scope,
+                    dependencies=dependencies,
+                    is_async=is_async,
+                    is_any_dependency_async=is_any_dependency_async,
+                    needs_cleanup=needs_cleanup,
+                    lock_mode=lock_mode,
+                )
+            else:
+                provider_spec = ProviderSpec(
+                    provides=provides,
+                    context_manager=cast("ContextManagerProvider[Any]", provider),
+                    lifetime=lifetime,
+                    scope=scope,
+                    dependencies=dependencies,
+                    is_async=is_async,
+                    is_any_dependency_async=is_any_dependency_async,
+                    needs_cleanup=needs_cleanup,
+                    lock_mode=lock_mode,
+                )
+
+            self._providers_registrations.add(provider_spec)
+            self._autoregister_provider_dependencies(
+                dependencies=dependencies,
+                scope=scope,
+                lifetime=lifetime,
+                enabled=self._resolve_autoregister_dependencies(
+                    resolved_autoregister_dependencies,
                 ),
             )
-            self._autoregister_provider_dependencies(
-                dependencies=dependencies_for_provider,
-                scope=resolved_scope,
-                lifetime=resolved_lifetime,
-                enabled=self._resolve_autoregister_dependencies(autoregister_dependencies),
-            )
             self._invalidate_compilation()
-
             return decorator
 
     def _resolve_concrete_registration_dependencies(
@@ -782,34 +1014,57 @@ class Container:
     @overload
     def inject(
         self,
-        func: None = None,
+        func: Literal["from_decorator"] = "from_decorator",
         *,
-        scope: BaseScope | None = None,
-        autoregister_dependencies: bool | None = None,
+        scope: BaseScope | Literal["infer"] = "infer",
+        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
         auto_open_scope: bool = True,
     ) -> Callable[[InjectableF], InjectableF]: ...
 
     def inject(
         self,
-        func: InjectableF | None = None,
+        func: InjectableF | Literal["from_decorator"] = "from_decorator",
         *,
-        scope: BaseScope | None = None,
-        autoregister_dependencies: bool | None = None,
+        scope: BaseScope | Literal["infer"] = "infer",
+        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
         auto_open_scope: bool = True,
     ) -> InjectableF | Callable[[InjectableF], InjectableF]:
         """Decorate a callable to auto-inject parameters marked with Injected[T]."""
+        scope_value = cast("Any", scope)
+        resolved_scope: BaseScope | None
+        if scope_value == "infer":
+            resolved_scope = None
+        elif isinstance(scope_value, BaseScope):
+            resolved_scope = scope_value
+        else:
+            msg = "inject() parameter 'scope' must be BaseScope or 'infer'."
+            raise DIWireInvalidRegistrationError(msg)
+
+        autoregister_dependencies_value = cast("Any", autoregister_dependencies)
+        resolved_autoregister_dependencies: bool | None
+        if autoregister_dependencies_value == "from_container":
+            resolved_autoregister_dependencies = None
+        elif isinstance(autoregister_dependencies_value, bool):
+            resolved_autoregister_dependencies = autoregister_dependencies_value
+        else:
+            msg = "inject() parameter 'autoregister_dependencies' must be bool or 'from_container'."
+            raise DIWireInvalidRegistrationError(msg)
 
         def decorator(callable_obj: InjectableF) -> InjectableF:
             return self._inject_callable(
                 callable_obj=callable_obj,
-                scope=scope,
-                autoregister_dependencies=autoregister_dependencies,
+                scope=resolved_scope,
+                autoregister_dependencies=resolved_autoregister_dependencies,
                 auto_open_scope=auto_open_scope,
             )
 
-        if func is None:
+        func_value = cast("Any", func)
+        if func_value == "from_decorator":
             return decorator
-        return decorator(func)
+        if not callable(func_value):
+            msg = "inject() parameter 'func' must be callable or 'from_decorator'."
+            raise DIWireInvalidRegistrationError(msg)
+        return decorator(func_value)
 
     def _inject_callable(
         self,
@@ -1352,12 +1607,12 @@ class ConcreteTypeRegistrationDecorator(Generic[T]):
     """A decorator for registering concrete type providers in the container."""
 
     container: Container
-    scope: BaseScope | None
-    lifetime: Lifetime | None
-    provides: type[T] | None = None
-    dependencies: list[ProviderDependency] | None = None
+    scope: BaseScope | Literal["from_container"] = "from_container"
+    lifetime: Lifetime | Literal["from_container"] = "from_container"
+    provides: type[T] | Literal["infer"] = "infer"
+    dependencies: list[ProviderDependency] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
-    autoregister_dependencies: bool | None = None
+    autoregister_dependencies: bool | Literal["from_container"] = "from_container"
 
     def __call__(self, concrete_type: type[T]) -> type[T]:
         """Register the concrete type provider in the container."""
@@ -1379,12 +1634,12 @@ class FactoryRegistrationDecorator(Generic[T]):
     """A decorator for registering factory providers in the container."""
 
     container: Container
-    scope: BaseScope | None
-    lifetime: Lifetime | None
-    provides: type[T] | None = None
-    dependencies: list[ProviderDependency] | None = None
+    scope: BaseScope | Literal["from_container"] = "from_container"
+    lifetime: Lifetime | Literal["from_container"] = "from_container"
+    provides: type[T] | Literal["infer"] = "infer"
+    dependencies: list[ProviderDependency] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
-    autoregister_dependencies: bool | None = None
+    autoregister_dependencies: bool | Literal["from_container"] = "from_container"
 
     def __call__(self, factory: F) -> F:
         """Register the factory provider in the container."""
@@ -1406,12 +1661,12 @@ class GeneratorRegistrationDecorator(Generic[T]):
     """A decorator for registering generator providers in the container."""
 
     container: Container
-    scope: BaseScope | None
-    lifetime: Lifetime | None
-    provides: type[T] | None = None
-    dependencies: list[ProviderDependency] | None = None
+    scope: BaseScope | Literal["from_container"] = "from_container"
+    lifetime: Lifetime | Literal["from_container"] = "from_container"
+    provides: type[T] | Literal["infer"] = "infer"
+    dependencies: list[ProviderDependency] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
-    autoregister_dependencies: bool | None = None
+    autoregister_dependencies: bool | Literal["from_container"] = "from_container"
 
     def __call__(self, generator: F) -> F:
         """Register the generator provider in the container."""
@@ -1433,12 +1688,12 @@ class ContextManagerRegistrationDecorator(Generic[T]):
     """A decorator for registering context manager providers in the container."""
 
     container: Container
-    scope: BaseScope | None
-    lifetime: Lifetime | None
-    provides: type[T] | None = None
-    dependencies: list[ProviderDependency] | None = None
+    scope: BaseScope | Literal["from_container"] = "from_container"
+    lifetime: Lifetime | Literal["from_container"] = "from_container"
+    provides: type[T] | Literal["infer"] = "infer"
+    dependencies: list[ProviderDependency] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
-    autoregister_dependencies: bool | None = None
+    autoregister_dependencies: bool | Literal["from_container"] = "from_container"
 
     def __call__(self, context_manager: F) -> F:
         """Register the context manager provider in the container."""

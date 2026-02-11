@@ -151,17 +151,20 @@ def test_register_concrete_without_arguments_returns_decorator() -> None:
     assert isinstance(container.register_concrete(), ConcreteTypeRegistrationDecorator)
 
 
-def test_register_generator_with_none_returns_decorator() -> None:
-    container = Container()
-
-    assert isinstance(container.register_generator(generator=None), GeneratorRegistrationDecorator)
-
-
-def test_register_context_manager_with_none_returns_decorator() -> None:
+def test_register_generator_with_decorator_sentinel_returns_decorator() -> None:
     container = Container()
 
     assert isinstance(
-        container.register_context_manager(context_manager=None),
+        container.register_generator(generator="from_decorator"),
+        GeneratorRegistrationDecorator,
+    )
+
+
+def test_register_context_manager_with_decorator_sentinel_returns_decorator() -> None:
+    container = Container()
+
+    assert isinstance(
+        container.register_context_manager(context_manager="from_decorator"),
         ContextManagerRegistrationDecorator,
     )
 
@@ -192,7 +195,7 @@ def test_generator_decorator_registers_provider() -> None:
 
     container = Container()
 
-    decorator = container.register_generator(provides=DecoratorService, generator=None)
+    decorator = container.register_generator(provides=DecoratorService, generator="from_decorator")
     returned_generator = decorator(build_service)
 
     assert returned_generator is build_service
@@ -207,7 +210,10 @@ def test_context_manager_decorator_registers_provider() -> None:
 
     container = Container()
 
-    decorator = container.register_context_manager(provides=DecoratorService, context_manager=None)
+    decorator = container.register_context_manager(
+        provides=DecoratorService,
+        context_manager="from_decorator",
+    )
     returned_context_manager = decorator(build_service)
 
     assert returned_context_manager is build_service

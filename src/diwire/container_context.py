@@ -47,7 +47,7 @@ class _RegistrationOperation:
 
     def apply(self, container: Container) -> None:
         registration_kwargs = {
-            key: list(value) if key == "dependencies" and value is not None else value
+            key: list(value) if key == "dependencies" and isinstance(value, tuple) else value
             for key, value in self.kwargs.items()
         }
         registration_method = cast("Callable[..., Any]", getattr(container, self.method_name))
@@ -101,7 +101,7 @@ class ContainerContext:
     ) -> None:
         normalized_kwargs = registration_kwargs.copy()
         dependencies = normalized_kwargs.get("dependencies")
-        if dependencies is not None:
+        if isinstance(dependencies, list):
             normalized_kwargs["dependencies"] = tuple(dependencies)
 
         self._record_operation(
@@ -113,29 +113,38 @@ class ContainerContext:
 
     def register_instance(
         self,
-        provides: type[T] | None = None,
+        provides: type[T] | Literal["infer"] = "infer",
         *,
         instance: T,
     ) -> None:
         """Register an instance provider for replay and immediate binding when available."""
+        provides_value = cast("Any", provides)
+        if provides_value == "infer":
+            resolved_provides: type[T] = type(instance)
+        elif provides_value is not None:
+            resolved_provides = cast("type[T]", provides_value)
+        else:
+            msg = "register_instance() parameter 'provides' must not be None; use 'infer'."
+            raise DIWireInvalidRegistrationError(msg)
+
         self._record_registration(
             method_name="register_instance",
             registration_kwargs={
-                "provides": provides,
+                "provides": resolved_provides,
                 "instance": instance,
             },
         )
 
     def register_concrete(  # noqa: PLR0913
         self,
-        provides: type[T] | None = None,
+        provides: type[T] | Literal["infer"] = "infer",
         *,
-        concrete_type: type[T] | None = None,
-        scope: BaseScope | None = None,
-        lifetime: Lifetime | None = None,
-        dependencies: list[ProviderDependency] | None = None,
+        concrete_type: type[T] | Literal["infer"] = "infer",
+        scope: BaseScope | Literal["from_container"] = "from_container",
+        lifetime: Lifetime | Literal["from_container"] = "from_container",
+        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | None = None,
+        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> Callable[[type[T]], type[T]]:
         """Register a concrete provider with direct and decorator forms.
 
@@ -154,11 +163,33 @@ class ContainerContext:
             )
             return decorated_concrete
 
-        if provides is None and concrete_type is None:
+        if provides == "infer" and concrete_type == "infer":
             return decorator
 
-        normalized_provides = provides if provides is not None else concrete_type
-        normalized_concrete = concrete_type if concrete_type is not None else provides
+        normalized_provides, normalized_concrete = self._normalize_concrete_registration_types(
+            provides=provides,
+            concrete_type=concrete_type,
+        )
+        self._validate_registration_provides(
+            method_name="register_concrete",
+            provides=normalized_provides,
+        )
+        self._validate_registration_scope(
+            method_name="register_concrete",
+            scope=scope,
+        )
+        self._validate_registration_lifetime(
+            method_name="register_concrete",
+            lifetime=lifetime,
+        )
+        self._validate_registration_dependencies(
+            method_name="register_concrete",
+            dependencies=dependencies,
+        )
+        self._validate_registration_autoregister_dependencies(
+            method_name="register_concrete",
+            autoregister_dependencies=autoregister_dependencies,
+        )
 
         self._record_registration(
             method_name="register_concrete",
@@ -176,14 +207,16 @@ class ContainerContext:
 
     def register_factory(  # noqa: PLR0913
         self,
-        provides: type[T] | None = None,
+        provides: type[T] | Literal["infer"] = "infer",
         *,
-        factory: Callable[..., T] | Callable[..., Awaitable[T]] | None = None,
-        scope: BaseScope | None = None,
-        lifetime: Lifetime | None = None,
-        dependencies: list[ProviderDependency] | None = None,
+        factory: (Callable[..., T] | Callable[..., Awaitable[T]]) | Literal["from_decorator"] = (
+            "from_decorator"
+        ),
+        scope: BaseScope | Literal["from_container"] = "from_container",
+        lifetime: Lifetime | Literal["from_container"] = "from_container",
+        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | None = None,
+        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> Callable[[F], F]:
         """Register a factory provider with direct and decorator forms.
 
@@ -202,14 +235,31 @@ class ContainerContext:
             )
             return decorated_factory
 
-        if factory is None:
+        factory_value = cast("Any", factory)
+        if factory_value == "from_decorator":
             return decorator
+
+        if not callable(factory_value):
+            msg = "register_factory() parameter 'factory' must be callable or 'from_decorator'."
+            raise DIWireInvalidRegistrationError(msg)
+
+        self._validate_registration_provides(method_name="register_factory", provides=provides)
+        self._validate_registration_scope(method_name="register_factory", scope=scope)
+        self._validate_registration_lifetime(method_name="register_factory", lifetime=lifetime)
+        self._validate_registration_dependencies(
+            method_name="register_factory",
+            dependencies=dependencies,
+        )
+        self._validate_registration_autoregister_dependencies(
+            method_name="register_factory",
+            autoregister_dependencies=autoregister_dependencies,
+        )
 
         self._record_registration(
             method_name="register_factory",
             registration_kwargs={
                 "provides": provides,
-                "factory": cast("FactoryProvider[Any]", factory),
+                "factory": cast("FactoryProvider[Any]", factory_value),
                 "scope": scope,
                 "lifetime": lifetime,
                 "dependencies": dependencies,
@@ -221,16 +271,17 @@ class ContainerContext:
 
     def register_generator(  # noqa: PLR0913
         self,
-        provides: type[T] | None = None,
+        provides: type[T] | Literal["infer"] = "infer",
         *,
         generator: (
-            Callable[..., Generator[T, None, None]] | Callable[..., AsyncGenerator[T, None]] | None
-        ),
-        scope: BaseScope | None = None,
-        lifetime: Lifetime | None = None,
-        dependencies: list[ProviderDependency] | None = None,
+            Callable[..., Generator[T, None, None]] | Callable[..., AsyncGenerator[T, None]]
+        )
+        | Literal["from_decorator"] = "from_decorator",
+        scope: BaseScope | Literal["from_container"] = "from_container",
+        lifetime: Lifetime | Literal["from_container"] = "from_container",
+        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | None = None,
+        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> Callable[[F], F]:
         """Register a generator provider with direct and decorator forms.
 
@@ -252,14 +303,31 @@ class ContainerContext:
             )
             return decorated_generator
 
-        if generator is None:
+        generator_value = cast("Any", generator)
+        if generator_value == "from_decorator":
             return decorator
+
+        if not callable(generator_value):
+            msg = "register_generator() parameter 'generator' must be callable or 'from_decorator'."
+            raise DIWireInvalidRegistrationError(msg)
+
+        self._validate_registration_provides(method_name="register_generator", provides=provides)
+        self._validate_registration_scope(method_name="register_generator", scope=scope)
+        self._validate_registration_lifetime(method_name="register_generator", lifetime=lifetime)
+        self._validate_registration_dependencies(
+            method_name="register_generator",
+            dependencies=dependencies,
+        )
+        self._validate_registration_autoregister_dependencies(
+            method_name="register_generator",
+            autoregister_dependencies=autoregister_dependencies,
+        )
 
         self._record_registration(
             method_name="register_generator",
             registration_kwargs={
                 "provides": provides,
-                "generator": cast("GeneratorProvider[Any]", generator),
+                "generator": cast("GeneratorProvider[Any]", generator_value),
                 "scope": scope,
                 "lifetime": lifetime,
                 "dependencies": dependencies,
@@ -271,18 +339,18 @@ class ContainerContext:
 
     def register_context_manager(  # noqa: PLR0913
         self,
-        provides: type[T] | None = None,
+        provides: type[T] | Literal["infer"] = "infer",
         *,
         context_manager: (
             Callable[..., AbstractContextManager[T]]
             | Callable[..., AbstractAsyncContextManager[T]]
-            | None
-        ) = None,
-        scope: BaseScope | None = None,
-        lifetime: Lifetime | None = None,
-        dependencies: list[ProviderDependency] | None = None,
+            | Literal["from_decorator"]
+        ) = "from_decorator",
+        scope: BaseScope | Literal["from_container"] = "from_container",
+        lifetime: Lifetime | Literal["from_container"] = "from_container",
+        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | None = None,
+        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> Callable[[F], F]:
         """Register a context manager provider with direct and decorator forms.
 
@@ -304,14 +372,40 @@ class ContainerContext:
             )
             return decorated_context_manager
 
-        if context_manager is None:
+        context_manager_value = cast("Any", context_manager)
+        if context_manager_value == "from_decorator":
             return decorator
+
+        if not callable(context_manager_value):
+            msg = (
+                "register_context_manager() parameter 'context_manager' must be callable or "
+                "'from_decorator'."
+            )
+            raise DIWireInvalidRegistrationError(msg)
+
+        self._validate_registration_provides(
+            method_name="register_context_manager",
+            provides=provides,
+        )
+        self._validate_registration_scope(method_name="register_context_manager", scope=scope)
+        self._validate_registration_lifetime(
+            method_name="register_context_manager",
+            lifetime=lifetime,
+        )
+        self._validate_registration_dependencies(
+            method_name="register_context_manager",
+            dependencies=dependencies,
+        )
+        self._validate_registration_autoregister_dependencies(
+            method_name="register_context_manager",
+            autoregister_dependencies=autoregister_dependencies,
+        )
 
         self._record_registration(
             method_name="register_context_manager",
             registration_kwargs={
                 "provides": provides,
-                "context_manager": cast("ContextManagerProvider[Any]", context_manager),
+                "context_manager": cast("ContextManagerProvider[Any]", context_manager_value),
                 "scope": scope,
                 "lifetime": lifetime,
                 "dependencies": dependencies,
@@ -321,47 +415,157 @@ class ContainerContext:
         )
         return decorator
 
+    def _normalize_concrete_registration_types(
+        self,
+        *,
+        provides: type[T] | Literal["infer"],
+        concrete_type: type[T] | Literal["infer"],
+    ) -> tuple[Any, Any]:
+        provides_value = cast("Any", provides)
+        concrete_type_value = cast("Any", concrete_type)
+
+        if provides_value == "infer":
+            normalized_provides = concrete_type_value
+        elif provides_value is not None:
+            normalized_provides = provides_value
+        else:
+            msg = "register_concrete() parameter 'provides' must not be None; use 'infer'."
+            raise DIWireInvalidRegistrationError(msg)
+
+        if concrete_type_value == "infer":
+            if isinstance(normalized_provides, type):
+                return normalized_provides, normalized_provides
+
+            msg = (
+                "register_concrete() parameter 'concrete_type' must be provided when "
+                "'provides' is not a class."
+            )
+            raise DIWireInvalidRegistrationError(msg)
+
+        if concrete_type_value is None:
+            msg = "register_concrete() parameter 'concrete_type' must not be None; use 'infer'."
+            raise DIWireInvalidRegistrationError(msg)
+
+        return normalized_provides, concrete_type_value
+
+    def _validate_registration_provides(
+        self,
+        *,
+        method_name: str,
+        provides: type[Any] | Literal["infer"],
+    ) -> None:
+        provides_value = cast("Any", provides)
+        if provides_value is None:
+            msg = f"{method_name}() parameter 'provides' must not be None; use 'infer'."
+            raise DIWireInvalidRegistrationError(msg)
+
+    def _validate_registration_scope(
+        self,
+        *,
+        method_name: str,
+        scope: BaseScope | Literal["from_container"],
+    ) -> None:
+        scope_value = cast("Any", scope)
+        if scope_value != "from_container" and not isinstance(scope_value, BaseScope):
+            msg = f"{method_name}() parameter 'scope' must be BaseScope or 'from_container'."
+            raise DIWireInvalidRegistrationError(msg)
+
+    def _validate_registration_lifetime(
+        self,
+        *,
+        method_name: str,
+        lifetime: Lifetime | Literal["from_container"],
+    ) -> None:
+        lifetime_value = cast("Any", lifetime)
+        if lifetime_value != "from_container" and not isinstance(lifetime_value, Lifetime):
+            msg = f"{method_name}() parameter 'lifetime' must be Lifetime or 'from_container'."
+            raise DIWireInvalidRegistrationError(msg)
+
+    def _validate_registration_dependencies(
+        self,
+        *,
+        method_name: str,
+        dependencies: list[ProviderDependency] | Literal["infer"],
+    ) -> None:
+        dependencies_value = cast("Any", dependencies)
+        if dependencies_value != "infer" and not isinstance(dependencies_value, list):
+            msg = f"{method_name}() parameter 'dependencies' must be a list or 'infer'."
+            raise DIWireInvalidRegistrationError(msg)
+
+    def _validate_registration_autoregister_dependencies(
+        self,
+        *,
+        method_name: str,
+        autoregister_dependencies: bool | Literal["from_container"],
+    ) -> None:
+        autoregister_dependencies_value = cast("Any", autoregister_dependencies)
+        if autoregister_dependencies_value != "from_container" and not isinstance(
+            autoregister_dependencies_value,
+            bool,
+        ):
+            msg = (
+                f"{method_name}() parameter 'autoregister_dependencies' must be bool or "
+                "'from_container'."
+            )
+            raise DIWireInvalidRegistrationError(msg)
+
     @overload
     def inject(self, func: InjectableF) -> InjectableF: ...
 
     @overload
     def inject(
         self,
-        func: None = None,
+        func: Literal["from_decorator"] = "from_decorator",
         *,
-        scope: BaseScope | None = None,
-        autoregister_dependencies: bool | None = None,
+        scope: BaseScope | Literal["infer"] = "infer",
+        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
         auto_open_scope: bool = True,
     ) -> Callable[[InjectableF], InjectableF]: ...
 
     def inject(
         self,
-        func: InjectableF | None = None,
+        func: InjectableF | Literal["from_decorator"] = "from_decorator",
         *,
-        scope: BaseScope | None = None,
-        autoregister_dependencies: bool | None = None,
+        scope: BaseScope | Literal["infer"] = "infer",
+        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
         auto_open_scope: bool = True,
     ) -> InjectableF | Callable[[InjectableF], InjectableF]:
         """Decorate a callable with lazy injection delegated to the current container."""
+        scope_value = cast("Any", scope)
+        if scope_value != "infer" and not isinstance(scope_value, BaseScope):
+            msg = "inject() parameter 'scope' must be BaseScope or 'infer'."
+            raise DIWireInvalidRegistrationError(msg)
+
+        autoregister_dependencies_value = cast("Any", autoregister_dependencies)
+        if autoregister_dependencies_value != "from_container" and not isinstance(
+            autoregister_dependencies_value,
+            bool,
+        ):
+            msg = "inject() parameter 'autoregister_dependencies' must be bool or 'from_container'."
+            raise DIWireInvalidRegistrationError(msg)
 
         def decorator(callable_obj: InjectableF) -> InjectableF:
             return self._inject_callable(
                 callable_obj=callable_obj,
-                scope=scope,
-                autoregister_dependencies=autoregister_dependencies,
+                scope=scope_value,
+                autoregister_dependencies=autoregister_dependencies_value,
                 auto_open_scope=auto_open_scope,
             )
 
-        if func is None:
+        func_value = cast("Any", func)
+        if func_value == "from_decorator":
             return decorator
-        return decorator(func)
+        if not callable(func_value):
+            msg = "inject() parameter 'func' must be callable or 'from_decorator'."
+            raise DIWireInvalidRegistrationError(msg)
+        return decorator(func_value)
 
     def _resolve_container_injected_callable(
         self,
         *,
         callable_obj: InjectableF,
-        scope: BaseScope | None,
-        autoregister_dependencies: bool | None,
+        scope: BaseScope | Literal["infer"],
+        autoregister_dependencies: bool | Literal["from_container"],
         auto_open_scope: bool,
     ) -> Callable[..., Any]:
         container = self.get_current()
@@ -376,8 +580,8 @@ class ContainerContext:
         self,
         *,
         callable_obj: InjectableF,
-        scope: BaseScope | None,
-        autoregister_dependencies: bool | None,
+        scope: BaseScope | Literal["infer"],
+        autoregister_dependencies: bool | Literal["from_container"],
         auto_open_scope: bool,
     ) -> InjectableF:
         signature = inspect.signature(callable_obj)
