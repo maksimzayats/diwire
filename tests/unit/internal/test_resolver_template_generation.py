@@ -268,7 +268,7 @@ def test_renderer_output_is_deterministic_and_composable() -> None:
     assert "async def __aenter__(self) -> RootResolver:" in code_first
     assert (
         "def enter_scope(self, scope: Any | None = None) -> "
-        "RootResolver | _SessionResolver | _RequestResolver:"
+        "RootResolver | _SessionResolver | _RequestResolver | _ActionResolver | _StepResolver:"
     ) in code_first
     assert "def enter_scope(self, scope: Any | None = None) -> NoReturn:" in code_first
     assert "def resolve(self, dependency: Any) -> Any:" in code_first

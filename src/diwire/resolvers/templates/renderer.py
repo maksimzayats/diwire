@@ -391,6 +391,7 @@ class ResolversTemplateRenderer:
             slots.append("__dict__")
         if plan.has_cleanup:
             slots.append("_cleanup_callbacks")
+        slots.append("_owned_scope_resolvers")
 
         slots.append(plan.scopes[0].resolver_attr_name)
 
@@ -460,6 +461,7 @@ class ResolversTemplateRenderer:
         )
         if plan.has_cleanup:
             body_lines.append("self._cleanup_callbacks: list[tuple[int, Any]] = []")
+        body_lines.append("self._owned_scope_resolvers: tuple[Any, ...] = ()")
         return body_lines
 
     def _stateless_scope_reuse_init_lines(self, *, plan: ResolverGenerationPlan) -> list[str]:
@@ -518,6 +520,34 @@ class ResolversTemplateRenderer:
             msg = "Expected a default scope transition but none was found."
             raise ValueError(msg)
 
+        transition_plans = self._transition_plan_by_candidate(
+            plan=plan,
+            class_scope_level=class_plan.scope_level,
+            explicit_candidates=explicit_candidates,
+        )
+        uses_stateless_scope_reuse = self._uses_stateless_scope_reuse(plan=plan)
+        if uses_stateless_scope_reuse:
+            single_step_candidates = tuple(
+                candidate
+                for candidate in explicit_candidates
+                if candidate.scope_level != default_next.scope_level
+            )
+            deep_candidates: tuple[ScopePlan, ...] = ()
+        else:
+            single_step_candidates = tuple(
+                candidate
+                for candidate in explicit_candidates
+                if (
+                    len(transition_plans[candidate.scope_level]) == 1
+                    and candidate.scope_level != default_next.scope_level
+                )
+            )
+            deep_candidates = tuple(
+                candidate
+                for candidate in explicit_candidates
+                if len(transition_plans[candidate.scope_level]) > 1
+            )
+
         body_lines = [
             (
                 f"if scope is _scope_obj_{default_next.scope_level} "
@@ -559,9 +589,7 @@ class ResolversTemplateRenderer:
             ],
         )
 
-        for candidate in explicit_candidates:
-            if candidate.scope_level == default_next.scope_level:
-                continue
+        for candidate in single_step_candidates:
             body_lines.append(
                 (
                     f"if target_scope_level is _scope_obj_{candidate.scope_level} "
@@ -574,6 +602,24 @@ class ResolversTemplateRenderer:
                         plan=plan,
                         current_scope_level=class_plan.scope_level,
                         target_scope=candidate,
+                    ),
+                    1,
+                ),
+            )
+
+        for candidate in deep_candidates:
+            body_lines.append(
+                (
+                    f"if target_scope_level is _scope_obj_{candidate.scope_level} "
+                    f"or target_scope_level == {candidate.scope_level}:"
+                ),
+            )
+            body_lines.extend(
+                self._indent_lines(
+                    self._render_deep_constructor_chain_return_lines(
+                        plan=plan,
+                        class_plan=class_plan,
+                        transition_plan=transition_plans[candidate.scope_level],
                     ),
                     1,
                 ),
@@ -646,6 +692,153 @@ class ResolversTemplateRenderer:
         lines.append(")")
         return lines
 
+    def _render_deep_constructor_chain_return_lines(
+        self,
+        *,
+        plan: ResolverGenerationPlan,
+        class_plan: ScopePlan,
+        transition_plan: tuple[ScopePlan, ...],
+    ) -> list[str]:
+        if not transition_plan:
+            msg = "Transition plan must contain at least one scope."
+            raise ValueError(msg)
+
+        if self._uses_stateless_scope_reuse(plan=plan):
+            return self._constructor_return_lines(
+                plan=plan,
+                current_scope_level=class_plan.scope_level,
+                target_scope=transition_plan[-1],
+            )
+
+        local_ref_by_level: dict[int, str] = {}
+        current_ref = "self"
+        current_scope_level = class_plan.scope_level
+        lines: list[str] = []
+
+        for scope in transition_plan:
+            scope_local_ref = f"{scope.scope_name}_resolver"
+            constructor_call_lines = self._constructor_call_lines(
+                plan=plan,
+                current_scope_level=current_scope_level,
+                current_ref=current_ref,
+                target_scope=scope,
+                local_ref_by_level=local_ref_by_level,
+            )
+            lines.append(f"{scope_local_ref} = {constructor_call_lines[0]}")
+            lines.extend(constructor_call_lines[1:])
+            local_ref_by_level[scope.scope_level] = scope_local_ref
+            current_ref = scope_local_ref
+            current_scope_level = scope.scope_level
+
+        deepest_ref = local_ref_by_level[transition_plan[-1].scope_level]
+        owned_refs = [local_ref_by_level[scope.scope_level] for scope in transition_plan[:-1]]
+        if owned_refs:
+            lines.append(
+                f"{deepest_ref}._owned_scope_resolvers = {self._tuple_literal(owned_refs)}",
+            )
+        lines.append(f"return {deepest_ref}")
+        return lines
+
+    def _constructor_call_lines(
+        self,
+        *,
+        plan: ResolverGenerationPlan,
+        current_scope_level: int,
+        current_ref: str,
+        target_scope: ScopePlan,
+        local_ref_by_level: dict[int, str],
+    ) -> list[str]:
+        arguments = [
+            current_ref
+            if current_scope_level == plan.root_scope_level
+            else f"{current_ref}._root_resolver",
+        ]
+        if plan.has_cleanup:
+            arguments.append(f"{current_ref}._cleanup_enabled")
+
+        constructor_base_arguments = (
+            _MIN_CONSTRUCTOR_BASE_ARGUMENTS
+            if plan.has_cleanup
+            else _MIN_CONSTRUCTOR_BASE_ARGUMENTS - 1
+        )
+        for ancestor in self._ancestor_non_root_scopes(
+            plan=plan,
+            scope_level=target_scope.scope_level,
+        ):
+            local_ref = local_ref_by_level.get(ancestor.scope_level)
+            if local_ref is not None:
+                arguments.append(local_ref)
+                continue
+            if ancestor.scope_level < current_scope_level:
+                arguments.append(f"{current_ref}.{ancestor.resolver_attr_name}")
+            elif ancestor.scope_level == current_scope_level:
+                arguments.append(current_ref)
+            else:
+                arguments.append("_MISSING_RESOLVER")
+        while len(arguments) > constructor_base_arguments and arguments[-1] == "_MISSING_RESOLVER":
+            arguments.pop()
+
+        lines = [f"{target_scope.class_name}("]
+        lines.extend(f"    {argument}," for argument in arguments)
+        lines.append(")")
+        return lines
+
+    def _tuple_literal(self, values: list[str]) -> str:
+        if len(values) == 1:
+            return f"({values[0]},)"
+        return f"({', '.join(values)})"
+
+    def _transition_plan_by_candidate(
+        self,
+        *,
+        plan: ResolverGenerationPlan,
+        class_scope_level: int,
+        explicit_candidates: tuple[ScopePlan, ...],
+    ) -> dict[int, tuple[ScopePlan, ...]]:
+        return {
+            candidate.scope_level: self._build_transition_plan_to_target(
+                plan=plan,
+                class_scope_level=class_scope_level,
+                target_scope_level=candidate.scope_level,
+            )
+            for candidate in explicit_candidates
+        }
+
+    def _build_transition_plan_to_target(
+        self,
+        *,
+        plan: ResolverGenerationPlan,
+        class_scope_level: int,
+        target_scope_level: int,
+    ) -> tuple[ScopePlan, ...]:
+        if target_scope_level <= class_scope_level:
+            msg = "Transition target scope level must be deeper than current scope level."
+            raise ValueError(msg)
+
+        transition_plan: list[ScopePlan] = []
+        current_scope_level = class_scope_level
+
+        while current_scope_level < target_scope_level:
+            immediate_next, default_next, _ = self._next_scope_options(
+                plan=plan,
+                class_scope_level=current_scope_level,
+            )
+            if immediate_next is None or default_next is None:
+                msg = f"Cannot build transition plan from scope level {class_scope_level}."
+                raise ValueError(msg)
+
+            if immediate_next.scope_level == target_scope_level:
+                next_scope = immediate_next
+            elif default_next.scope_level <= target_scope_level:
+                next_scope = default_next
+            else:
+                next_scope = immediate_next
+
+            transition_plan.append(next_scope)
+            current_scope_level = next_scope.scope_level
+
+        return tuple(transition_plan)
+
     def _next_scope_options(
         self,
         *,
@@ -661,10 +854,7 @@ class ResolversTemplateRenderer:
             (scope for scope in deeper_scopes if not scope.skippable),
             immediate_next,
         )
-        explicit_candidates: list[ScopePlan] = [immediate_next]
-        if immediate_next.skippable and default_next.scope_level != immediate_next.scope_level:
-            explicit_candidates.append(default_next)
-        return immediate_next, default_next, tuple(explicit_candidates)
+        return immediate_next, default_next, tuple(deeper_scopes)
 
     def _render_dispatch_resolve_method(
         self,

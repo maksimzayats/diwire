@@ -528,8 +528,10 @@ def test_scope_resolution_requires_explicit_opened_scope_chain() -> None:
     with pytest.raises(DIWireScopeMismatchError):
         container.resolve(_RequestService)
 
-    with pytest.raises(DIWireScopeMismatchError):
-        container.enter_scope(Scope.ACTION)
+    with container.enter_scope(Scope.ACTION) as action_scope:
+        from_action = action_scope.resolve(_RequestService)
+        assert isinstance(from_action, _RequestService)
+        assert from_action is action_scope.resolve(_RequestService)
 
     with container.enter_scope() as request_scope:
         with request_scope.enter_scope(Scope.ACTION) as action_scope:
@@ -1178,6 +1180,32 @@ def test_sync_generator_runs_cleanup_on_scope_exit() -> None:
 
     with container.enter_scope() as request_scope:
         resolved = request_scope.resolve(_Resource)
+        assert isinstance(resolved, _Resource)
+        assert events == ["enter"]
+
+    assert events == ["enter", "exit"]
+
+
+def test_sync_generator_runs_cleanup_for_implicit_request_scope_on_action_exit() -> None:
+    events: list[str] = []
+
+    def provide_resource() -> Generator[_Resource, None, None]:
+        events.append("enter")
+        try:
+            yield _Resource()
+        finally:
+            events.append("exit")
+
+    container = Container()
+    container.register_generator(
+        _Resource,
+        generator=provide_resource,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with container.enter_scope(Scope.ACTION) as action_scope:
+        resolved = action_scope.resolve(_Resource)
         assert isinstance(resolved, _Resource)
         assert events == ["enter"]
 

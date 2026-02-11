@@ -301,6 +301,28 @@ def test_open_scoped_cache_isolated_per_scope_and_closed_dependency_key() -> Non
     assert cast("object", one_first) is not cast("object", two_first)
 
 
+def test_open_scoped_cache_works_when_entering_action_scope_directly() -> None:
+    container = Container()
+    container.register_factory(
+        _IBox,
+        factory=_create_box,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with container.enter_scope(Scope.ACTION) as action_scope:
+        first = action_scope.resolve(_IBox[int])
+        second = action_scope.resolve(_IBox[int])
+        other = action_scope.resolve(_IBox[str])
+
+    with container.enter_scope(Scope.ACTION) as next_action_scope:
+        next_scope_first = next_action_scope.resolve(_IBox[int])
+
+    assert first is second
+    assert cast("object", first) is not cast("object", other)
+    assert cast("object", first) is not cast("object", next_scope_first)
+
+
 def test_resolving_open_generic_without_type_arguments_remains_unregistered() -> None:
     container = Container()
     container.register_concrete(_IBox, concrete_type=_Box)

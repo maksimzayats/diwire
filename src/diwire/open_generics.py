@@ -267,6 +267,7 @@ class _OpenGenericResolver:  # pragma: no cover
         self._cleanup_enabled = bool(
             getattr(base_resolver, "_cleanup_enabled", True),
         )
+        self._owned_scope_wrappers: tuple[_OpenGenericResolver, ...] = ()
 
     def resolve(self, dependency: Any) -> Any:
         try:
@@ -293,21 +294,34 @@ class _OpenGenericResolver:  # pragma: no cover
             )
 
     def enter_scope(self, scope: BaseScope | None = None) -> _OpenGenericResolver:
-        target_scope_level = _resolve_scope_transition(
+        transition_path = _resolve_scope_transition_path(
             root_scope=self._root_scope,
             current_scope_level=self._scope_level,
             scope=scope,
         )
-        child_base_resolver = self._base_resolver.enter_scope(scope)
-        return _OpenGenericResolver(
-            base_resolver=child_base_resolver,
-            registry=self._registry,
-            root_scope=self._root_scope,
-            has_async_specs=self._has_async_specs,
-            scope_level=target_scope_level,
-            root_wrapper=self._root_wrapper,
-            parent_wrapper=self,
-        )
+        if not transition_path:
+            return self
+
+        current_wrapper = self
+        current_base_resolver = self._base_resolver
+        created_wrappers: list[_OpenGenericResolver] = []
+
+        for next_scope in transition_path:
+            current_base_resolver = current_base_resolver.enter_scope(next_scope)
+            current_wrapper = _OpenGenericResolver(
+                base_resolver=current_base_resolver,
+                registry=self._registry,
+                root_scope=self._root_scope,
+                has_async_specs=self._has_async_specs,
+                scope_level=next_scope.level,
+                root_wrapper=self._root_wrapper,
+                parent_wrapper=current_wrapper,
+            )
+            created_wrappers.append(current_wrapper)
+
+        if len(created_wrappers) > 1:
+            current_wrapper._owned_scope_wrappers = tuple(created_wrappers[:-1])
+        return current_wrapper
 
     def __enter__(self) -> Self:
         self._base_resolver.__enter__()
@@ -319,14 +333,43 @@ class _OpenGenericResolver:  # pragma: no cover
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        self._base_resolver.__exit__(exc_type, exc_value, traceback)
-        if self._resolver_cleanup_callbacks() is None:
-            _execute_sync_cleanup_callbacks(
-                callbacks=self._cleanup_callbacks,
-                exc_type=exc_type,
-                exc_value=exc_value,
-                traceback=traceback,
+        callbacks: list[tuple[int, Any]] = (
+            self._cleanup_callbacks if self._resolver_cleanup_callbacks() is None else []
+        )
+
+        def _base_exit_callback(
+            callback_exc_type: type[BaseException] | None,
+            callback_exc_value: BaseException | None,
+            callback_traceback: TracebackType | None,
+        ) -> None:
+            self._base_resolver.__exit__(
+                callback_exc_type,
+                callback_exc_value,
+                callback_traceback,
             )
+
+        if self._owned_scope_wrappers:
+            callbacks[:0] = [
+                (
+                    0,
+                    lambda callback_exc_type, callback_exc_value, callback_traceback, owned_scope_wrapper=owned_scope_wrapper: (
+                        owned_scope_wrapper.__exit__(
+                            callback_exc_type,
+                            callback_exc_value,
+                            callback_traceback,
+                        )
+                    ),
+                )
+                for owned_scope_wrapper in self._owned_scope_wrappers
+            ]
+
+        callbacks.append((0, _base_exit_callback))
+        _execute_sync_cleanup_callbacks(
+            callbacks=callbacks,
+            exc_type=exc_type,
+            exc_value=exc_value,
+            traceback=traceback,
+        )
 
     async def __aenter__(self) -> Self:
         enter_result = self._base_resolver.__aenter__()
@@ -340,14 +383,43 @@ class _OpenGenericResolver:  # pragma: no cover
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        await self._base_resolver.__aexit__(exc_type, exc_value, traceback)
-        if self._resolver_cleanup_callbacks() is None:
-            await _execute_async_cleanup_callbacks(
-                callbacks=self._cleanup_callbacks,
-                exc_type=exc_type,
-                exc_value=exc_value,
-                traceback=traceback,
+        callbacks: list[tuple[int, Any]] = (
+            self._cleanup_callbacks if self._resolver_cleanup_callbacks() is None else []
+        )
+
+        async def _base_aexit_callback(
+            callback_exc_type: type[BaseException] | None,
+            callback_exc_value: BaseException | None,
+            callback_traceback: TracebackType | None,
+        ) -> None:
+            await self._base_resolver.__aexit__(
+                callback_exc_type,
+                callback_exc_value,
+                callback_traceback,
             )
+
+        if self._owned_scope_wrappers:
+            callbacks[:0] = [
+                (
+                    1,
+                    lambda callback_exc_type, callback_exc_value, callback_traceback, owned_scope_wrapper=owned_scope_wrapper: (
+                        owned_scope_wrapper.__aexit__(
+                            callback_exc_type,
+                            callback_exc_value,
+                            callback_traceback,
+                        )
+                    ),
+                )
+                for owned_scope_wrapper in self._owned_scope_wrappers
+            ]
+
+        callbacks.append((1, _base_aexit_callback))
+        await _execute_async_cleanup_callbacks(
+            callbacks=callbacks,
+            exc_type=exc_type,
+            exc_value=exc_value,
+            traceback=traceback,
+        )
 
     def _resolve_open_match_sync(
         self,
@@ -946,49 +1018,64 @@ def _origin_or_self(value: Any) -> Any:
     return get_origin(value) or value
 
 
-def _resolve_scope_transition(
+def _resolve_scope_transition_path(
     *,
     root_scope: BaseScope,
     current_scope_level: int,
     scope: BaseScope | None,
-) -> int:
+) -> list[BaseScope]:
     managed_scopes = sorted(
         (candidate for candidate in root_scope.owner() if candidate.level >= root_scope.level),
         key=lambda candidate: candidate.level,
     )
-    deeper_scopes = [
-        candidate for candidate in managed_scopes if candidate.level > current_scope_level
-    ]
-    if not deeper_scopes:
-        msg = f"Cannot enter deeper scope from level {current_scope_level}."
-        raise DIWireScopeMismatchError(msg)
-
-    immediate_next = deeper_scopes[0]
-    default_next = next(
-        (candidate for candidate in deeper_scopes if not candidate.skippable),
-        immediate_next,
-    )
-    explicit_candidates = [immediate_next]
-    if immediate_next.skippable and default_next.level != immediate_next.level:
-        explicit_candidates.append(default_next)
 
     if scope is None:
-        return default_next.level
-    target_scope_level = scope.level
-    if target_scope_level == current_scope_level:
-        return current_scope_level
+        deeper_scopes = [
+            candidate for candidate in managed_scopes if candidate.level > current_scope_level
+        ]
+        if not deeper_scopes:
+            msg = f"Cannot enter deeper scope from level {current_scope_level}."
+            raise DIWireScopeMismatchError(msg)
+        immediate_next = deeper_scopes[0]
+        default_next = next(
+            (candidate for candidate in deeper_scopes if not candidate.skippable),
+            immediate_next,
+        )
+        target_scope_level = default_next.level
+    else:
+        target_scope_level = scope.level
+        if target_scope_level == current_scope_level:
+            return []
     if target_scope_level <= current_scope_level:
         msg = f"Cannot enter scope level {target_scope_level} from level {current_scope_level}."
         raise DIWireScopeMismatchError(msg)
 
-    if any(candidate.level == target_scope_level for candidate in explicit_candidates):
-        return target_scope_level
+    valid_scope_levels = {candidate.level for candidate in managed_scopes}
+    if target_scope_level not in valid_scope_levels:
+        msg = (
+            f"Scope level {target_scope_level} is not a valid next transition from "
+            f"level {current_scope_level}."
+        )
+        raise DIWireScopeMismatchError(msg)
 
-    msg = (
-        f"Scope level {target_scope_level} is not a valid next transition from "
-        f"level {current_scope_level}."
-    )
-    raise DIWireScopeMismatchError(msg)
+    transition_path: list[BaseScope] = []
+    cursor_level = current_scope_level
+    while cursor_level < target_scope_level:
+        deeper_scopes = [
+            candidate for candidate in managed_scopes if candidate.level > cursor_level
+        ]
+        immediate_next = deeper_scopes[0]
+        default_next = next(
+            (candidate for candidate in deeper_scopes if not candidate.skippable),
+            immediate_next,
+        )
+        if immediate_next.level != target_scope_level and default_next.level <= target_scope_level:
+            next_scope = default_next
+        else:
+            next_scope = immediate_next
+        transition_path.append(next_scope)
+        cursor_level = next_scope.level
+    return transition_path
 
 
 def _execute_sync_cleanup_callbacks(

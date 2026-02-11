@@ -186,6 +186,13 @@ CONTEXT_EXIT_WITH_CLEANUP_TEMPLATE = dedent(
             except BaseException as error:
                 if exc_type is None and cleanup_error is None:
                     cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    owned_scope_resolver.__exit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
         if exc_type is None and cleanup_error is not None:
             raise cleanup_error
         return None
@@ -211,6 +218,13 @@ CONTEXT_AEXIT_WITH_CLEANUP_TEMPLATE = dedent(
             except BaseException as error:
                 if exc_type is None and cleanup_error is None:
                     cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    await owned_scope_resolver.__aexit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
         if exc_type is None and cleanup_error is not None:
             raise cleanup_error
         return None

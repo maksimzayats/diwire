@@ -15,7 +15,7 @@ from diwire.exceptions import (
 )
 from diwire.lock_mode import LockMode
 from diwire.providers import Lifetime, ProviderDependency
-from diwire.scope import Scope
+from diwire.scope import BaseScope, Scope
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -234,51 +234,50 @@ def test_matches_type_constraint_handles_any_and_issubclass_type_error(
     assert open_generics._matches_type_constraint(argument=int, constraint=int) is False
 
 
-def test_resolve_scope_transition_handles_all_error_and_success_paths() -> None:
+def test_resolve_scope_transition_path_handles_all_error_and_success_paths() -> None:
     with pytest.raises(DIWireScopeMismatchError, match="Cannot enter deeper scope"):
-        open_generics._resolve_scope_transition(
+        open_generics._resolve_scope_transition_path(
             root_scope=Scope.APP,
             current_scope_level=Scope.STEP.level,
             scope=None,
         )
 
+    assert open_generics._resolve_scope_transition_path(
+        root_scope=Scope.APP,
+        current_scope_level=Scope.APP.level,
+        scope=None,
+    ) == [Scope.REQUEST]
+    assert open_generics._resolve_scope_transition_path(
+        root_scope=Scope.APP,
+        current_scope_level=Scope.APP.level,
+        scope=Scope.SESSION,
+    ) == [Scope.SESSION]
+    assert open_generics._resolve_scope_transition_path(
+        root_scope=Scope.APP,
+        current_scope_level=Scope.APP.level,
+        scope=Scope.ACTION,
+    ) == [Scope.REQUEST, Scope.ACTION]
     assert (
-        open_generics._resolve_scope_transition(
-            root_scope=Scope.APP,
-            current_scope_level=Scope.APP.level,
-            scope=None,
-        )
-        == Scope.REQUEST.level
-    )
-    assert (
-        open_generics._resolve_scope_transition(
-            root_scope=Scope.APP,
-            current_scope_level=Scope.APP.level,
-            scope=Scope.SESSION,
-        )
-        == Scope.SESSION.level
-    )
-    assert (
-        open_generics._resolve_scope_transition(
+        open_generics._resolve_scope_transition_path(
             root_scope=Scope.APP,
             current_scope_level=Scope.REQUEST.level,
             scope=Scope.REQUEST,
         )
-        == Scope.REQUEST.level
+        == []
     )
 
     with pytest.raises(DIWireScopeMismatchError, match="Cannot enter scope level"):
-        open_generics._resolve_scope_transition(
+        open_generics._resolve_scope_transition_path(
             root_scope=Scope.APP,
             current_scope_level=Scope.REQUEST.level,
             scope=Scope.SESSION,
         )
 
     with pytest.raises(DIWireScopeMismatchError, match="is not a valid next transition"):
-        open_generics._resolve_scope_transition(
+        open_generics._resolve_scope_transition_path(
             root_scope=Scope.APP,
             current_scope_level=Scope.APP.level,
-            scope=Scope.ACTION,
+            scope=BaseScope(99),
         )
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from diwire import Container, Injected, Lifetime, Scope
+from diwire import Container, Injected, Lifetime
 
 pytest_plugins = ["diwire.integrations.pytest_plugin"]
 
