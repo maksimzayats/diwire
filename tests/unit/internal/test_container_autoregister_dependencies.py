@@ -187,6 +187,17 @@ def test_dependency_autoregistration_skips_already_registered_dependency() -> No
     assert container._providers_registrations.get_by_type(ExistingDependency) is existing_spec
 
 
+def test_strict_container_skips_dependency_autoregistration_even_when_enabled() -> None:
+    container = Container(
+        autoregister_concrete_types=False,
+        autoregister_dependencies=True,
+    )
+
+    container.register_concrete(concrete_type=RootWithDirectDependency)
+
+    assert container._providers_registrations.find_by_type(DirectDependency) is None
+
+
 def test_dependency_autoregistration_uses_parent_scope_and_lifetime() -> None:
     container = Container()
 

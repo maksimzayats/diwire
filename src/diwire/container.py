@@ -939,6 +939,8 @@ class Container:
         self,
         autoregister_dependencies: bool | None,
     ) -> bool:
+        if not self._autoregister_concrete_types:
+            return False
         if autoregister_dependencies is None:
             return self._autoregister_dependencies
         return autoregister_dependencies
