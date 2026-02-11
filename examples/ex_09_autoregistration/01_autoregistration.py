@@ -62,9 +62,15 @@ def main() -> None:
         concrete_type=RegisterRoot,
         autoregister_dependencies=True,
     )
-    autoregister_deps_on_register = (
-        register_container._providers_registrations.find_by_type(RegisterDependency) is not None
-    )
+    try:
+        resolved_register_root = register_container.resolve(RegisterRoot)
+    except DIWireDependencyNotRegisteredError:
+        autoregister_deps_on_register = False
+    else:
+        autoregister_deps_on_register = isinstance(
+            resolved_register_root.dependency,
+            RegisterDependency,
+        )
     print(
         f"autoregister_deps_on_register={autoregister_deps_on_register}",
     )  # => autoregister_deps_on_register=True

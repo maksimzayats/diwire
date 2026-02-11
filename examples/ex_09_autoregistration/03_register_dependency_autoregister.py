@@ -20,8 +20,11 @@ def main() -> None:
     container = Container(autoregister_dependencies=False)
     container.register_concrete(concrete_type=Root, autoregister_dependencies=True)
 
-    registered = container._providers_registrations.find_by_type(Dependency) is not None
-    print(f"autoregister_deps_on_register={registered}")  # => autoregister_deps_on_register=True
+    resolved = container.resolve(Root)
+    autoregistered = isinstance(resolved.dependency, Dependency)
+    print(
+        f"autoregister_deps_on_register={autoregistered}",
+    )  # => autoregister_deps_on_register=True
 
 
 if __name__ == "__main__":
