@@ -150,6 +150,25 @@ class _OpenGenericRegistry:
         self._specs_by_key: dict[Any, _OpenGenericSpec] = {}
         self._registration_counter = 0
 
+    @dataclass(frozen=True, slots=True)
+    class Snapshot:
+        """A rollback snapshot for open generic registrations."""
+
+        specs_by_key: dict[Any, _OpenGenericSpec]
+        registration_counter: int
+
+    def snapshot(self) -> Snapshot:
+        """Capture current registry state for rollback."""
+        return self.Snapshot(
+            specs_by_key=dict(self._specs_by_key),
+            registration_counter=self._registration_counter,
+        )
+
+    def restore(self, snapshot: Snapshot) -> None:
+        """Restore registry state from a previous snapshot."""
+        self._specs_by_key = dict(snapshot.specs_by_key)
+        self._registration_counter = snapshot.registration_counter
+
     def has_specs(self) -> bool:
         return bool(self._specs_by_key)
 

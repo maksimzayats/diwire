@@ -397,6 +397,87 @@ def test_inject_rejects_explicit_scope_shallower_than_inferred() -> None:
             return dep
 
 
+def test_inject_revalidates_explicit_scope_after_late_registration_sync() -> None:
+    container = Container()
+
+    @container.inject(scope=Scope.SESSION)
+    def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
+        return dep
+
+    with pytest.raises(DIWireInvalidRegistrationError, match="shallower than required"):
+        container.register_concrete(
+            _RequestDependency,
+            concrete_type=_RequestDependency,
+            scope=Scope.REQUEST,
+            lifetime=Lifetime.SCOPED,
+        )
+
+    assert container._providers_registrations.find_by_type(_RequestDependency) is None
+    assert handler is not None
+
+
+@pytest.mark.asyncio
+async def test_inject_revalidates_explicit_scope_after_late_registration_async() -> None:
+    container = Container()
+
+    @container.inject(scope=Scope.SESSION)
+    async def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
+        return dep
+
+    with pytest.raises(DIWireInvalidRegistrationError, match="shallower than required"):
+        container.register_concrete(
+            _RequestDependency,
+            concrete_type=_RequestDependency,
+            scope=Scope.REQUEST,
+            lifetime=Lifetime.SCOPED,
+        )
+
+    assert container._providers_registrations.find_by_type(_RequestDependency) is None
+    assert handler is not None
+
+
+def test_inject_without_explicit_scope_still_works_after_late_registration() -> None:
+    container = Container()
+
+    @container.inject
+    def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
+        return dep
+
+    container.register_concrete(
+        _RequestDependency,
+        concrete_type=_RequestDependency,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    injected_handler = cast("Any", handler)
+    with container.enter_scope() as request_scope:
+        resolved = injected_handler(__diwire_resolver=request_scope)
+
+    assert isinstance(resolved, _RequestDependency)
+
+
+def test_inject_revalidates_explicit_scope_on_registration_when_still_compatible() -> None:
+    container = Container()
+
+    @container.inject(scope=Scope.REQUEST)
+    def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
+        return dep
+
+    container.register_concrete(
+        _RequestDependency,
+        concrete_type=_RequestDependency,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    injected_handler = cast("Any", handler)
+    with container.enter_scope() as request_scope:
+        resolved = injected_handler(__diwire_resolver=request_scope)
+
+    assert isinstance(resolved, _RequestDependency)
+
+
 def test_inject_autoregister_true_registers_missing_dependency_chain() -> None:
     container = Container()
 

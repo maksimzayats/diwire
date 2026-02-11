@@ -127,6 +127,26 @@ class ProvidersRegistrations:
         self._registrations_by_type: dict[UserDependency, ProviderSpec] = {}
         self._registrations_by_slot: dict[int, ProviderSpec] = {}
 
+    @dataclass(frozen=True, slots=True)
+    class Snapshot:
+        """A rollback snapshot for provider registrations."""
+
+        registrations_by_type: dict[UserDependency, ProviderSpec]
+        registrations_by_slot: dict[int, ProviderSpec]
+
+    def snapshot(self) -> Snapshot:
+        """Capture current registrations for rollback."""
+        return self.Snapshot(
+            registrations_by_type=dict(self._registrations_by_type),
+            registrations_by_slot=dict(self._registrations_by_slot),
+        )
+
+    def restore(self, snapshot: Snapshot) -> None:
+        """Restore registrations from a previous snapshot."""
+        self._registrations_by_type = dict(snapshot.registrations_by_type)
+        self._registrations_by_slot = dict(snapshot.registrations_by_slot)
+        self._refresh_needs_cleanup_flags()
+
     def add(self, spec: ProviderSpec) -> None:
         """Add a new provider specification to the registrations."""
         if previous_spec := self._registrations_by_type.get(spec.provides):
