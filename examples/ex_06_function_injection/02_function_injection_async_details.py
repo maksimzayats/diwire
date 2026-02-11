@@ -22,7 +22,7 @@ class AsyncUser:
 
 async def main() -> None:
     container = Container(autoregister_concrete_types=False)
-    container.register_instance(instance=AsyncUser(email="async@example.com"))
+    container.add_instance(AsyncUser(email="async@example.com"))
 
     @container.inject
     async def handler(user: Injected[AsyncUser]) -> str:

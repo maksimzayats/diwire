@@ -247,8 +247,8 @@ def _make_generation_plan(
 
 def test_renderer_output_is_deterministic_and_composable() -> None:
     container = Container()
-    container.register_instance(_Config, instance=_Config())
-    container.register_concrete(_Service, concrete_type=_Service, lifetime=Lifetime.TRANSIENT)
+    container.add_instance(_Config(), provides=_Config)
+    container.add_concrete(_Service, provides=_Service, lifetime=Lifetime.TRANSIENT)
 
     renderer = ResolversTemplateRenderer()
     code_first = renderer.get_providers_code(
@@ -296,8 +296,8 @@ def test_renderer_output_is_deterministic_and_composable() -> None:
 
 def test_renderer_output_avoids_reflective_hot_path_tokens() -> None:
     container = Container()
-    container.register_instance(_Config, instance=_Config())
-    container.register_concrete(_Service, concrete_type=_Service, lifetime=Lifetime.SCOPED)
+    container.add_instance(_Config(), provides=_Config)
+    container.add_concrete(_Service, provides=_Service, lifetime=Lifetime.SCOPED)
 
     code = ResolversTemplateRenderer().get_providers_code(
         root_scope=Scope.APP,
@@ -313,9 +313,9 @@ def test_renderer_logs_lock_strategy_once_per_compile_cache_miss(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     container = Container()
-    container.register_factory(
-        _Service,
-        factory=lambda: _Service(_Config()),
+    container.add_factory(
+        lambda: _Service(_Config()),
+        provides=_Service,
         lifetime=Lifetime.SCOPED,
     )
 
@@ -332,10 +332,10 @@ def test_renderer_logs_lock_strategy_once_per_compile_cache_miss(
 
 def test_planner_selects_async_effective_lock_mode_when_async_specs_exist() -> None:
     container = Container()
-    container.register_factory(int, factory=_provide_int, lifetime=Lifetime.SCOPED)
-    container.register_factory(
-        _AsyncService,
-        factory=_provide_async_service,
+    container.add_factory(_provide_int, provides=int, lifetime=Lifetime.SCOPED)
+    container.add_factory(
+        _provide_async_service,
+        provides=_AsyncService,
         lifetime=Lifetime.SCOPED,
     )
 
@@ -350,15 +350,15 @@ def test_planner_selects_async_effective_lock_mode_when_async_specs_exist() -> N
 
 def test_renderer_includes_generator_context_helpers_for_generator_graphs() -> None:
     container = Container()
-    container.register_generator(
-        _GeneratorService,
-        generator=_provide_generator_service,
+    container.add_generator(
+        _provide_generator_service,
+        provides=_GeneratorService,
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
     )
-    container.register_generator(
-        _AsyncGeneratorService,
-        generator=_provide_async_generator_service,
+    container.add_generator(
+        _provide_async_generator_service,
+        provides=_AsyncGeneratorService,
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
     )
@@ -379,9 +379,9 @@ def test_renderer_includes_generator_context_helpers_for_generator_graphs() -> N
 
 def test_renderer_does_not_add_generator_helpers_for_context_manager_only_graphs() -> None:
     container = Container()
-    container.register_context_manager(
-        _ContextManagerService,
-        context_manager=_provide_context_manager_service,
+    container.add_context_manager(
+        _provide_context_manager_service,
+        provides=_ContextManagerService,
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
     )
@@ -397,9 +397,9 @@ def test_renderer_does_not_add_generator_helpers_for_context_manager_only_graphs
 
 def test_renderer_emits_async_context_manager_branch_for_async_context_manager_specs() -> None:
     container = Container()
-    container.register_context_manager(
-        _AsyncContextManagerService,
-        context_manager=_provide_async_context_manager_service,
+    container.add_context_manager(
+        _provide_async_context_manager_service,
+        provides=_AsyncContextManagerService,
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
     )
@@ -421,12 +421,12 @@ def test_renderer_dependency_wiring_supports_positional_varargs_and_varkw() -> N
     options_type = dict[str, int]
 
     container = Container()
-    container.register_instance(provides=positional_type, instance=1)
-    container.register_instance(provides=values_type, instance=(2, 3))
-    container.register_instance(provides=options_type, instance={"first": 1, "second": 2})
-    container.register_factory(
-        _DependencyShapeService,
-        factory=_provide_dependency_shape_service,
+    container.add_instance(1, provides=positional_type)
+    container.add_instance((2, 3), provides=values_type)
+    container.add_instance({"first": 1, "second": 2}, provides=options_type)
+    container.add_factory(
+        _provide_dependency_shape_service,
+        provides=_DependencyShapeService,
         dependencies=[
             ProviderDependency(
                 provides=positional_type,
@@ -455,8 +455,8 @@ def test_renderer_dependency_wiring_supports_positional_varargs_and_varkw() -> N
 
 def test_planner_classifies_dispatch_strategy_for_class_and_non_class_keys() -> None:
     container = Container()
-    container.register_instance(provides=int, instance=1)
-    container.register_instance(provides=dict[str, int], instance={"first": 1})
+    container.add_instance(1, provides=int)
+    container.add_instance({"first": 1}, provides=dict[str, int])
 
     plan = ResolverGenerationPlanner(
         root_scope=Scope.APP,
@@ -472,8 +472,8 @@ def test_planner_classifies_dispatch_strategy_for_class_and_non_class_keys() -> 
 
 def test_renderer_emits_equality_fallback_when_non_class_keys_exist() -> None:
     container = Container()
-    container.register_instance(provides=int, instance=1)
-    container.register_instance(provides=dict[str, int], instance={"first": 1})
+    container.add_instance(1, provides=int)
+    container.add_instance({"first": 1}, provides=dict[str, int])
 
     code = ResolversTemplateRenderer().get_providers_code(
         root_scope=Scope.APP,
@@ -488,8 +488,8 @@ def test_renderer_emits_equality_fallback_when_non_class_keys_exist() -> None:
 
 def test_renderer_omits_equality_fallback_for_pure_class_key_graphs() -> None:
     container = Container()
-    container.register_instance(provides=_Config, instance=_Config())
-    container.register_instance(provides=_Service, instance=_Service(_Config()))
+    container.add_instance(_Config(), provides=_Config)
+    container.add_instance(_Service(_Config()), provides=_Service)
 
     code = ResolversTemplateRenderer().get_providers_code(
         root_scope=Scope.APP,
@@ -503,8 +503,8 @@ def test_renderer_omits_equality_fallback_for_pure_class_key_graphs() -> None:
 
 def test_renderer_raises_for_circular_dependency_graph() -> None:
     container = Container()
-    container.register_factory(_CycleA, factory=_provide_cycle_a)
-    container.register_factory(_CycleB, factory=_provide_cycle_b)
+    container.add_factory(_provide_cycle_a, provides=_CycleA)
+    container.add_factory(_provide_cycle_b, provides=_CycleB)
 
     with pytest.raises(DIWireInvalidProviderSpecError, match="Circular dependency detected"):
         ResolversTemplateRenderer().get_providers_code(
@@ -515,7 +515,7 @@ def test_renderer_raises_for_circular_dependency_graph() -> None:
 
 def test_renderer_documents_instance_lifetime_from_container_default() -> None:
     container = Container(default_lifetime=Lifetime.SCOPED)
-    container.register_instance(provides=_Config, instance=_Config())
+    container.add_instance(_Config(), provides=_Config)
 
     code = ResolversTemplateRenderer().get_providers_code(
         root_scope=Scope.APP,
@@ -528,21 +528,21 @@ def test_renderer_documents_instance_lifetime_from_container_default() -> None:
 
 def test_renderer_filters_providers_and_scopes_when_root_scope_is_request() -> None:
     container = Container()
-    container.register_concrete(
+    container.add_concrete(
         _Config,
-        concrete_type=_Config,
+        provides=_Config,
         scope=Scope.APP,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_concrete(
+    container.add_concrete(
         _RequestRootSessionService,
-        concrete_type=_RequestRootSessionService,
+        provides=_RequestRootSessionService,
         scope=Scope.SESSION,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_concrete(
+    container.add_concrete(
         _RequestRootOnlyService,
-        concrete_type=_RequestRootOnlyService,
+        provides=_RequestRootOnlyService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -607,14 +607,14 @@ def test_planner_propagates_async_requirement_from_dependencies() -> None:
         return _AsyncDependencyConsumer(dependency)
 
     container = Container()
-    container.register_generator(
-        _AsyncGeneratorService,
-        generator=_provide_async_generator_service,
+    container.add_generator(
+        _provide_async_generator_service,
+        provides=_AsyncGeneratorService,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_factory(
-        _AsyncDependencyConsumer,
-        factory=_build_sync_consumer,
+    container.add_factory(
+        _build_sync_consumer,
+        provides=_AsyncDependencyConsumer,
         lifetime=Lifetime.SCOPED,
     )
 

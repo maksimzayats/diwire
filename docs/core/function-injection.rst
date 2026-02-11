@@ -91,9 +91,7 @@ closes it at the end of the call.
        pass
 
    container = Container()
-   container.register_concrete(
-       RequestService,
-       concrete_type=RequestService,
+   container.add_concrete(RequestService, provides=RequestService,
        scope=Scope.REQUEST,
        lifetime=Lifetime.SCOPED,
    )

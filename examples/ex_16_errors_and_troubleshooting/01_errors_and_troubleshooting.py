@@ -61,9 +61,9 @@ def main() -> None:
     print(f"missing={missing}")  # => missing=DIWireDependencyNotRegisteredError
 
     scope_container = Container(autoregister_concrete_types=False)
-    scope_container.register_concrete(
+    scope_container.add_concrete(
         RequestScopedDependency,
-        concrete_type=RequestScopedDependency,
+        provides=RequestScopedDependency,
         scope=Scope.REQUEST,
     )
     try:
@@ -77,7 +77,7 @@ def main() -> None:
     async def build_async_dependency() -> AsyncDependency:
         return AsyncDependency()
 
-    async_container.register_factory(AsyncDependency, factory=build_async_dependency)
+    async_container.add_factory(build_async_dependency, provides=AsyncDependency)
     try:
         async_container.resolve(AsyncDependency)
     except DIWireAsyncDependencyInSyncContextError as error:
@@ -93,13 +93,13 @@ def main() -> None:
         return TypedDependency()
 
     try:
-        inference_container.register_factory(TypedDependency, factory=build_typed_dependency)
+        inference_container.add_factory(build_typed_dependency, provides=TypedDependency)
     except DIWireProviderDependencyInferenceError as error:
         inference = type(error).__name__
     print(f"inference={inference}")  # => inference=DIWireProviderDependencyInferenceError
 
     generic_container = Container(autoregister_concrete_types=False)
-    generic_container.register_concrete(ModelBox, concrete_type=DefaultModelBox)
+    generic_container.add_concrete(DefaultModelBox, provides=ModelBox)
     invalid_key = cast("Any", ModelBox)[str]
     try:
         generic_container.resolve(invalid_key)
@@ -109,7 +109,7 @@ def main() -> None:
 
     invalid_registration_container = Container()
     try:
-        invalid_registration_container.register_instance(
+        invalid_registration_container.add_instance(
             provides=cast("Any", None),
             instance=object(),
         )

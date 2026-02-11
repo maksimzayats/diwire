@@ -6,7 +6,7 @@ Interfaces (Protocol/ABC)
 
 If your code depends on abstractions (Protocols/ABCs), you must tell diwire what concrete class to build.
 
-Use ``register_concrete(provides=..., concrete_type=...)``:
+Use ``add_concrete(..., provides=...)``:
 
 .. code-block:: python
 
@@ -25,9 +25,7 @@ Use ``register_concrete(provides=..., concrete_type=...)``:
 
 
    container = Container(autoregister_concrete_types=False)
-   container.register_concrete(
-       provides=Clock,
-       concrete_type=SystemClock,
+   container.add_concrete(SystemClock, provides=Clock,
        lifetime=Lifetime.SCOPED,
    )
 

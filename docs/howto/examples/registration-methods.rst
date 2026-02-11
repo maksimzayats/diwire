@@ -7,7 +7,7 @@ Registration methods
 What you'll learn
 -----------------
 
-- Register providers using ``register_instance()``, ``register_concrete()``, and factory variants.
+- Register providers using ``add_instance()``, ``add_concrete()``, and factory variants.
 
 Run locally
 -----------

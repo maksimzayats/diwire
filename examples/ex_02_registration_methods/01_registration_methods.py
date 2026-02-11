@@ -2,11 +2,11 @@
 
 Learn when to use:
 
-1. ``register_instance`` for pre-built objects.
-2. ``register_concrete`` for constructor-based creation.
-3. ``register_factory`` for custom build logic.
-4. ``register_generator`` for resources with teardown on scope exit.
-5. ``register_context_manager`` for context-managed resources.
+1. ``add_instance`` for pre-built objects.
+2. ``add_concrete`` for constructor-based creation.
+3. ``add_factory`` for custom build logic.
+4. ``add_generator`` for resources with teardown on scope exit.
+5. ``add_context_manager`` for context-managed resources.
 6. Explicit ``dependencies=[ProviderDependency(...)]`` to bypass inference.
 """
 
@@ -57,16 +57,16 @@ def main() -> None:
     container = Container(autoregister_concrete_types=False)
 
     config = Config(value="singleton")
-    container.register_instance(Config, instance=config)
+    container.add_instance(config, provides=Config)
     instance_singleton = container.resolve(Config) is container.resolve(Config)
     print(f"instance_singleton={instance_singleton}")  # => instance_singleton=True
 
-    container.register_concrete(ConcreteDependency, concrete_type=ConcreteDependency)
+    container.add_concrete(ConcreteDependency, provides=ConcreteDependency)
 
     def build_factory(dependency: ConcreteDependency) -> FactoryService:
         return FactoryService(dependency=dependency)
 
-    container.register_factory(FactoryService, factory=build_factory)
+    container.add_factory(build_factory, provides=FactoryService)
     factory_result = container.resolve(FactoryService)
     print(
         f"factory_injected_dep={isinstance(factory_result.dependency, ConcreteDependency)}",
@@ -80,9 +80,9 @@ def main() -> None:
         finally:
             generator_state["cleaned"] = True
 
-    container.register_generator(
-        GeneratorResource,
-        generator=build_generator_resource,
+    container.add_generator(
+        build_generator_resource,
+        provides=GeneratorResource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -99,9 +99,9 @@ def main() -> None:
         finally:
             context_state["cleaned"] = True
 
-    container.register_context_manager(
-        ContextManagerResource,
-        context_manager=build_context_resource,
+    container.add_context_manager(
+        build_context_resource,
+        provides=ContextManagerResource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -110,7 +110,7 @@ def main() -> None:
     print(f"context_manager_cleaned={context_state['cleaned']}")  # => context_manager_cleaned=True
 
     raw_dependency = UntypedDependency(value="raw")
-    container.register_instance(UntypedDependency, instance=raw_dependency)
+    container.add_instance(raw_dependency, provides=UntypedDependency)
 
     def build_explicit_service(raw_dependency) -> ExplicitDependencyService:  # type: ignore[no-untyped-def]
         return ExplicitDependencyService(raw_dependency=raw_dependency)
@@ -122,9 +122,9 @@ def main() -> None:
             parameter=signature.parameters["raw_dependency"],
         ),
     ]
-    container.register_factory(
-        ExplicitDependencyService,
-        factory=build_explicit_service,
+    container.add_factory(
+        build_explicit_service,
+        provides=ExplicitDependencyService,
         dependencies=explicit_dependencies,
     )
     explicit_service = container.resolve(ExplicitDependencyService)

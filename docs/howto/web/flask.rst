@@ -26,16 +26,14 @@ Minimal sketch
    app = Flask(__name__)
    container = Container(autoregister_concrete_types=False)
 
-   container.register_factory(provides=Request, factory=lambda: request, scope=Scope.REQUEST)
+   container.add_factory(lambda: request, provides=Request, scope=Scope.REQUEST)
 
 
    class Service:
        ...
 
 
-   container.register_concrete(
-       provides=Service,
-       concrete_type=Service,
+   container.add_concrete(Service, provides=Service,
        lifetime=Lifetime.SCOPED,
        scope=Scope.REQUEST,
    )

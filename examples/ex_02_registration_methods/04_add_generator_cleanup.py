@@ -1,4 +1,4 @@
-"""Focused example: ``register_generator`` cleanup on scope exit."""
+"""Focused example: ``add_generator`` cleanup on scope exit."""
 
 from __future__ import annotations
 
@@ -21,9 +21,9 @@ def main() -> None:
         finally:
             state["cleaned"] = True
 
-    container.register_generator(
-        Resource,
-        generator=provide_resource,
+    container.add_generator(
+        provide_resource,
+        provides=Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )

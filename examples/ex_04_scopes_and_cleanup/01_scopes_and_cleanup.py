@@ -37,9 +37,9 @@ def _resolver_scope_name(resolver: object) -> str:
 def main() -> None:
     container = Container(autoregister_concrete_types=False)
 
-    container.register_concrete(
+    container.add_concrete(
         RequestScopedDependency,
-        concrete_type=RequestScopedDependency,
+        provides=RequestScopedDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -71,9 +71,9 @@ def main() -> None:
         finally:
             scoped_state["closed"] += 1
 
-    container.register_generator(
-        ScopedResource,
-        generator=provide_scoped_resource,
+    container.add_generator(
+        provide_scoped_resource,
+        provides=ScopedResource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -96,9 +96,9 @@ def main() -> None:
         finally:
             singleton_state["closed"] += 1
 
-    container.register_generator(
-        SingletonResource,
-        generator=provide_singleton_resource,
+    container.add_generator(
+        provide_singleton_resource,
+        provides=SingletonResource,
         scope=Scope.APP,
         lifetime=Lifetime.SCOPED,
     )

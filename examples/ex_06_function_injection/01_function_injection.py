@@ -44,7 +44,10 @@ class NestedOuterService:
 
 def main() -> None:
     container = Container(autoregister_concrete_types=False)
-    container.register_instance(User, instance=User(email="injected@example.com", name="Injected"))
+    container.add_instance(
+        User(email="injected@example.com", name="Injected"),
+        provides=User,
+    )
 
     @container.inject
     def render_user(
@@ -80,9 +83,9 @@ def main() -> None:
         finally:
             cleanup_state["cleaned"] = True
 
-    container.register_generator(
-        RequestScopedResource,
-        generator=provide_scoped_resource,
+    container.add_generator(
+        provide_scoped_resource,
+        provides=RequestScopedResource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -94,9 +97,9 @@ def main() -> None:
     _ = use_scoped_resource()
     print(f"auto_scope_cleanup={cleanup_state['cleaned']}")  # => auto_scope_cleanup=True
 
-    container.register_concrete(
+    container.add_concrete(
         RequestDependency,
-        concrete_type=RequestDependency,
+        provides=RequestDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -112,15 +115,15 @@ def main() -> None:
     ) -> NestedOuterService:
         return NestedOuterService(inner=inner, dependency=dependency)
 
-    container.register_factory(
-        NestedInnerService,
-        factory=build_inner,
+    container.add_factory(
+        build_inner,
+        provides=NestedInnerService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_factory(
-        NestedOuterService,
-        factory=build_outer,
+    container.add_factory(
+        build_outer,
+        provides=NestedOuterService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.TRANSIENT,
     )

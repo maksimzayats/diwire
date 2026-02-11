@@ -24,9 +24,9 @@ class OuterService:
 
 def main() -> None:
     container = Container(autoregister_concrete_types=False)
-    container.register_concrete(
+    container.add_concrete(
         RequestDependency,
-        concrete_type=RequestDependency,
+        provides=RequestDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -42,15 +42,15 @@ def main() -> None:
     ) -> OuterService:
         return OuterService(inner=inner, dependency=dependency)
 
-    container.register_factory(
-        InnerService,
-        factory=build_inner,
+    container.add_factory(
+        build_inner,
+        provides=InnerService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_factory(
-        OuterService,
-        factory=build_outer,
+    container.add_factory(
+        build_outer,
+        provides=OuterService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.TRANSIENT,
     )

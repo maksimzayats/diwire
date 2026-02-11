@@ -34,178 +34,160 @@ def _context_manager() -> Generator[_Service, None, None]:
     ("invoke", "match"),
     [
         (
-            lambda container: container.register_instance(
+            lambda container: container.add_instance(
+                _Service(),
                 provides=cast("Any", None),
-                instance=_Service(),
             ),
-            "register_instance\\(\\) parameter 'provides'",
+            "add_instance\\(\\) parameter 'provides'",
         ),
         (
-            lambda container: container.register_concrete(
-                provides=cast("Any", None),
-                concrete_type=_Service,
-            ),
-            "register_concrete\\(\\) parameter 'provides'",
+            lambda container: container.add_concrete(_Service, provides=cast("Any", None)),
+            "add_concrete\\(\\) parameter 'provides'",
         ),
         (
-            lambda container: container.register_concrete(
-                provides=_Service,
-                concrete_type=cast("Any", None),
-            ),
-            "register_concrete\\(\\) parameter 'concrete_type'",
+            lambda container: container.add_concrete(cast("Any", None), provides=_Service),
+            "add_concrete\\(\\) parameter 'concrete_type'",
         ),
         (
-            lambda container: container.register_concrete(
-                provides=dict[str, int],
-            ),
-            "register_concrete\\(\\) parameter 'concrete_type' must be provided",
-        ),
-        (
-            lambda container: container.register_concrete(
-                concrete_type=_Service,
+            lambda container: container.add_concrete(
+                _Service,
                 scope=cast("Any", None),
             ),
-            "register_concrete\\(\\) parameter 'scope'",
+            "add_concrete\\(\\) parameter 'scope'",
         ),
         (
-            lambda container: container.register_concrete(
-                concrete_type=_Service,
+            lambda container: container.add_concrete(
+                _Service,
                 lifetime=cast("Any", None),
             ),
-            "register_concrete\\(\\) parameter 'lifetime'",
+            "add_concrete\\(\\) parameter 'lifetime'",
         ),
         (
-            lambda container: container.register_concrete(
-                concrete_type=_Service,
+            lambda container: container.add_concrete(
+                _Service,
                 dependencies=cast("Any", None),
             ),
-            "register_concrete\\(\\) parameter 'dependencies'",
+            "add_concrete\\(\\) parameter 'dependencies'",
         ),
         (
-            lambda container: container.register_concrete(
-                concrete_type=_Service,
+            lambda container: container.add_concrete(
+                _Service,
                 autoregister_dependencies=cast("Any", None),
             ),
-            "register_concrete\\(\\) parameter 'autoregister_dependencies'",
+            "add_concrete\\(\\) parameter 'autoregister_dependencies'",
         ),
         (
-            lambda container: container.register_factory(factory=cast("Any", None)),
-            "register_factory\\(\\) parameter 'factory'",
+            lambda container: container.add_factory(cast("Any", None)),
+            "add_factory\\(\\) parameter 'factory'",
         ),
         (
-            lambda container: container.register_factory(
-                provides=cast("Any", None),
-                factory=_factory,
-            ),
-            "register_factory\\(\\) parameter 'provides'",
+            lambda container: container.add_factory(_factory, provides=cast("Any", None)),
+            "add_factory\\(\\) parameter 'provides'",
         ),
         (
-            lambda container: container.register_factory(
-                factory=_factory,
+            lambda container: container.add_factory(
+                _factory,
                 scope=cast("Any", None),
             ),
-            "register_factory\\(\\) parameter 'scope'",
+            "add_factory\\(\\) parameter 'scope'",
         ),
         (
-            lambda container: container.register_factory(
-                factory=_factory,
+            lambda container: container.add_factory(
+                _factory,
                 lifetime=cast("Any", None),
             ),
-            "register_factory\\(\\) parameter 'lifetime'",
+            "add_factory\\(\\) parameter 'lifetime'",
         ),
         (
-            lambda container: container.register_factory(
-                factory=_factory,
+            lambda container: container.add_factory(
+                _factory,
                 dependencies=cast("Any", None),
             ),
-            "register_factory\\(\\) parameter 'dependencies'",
+            "add_factory\\(\\) parameter 'dependencies'",
         ),
         (
-            lambda container: container.register_factory(
-                factory=_factory,
+            lambda container: container.add_factory(
+                _factory,
                 autoregister_dependencies=cast("Any", None),
             ),
-            "register_factory\\(\\) parameter 'autoregister_dependencies'",
+            "add_factory\\(\\) parameter 'autoregister_dependencies'",
         ),
         (
-            lambda container: container.register_generator(generator=cast("Any", None)),
-            "register_generator\\(\\) parameter 'generator'",
+            lambda container: container.add_generator(cast("Any", None)),
+            "add_generator\\(\\) parameter 'generator'",
         ),
         (
-            lambda container: container.register_generator(
-                provides=cast("Any", None),
-                generator=_generator,
-            ),
-            "register_generator\\(\\) parameter 'provides'",
+            lambda container: container.add_generator(_generator, provides=cast("Any", None)),
+            "add_generator\\(\\) parameter 'provides'",
         ),
         (
-            lambda container: container.register_generator(
-                generator=_generator,
+            lambda container: container.add_generator(
+                _generator,
                 scope=cast("Any", None),
             ),
-            "register_generator\\(\\) parameter 'scope'",
+            "add_generator\\(\\) parameter 'scope'",
         ),
         (
-            lambda container: container.register_generator(
-                generator=_generator,
+            lambda container: container.add_generator(
+                _generator,
                 lifetime=cast("Any", None),
             ),
-            "register_generator\\(\\) parameter 'lifetime'",
+            "add_generator\\(\\) parameter 'lifetime'",
         ),
         (
-            lambda container: container.register_generator(
-                generator=_generator,
+            lambda container: container.add_generator(
+                _generator,
                 dependencies=cast("Any", None),
             ),
-            "register_generator\\(\\) parameter 'dependencies'",
+            "add_generator\\(\\) parameter 'dependencies'",
         ),
         (
-            lambda container: container.register_generator(
-                generator=_generator,
+            lambda container: container.add_generator(
+                _generator,
                 autoregister_dependencies=cast("Any", None),
             ),
-            "register_generator\\(\\) parameter 'autoregister_dependencies'",
+            "add_generator\\(\\) parameter 'autoregister_dependencies'",
         ),
         (
-            lambda container: container.register_context_manager(
-                context_manager=cast("Any", None),
+            lambda container: container.add_context_manager(
+                cast("Any", None),
             ),
-            "register_context_manager\\(\\) parameter 'context_manager'",
+            "add_context_manager\\(\\) parameter 'context_manager'",
         ),
         (
-            lambda container: container.register_context_manager(
+            lambda container: container.add_context_manager(
+                _context_manager,
                 provides=cast("Any", None),
-                context_manager=_context_manager,
             ),
-            "register_context_manager\\(\\) parameter 'provides'",
+            "add_context_manager\\(\\) parameter 'provides'",
         ),
         (
-            lambda container: container.register_context_manager(
-                context_manager=_context_manager,
+            lambda container: container.add_context_manager(
+                _context_manager,
                 scope=cast("Any", None),
             ),
-            "register_context_manager\\(\\) parameter 'scope'",
+            "add_context_manager\\(\\) parameter 'scope'",
         ),
         (
-            lambda container: container.register_context_manager(
-                context_manager=_context_manager,
+            lambda container: container.add_context_manager(
+                _context_manager,
                 lifetime=cast("Any", None),
             ),
-            "register_context_manager\\(\\) parameter 'lifetime'",
+            "add_context_manager\\(\\) parameter 'lifetime'",
         ),
         (
-            lambda container: container.register_context_manager(
-                context_manager=_context_manager,
+            lambda container: container.add_context_manager(
+                _context_manager,
                 dependencies=cast("Any", None),
             ),
-            "register_context_manager\\(\\) parameter 'dependencies'",
+            "add_context_manager\\(\\) parameter 'dependencies'",
         ),
         (
-            lambda container: container.register_context_manager(
-                context_manager=_context_manager,
+            lambda container: container.add_context_manager(
+                _context_manager,
                 autoregister_dependencies=cast("Any", None),
             ),
-            "register_context_manager\\(\\) parameter 'autoregister_dependencies'",
+            "add_context_manager\\(\\) parameter 'autoregister_dependencies'",
         ),
         (
             lambda container: container.inject(func=cast("Any", None)),
@@ -237,178 +219,160 @@ def test_container_rejects_none_for_literal_sentinel_parameters(
     ("invoke", "match"),
     [
         (
-            lambda context: context.register_instance(
+            lambda context: context.add_instance(
+                _Service(),
                 provides=cast("Any", None),
-                instance=_Service(),
             ),
-            "register_instance\\(\\) parameter 'provides'",
+            "add_instance\\(\\) parameter 'provides'",
         ),
         (
-            lambda context: context.register_concrete(
-                provides=cast("Any", None),
-                concrete_type=_Service,
-            ),
-            "register_concrete\\(\\) parameter 'provides'",
+            lambda context: context.add_concrete(_Service, provides=cast("Any", None)),
+            "add_concrete\\(\\) parameter 'provides'",
         ),
         (
-            lambda context: context.register_concrete(
-                provides=_Service,
-                concrete_type=cast("Any", None),
-            ),
-            "register_concrete\\(\\) parameter 'concrete_type'",
+            lambda context: context.add_concrete(cast("Any", None), provides=_Service),
+            "add_concrete\\(\\) parameter 'concrete_type'",
         ),
         (
-            lambda context: context.register_concrete(
-                provides=dict[str, int],
-            ),
-            "register_concrete\\(\\) parameter 'concrete_type' must be provided",
-        ),
-        (
-            lambda context: context.register_concrete(
-                concrete_type=_Service,
+            lambda context: context.add_concrete(
+                _Service,
                 scope=cast("Any", None),
             ),
-            "register_concrete\\(\\) parameter 'scope'",
+            "add_concrete\\(\\) parameter 'scope'",
         ),
         (
-            lambda context: context.register_concrete(
-                concrete_type=_Service,
+            lambda context: context.add_concrete(
+                _Service,
                 lifetime=cast("Any", None),
             ),
-            "register_concrete\\(\\) parameter 'lifetime'",
+            "add_concrete\\(\\) parameter 'lifetime'",
         ),
         (
-            lambda context: context.register_concrete(
-                concrete_type=_Service,
+            lambda context: context.add_concrete(
+                _Service,
                 dependencies=cast("Any", None),
             ),
-            "register_concrete\\(\\) parameter 'dependencies'",
+            "add_concrete\\(\\) parameter 'dependencies'",
         ),
         (
-            lambda context: context.register_concrete(
-                concrete_type=_Service,
+            lambda context: context.add_concrete(
+                _Service,
                 autoregister_dependencies=cast("Any", None),
             ),
-            "register_concrete\\(\\) parameter 'autoregister_dependencies'",
+            "add_concrete\\(\\) parameter 'autoregister_dependencies'",
         ),
         (
-            lambda context: context.register_factory(factory=cast("Any", None)),
-            "register_factory\\(\\) parameter 'factory'",
+            lambda context: context.add_factory(cast("Any", None)),
+            "add_factory\\(\\) parameter 'factory'",
         ),
         (
-            lambda context: context.register_factory(
-                provides=cast("Any", None),
-                factory=_factory,
-            ),
-            "register_factory\\(\\) parameter 'provides'",
+            lambda context: context.add_factory(_factory, provides=cast("Any", None)),
+            "add_factory\\(\\) parameter 'provides'",
         ),
         (
-            lambda context: context.register_factory(
-                factory=_factory,
+            lambda context: context.add_factory(
+                _factory,
                 scope=cast("Any", None),
             ),
-            "register_factory\\(\\) parameter 'scope'",
+            "add_factory\\(\\) parameter 'scope'",
         ),
         (
-            lambda context: context.register_factory(
-                factory=_factory,
+            lambda context: context.add_factory(
+                _factory,
                 lifetime=cast("Any", None),
             ),
-            "register_factory\\(\\) parameter 'lifetime'",
+            "add_factory\\(\\) parameter 'lifetime'",
         ),
         (
-            lambda context: context.register_factory(
-                factory=_factory,
+            lambda context: context.add_factory(
+                _factory,
                 dependencies=cast("Any", None),
             ),
-            "register_factory\\(\\) parameter 'dependencies'",
+            "add_factory\\(\\) parameter 'dependencies'",
         ),
         (
-            lambda context: context.register_factory(
-                factory=_factory,
+            lambda context: context.add_factory(
+                _factory,
                 autoregister_dependencies=cast("Any", None),
             ),
-            "register_factory\\(\\) parameter 'autoregister_dependencies'",
+            "add_factory\\(\\) parameter 'autoregister_dependencies'",
         ),
         (
-            lambda context: context.register_generator(generator=cast("Any", None)),
-            "register_generator\\(\\) parameter 'generator'",
+            lambda context: context.add_generator(cast("Any", None)),
+            "add_generator\\(\\) parameter 'generator'",
         ),
         (
-            lambda context: context.register_generator(
-                provides=cast("Any", None),
-                generator=_generator,
-            ),
-            "register_generator\\(\\) parameter 'provides'",
+            lambda context: context.add_generator(_generator, provides=cast("Any", None)),
+            "add_generator\\(\\) parameter 'provides'",
         ),
         (
-            lambda context: context.register_generator(
-                generator=_generator,
+            lambda context: context.add_generator(
+                _generator,
                 scope=cast("Any", None),
             ),
-            "register_generator\\(\\) parameter 'scope'",
+            "add_generator\\(\\) parameter 'scope'",
         ),
         (
-            lambda context: context.register_generator(
-                generator=_generator,
+            lambda context: context.add_generator(
+                _generator,
                 lifetime=cast("Any", None),
             ),
-            "register_generator\\(\\) parameter 'lifetime'",
+            "add_generator\\(\\) parameter 'lifetime'",
         ),
         (
-            lambda context: context.register_generator(
-                generator=_generator,
+            lambda context: context.add_generator(
+                _generator,
                 dependencies=cast("Any", None),
             ),
-            "register_generator\\(\\) parameter 'dependencies'",
+            "add_generator\\(\\) parameter 'dependencies'",
         ),
         (
-            lambda context: context.register_generator(
-                generator=_generator,
+            lambda context: context.add_generator(
+                _generator,
                 autoregister_dependencies=cast("Any", None),
             ),
-            "register_generator\\(\\) parameter 'autoregister_dependencies'",
+            "add_generator\\(\\) parameter 'autoregister_dependencies'",
         ),
         (
-            lambda context: context.register_context_manager(
-                context_manager=cast("Any", None),
+            lambda context: context.add_context_manager(
+                cast("Any", None),
             ),
-            "register_context_manager\\(\\) parameter 'context_manager'",
+            "add_context_manager\\(\\) parameter 'context_manager'",
         ),
         (
-            lambda context: context.register_context_manager(
+            lambda context: context.add_context_manager(
+                _context_manager,
                 provides=cast("Any", None),
-                context_manager=_context_manager,
             ),
-            "register_context_manager\\(\\) parameter 'provides'",
+            "add_context_manager\\(\\) parameter 'provides'",
         ),
         (
-            lambda context: context.register_context_manager(
-                context_manager=_context_manager,
+            lambda context: context.add_context_manager(
+                _context_manager,
                 scope=cast("Any", None),
             ),
-            "register_context_manager\\(\\) parameter 'scope'",
+            "add_context_manager\\(\\) parameter 'scope'",
         ),
         (
-            lambda context: context.register_context_manager(
-                context_manager=_context_manager,
+            lambda context: context.add_context_manager(
+                _context_manager,
                 lifetime=cast("Any", None),
             ),
-            "register_context_manager\\(\\) parameter 'lifetime'",
+            "add_context_manager\\(\\) parameter 'lifetime'",
         ),
         (
-            lambda context: context.register_context_manager(
-                context_manager=_context_manager,
+            lambda context: context.add_context_manager(
+                _context_manager,
                 dependencies=cast("Any", None),
             ),
-            "register_context_manager\\(\\) parameter 'dependencies'",
+            "add_context_manager\\(\\) parameter 'dependencies'",
         ),
         (
-            lambda context: context.register_context_manager(
-                context_manager=_context_manager,
+            lambda context: context.add_context_manager(
+                _context_manager,
                 autoregister_dependencies=cast("Any", None),
             ),
-            "register_context_manager\\(\\) parameter 'autoregister_dependencies'",
+            "add_context_manager\\(\\) parameter 'autoregister_dependencies'",
         ),
         (
             lambda context: context.inject(func=cast("Any", None)),
@@ -436,8 +400,8 @@ def test_container_context_rejects_none_for_literal_sentinel_parameters(
 
 def test_container_context_keeps_infer_dependencies_sentinel() -> None:
     context = ContainerContext()
-    context.register_concrete(
-        concrete_type=_Service,
+    context.add_concrete(
+        _Service,
         dependencies="infer",
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
@@ -447,30 +411,38 @@ def test_container_context_keeps_infer_dependencies_sentinel() -> None:
     assert operation.kwargs["dependencies"] == "infer"
 
 
-def test_register_concrete_rejects_inferred_concrete_for_non_class_provides() -> None:
+def test_container_add_concrete_decorator_accepts_non_class_provides_key() -> None:
     container = Container()
 
-    with pytest.raises(DIWireInvalidRegistrationError, match="must be provided when"):
-        container.register_concrete(provides=cast("Any", "alias"))
+    decorator = container.add_concrete(provides=cast("Any", "alias"))
+    decorator(_Service)
+
+    operation = container._providers_registrations.find_by_type("alias")
+    assert operation is not None
+    assert operation.concrete_type is _Service
 
 
-def test_container_context_register_concrete_rejects_inferred_non_class_provides() -> None:
+def test_container_context_add_concrete_decorator_accepts_non_class_provides_key() -> None:
     context = ContainerContext()
 
-    with pytest.raises(DIWireInvalidRegistrationError, match="must be provided when"):
-        context.register_concrete(provides=cast("Any", "alias"))
+    decorator = context.add_concrete(provides=cast("Any", "alias"))
+    decorator(_Service)
+
+    operation = context._operations[0]
+    assert operation.kwargs["provides"] == "alias"
+    assert operation.kwargs["concrete_type"] is _Service
 
 
 def test_container_context_register_instance_accepts_non_class_provides_key() -> None:
     context = ContainerContext()
-    context.register_instance(provides=cast("Any", "service_key"), instance=_Service())
+    context.add_instance(_Service(), provides=cast("Any", "service_key"))
 
     assert context._operations[0].kwargs["provides"] == "service_key"
 
 
 def test_container_context_register_concrete_infers_from_class_provides() -> None:
     context = ContainerContext()
-    context.register_concrete(provides=_Service)
+    context.add_concrete(_Service)
 
     operation = context._operations[0]
     assert operation.kwargs["concrete_type"] is _Service
@@ -480,7 +452,7 @@ def test_container_context_register_instance_accepts_explicit_provides() -> None
     context = ContainerContext()
     instance = _Service()
 
-    context.register_instance(provides=_Service, instance=instance)
+    context.add_instance(instance, provides=_Service)
 
     operation = context._operations[0]
     assert operation.kwargs["provides"] is _Service
@@ -489,7 +461,8 @@ def test_container_context_register_instance_accepts_explicit_provides() -> None
 def test_container_context_register_concrete_with_provides_only_uses_infer_concrete() -> None:
     context = ContainerContext()
 
-    context.register_concrete(provides=_Service)
+    decorator = context.add_concrete(provides=_Service)
+    decorator(_Service)
 
     operation = context._operations[0]
     assert operation.kwargs["provides"] is _Service

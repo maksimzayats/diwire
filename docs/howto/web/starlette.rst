@@ -38,9 +38,7 @@ Minimal sketch
 
    app.middleware("http")(middleware)
 
-   container.register_factory(
-       provides=Request,
-       factory=request_var.get,
+   container.add_factory(request_var.get, provides=Request,
        scope=Scope.REQUEST,
    )
 
@@ -49,7 +47,7 @@ Minimal sketch
        ...
 
 
-   container.register_concrete(provides=Service, concrete_type=Service, scope=Scope.REQUEST)
+   container.add_concrete(Service, provides=Service, scope=Scope.REQUEST)
 
 
    @container.inject(scope=Scope.REQUEST)

@@ -21,9 +21,9 @@ def main() -> None:
         finally:
             state["closed"] += 1
 
-    container.register_generator(
-        ScopedResource,
-        generator=provide_resource,
+    container.add_generator(
+        provide_resource,
+        provides=ScopedResource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )

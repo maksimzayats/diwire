@@ -26,9 +26,9 @@ def build_box(type_arg: type[T]) -> IBox[T]:
 
 def main() -> None:
     container = Container(autoregister_concrete_types=False)
-    container.register_factory(
-        IBox,
-        factory=build_box,
+    container.add_factory(
+        build_box,
+        provides=IBox,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )

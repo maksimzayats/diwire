@@ -40,8 +40,8 @@ If you can write this:
 
 When you need explicit control, you still have it:
 
-- interface/protocol bindings via ``register_concrete(provides=..., concrete_type=...)``
-- instances via ``register_instance(instance=...)``
+- interface/protocol bindings via ``add_concrete(..., provides=...)``
+- instances via ``add_instance(...)``
 - factories (sync/async/generator/context manager)
 - lifetimes (``TRANSIENT``, ``SCOPED``) and scope transitions (root-scoped ``SCOPED`` behaves like a singleton)
 - named registrations via ``Component(\"name\")``

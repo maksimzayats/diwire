@@ -43,12 +43,12 @@ class _Root:
 
 def test_benchmark_diwire_resolve_deep_transient_chain(benchmark: Any) -> None:
     container = DIWireContainer(lock_mode=LockMode.NONE)
-    container.register_concrete(_Dep0, lifetime=Lifetime.TRANSIENT)
-    container.register_concrete(_Dep1, lifetime=Lifetime.TRANSIENT)
-    container.register_concrete(_Dep2, lifetime=Lifetime.TRANSIENT)
-    container.register_concrete(_Dep3, lifetime=Lifetime.TRANSIENT)
-    container.register_concrete(_Dep4, lifetime=Lifetime.TRANSIENT)
-    container.register_concrete(_Root, lifetime=Lifetime.TRANSIENT)
+    container.add_concrete(_Dep0, lifetime=Lifetime.TRANSIENT)
+    container.add_concrete(_Dep1, lifetime=Lifetime.TRANSIENT)
+    container.add_concrete(_Dep2, lifetime=Lifetime.TRANSIENT)
+    container.add_concrete(_Dep3, lifetime=Lifetime.TRANSIENT)
+    container.add_concrete(_Dep4, lifetime=Lifetime.TRANSIENT)
+    container.add_concrete(_Root, lifetime=Lifetime.TRANSIENT)
     first = container.resolve(_Root)
     second = container.resolve(_Root)
     assert first is not second

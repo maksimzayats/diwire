@@ -15,7 +15,7 @@ class Message:
 
 def main() -> None:
     context = ContainerContext()
-    context.register_instance(instance=Message(value="context-message"))
+    context.add_instance(Message(value="context-message"))
     context.set_current(Container(autoregister_concrete_types=False))
 
     @context.inject

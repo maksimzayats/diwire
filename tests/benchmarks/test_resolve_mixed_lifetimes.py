@@ -29,9 +29,9 @@ class _RootScopedService:
 
 def test_benchmark_diwire_resolve_mixed_lifetimes(benchmark: Any) -> None:
     container = DIWireContainer(lock_mode=LockMode.NONE)
-    container.register_concrete(_SharedDependency, lifetime=Lifetime.SCOPED)
-    container.register_concrete(_PerResolveDependency, lifetime=Lifetime.TRANSIENT)
-    container.register_concrete(
+    container.add_concrete(_SharedDependency, lifetime=Lifetime.SCOPED)
+    container.add_concrete(_PerResolveDependency, lifetime=Lifetime.TRANSIENT)
+    container.add_concrete(
         _RootScopedService,
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,

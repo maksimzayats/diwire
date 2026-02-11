@@ -55,13 +55,13 @@ class MsgspecConsumer(msgspec.Struct):
 def main() -> None:
     container = Container(autoregister_concrete_types=False)
     dependency = FrameworkDependency(name="framework")
-    container.register_instance(instance=dependency)
+    container.add_instance(dependency)
 
-    container.register_concrete(concrete_type=DataclassConsumer)
-    container.register_concrete(concrete_type=NamedTupleConsumer)
-    container.register_concrete(concrete_type=AttrsConsumer)
-    container.register_concrete(concrete_type=PydanticConsumer)
-    container.register_concrete(concrete_type=MsgspecConsumer)
+    container.add_concrete(DataclassConsumer)
+    container.add_concrete(NamedTupleConsumer)
+    container.add_concrete(AttrsConsumer)
+    container.add_concrete(PydanticConsumer)
+    container.add_concrete(MsgspecConsumer)
 
     dataclass_ok = container.resolve(DataclassConsumer).dependency is dependency
     namedtuple_ok = container.resolve(NamedTupleConsumer).dependency is dependency

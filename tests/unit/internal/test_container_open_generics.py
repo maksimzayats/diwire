@@ -88,8 +88,8 @@ async def _async_context_box(type_arg: type[T]) -> AsyncGenerator[_IBox[T], None
 
 def test_open_key_canonicalization_allows_latest_override_for_equivalent_keys() -> None:
     container = Container()
-    container.register_concrete(_IBox, concrete_type=_BoxA)
-    container.register_concrete(_IBox[T], concrete_type=_BoxB)
+    container.add_concrete(_BoxA, provides=_IBox)
+    container.add_concrete(_BoxB, provides=_IBox[T])
 
     resolved = container.resolve(_IBox[int])
 
@@ -98,7 +98,7 @@ def test_open_key_canonicalization_allows_latest_override_for_equivalent_keys() 
 
 def test_open_concrete_registration_resolves_closed_generic_requests() -> None:
     container = Container()
-    container.register_concrete(_IBox, concrete_type=_Box)
+    container.add_concrete(_Box, provides=_IBox)
 
     resolved = container.resolve(_IBox[str])
 
@@ -108,8 +108,8 @@ def test_open_concrete_registration_resolves_closed_generic_requests() -> None:
 
 def test_closed_registration_wins_over_open_template() -> None:
     container = Container()
-    container.register_concrete(_IBox, concrete_type=_Box)
-    container.register_concrete(_IBox[int], concrete_type=_SpecialIntBox)
+    container.add_concrete(_Box, provides=_IBox)
+    container.add_concrete(_SpecialIntBox, provides=_IBox[int])
 
     int_box = container.resolve(_IBox[int])
     str_box = container.resolve(_IBox[str])
@@ -121,8 +121,8 @@ def test_closed_registration_wins_over_open_template() -> None:
 
 def test_closed_generic_override_with_kw_only_dataclass_typevar_field_is_resolvable() -> None:
     container = Container()
-    container.register_concrete(_KeywordBox, concrete_type=_KeywordBoxImpl)
-    container.register_concrete(_KeywordBox[int], concrete_type=_KeywordSpecialIntBox)
+    container.add_concrete(_KeywordBoxImpl, provides=_KeywordBox)
+    container.add_concrete(_KeywordSpecialIntBox, provides=_KeywordBox[int])
 
     str_box = container.resolve(_KeywordBox[str])
     int_box = container.resolve(_KeywordBox[int])
@@ -135,7 +135,7 @@ def test_closed_generic_override_with_kw_only_dataclass_typevar_field_is_resolva
 
 def test_open_factory_registration_supports_type_argument_injection() -> None:
     container = Container()
-    container.register_factory(_IBox, factory=_create_box)
+    container.add_factory(_create_box, provides=_IBox)
 
     assert cast("Any", container.resolve(_IBox[int])).type is int
     assert cast("Any", container.resolve(_IBox[str])).type is str
@@ -143,7 +143,7 @@ def test_open_factory_registration_supports_type_argument_injection() -> None:
 
 def test_open_generator_registration_supports_type_argument_injection() -> None:
     container = Container()
-    container.register_generator(_IBox, generator=_generate_box)
+    container.add_generator(_generate_box, provides=_IBox)
 
     resolved = container.resolve(_IBox[bytes])
     assert isinstance(resolved, _Box)
@@ -152,7 +152,7 @@ def test_open_generator_registration_supports_type_argument_injection() -> None:
 
 def test_open_context_manager_registration_works_inside_container_context() -> None:
     container = Container()
-    container.register_context_manager(_IBox, context_manager=_context_box)
+    container.add_context_manager(_context_box, provides=_IBox)
 
     with container as resolver:
         resolved = resolver.resolve(_IBox[float])
@@ -163,7 +163,7 @@ def test_open_context_manager_registration_works_inside_container_context() -> N
 @pytest.mark.asyncio
 async def test_open_async_context_manager_registration_works_in_async_path() -> None:
     container = Container()
-    container.register_context_manager(_IBox, context_manager=_async_context_box)
+    container.add_context_manager(_async_context_box, provides=_IBox)
 
     async with container as resolver:
         resolved = await resolver.aresolve(_IBox[float])
@@ -173,7 +173,7 @@ async def test_open_async_context_manager_registration_works_in_async_path() -> 
 
 def test_open_async_factory_raises_in_sync_resolution() -> None:
     container = Container()
-    container.register_factory(_IBox, factory=_create_box_async)
+    container.add_factory(_create_box_async, provides=_IBox)
 
     with pytest.raises(DIWireAsyncDependencyInSyncContextError, match="requires asynchronous"):
         container.resolve(_IBox[int])
@@ -195,8 +195,8 @@ class _ListRepo(_Repo[list[U]]):
 
 def test_most_specific_open_template_wins_for_matching_request() -> None:
     container = Container()
-    container.register_concrete(_Repo, concrete_type=_GenericRepo)
-    container.register_concrete(_Repo[list[U]], concrete_type=_ListRepo)
+    container.add_concrete(_GenericRepo, provides=_Repo)
+    container.add_concrete(_ListRepo, provides=_Repo[list[U]])
 
     resolved_specific = container.resolve(_Repo[list[int]])
     resolved_fallback = container.resolve(_Repo[str])
@@ -229,7 +229,7 @@ class _DefaultModelBox(_ModelBox[M]):
 
 def test_typevar_bound_is_validated_at_resolve_time() -> None:
     container = Container()
-    container.register_concrete(_ModelBox, concrete_type=_DefaultModelBox)
+    container.add_concrete(_DefaultModelBox, provides=_ModelBox)
 
     valid = container.resolve(_ModelBox[_User])
     assert isinstance(valid, _DefaultModelBox)
@@ -242,7 +242,7 @@ def test_typevar_bound_is_validated_at_resolve_time() -> None:
 
 def test_injected_open_generic_uses_open_resolver_fallback() -> None:
     container = Container()
-    container.register_concrete(_IBox, concrete_type=_Box)
+    container.add_concrete(_Box, provides=_IBox)
 
     @container.inject
     def handler(box: Injected[_IBox[str]]) -> str:
@@ -254,8 +254,8 @@ def test_injected_open_generic_uses_open_resolver_fallback() -> None:
 
 def test_container_context_replays_open_registrations_with_canonical_keys() -> None:
     context = ContainerContext()
-    context.register_concrete(_IBox, concrete_type=_BoxA)
-    context.register_concrete(_IBox[T], concrete_type=_BoxB)
+    context.add_concrete(_BoxA, provides=_IBox)
+    context.add_concrete(_BoxB, provides=_IBox[T])
 
     runtime = Container()
     context.set_current(runtime)
@@ -266,7 +266,7 @@ def test_container_context_replays_open_registrations_with_canonical_keys() -> N
 
 def test_open_singleton_cache_isolated_per_closed_dependency_key() -> None:
     container = Container()
-    container.register_factory(_IBox, factory=_create_box, lifetime=Lifetime.SCOPED)
+    container.add_factory(_create_box, provides=_IBox, lifetime=Lifetime.SCOPED)
 
     int_first = container.resolve(_IBox[int])
     int_second = container.resolve(_IBox[int])
@@ -278,9 +278,9 @@ def test_open_singleton_cache_isolated_per_closed_dependency_key() -> None:
 
 def test_open_scoped_cache_isolated_per_scope_and_closed_dependency_key() -> None:
     container = Container()
-    container.register_factory(
-        _IBox,
-        factory=_create_box,
+    container.add_factory(
+        _create_box,
+        provides=_IBox,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -303,9 +303,9 @@ def test_open_scoped_cache_isolated_per_scope_and_closed_dependency_key() -> Non
 
 def test_open_scoped_cache_works_when_entering_action_scope_directly() -> None:
     container = Container()
-    container.register_factory(
-        _IBox,
-        factory=_create_box,
+    container.add_factory(
+        _create_box,
+        provides=_IBox,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -325,7 +325,7 @@ def test_open_scoped_cache_works_when_entering_action_scope_directly() -> None:
 
 def test_resolving_open_generic_without_type_arguments_remains_unregistered() -> None:
     container = Container(autoregister_concrete_types=False)
-    container.register_concrete(_IBox, concrete_type=_Box)
+    container.add_concrete(_Box, provides=_IBox)
 
     with pytest.raises(DIWireDependencyNotRegisteredError):
         container.resolve(_IBox)
@@ -333,7 +333,7 @@ def test_resolving_open_generic_without_type_arguments_remains_unregistered() ->
 
 def test_autoregister_skips_open_generic_dependencies_when_match_exists() -> None:
     container = Container()
-    container.register_concrete(_IBox, concrete_type=_Box)
+    container.add_concrete(_Box, provides=_IBox)
 
     resolved = container.resolve(_IBox[int])
 

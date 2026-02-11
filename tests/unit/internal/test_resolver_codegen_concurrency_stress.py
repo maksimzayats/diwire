@@ -40,9 +40,9 @@ def test_concurrency_stress_thread_safe_singleton_constructs_once() -> None:
         return _ThreadSingleton()
 
     container = Container()
-    container.register_factory(
-        _ThreadSingleton,
-        factory=build_singleton,
+    container.add_factory(
+        build_singleton,
+        provides=_ThreadSingleton,
         lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.THREAD,
     )
@@ -77,9 +77,9 @@ def test_concurrency_stress_thread_unsafe_singleton_allows_parallel_construction
         return _ThreadSingleton()
 
     container = Container()
-    container.register_factory(
-        _ThreadSingleton,
-        factory=build_singleton,
+    container.add_factory(
+        build_singleton,
+        provides=_ThreadSingleton,
         lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.NONE,
     )
@@ -106,9 +106,9 @@ def test_concurrency_stress_thread_safe_scoped_constructs_once_per_scope() -> No
         return _ThreadScoped()
 
     container = Container()
-    container.register_factory(
-        _ThreadScoped,
-        factory=build_scoped,
+    container.add_factory(
+        build_scoped,
+        provides=_ThreadScoped,
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
         lock_mode=LockMode.THREAD,
@@ -154,9 +154,9 @@ def test_concurrency_stress_thread_unsafe_scoped_allows_parallel_construction() 
         return _ThreadScoped()
 
     container = Container()
-    container.register_factory(
-        _ThreadScoped,
-        factory=build_scoped,
+    container.add_factory(
+        build_scoped,
+        provides=_ThreadScoped,
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
         lock_mode=LockMode.NONE,
@@ -196,9 +196,9 @@ def test_concurrency_stress_thread_unsafe_scoped_from_default_allows_parallel_co
         return _ThreadScoped()
 
     container = Container(lock_mode=LockMode.NONE)
-    container.register_factory(
-        _ThreadScoped,
-        factory=build_scoped,
+    container.add_factory(
+        build_scoped,
+        provides=_ThreadScoped,
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
     )
@@ -230,9 +230,9 @@ async def test_concurrency_stress_async_safe_singleton_constructs_once() -> None
         return _AsyncSingleton()
 
     container = Container()
-    container.register_factory(
-        _AsyncSingleton,
-        factory=build_singleton,
+    container.add_factory(
+        build_singleton,
+        provides=_AsyncSingleton,
         lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.ASYNC,
     )
@@ -259,9 +259,9 @@ async def test_concurrency_stress_async_unsafe_singleton_allows_parallel_constru
         return _AsyncSingleton()
 
     container = Container()
-    container.register_factory(
-        _AsyncSingleton,
-        factory=build_singleton,
+    container.add_factory(
+        build_singleton,
+        provides=_AsyncSingleton,
         lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.NONE,
     )
@@ -286,9 +286,9 @@ async def test_concurrency_stress_async_safe_scoped_constructs_once_per_scope() 
         return _AsyncScoped()
 
     container = Container()
-    container.register_factory(
-        _AsyncScoped,
-        factory=build_scoped,
+    container.add_factory(
+        build_scoped,
+        provides=_AsyncScoped,
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
         lock_mode=LockMode.ASYNC,
@@ -325,9 +325,9 @@ async def test_concurrency_stress_async_unsafe_scoped_allows_parallel_constructi
         return _AsyncScoped()
 
     container = Container()
-    container.register_factory(
-        _AsyncScoped,
-        factory=build_scoped,
+    container.add_factory(
+        build_scoped,
+        provides=_AsyncScoped,
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
         lock_mode=LockMode.NONE,
@@ -361,9 +361,9 @@ async def test_concurrency_stress_async_unsafe_scoped_from_default_allows_parall
         return _AsyncScoped()
 
     container = Container(lock_mode=LockMode.NONE)
-    container.register_factory(
-        _AsyncScoped,
-        factory=build_scoped,
+    container.add_factory(
+        build_scoped,
+        provides=_AsyncScoped,
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
     )

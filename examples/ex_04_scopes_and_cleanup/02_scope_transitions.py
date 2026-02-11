@@ -15,9 +15,9 @@ def _resolver_scope_name(resolver: object) -> str:
 
 def main() -> None:
     container = Container(autoregister_concrete_types=False)
-    container.register_concrete(
+    container.add_concrete(
         RequestDependency,
-        concrete_type=RequestDependency,
+        provides=RequestDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )

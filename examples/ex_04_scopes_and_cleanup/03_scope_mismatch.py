@@ -12,9 +12,9 @@ class RequestDependency:
 
 def main() -> None:
     container = Container(autoregister_concrete_types=False)
-    container.register_concrete(
+    container.add_concrete(
         RequestDependency,
-        concrete_type=RequestDependency,
+        provides=RequestDependency,
         scope=Scope.REQUEST,
     )
 

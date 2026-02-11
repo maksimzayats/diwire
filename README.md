@@ -74,9 +74,7 @@ class SystemClock:
 
 
 container = Container(autoregister_concrete_types=False)
-container.register_concrete(
-    provides=Clock,
-    concrete_type=SystemClock,
+container.add_concrete(SystemClock, provides=Clock,
     lifetime=Lifetime.SCOPED,
 )
 
@@ -91,7 +89,7 @@ from diwire import Container
 container = Container(autoregister_concrete_types=False)
 
 
-@container.register_factory()
+@container.add_factory()
 def build_answer() -> int:
     return 42
 
@@ -127,9 +125,7 @@ def session_factory() -> Generator[Session, None, None]:
 
 
 container = Container(autoregister_concrete_types=False)
-container.register_generator(
-    provides=Session,
-    generator=session_factory,
+container.add_generator(session_factory, provides=Session,
     scope=Scope.REQUEST,
     lifetime=Lifetime.SCOPED,
 )
@@ -185,8 +181,8 @@ FallbackCache: TypeAlias = Annotated[Cache, Component("fallback")]
 
 
 container = Container(autoregister_concrete_types=False)
-container.register_instance(provides=PrimaryCache, instance=Cache(label="redis"))
-container.register_instance(provides=FallbackCache, instance=Cache(label="memory"))
+container.add_instance(Cache(label="redis"), provides=PrimaryCache)
+container.add_instance(Cache(label="memory"), provides=FallbackCache)
 
 print(container.resolve(PrimaryCache).label)  # => redis
 print(container.resolve(FallbackCache).label)  # => memory

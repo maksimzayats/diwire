@@ -114,7 +114,7 @@ def test_register_before_bind_replays_on_set_current() -> None:
     class _ConcreteService:
         pass
 
-    context.register_concrete(concrete_type=_ConcreteService)
+    context.add_concrete(_ConcreteService)
 
     container = Container()
     context.set_current(container)
@@ -125,8 +125,8 @@ def test_register_before_bind_replays_on_set_current() -> None:
 
 def test_replay_preserves_canonical_open_key_override_order() -> None:
     context = ContainerContext()
-    context.register_concrete(_OpenBox, concrete_type=_OpenBoxA)
-    context.register_concrete(_OpenBox[T], concrete_type=_OpenBoxB)
+    context.add_concrete(_OpenBoxA, provides=_OpenBox)
+    context.add_concrete(_OpenBoxB, provides=_OpenBox[T])
 
     container = Container()
     context.set_current(container)
@@ -141,7 +141,7 @@ def test_register_factory_persists_and_replays_from_container_lock_mode_sentinel
     def build_service() -> _Service:
         return _Service("factory")
 
-    context.register_factory(_Service, factory=build_service)
+    context.add_factory(build_service, provides=_Service)
     operation = context._operations[0]
     assert operation.kwargs["lock_mode"] == "from_container"
 
@@ -158,7 +158,7 @@ def test_register_concrete_supports_decorator_form() -> None:
     class _DecoratedService:
         pass
 
-    register_decorator = cast("Any", context.register_concrete())
+    register_decorator = cast("Any", context.add_concrete())
     register_decorator(_DecoratedService)
 
     container = Container()
@@ -169,7 +169,7 @@ def test_register_concrete_supports_decorator_form() -> None:
 
 def test_set_current_replays_operations_for_each_bound_container() -> None:
     context = ContainerContext()
-    context.register_instance(instance=_Service("registered"))
+    context.add_instance(_Service("registered"))
 
     first = Container()
     context.set_current(first)
@@ -186,7 +186,7 @@ def test_register_while_bound_applies_to_current_container_immediately() -> None
     container = Container()
     context.set_current(container)
 
-    context.register_instance(instance=_Service("bound"))
+    context.add_instance(_Service("bound"))
 
     assert container.resolve(_Service).value == "bound"
 
@@ -237,7 +237,7 @@ def test_inject_wrapper_preserves_metadata_and_marker() -> None:
 
 def test_inject_supports_factory_form() -> None:
     context = ContainerContext()
-    context.register_instance(instance=_Service("factory"))
+    context.add_instance(_Service("factory"))
     context.set_current(Container())
 
     @context.inject()
@@ -249,9 +249,9 @@ def test_inject_supports_factory_form() -> None:
 
 def test_inject_supports_auto_open_scope_forwarding() -> None:
     context = ContainerContext()
-    context.register_concrete(
+    context.add_concrete(
         _RequestDependency,
-        concrete_type=_RequestDependency,
+        provides=_RequestDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -293,7 +293,7 @@ def test_inject_rejects_reserved_internal_context_parameter_name() -> None:
 
 def test_inject_method_descriptor_behavior() -> None:
     context = ContainerContext()
-    context.register_instance(instance=_Service("bound"))
+    context.add_instance(_Service("bound"))
     context.set_current(Container())
 
     class _Handler:
@@ -308,7 +308,7 @@ def test_inject_method_descriptor_behavior() -> None:
 
 def test_inject_staticmethod_and_classmethod_descriptor_behavior() -> None:
     context = ContainerContext()
-    context.register_instance(instance=_Service("value"))
+    context.add_instance(_Service("value"))
     context.set_current(Container())
 
     class _Handler:
@@ -342,7 +342,7 @@ async def test_aresolve_delegates_to_current_container() -> None:
     async def provide_async_service() -> _AsyncService:
         return _AsyncService("async")
 
-    context.register_factory(_AsyncService, factory=provide_async_service)
+    context.add_factory(provide_async_service, provides=_AsyncService)
     context.set_current(Container())
 
     resolved = await context.aresolve(_AsyncService)
@@ -352,9 +352,9 @@ async def test_aresolve_delegates_to_current_container() -> None:
 
 def test_enter_scope_delegates_to_current_container() -> None:
     context = ContainerContext()
-    context.register_concrete(
+    context.add_concrete(
         _RequestDependency,
-        concrete_type=_RequestDependency,
+        provides=_RequestDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -376,9 +376,9 @@ def test_enter_scope_delegates_context_to_current_container() -> None:
 
 def test_resolve_delegation_preserves_scope_rules() -> None:
     context = ContainerContext()
-    context.register_concrete(
+    context.add_concrete(
         _RequestDependency,
-        concrete_type=_RequestDependency,
+        provides=_RequestDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -391,7 +391,7 @@ def test_resolve_delegation_preserves_scope_rules() -> None:
 @pytest.mark.asyncio
 async def test_context_inject_async_wrapper_works_after_binding() -> None:
     context = ContainerContext()
-    context.register_instance(instance=_AsyncService("ready"))
+    context.add_instance(_AsyncService("ready"))
 
     @context.inject
     async def handler(service: Injected[_AsyncService]) -> str:
@@ -412,8 +412,8 @@ def test_register_generator_and_context_manager_replay() -> None:
     def provide_context_manager() -> Generator[_RequestDependency, None, None]:
         yield _RequestDependency()
 
-    context.register_generator(_Service, generator=provide_generator)
-    context.register_context_manager(_RequestDependency, context_manager=provide_context_manager)
+    context.add_generator(provide_generator, provides=_Service)
+    context.add_context_manager(provide_context_manager, provides=_RequestDependency)
 
     container = Container()
     context.set_current(container)
@@ -424,7 +424,7 @@ def test_register_generator_and_context_manager_replay() -> None:
 
 def test_registration_dependencies_are_copied_for_replay() -> None:
     context = ContainerContext()
-    context.register_instance(instance=_Service("dep"))
+    context.add_instance(_Service("dep"))
 
     def provide_request(service: _Service) -> _RequestDependency:
         _ = service
@@ -439,9 +439,9 @@ def test_registration_dependencies_are_copied_for_replay() -> None:
             ),
         ),
     ]
-    context.register_factory(
-        _RequestDependency,
-        factory=provide_request,
+    context.add_factory(
+        provide_request,
+        provides=_RequestDependency,
         dependencies=explicit_dependencies,
     )
     explicit_dependencies.clear()
@@ -459,7 +459,7 @@ async def test_register_async_generator_replay() -> None:
     async def provide_async_generator() -> AsyncGenerator[_AsyncService, None]:
         yield _AsyncService("async-generator")
 
-    context.register_generator(_AsyncService, generator=provide_async_generator)
+    context.add_generator(provide_async_generator, provides=_AsyncService)
     context.set_current(Container())
 
     resolved = await context.aresolve(_AsyncService)

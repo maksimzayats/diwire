@@ -19,7 +19,7 @@ def main() -> None:
     container = Container(autoregister_concrete_types=False)
 
     try:
-        container.register_factory(Service, factory=build_service)
+        container.add_factory(build_service, provides=Service)
     except DIWireProviderDependencyInferenceError as error:
         error_name = type(error).__name__
 

@@ -15,7 +15,7 @@ _BENCHMARK_ROUNDS = 5
 
 def test_benchmark_diwire_enter_close_scope_no_resolve(benchmark: Any) -> None:
     container = DIWireContainer(lock_mode=LockMode.NONE)
-    container.register_instance(int, instance=42)
+    container.add_instance(42, provides=int)
     assert container.resolve(int) == 42
     with container.enter_scope() as scope:
         assert scope.resolve(int) == 42

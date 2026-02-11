@@ -36,8 +36,8 @@ def main() -> None:
         unbound_error = type(error).__name__
     print(f"unbound_error={unbound_error}")  # => unbound_error=DIWireContainerNotSetError
 
-    context.register_instance(instance=Message(value="context-message"))
-    context.register_concrete(concrete_type=Service)
+    context.add_instance(Message(value="context-message"))
+    context.add_concrete(Service)
 
     first_container = Container(autoregister_concrete_types=False)
     context.set_current(first_container)

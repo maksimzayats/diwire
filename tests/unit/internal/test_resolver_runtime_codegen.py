@@ -170,9 +170,9 @@ def test_sync_singleton_uses_lambda_method_replacement_cache() -> None:
         return _SingletonService()
 
     container = Container()
-    container.register_factory(
-        _SingletonService,
-        factory=build_service,
+    container.add_factory(
+        build_service,
+        provides=_SingletonService,
         lifetime=Lifetime.SCOPED,
     )
 
@@ -200,9 +200,9 @@ async def test_async_singleton_uses_async_cached_method_replacement() -> None:
         return _SingletonService()
 
     container = Container()
-    container.register_factory(
-        _SingletonService,
-        factory=build_service,
+    container.add_factory(
+        build_service,
+        provides=_SingletonService,
         lifetime=Lifetime.SCOPED,
     )
 
@@ -222,7 +222,7 @@ async def test_async_singleton_uses_async_cached_method_replacement() -> None:
 
 def test_compile_returns_cached_resolver_and_rebinds_entrypoints() -> None:
     container = Container(autoregister_concrete_types=False)
-    container.register_instance(_Resource, instance=_Resource())
+    container.add_instance(_Resource(), provides=_Resource)
 
     initial_resolver = container._root_resolver
     assert initial_resolver is None
@@ -251,7 +251,7 @@ def test_compile_returns_cached_resolver_and_rebinds_entrypoints() -> None:
 def test_resolve_auto_compiles_root_resolver_when_uncompiled() -> None:
     resource = _Resource()
     container = Container(autoregister_concrete_types=False)
-    container.register_instance(_Resource, instance=resource)
+    container.add_instance(resource, provides=_Resource)
 
     initial_resolver = container._root_resolver
     assert initial_resolver is None
@@ -268,7 +268,7 @@ def test_resolve_auto_compiles_root_resolver_when_uncompiled() -> None:
 async def test_aresolve_auto_compiles_root_resolver_when_uncompiled() -> None:
     resource = _Resource()
     container = Container(autoregister_concrete_types=False)
-    container.register_instance(_Resource, instance=resource)
+    container.add_instance(resource, provides=_Resource)
 
     initial_resolver = container._root_resolver
     assert initial_resolver is None
@@ -283,7 +283,7 @@ async def test_aresolve_auto_compiles_root_resolver_when_uncompiled() -> None:
 
 def test_compile_wraps_codegen_resolver_when_open_generic_registry_present() -> None:
     container = Container(autoregister_concrete_types=False)
-    container.register_concrete(_OpenRuntimeService, concrete_type=_OpenRuntimeServiceImpl)
+    container.add_concrete(_OpenRuntimeServiceImpl, provides=_OpenRuntimeService)
 
     compiled_resolver = container.compile()
 
@@ -296,9 +296,9 @@ def test_compile_wraps_codegen_resolver_when_open_generic_registry_present() -> 
 
 def test_enter_scope_auto_compiles_root_resolver_when_uncompiled() -> None:
     container = Container(autoregister_concrete_types=False)
-    container.register_concrete(
+    container.add_concrete(
         _RequestService,
-        concrete_type=_RequestService,
+        provides=_RequestService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -358,37 +358,34 @@ def test_registering_after_compile_invalidates_compilation_and_rebinds_lazy_entr
     registrations: tuple[tuple[str, Any], ...] = (
         (
             "instance",
-            lambda: container.register_instance(
-                _RegisteredByInstance,
-                instance=_RegisteredByInstance(),
-            ),
+            lambda: container.add_instance(_RegisteredByInstance(), provides=_RegisteredByInstance),
         ),
         (
             "concrete",
-            lambda: container.register_concrete(
+            lambda: container.add_concrete(
                 _RegisteredByConcrete,
-                concrete_type=_RegisteredByConcrete,
+                provides=_RegisteredByConcrete,
             ),
         ),
         (
             "factory",
-            lambda: container.register_factory(
-                _RegisteredByFactory,
-                factory=build_factory,
+            lambda: container.add_factory(
+                build_factory,
+                provides=_RegisteredByFactory,
             ),
         ),
         (
             "generator",
-            lambda: container.register_generator(
-                _RegisteredByGenerator,
-                generator=build_generator,
+            lambda: container.add_generator(
+                build_generator,
+                provides=_RegisteredByGenerator,
             ),
         ),
         (
             "context manager",
-            lambda: container.register_context_manager(
-                _RegisteredByContextManager,
-                context_manager=build_context_manager,
+            lambda: container.add_context_manager(
+                build_context_manager,
+                provides=_RegisteredByContextManager,
             ),
         ),
     )
@@ -451,7 +448,7 @@ def test_autoregister_keeps_container_entrypoints_and_skips_existing_registratio
 
 def test_dunder_enter_and_exit_delegate_to_root_resolver() -> None:
     container = Container()
-    container.register_instance(_Resource, instance=_Resource())
+    container.add_instance(_Resource(), provides=_Resource)
 
     entered = container.__enter__()
     root_resolver = container._root_resolver
@@ -474,7 +471,7 @@ def test_dunder_exit_without_matching_enter_raises_runtime_error() -> None:
 
 def test_container_exit_wrapper_delegates_when_root_resolver_exists() -> None:
     container = Container()
-    container.register_instance(_Resource, instance=_Resource())
+    container.add_instance(_Resource(), provides=_Resource)
     container.compile()
 
     Container.__exit__(container, None, None, None)
@@ -483,7 +480,7 @@ def test_container_exit_wrapper_delegates_when_root_resolver_exists() -> None:
 @pytest.mark.asyncio
 async def test_dunder_aenter_and_aexit_delegate_to_root_resolver() -> None:
     container = Container()
-    container.register_instance(_Resource, instance=_Resource())
+    container.add_instance(_Resource(), provides=_Resource)
 
     entered = await container.__aenter__()
     root_resolver = container._root_resolver
@@ -508,7 +505,7 @@ async def test_dunder_aexit_without_matching_aenter_raises_runtime_error() -> No
 @pytest.mark.asyncio
 async def test_container_aexit_wrapper_delegates_when_root_resolver_exists() -> None:
     container = Container()
-    container.register_instance(_Resource, instance=_Resource())
+    container.add_instance(_Resource(), provides=_Resource)
     container.compile()
 
     await Container.__aexit__(container, None, None, None)
@@ -523,9 +520,9 @@ def test_transient_provider_is_not_cached() -> None:
         return _TransientService()
 
     container = Container()
-    container.register_factory(
-        _TransientService,
-        factory=build_service,
+    container.add_factory(
+        build_service,
+        provides=_TransientService,
         lifetime=Lifetime.TRANSIENT,
     )
 
@@ -538,9 +535,9 @@ def test_transient_provider_is_not_cached() -> None:
 
 def test_scope_resolution_requires_explicit_opened_scope_chain() -> None:
     container = Container()
-    container.register_concrete(
+    container.add_concrete(
         _RequestService,
-        concrete_type=_RequestService,
+        provides=_RequestService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -565,9 +562,9 @@ def test_provider_context_dependency_is_resolved_and_missing_value_errors() -> N
         return _ContextValueConsumer(value=value)
 
     container = Container()
-    container.register_factory(
-        _ContextValueConsumer,
-        factory=build_consumer,
+    container.add_factory(
+        build_consumer,
+        provides=_ContextValueConsumer,
         scope=Scope.REQUEST,
         lifetime=Lifetime.TRANSIENT,
     )
@@ -592,21 +589,21 @@ def test_context_visibility_includes_scope_and_children_with_nearest_override() 
         return _StepContextValue(value=value)
 
     container = Container()
-    container.register_factory(
-        _RequestContextValue,
-        factory=build_request_value,
+    container.add_factory(
+        build_request_value,
+        provides=_RequestContextValue,
         scope=Scope.REQUEST,
         lifetime=Lifetime.TRANSIENT,
     )
-    container.register_factory(
-        _ActionContextValue,
-        factory=build_action_value,
+    container.add_factory(
+        build_action_value,
+        provides=_ActionContextValue,
         scope=Scope.ACTION,
         lifetime=Lifetime.TRANSIENT,
     )
-    container.register_factory(
-        _StepContextValue,
-        factory=build_step_value,
+    container.add_factory(
+        build_step_value,
+        provides=_StepContextValue,
         scope=Scope.STEP,
         lifetime=Lifetime.TRANSIENT,
     )
@@ -629,9 +626,9 @@ def test_scope_resolver_can_directly_resolve_from_context_marker() -> None:
 
 def test_codegen_passes_resolver_to_inject_wrapped_provider_calls() -> None:
     container = Container()
-    container.register_concrete(
+    container.add_concrete(
         _InjectScopedDependency,
-        concrete_type=_InjectScopedDependency,
+        provides=_InjectScopedDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -642,9 +639,9 @@ def test_codegen_passes_resolver_to_inject_wrapped_provider_calls() -> None:
     ) -> _InjectScopedConsumer:
         return _InjectScopedConsumer(dependency=dependency)
 
-    container.register_factory(
-        _InjectScopedConsumer,
-        factory=build_consumer,
+    container.add_factory(
+        build_consumer,
+        provides=_InjectScopedConsumer,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -658,9 +655,9 @@ def test_codegen_passes_resolver_to_inject_wrapped_provider_calls() -> None:
 @pytest.mark.asyncio
 async def test_codegen_async_inject_wrapper_provider_receives_resolver() -> None:
     container = Container()
-    container.register_concrete(
+    container.add_concrete(
         _InjectScopedDependency,
-        concrete_type=_InjectScopedDependency,
+        provides=_InjectScopedDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -672,9 +669,9 @@ async def test_codegen_async_inject_wrapper_provider_receives_resolver() -> None
         await asyncio.sleep(0)
         return _InjectScopedConsumer(dependency=dependency)
 
-    container.register_factory(
-        _InjectScopedConsumer,
-        factory=build_consumer,
+    container.add_factory(
+        build_consumer,
+        provides=_InjectScopedConsumer,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -688,9 +685,9 @@ async def test_codegen_async_inject_wrapper_provider_receives_resolver() -> None
 
 def test_codegen_nested_inject_wrappers_runtime_scope_consistency() -> None:
     container = Container()
-    container.register_concrete(
+    container.add_concrete(
         _InjectScopedDependency,
-        concrete_type=_InjectScopedDependency,
+        provides=_InjectScopedDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -708,15 +705,15 @@ def test_codegen_nested_inject_wrappers_runtime_scope_consistency() -> None:
     ) -> _InjectNestedOuterConsumer:
         return _InjectNestedOuterConsumer(inner=inner, dependency=dependency)
 
-    container.register_factory(
-        _InjectNestedInnerConsumer,
-        factory=build_inner,
+    container.add_factory(
+        build_inner,
+        provides=_InjectNestedInnerConsumer,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_factory(
-        _InjectNestedOuterConsumer,
-        factory=build_outer,
+    container.add_factory(
+        build_outer,
+        provides=_InjectNestedOuterConsumer,
         scope=Scope.REQUEST,
         lifetime=Lifetime.TRANSIENT,
     )
@@ -734,7 +731,7 @@ def test_codegen_inject_wrapper_singleton_thread_safe_stress() -> None:
 
     dependency = _Resource()
     container = Container()
-    container.register_instance(_Resource, instance=dependency)
+    container.add_instance(dependency, provides=_Resource)
 
     @container.inject
     def build_singleton(resource: Injected[_Resource]) -> _DependsOnResource:
@@ -742,9 +739,9 @@ def test_codegen_inject_wrapper_singleton_thread_safe_stress() -> None:
         calls += 1
         return _DependsOnResource(resource=resource)
 
-    container.register_factory(
-        _DependsOnResource,
-        factory=build_singleton,
+    container.add_factory(
+        build_singleton,
+        provides=_DependsOnResource,
         lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.THREAD,
     )
@@ -764,7 +761,7 @@ async def test_codegen_inject_wrapper_singleton_async_stress() -> None:
     tasks = 128
     dependency = _Resource()
     container = Container()
-    container.register_instance(_Resource, instance=dependency)
+    container.add_instance(dependency, provides=_Resource)
 
     @container.inject
     async def build_singleton(resource: Injected[_Resource]) -> _DependsOnResource:
@@ -773,9 +770,9 @@ async def test_codegen_inject_wrapper_singleton_async_stress() -> None:
         await asyncio.sleep(0)
         return _DependsOnResource(resource=resource)
 
-    container.register_factory(
-        _DependsOnResource,
-        factory=build_singleton,
+    container.add_factory(
+        build_singleton,
+        provides=_DependsOnResource,
         lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.ASYNC,
     )
@@ -795,7 +792,7 @@ def test_codegen_inject_wrapper_unsafe_mode_stress_no_deadlock() -> None:
     calls_lock = threading.Lock()
     dependency = _Resource()
     container = Container()
-    container.register_instance(_Resource, instance=dependency)
+    container.add_instance(dependency, provides=_Resource)
 
     @container.inject
     def build_singleton(resource: Injected[_Resource]) -> _DependsOnResource:
@@ -808,9 +805,9 @@ def test_codegen_inject_wrapper_unsafe_mode_stress_no_deadlock() -> None:
         assert did_start
         return _DependsOnResource(resource=resource)
 
-    container.register_factory(
-        _DependsOnResource,
-        factory=build_singleton,
+    container.add_factory(
+        build_singleton,
+        provides=_DependsOnResource,
         lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.NONE,
     )
@@ -858,7 +855,7 @@ def test_generated_dispatch_resolves_equal_non_identical_generic_alias_keys(
     lookup_key = alias_factory()
     instance = object()
     container = Container()
-    container.register_instance(provides=registration_key, instance=instance)
+    container.add_instance(instance, provides=registration_key)
 
     assert lookup_key == registration_key
     assert lookup_key is not registration_key
@@ -882,7 +879,7 @@ async def test_generated_aresolve_resolves_equal_non_identical_generic_alias_key
     lookup_key = alias_factory()
     instance = object()
     container = Container()
-    container.register_instance(provides=registration_key, instance=instance)
+    container.add_instance(instance, provides=registration_key)
 
     assert lookup_key == registration_key
     assert lookup_key is not registration_key
@@ -893,7 +890,7 @@ def test_codegen_exec_handles_escaped_module_and_qualname_in_docstrings() -> Non
     bad_symbol = type('Bad"""Name', (), {"__module__": 'bad"""module'})
     bad_instance = bad_symbol()
     container = Container()
-    container.register_instance(provides=bad_symbol, instance=bad_instance)
+    container.add_instance(bad_instance, provides=bad_symbol)
 
     code = ResolversTemplateRenderer().get_providers_code(
         root_scope=Scope.APP,
@@ -910,15 +907,15 @@ def test_codegen_exec_handles_escaped_module_and_qualname_in_docstrings() -> Non
 
 def test_enter_scope_can_choose_skippable_or_next_non_skippable_scope() -> None:
     container = Container()
-    container.register_concrete(
+    container.add_concrete(
         _SessionService,
-        concrete_type=_SessionService,
+        provides=_SessionService,
         scope=Scope.SESSION,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_concrete(
+    container.add_concrete(
         _RequestService,
-        concrete_type=_RequestService,
+        provides=_RequestService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -966,9 +963,9 @@ def test_request_resolver_delegates_to_session_owner_cache_when_opened_from_sess
         return _SessionService()
 
     container = Container()
-    container.register_factory(
-        _SessionService,
-        factory=build_session_service,
+    container.add_factory(
+        build_session_service,
+        provides=_SessionService,
         scope=Scope.SESSION,
         lifetime=Lifetime.SCOPED,
     )
@@ -986,9 +983,9 @@ def test_request_resolver_delegates_to_session_owner_cache_when_opened_from_sess
 
 def test_request_resolve_for_sync_session_service_raises_when_owner_missing() -> None:
     container = Container()
-    container.register_factory(
+    container.add_factory(
         _SessionService,
-        factory=_SessionService,
+        provides=_SessionService,
         scope=Scope.SESSION,
         lifetime=Lifetime.SCOPED,
     )
@@ -1004,9 +1001,9 @@ async def test_request_aresolve_for_async_session_service_raises_when_owner_miss
         return _SessionAsyncService()
 
     container = Container()
-    container.register_factory(
-        _SessionAsyncService,
-        factory=build_session_async_service,
+    container.add_factory(
+        build_session_async_service,
+        provides=_SessionAsyncService,
         scope=Scope.SESSION,
         lifetime=Lifetime.SCOPED,
     )
@@ -1026,9 +1023,9 @@ async def test_request_resolver_async_delegates_to_session_owner_cache() -> None
         return _SessionAsyncService()
 
     container = Container()
-    container.register_factory(
-        _SessionAsyncService,
-        factory=build_session_async_service,
+    container.add_factory(
+        build_session_async_service,
+        provides=_SessionAsyncService,
         scope=Scope.SESSION,
         lifetime=Lifetime.SCOPED,
     )
@@ -1046,9 +1043,9 @@ async def test_request_resolver_async_delegates_to_session_owner_cache() -> None
 
 def test_renderer_emits_thread_locks_for_sync_graph() -> None:
     container = Container(lock_mode="auto")
-    container.register_factory(
+    container.add_factory(
         _SingletonService,
-        factory=_SingletonService,
+        provides=_SingletonService,
         lifetime=Lifetime.SCOPED,
     )
 
@@ -1068,14 +1065,14 @@ async def test_renderer_emits_async_locks_only_for_async_cached_paths() -> None:
         return _SingletonService()
 
     container = Container(lock_mode="auto")
-    container.register_factory(
-        _SingletonService,
-        factory=build_async,
+    container.add_factory(
+        build_async,
+        provides=_SingletonService,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_factory(
+    container.add_factory(
         _TransientService,
-        factory=_TransientService,
+        provides=_TransientService,
         lifetime=Lifetime.SCOPED,
     )
 
@@ -1097,9 +1094,9 @@ async def test_renderer_emits_async_locks_only_for_async_cached_paths() -> None:
 
 def test_renderer_lock_mode_none_emits_no_lock_globals() -> None:
     container = Container()
-    container.register_factory(
+    container.add_factory(
         _SingletonService,
-        factory=_SingletonService,
+        provides=_SingletonService,
         lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.NONE,
     )
@@ -1126,15 +1123,15 @@ def test_mixed_graph_thread_override_keeps_sync_singleton_thread_safe() -> None:
         return _TransientService()
 
     container = Container()
-    container.register_factory(
-        _SingletonService,
-        factory=build_sync_singleton,
+    container.add_factory(
+        build_sync_singleton,
+        provides=_SingletonService,
         lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.THREAD,
     )
-    container.register_factory(
-        _TransientService,
-        factory=build_async_singleton,
+    container.add_factory(
+        build_async_singleton,
+        provides=_TransientService,
         lifetime=Lifetime.SCOPED,
     )
     container.compile()
@@ -1166,21 +1163,21 @@ def test_mixed_graph_thread_override_keeps_sync_dependency_chain_thread_safe() -
         return _MixedAsyncGraphDependency()
 
     container = Container(lock_mode="auto")
-    container.register_factory(
-        _MixedSharedSyncDependency,
-        factory=build_shared_dependency,
+    container.add_factory(
+        build_shared_dependency,
+        provides=_MixedSharedSyncDependency,
         lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.THREAD,
     )
-    container.register_factory(
-        _MixedSyncConsumer,
-        factory=build_consumer,
+    container.add_factory(
+        build_consumer,
+        provides=_MixedSyncConsumer,
         lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.THREAD,
     )
-    container.register_factory(
-        _MixedAsyncGraphDependency,
-        factory=build_async_graph_dependency,
+    container.add_factory(
+        build_async_graph_dependency,
+        provides=_MixedAsyncGraphDependency,
         lifetime=Lifetime.SCOPED,
     )
 
@@ -1225,9 +1222,9 @@ def test_lock_mode_async_on_sync_cached_provider_leaves_sync_path_unlocked() -> 
         return _SingletonService()
 
     container = Container()
-    container.register_factory(
-        _SingletonService,
-        factory=build_singleton,
+    container.add_factory(
+        build_singleton,
+        provides=_SingletonService,
         lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.ASYNC,
     )
@@ -1258,9 +1255,9 @@ def test_sync_generator_runs_cleanup_on_scope_exit() -> None:
             events.append("exit")
 
     container = Container()
-    container.register_generator(
-        _Resource,
-        generator=provide_resource,
+    container.add_generator(
+        provide_resource,
+        provides=_Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -1284,9 +1281,9 @@ def test_sync_generator_runs_cleanup_for_implicit_request_scope_on_action_exit()
             events.append("exit")
 
     container = Container()
-    container.register_generator(
-        _Resource,
-        generator=provide_resource,
+    container.add_generator(
+        provide_resource,
+        provides=_Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -1307,9 +1304,9 @@ def test_sync_generator_cleanup_disabled_keeps_cleanup_callbacks_empty() -> None
         yield _Resource()
 
     container = Container()
-    container.register_generator(
-        _Resource,
-        generator=provide_resource,
+    container.add_generator(
+        provide_resource,
+        provides=_Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -1349,9 +1346,9 @@ async def test_async_generator_runs_cleanup_on_async_scope_exit() -> None:
             events.append("exit")
 
     container = Container()
-    container.register_generator(
-        _Resource,
-        generator=provide_resource,
+    container.add_generator(
+        provide_resource,
+        provides=_Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -1369,7 +1366,7 @@ def test_sync_resolution_for_async_generator_raises_async_dependency_error() -> 
         yield _Resource()
 
     container = Container()
-    container.register_generator(_Resource, generator=provide_resource)
+    container.add_generator(provide_resource, provides=_Resource)
 
     with pytest.raises(
         DIWireAsyncDependencyInSyncContextError,
@@ -1402,9 +1399,9 @@ async def test_async_context_manager_provider_uses_aenter_and_aexit() -> None:
         return _ManagedAsyncContext()
 
     container = Container()
-    container.register_context_manager(
-        _Resource,
-        context_manager=provide_resource,
+    container.add_context_manager(
+        provide_resource,
+        provides=_Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -1422,9 +1419,9 @@ def test_sync_scope_exit_raises_when_async_cleanup_callbacks_are_present() -> No
         yield _Resource()
 
     container = Container()
-    container.register_generator(
-        _Resource,
-        generator=provide_resource,
+    container.add_generator(
+        provide_resource,
+        provides=_Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -1478,21 +1475,21 @@ def test_cleanup_callbacks_execute_in_lifo_order() -> None:
             self.second = second
 
     container = Container()
-    container.register_context_manager(
-        _Resource,
-        context_manager=provide_first,
+    container.add_context_manager(
+        provide_first,
+        provides=_Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_context_manager(
-        _SingletonService,
-        context_manager=provide_second,
+    container.add_context_manager(
+        provide_second,
+        provides=_SingletonService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_concrete(
+    container.add_concrete(
         _Both,
-        concrete_type=_Both,
+        provides=_Both,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -1540,21 +1537,21 @@ def test_cleanup_keeps_first_cleanup_error_when_multiple_callbacks_fail() -> Non
             self.second = second
 
     container = Container()
-    container.register_context_manager(
-        _Resource,
-        context_manager=provide_first,
+    container.add_context_manager(
+        provide_first,
+        provides=_Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_context_manager(
-        _SingletonService,
-        context_manager=provide_second,
+    container.add_context_manager(
+        provide_second,
+        provides=_SingletonService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_concrete(
+    container.add_concrete(
         _Both,
-        concrete_type=_Both,
+        provides=_Both,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -1581,9 +1578,9 @@ def test_cleanup_does_not_override_active_body_exception() -> None:
         return _FailingContext()
 
     container = Container()
-    container.register_context_manager(
-        _Resource,
-        context_manager=provide_resource,
+    container.add_context_manager(
+        provide_resource,
+        provides=_Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -1636,21 +1633,21 @@ async def test_async_cleanup_callbacks_execute_in_lifo_order_and_drain_stack() -
             self.second = second
 
     container = Container()
-    container.register_context_manager(
-        _Resource,
-        context_manager=provide_sync,
+    container.add_context_manager(
+        provide_sync,
+        provides=_Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_context_manager(
-        _SingletonService,
-        context_manager=provide_async,
+    container.add_context_manager(
+        provide_async,
+        provides=_SingletonService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_concrete(
+    container.add_concrete(
         _Both,
-        concrete_type=_Both,
+        provides=_Both,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -1702,21 +1699,21 @@ async def test_async_cleanup_keeps_first_cleanup_error_when_multiple_callbacks_f
             self.second = second
 
     container = Container()
-    container.register_context_manager(
-        _Resource,
-        context_manager=provide_first,
+    container.add_context_manager(
+        provide_first,
+        provides=_Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_context_manager(
-        _SingletonService,
-        context_manager=provide_second,
+    container.add_context_manager(
+        provide_second,
+        provides=_SingletonService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_concrete(
+    container.add_concrete(
         _Both,
-        concrete_type=_Both,
+        provides=_Both,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -1751,9 +1748,9 @@ async def test_async_cleanup_does_not_override_body_exception_and_forwards_exc_i
         return _TrackingAsyncContext()
 
     container = Container()
-    container.register_context_manager(
-        _Resource,
-        context_manager=provide_resource,
+    container.add_context_manager(
+        provide_resource,
+        provides=_Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -1776,15 +1773,15 @@ async def test_async_generator_dependency_chain_requires_aresolve() -> None:
         return _DependsOnResource(resource)
 
     container = Container()
-    container.register_generator(
-        _Resource,
-        generator=provide_resource,
+    container.add_generator(
+        provide_resource,
+        provides=_Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_factory(
-        _DependsOnResource,
-        factory=build_dependent,
+    container.add_factory(
+        build_dependent,
+        provides=_DependsOnResource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -1812,15 +1809,15 @@ async def test_async_context_manager_dependency_chain_requires_aresolve() -> Non
         return _DependsOnResource(resource)
 
     container = Container()
-    container.register_context_manager(
-        _Resource,
-        context_manager=provide_resource,
+    container.add_context_manager(
+        provide_resource,
+        provides=_Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_factory(
-        _DependsOnResource,
-        factory=build_dependent,
+    container.add_factory(
+        build_dependent,
+        provides=_DependsOnResource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -1841,9 +1838,9 @@ async def test_async_context_manager_dependency_chain_requires_aresolve() -> Non
 @pytest.mark.asyncio
 async def test_async_scope_mismatch_raises_for_deeper_scoped_provider() -> None:
     container = Container()
-    container.register_concrete(
+    container.add_concrete(
         _RequestService,
-        concrete_type=_RequestService,
+        provides=_RequestService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -1859,8 +1856,8 @@ def test_positional_only_dependency_wiring_is_supported() -> None:
         return _PosOnlyService(dependency)
 
     container = Container()
-    container.register_instance(_PosOnlyDependency, instance=dependency_instance)
-    container.register_factory(_PosOnlyService, factory=build_service)
+    container.add_instance(dependency_instance, provides=_PosOnlyDependency)
+    container.add_factory(build_service, provides=_PosOnlyService)
 
     resolved = container.resolve(_PosOnlyService)
 
@@ -1878,10 +1875,10 @@ def test_var_positional_dependency_wiring_expands_iterable_dependency() -> None:
     values_instance = (1, 2, 3)
 
     container = Container()
-    container.register_instance(provides=values_type, instance=values_instance)
-    container.register_factory(
-        _VarArgsService,
-        factory=build_service,
+    container.add_instance(values_instance, provides=values_type)
+    container.add_factory(
+        build_service,
+        provides=_VarArgsService,
         dependencies=[
             ProviderDependency(provides=values_type, parameter=values_parameter),
         ],
@@ -1903,10 +1900,10 @@ def test_var_keyword_dependency_wiring_expands_mapping_dependency() -> None:
     options_instance = {"first": 1, "second": 2}
 
     container = Container()
-    container.register_instance(provides=options_type, instance=options_instance)
-    container.register_factory(
-        _KwArgsService,
-        factory=build_service,
+    container.add_instance(options_instance, provides=options_type)
+    container.add_factory(
+        build_service,
+        provides=_KwArgsService,
         dependencies=[
             ProviderDependency(provides=options_type, parameter=options_parameter),
         ],
@@ -1935,9 +1932,9 @@ def test_cleanup_raises_when_only_cleanup_fails() -> None:
         return _FailingContext()
 
     container = Container()
-    container.register_context_manager(
-        _Resource,
-        context_manager=provide_resource,
+    container.add_context_manager(
+        provide_resource,
+        provides=_Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -1971,9 +1968,9 @@ def test_cleanup_preserves_original_exception_and_forwards_exc_info() -> None:
         return _TrackingContext()
 
     container = Container()
-    container.register_context_manager(
-        _Resource,
-        context_manager=provide_resource,
+    container.add_context_manager(
+        provide_resource,
+        provides=_Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -2010,9 +2007,9 @@ def test_build_root_resolver_supports_no_cleanup_mode() -> None:
         return _ManagedContext()
 
     container = Container()
-    container.register_context_manager(
-        _Resource,
-        context_manager=provide_resource,
+    container.add_context_manager(
+        provide_resource,
+        provides=_Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -2045,11 +2042,11 @@ def test_build_root_resolver_rebinds_globals_for_new_registrations() -> None:
     try:
         ProviderSpec.SLOT_COUNTER = 0
         first_container = Container()
-        first_container.register_instance(_Resource, instance=first)
+        first_container.add_instance(first, provides=_Resource)
 
         ProviderSpec.SLOT_COUNTER = 0
         second_container = Container()
-        second_container.register_instance(_Resource, instance=second)
+        second_container.add_instance(second, provides=_Resource)
     finally:
         ProviderSpec.SLOT_COUNTER = slot_counter
 
@@ -2079,27 +2076,27 @@ def test_scope_chain_transitions_cover_session_request_action_and_step_paths() -
         pass
 
     container = Container()
-    container.register_concrete(
+    container.add_concrete(
         _SessionService,
-        concrete_type=_SessionService,
+        provides=_SessionService,
         scope=Scope.SESSION,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_concrete(
+    container.add_concrete(
         _RequestService,
-        concrete_type=_RequestService,
+        provides=_RequestService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_concrete(
+    container.add_concrete(
         _ActionService,
-        concrete_type=_ActionService,
+        provides=_ActionService,
         scope=Scope.ACTION,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_concrete(
+    container.add_concrete(
         _StepService,
-        concrete_type=_StepService,
+        provides=_StepService,
         scope=Scope.STEP,
         lifetime=Lifetime.SCOPED,
     )
@@ -2124,7 +2121,7 @@ def test_build_root_resolver_rebind_loop_preserves_each_existing_resolver_cache(
     try:
         ProviderSpec.SLOT_COUNTER = 0
         template_source_container = Container()
-        template_source_container.register_instance(_Resource, instance=_Resource())
+        template_source_container.add_instance(_Resource(), provides=_Resource)
         code = ResolversTemplateRenderer().get_providers_code(
             root_scope=Scope.APP,
             registrations=template_source_container._providers_registrations,
@@ -2139,7 +2136,7 @@ def test_build_root_resolver_rebind_loop_preserves_each_existing_resolver_cache(
             ProviderSpec.SLOT_COUNTER = 0
             container = Container()
             current = _Resource()
-            container.register_instance(_Resource, instance=current)
+            container.add_instance(current, provides=_Resource)
             resolver = build_root_resolver(container._providers_registrations)
             assert resolver.resolve(_Resource) is current
             resolvers.append(resolver)

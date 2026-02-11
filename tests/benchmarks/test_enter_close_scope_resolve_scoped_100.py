@@ -19,7 +19,7 @@ class _ScopedService:
 
 def test_benchmark_diwire_enter_close_scope_resolve_scoped_100(benchmark: Any) -> None:
     container = DIWireContainer(lock_mode=LockMode.NONE)
-    container.register_concrete(
+    container.add_concrete(
         _ScopedService,
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,

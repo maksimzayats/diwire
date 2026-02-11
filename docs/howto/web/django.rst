@@ -24,9 +24,7 @@ Minimal sketch
    container = Container(autoregister_concrete_types=False)
    request_var: ContextVar[HttpRequest] = ContextVar("request_var")
 
-   container.register_factory(
-       provides=HttpRequest,
-       factory=request_var.get,
+   container.add_factory(request_var.get, provides=HttpRequest,
        scope=Scope.REQUEST,
    )
 
@@ -47,9 +45,7 @@ Minimal sketch
        ...
 
 
-   container.register_concrete(
-       provides=Service,
-       concrete_type=Service,
+   container.add_concrete(Service, provides=Service,
        lifetime=Lifetime.SCOPED,
        scope=Scope.REQUEST,
    )

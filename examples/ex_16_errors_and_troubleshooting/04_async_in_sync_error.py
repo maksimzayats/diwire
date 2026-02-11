@@ -16,7 +16,7 @@ async def provide_async_dependency() -> AsyncDependency:
 
 def main() -> None:
     container = Container(autoregister_concrete_types=False)
-    container.register_factory(AsyncDependency, factory=provide_async_dependency)
+    container.add_factory(provide_async_dependency, provides=AsyncDependency)
 
     try:
         container.resolve(AsyncDependency)

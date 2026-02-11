@@ -37,9 +37,9 @@ def main() -> None:
         finally:
             lifecycle["closed"] += 1
 
-    container.register_generator(
-        RequestResource,
-        generator=provide_resource,
+    container.add_generator(
+        provide_resource,
+        provides=RequestResource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )

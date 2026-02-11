@@ -1,4 +1,4 @@
-"""Focused example: ``register_concrete`` and ``register_factory`` together."""
+"""Focused example: ``add_concrete`` and ``add_factory`` together."""
 
 from __future__ import annotations
 
@@ -18,12 +18,12 @@ class FactoryService:
 
 def main() -> None:
     container = Container(autoregister_concrete_types=False)
-    container.register_concrete(ConcreteDependency, concrete_type=ConcreteDependency)
+    container.add_concrete(ConcreteDependency, provides=ConcreteDependency)
 
     def build_service(dependency: ConcreteDependency) -> FactoryService:
         return FactoryService(dependency=dependency)
 
-    container.register_factory(FactoryService, factory=build_service)
+    container.add_factory(build_service, provides=FactoryService)
     resolved = container.resolve(FactoryService)
     print(
         f"factory_injected_dep={isinstance(resolved.dependency, ConcreteDependency)}",

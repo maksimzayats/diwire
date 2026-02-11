@@ -42,9 +42,7 @@ To cache a provider *within* a scope, register it as ``Lifetime.SCOPED`` and set
    class RequestSession: ...
 
    container = Container(autoregister_concrete_types=False)
-   container.register_concrete(
-       RequestSession,
-       concrete_type=RequestSession,
+   container.add_concrete(RequestSession, provides=RequestSession,
        scope=Scope.REQUEST,
        lifetime=Lifetime.SCOPED,
    )

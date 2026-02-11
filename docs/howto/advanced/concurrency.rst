@@ -31,20 +31,20 @@ LockMode
    If you resolve sync cached providers from multiple threads, set ``LockMode.THREAD``
    at the container or registration level.
 
-Registration-level overrides are available for ``register_concrete``, ``register_factory``,
-``register_generator``, and ``register_context_manager``:
+Registration-level overrides are available for ``add_concrete``, ``add_factory``,
+``add_generator``, and ``add_context_manager``:
 
 .. code-block:: python
 
    from diwire import Container, LockMode
 
    container = Container(lock_mode="auto")
-   container.register_factory(Service, factory=build_service)  # inherits AUTO via "from_container"
-   container.register_factory(Cache, factory=build_cache, lock_mode=LockMode.THREAD)
-   container.register_factory(Client, factory=build_client, lock_mode=LockMode.NONE)
+   container.add_factory(build_service, provides=Service)  # inherits AUTO via "from_container"
+   container.add_factory(build_cache, provides=Cache, lock_mode=LockMode.THREAD)
+   container.add_factory(build_client, provides=Client, lock_mode=LockMode.NONE)
 
 Use ``lock_mode="from_container"`` to explicitly inherit the container default.
-``register_instance`` has no lock override and always uses ``LockMode.NONE``.
+``add_instance`` has no lock override and always uses ``LockMode.NONE``.
 
 Threads and free-threaded Python
 --------------------------------

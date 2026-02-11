@@ -48,15 +48,15 @@ def _singleton_two_thread_stats(
         return provides()
 
     if lock_mode is None:
-        container.register_factory(
-            provides,
-            factory=factory,
+        container.add_factory(
+            factory,
+            provides=provides,
             lifetime=Lifetime.SCOPED,
         )
     else:
-        container.register_factory(
-            provides,
-            factory=factory,
+        container.add_factory(
+            factory,
+            provides=provides,
             lifetime=Lifetime.SCOPED,
             lock_mode=lock_mode,
         )

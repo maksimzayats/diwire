@@ -12,7 +12,7 @@ def main() -> None:
     container = Container()
 
     try:
-        container.register_instance(provides=cast("Any", None), instance=object())
+        container.add_instance(object(), provides=cast("Any", None))
     except DIWireInvalidRegistrationError as error:
         error_name = type(error).__name__
 

@@ -19,8 +19,8 @@ class Consumer(pydantic.BaseModel):
 def main() -> None:
     container = Container(autoregister_concrete_types=False)
     dependency = Dependency()
-    container.register_instance(instance=dependency)
-    container.register_concrete(concrete_type=Consumer)
+    container.add_instance(dependency)
+    container.add_concrete(Consumer)
 
     print(
         f"pydantic_ok={container.resolve(Consumer).dependency is dependency}",

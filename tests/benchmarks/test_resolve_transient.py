@@ -18,7 +18,7 @@ class _TransientService:
 
 def test_benchmark_diwire_resolve_transient(benchmark: Any) -> None:
     container = DIWireContainer(lock_mode=LockMode.NONE)
-    container.register_concrete(_TransientService, lifetime=Lifetime.TRANSIENT)
+    container.add_concrete(_TransientService, lifetime=Lifetime.TRANSIENT)
     first = container.resolve(_TransientService)
     second = container.resolve(_TransientService)
     assert first is not second

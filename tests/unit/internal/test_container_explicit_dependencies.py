@@ -48,7 +48,7 @@ def test_explicit_dependencies_bypass_inference() -> None:
     ]
 
     container = Container()
-    container.register_factory(Service, factory=build_service, dependencies=dependencies)
+    container.add_factory(build_service, provides=Service, dependencies=dependencies)
 
     provider_spec = container._providers_registrations.get_by_type(Service)
     assert [dependency.parameter.name for dependency in provider_spec.dependencies] == [
@@ -68,7 +68,7 @@ def test_missing_explicit_dependencies_raises_inference_error() -> None:
     container = Container()
 
     with pytest.raises(DIWireProviderDependencyInferenceError, match="raw_dependency"):
-        container.register_factory(Service, factory=build_service)
+        container.add_factory(build_service, provides=Service)
 
 
 def test_decorator_registration_accepts_explicit_dependencies() -> None:
@@ -84,7 +84,7 @@ def test_decorator_registration_accepts_explicit_dependencies() -> None:
     ]
 
     container = Container()
-    decorator = container.register_factory(Service, dependencies=dependencies)
+    decorator = container.add_factory(provides=Service, dependencies=dependencies)
     returned_factory = decorator(build_service)
 
     assert returned_factory is build_service
@@ -113,7 +113,7 @@ def test_explicit_dependencies_reject_unknown_parameter() -> None:
     container = Container()
 
     with pytest.raises(DIWireInvalidProviderSpecError, match="unknown parameter"):
-        container.register_factory(Service, factory=build_service, dependencies=dependencies)
+        container.add_factory(build_service, provides=Service, dependencies=dependencies)
 
 
 def test_explicit_dependencies_reject_duplicates() -> None:
@@ -129,7 +129,7 @@ def test_explicit_dependencies_reject_duplicates() -> None:
     container = Container()
 
     with pytest.raises(DIWireInvalidProviderSpecError, match="duplicated"):
-        container.register_factory(Service, factory=build_service, dependencies=dependencies)
+        container.add_factory(build_service, provides=Service, dependencies=dependencies)
 
 
 def test_explicit_dependencies_reject_kind_mismatch() -> None:
@@ -146,7 +146,7 @@ def test_explicit_dependencies_reject_kind_mismatch() -> None:
     container = Container()
 
     with pytest.raises(DIWireInvalidProviderSpecError, match="has kind"):
-        container.register_factory(Service, factory=build_service, dependencies=dependencies)
+        container.add_factory(build_service, provides=Service, dependencies=dependencies)
 
 
 def test_explicit_dependencies_for_concrete_type_are_validated() -> None:
@@ -159,7 +159,7 @@ def test_explicit_dependencies_for_concrete_type_are_validated() -> None:
     ]
 
     container = Container()
-    container.register_concrete(Service, concrete_type=ConcreteService, dependencies=dependencies)
+    container.add_concrete(ConcreteService, provides=Service, dependencies=dependencies)
 
     provider_spec = container._providers_registrations.get_by_type(Service)
     assert [dependency.parameter.name for dependency in provider_spec.dependencies] == ["dep"]
@@ -179,7 +179,7 @@ def test_explicit_dependencies_for_generator_are_validated() -> None:
     ]
 
     container = Container()
-    container.register_generator(Service, generator=build_service, dependencies=dependencies)
+    container.add_generator(build_service, provides=Service, dependencies=dependencies)
 
     provider_spec = container._providers_registrations.get_by_type(Service)
     assert [dependency.parameter.name for dependency in provider_spec.dependencies] == ["dep"]
@@ -200,9 +200,9 @@ def test_explicit_dependencies_for_context_manager_are_validated() -> None:
     ]
 
     container = Container()
-    container.register_context_manager(
-        Service,
-        context_manager=build_service,
+    container.add_context_manager(
+        build_service,
+        provides=Service,
         dependencies=dependencies,
     )
 

@@ -53,7 +53,7 @@ def test_container_sets_async_flags_for_sync_factory_with_async_dependency() -> 
         return Service()
 
     container = Container()
-    container.register_factory(factory=provide_service)
+    container.add_factory(provide_service)
     spec = container._providers_registrations.get_by_type(Service)
 
     assert not spec.is_async
@@ -66,7 +66,7 @@ def test_container_sets_async_flags_for_async_context_manager() -> None:
         yield Service()
 
     container = Container()
-    container.register_context_manager(context_manager=provide_async_service)
+    container.add_context_manager(provide_async_service)
     spec = container._providers_registrations.get_by_type(Service)
 
     assert spec.is_async

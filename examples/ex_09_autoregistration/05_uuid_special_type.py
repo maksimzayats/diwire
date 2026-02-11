@@ -25,7 +25,7 @@ def main() -> None:
         skipped_before_registration = False
 
     expected_uuid = uuid.UUID(int=0)
-    container.register_instance(instance=expected_uuid)
+    container.add_instance(expected_uuid)
     resolved = container.resolve(Root)
 
     print(

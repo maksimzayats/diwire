@@ -9,12 +9,12 @@ diwire supports async providers and async resolution.
 Async factories
 ---------------
 
-``register_factory()`` accepts ``async def`` factories. Resolve them with ``await container.aresolve(...)``.
+``add_factory()`` accepts ``async def`` factories. Resolve them with ``await container.aresolve(...)``.
 
 Async cleanup
 -------------
 
-``register_generator()`` supports async generators (``async def ...: yield ...``). Cleanup in the ``finally`` block runs
+``add_generator()`` supports async generators (``async def ...: yield ...``). Cleanup in the ``finally`` block runs
 when the owning scope exits.
 
 Runnable example: :doc:`/howto/examples/async`.

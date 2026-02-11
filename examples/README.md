@@ -8,7 +8,7 @@ Each topic lives in a grouped folder named `ex_XX_<topic>/`.
 
 - `ex_01_quickstart`: basic auto-wiring chain resolution
 - `ex_02_registration_methods`: instance/concrete/factory/generator/context-manager/explicit deps
-  - focused: `02_register_instance.py` ... `06_explicit_dependencies.py`
+  - focused: `02_add_instance.py` ... `06_explicit_dependencies.py`
 - `ex_03_lifetimes`: transient, singleton, scoped identity behavior
 - `ex_04_scopes_and_cleanup`: scope transitions, mismatch, cleanup timing
   - focused: `02_scope_transitions.py` ... `05_singleton_cleanup.py`

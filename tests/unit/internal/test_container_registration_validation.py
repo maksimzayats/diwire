@@ -23,11 +23,11 @@ def test_register_concrete_rejects_non_class_concrete_type() -> None:
     container = Container()
 
     with pytest.raises(DIWireInvalidRegistrationError, match="must be a class"):
-        container.register_concrete(concrete_type=cast("Any", 42))
+        container.add_concrete(cast("Any", 42))
 
 
 def test_register_concrete_rejects_abstract_concrete_type() -> None:
     container = Container()
 
     with pytest.raises(DIWireInvalidRegistrationError, match="abstract class"):
-        container.register_concrete(concrete_type=AbstractService)
+        container.add_concrete(AbstractService)

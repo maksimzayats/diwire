@@ -162,7 +162,7 @@ class _TestMetaclass(type):
 def test_container_default_autoregisters_dependencies_during_registration() -> None:
     container = Container()
 
-    container.register_concrete(concrete_type=RootWithDirectDependency)
+    container.add_concrete(RootWithDirectDependency)
 
     dependency_spec = container._providers_registrations.find_by_type(DirectDependency)
     assert dependency_spec is not None
@@ -172,8 +172,8 @@ def test_container_default_autoregisters_dependencies_during_registration() -> N
 def test_registration_override_can_disable_dependency_autoregistration() -> None:
     container = Container()
 
-    container.register_concrete(
-        concrete_type=RootWithDirectDependency,
+    container.add_concrete(
+        RootWithDirectDependency,
         autoregister_dependencies=False,
     )
 
@@ -183,8 +183,8 @@ def test_registration_override_can_disable_dependency_autoregistration() -> None
 def test_registration_override_can_enable_dependency_autoregistration() -> None:
     container = Container(autoregister_dependencies=False)
 
-    container.register_concrete(
-        concrete_type=RootWithDirectDependency,
+    container.add_concrete(
+        RootWithDirectDependency,
         autoregister_dependencies=True,
     )
 
@@ -194,7 +194,7 @@ def test_registration_override_can_enable_dependency_autoregistration() -> None:
 def test_dependency_autoregistration_is_recursive() -> None:
     container = Container()
 
-    container.register_concrete(concrete_type=RootWithNestedDependencies)
+    container.add_concrete(RootWithNestedDependencies)
 
     assert container._providers_registrations.find_by_type(IntermediateDependency) is not None
     assert container._providers_registrations.find_by_type(NestedDependency) is not None
@@ -202,10 +202,10 @@ def test_dependency_autoregistration_is_recursive() -> None:
 
 def test_dependency_autoregistration_skips_already_registered_dependency() -> None:
     container = Container()
-    container.register_concrete(concrete_type=ExistingDependency)
+    container.add_concrete(ExistingDependency)
     existing_spec = container._providers_registrations.get_by_type(ExistingDependency)
 
-    container.register_concrete(concrete_type=RootWithExistingDependency)
+    container.add_concrete(RootWithExistingDependency)
 
     assert container._providers_registrations.get_by_type(ExistingDependency) is existing_spec
 
@@ -216,7 +216,7 @@ def test_strict_container_skips_dependency_autoregistration_even_when_enabled() 
         autoregister_dependencies=True,
     )
 
-    container.register_concrete(concrete_type=RootWithDirectDependency)
+    container.add_concrete(RootWithDirectDependency)
 
     assert container._providers_registrations.find_by_type(DirectDependency) is None
 
@@ -224,8 +224,8 @@ def test_strict_container_skips_dependency_autoregistration_even_when_enabled() 
 def test_dependency_autoregistration_uses_parent_scope_and_lifetime() -> None:
     container = Container()
 
-    container.register_concrete(
-        concrete_type=RootWithScopedDependency,
+    container.add_concrete(
+        RootWithScopedDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
         autoregister_dependencies=True,
@@ -239,7 +239,7 @@ def test_dependency_autoregistration_uses_parent_scope_and_lifetime() -> None:
 def test_dependency_autoregistration_ignores_registration_failures_and_continues() -> None:
     container = Container()
 
-    container.register_concrete(concrete_type=RootWithMixedDependencies)
+    container.add_concrete(RootWithMixedDependencies)
 
     assert container._providers_registrations.find_by_type(AbstractDependency) is None
     assert container._providers_registrations.find_by_type(ValidDependency) is not None
@@ -265,9 +265,9 @@ def test_resolve_autoregistration_skips_pathlib_path_dependency() -> None:
 
     assert container._providers_registrations.find_by_type(pathlib.Path) is None
     expected_path = pathlib.Path("x")
-    container.register_instance(
+    container.add_instance(
+        expected_path,
         provides=pathlib.Path,
-        instance=expected_path,
     )
 
     resolved = container.resolve(RootWithPathDep)
@@ -282,7 +282,7 @@ def test_resolve_autoregistration_skips_uuid_dependency() -> None:
 
     assert container._providers_registrations.find_by_type(uuid.UUID) is None
     expected_uuid = uuid.UUID(int=0)
-    container.register_instance(instance=expected_uuid)
+    container.add_instance(expected_uuid)
 
     resolved = container.resolve(RootWithUuidDep)
     assert resolved.request_id is expected_uuid
@@ -297,7 +297,10 @@ def test_autoregistration_policy_skips_metaclasses() -> None:
 def test_factory_decorator_can_autoregister_dependencies() -> None:
     container = Container()
 
-    @container.register_factory(DecoratorService, autoregister_dependencies=True)
+    @container.add_factory(
+        provides=DecoratorService,
+        autoregister_dependencies=True,
+    )
     def build_service(dependency: DecoratorDependency) -> DecoratorService:
         return DecoratorService(dependency=dependency)
 
@@ -334,8 +337,8 @@ def test_resolve_autoregisters_pydantic_settings_as_singleton_factory() -> None:
 def test_dependency_autoregistration_registers_pydantic_settings_as_root_singleton() -> None:
     container = Container()
 
-    container.register_concrete(
-        concrete_type=RootWithPydanticSettingsDependency,
+    container.add_concrete(
+        RootWithPydanticSettingsDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -381,8 +384,8 @@ def test_concrete_registration_autoregisters_namedtuple_class_dependencies() -> 
 
     container = Container()
 
-    container.register_concrete(
-        concrete_type=NamedTupleRoot,
+    container.add_concrete(
+        NamedTupleRoot,
         autoregister_dependencies=True,
     )
 
@@ -399,8 +402,8 @@ def test_concrete_registration_autoregisters_msgspec_struct_dependencies() -> No
 
     container = Container()
 
-    container.register_concrete(
-        concrete_type=MsgspecRoot,
+    container.add_concrete(
+        MsgspecRoot,
         autoregister_dependencies=True,
     )
 
@@ -418,8 +421,8 @@ def test_concrete_registration_autoregisters_pydantic_basemodel_v2_dependencies(
 
     container = Container()
 
-    container.register_concrete(
-        concrete_type=PydanticRoot,
+    container.add_concrete(
+        PydanticRoot,
         autoregister_dependencies=True,
     )
 

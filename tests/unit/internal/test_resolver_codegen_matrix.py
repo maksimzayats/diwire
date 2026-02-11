@@ -81,20 +81,20 @@ def test_codegen_matrix_caching_identity_by_kind_lifetime_scope(
     if provider_kind == "instance":
         instance = _MatrixService()
         instance.value = "instance"
-        container.register_instance(_MatrixService, instance=instance)
+        container.add_instance(instance, provides=_MatrixService)
     elif provider_kind == "concrete":
         assert lifetime is not None
-        container.register_concrete(
+        container.add_concrete(
             _MatrixService,
-            concrete_type=_MatrixService,
+            provides=_MatrixService,
             lifetime=lifetime,
             scope=scope,
         )
     else:
         assert lifetime is not None
-        container.register_factory(
-            _MatrixService,
-            factory=build_service,
+        container.add_factory(
+            build_service,
+            provides=_MatrixService,
             lifetime=lifetime,
             scope=scope,
         )
@@ -123,9 +123,9 @@ def test_codegen_matrix_scoped_cache_isolated_across_scope_instances() -> None:
         return service
 
     container = Container()
-    container.register_factory(
-        _MatrixService,
-        factory=build_service,
+    container.add_factory(
+        build_service,
+        provides=_MatrixService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -178,16 +178,16 @@ def test_codegen_matrix_cleanup_behavior_respects_cleanup_enabled(
 
     container = Container()
     if provider_kind == "generator":
-        container.register_generator(
-            _MatrixResource,
-            generator=provide_generator,
+        container.add_generator(
+            provide_generator,
+            provides=_MatrixResource,
             scope=Scope.REQUEST,
             lifetime=Lifetime.SCOPED,
         )
     else:
-        container.register_context_manager(
-            _MatrixResource,
-            context_manager=provide_context_manager,
+        container.add_context_manager(
+            provide_context_manager,
+            provides=_MatrixResource,
             scope=Scope.REQUEST,
             lifetime=Lifetime.SCOPED,
         )
@@ -213,9 +213,9 @@ def test_codegen_matrix_cleanup_behavior_respects_cleanup_enabled(
 
 def test_codegen_matrix_scope_mismatch_for_request_scoped_dependency_at_root() -> None:
     container = Container()
-    container.register_factory(
+    container.add_factory(
         _MatrixService,
-        factory=_MatrixService,
+        provides=_MatrixService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -235,15 +235,15 @@ async def test_codegen_matrix_async_dependency_chain_requires_aresolve() -> None
         return service
 
     container = Container()
-    container.register_generator(
-        _MatrixAsyncDependency,
-        generator=provide_dependency,
+    container.add_generator(
+        provide_dependency,
+        provides=_MatrixAsyncDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_factory(
-        _MatrixService,
-        factory=build_consumer,
+    container.add_factory(
+        build_consumer,
+        provides=_MatrixService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -272,9 +272,9 @@ def test_codegen_matrix_cached_sync_path_lock_generation_follows_lock_mode(
     has_thread_lock: Any,
 ) -> None:
     container = Container()
-    container.register_factory(
+    container.add_factory(
         _MatrixService,
-        factory=_MatrixService,
+        provides=_MatrixService,
         lifetime=Lifetime.SCOPED,
         lock_mode=lock_mode,
     )
@@ -308,10 +308,10 @@ def test_codegen_matrix_signature_wiring_for_required_parameters(signature_kind:
     signature = inspect.signature(builder)
 
     container = Container()
-    container.register_instance(int, instance=42)
-    container.register_factory(
-        _SignatureService,
-        factory=builder,
+    container.add_instance(42, provides=int)
+    container.add_factory(
+        builder,
+        provides=_SignatureService,
         dependencies=[
             ProviderDependency(provides=int, parameter=signature.parameters["value"]),
         ],
@@ -348,10 +348,10 @@ def test_codegen_matrix_signature_wiring_for_variadic_parameters(signature_kind:
         payload = {"first": 1, "second": 2}
         parameter = signature.parameters["options"]
 
-    container.register_instance(values_type, instance=cast("Any", payload))
-    container.register_factory(
-        _SignatureService,
-        factory=builder,
+    container.add_instance(cast("Any", payload), provides=values_type)
+    container.add_factory(
+        builder,
+        provides=_SignatureService,
         dependencies=[
             ProviderDependency(
                 provides=values_type,
@@ -368,9 +368,9 @@ def test_codegen_matrix_signature_wiring_for_variadic_parameters(signature_kind:
 @pytest.mark.asyncio
 async def test_codegen_matrix_sync_only_graph_has_sync_async_parity() -> None:
     container = Container()
-    container.register_factory(
-        _MatrixService,
-        factory=_sync_only_service,
+    container.add_factory(
+        _sync_only_service,
+        provides=_MatrixService,
         lifetime=Lifetime.SCOPED,
     )
 

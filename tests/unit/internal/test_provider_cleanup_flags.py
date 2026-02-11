@@ -20,7 +20,7 @@ def test_container_sets_cleanup_flag_for_context_manager_provider() -> None:
         yield Resource()
 
     container = Container()
-    container.register_context_manager(context_manager=provide_resource)
+    container.add_context_manager(provide_resource)
     spec = container._providers_registrations.get_by_type(Resource)
 
     assert spec.needs_cleanup
@@ -35,8 +35,8 @@ def test_container_sets_cleanup_flag_for_dependency_cleanup() -> None:
         yield Resource()
 
     container = Container()
-    container.register_context_manager(context_manager=provide_resource)
-    container.register_factory(factory=provide_service)
+    container.add_context_manager(provide_resource)
+    container.add_factory(provide_service)
     spec = container._providers_registrations.get_by_type(Service)
 
     assert spec.needs_cleanup
@@ -51,11 +51,11 @@ def test_container_updates_cleanup_flag_when_dependency_registered_later() -> No
         yield Resource()
 
     container = Container()
-    container.register_factory(factory=provide_service)
+    container.add_factory(provide_service)
     service_spec = container._providers_registrations.get_by_type(Service)
     assert not service_spec.needs_cleanup
 
-    container.register_context_manager(context_manager=provide_resource)
+    container.add_context_manager(provide_resource)
     updated_service_spec = container._providers_registrations.get_by_type(Service)
 
     assert updated_service_spec.needs_cleanup

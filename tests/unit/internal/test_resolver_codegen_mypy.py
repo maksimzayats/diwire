@@ -152,60 +152,132 @@ def test_generated_code_passes_mypy_with_method_replacement_ignored(tmp_path: Pa
         )
 
 
+def test_add_concrete_requires_keyword_provides_for_decorator_usage(tmp_path: Path) -> None:
+    invalid_module_path = tmp_path / "invalid_add_concrete_decorator.py"
+    invalid_module_path.write_text(
+        """
+from __future__ import annotations
+from typing import Protocol
+
+from diwire import Container
+
+
+class IService(Protocol):
+    pass
+
+
+container = Container()
+
+
+@container.add_concrete(IService)
+class Service:
+    pass
+""".strip(),
+    )
+
+    stdout, stderr, exit_status = mypy_api.run(
+        [
+            "--config-file",
+            str(_PYPROJECT_PATH),
+            str(invalid_module_path),
+        ],
+    )
+    output = f"{stdout}\n{stderr}"
+    assert exit_status != 0
+    assert (
+        "decorator" in output.lower()
+        or "not callable" in output.lower()
+        or "none" in output.lower()
+    )
+
+    valid_module_path = tmp_path / "valid_add_concrete_decorator.py"
+    valid_module_path.write_text(
+        """
+from __future__ import annotations
+from typing import Protocol
+
+from diwire import Container
+
+
+class IService(Protocol):
+    pass
+
+
+container = Container()
+
+
+@container.add_concrete(provides=IService)
+class Service:
+    pass
+""".strip(),
+    )
+
+    stdout, stderr, exit_status = mypy_api.run(
+        [
+            "--config-file",
+            str(_PYPROJECT_PATH),
+            str(valid_module_path),
+        ],
+    )
+    assert exit_status == 0, (
+        f"Expected valid add_concrete decorator usage to pass mypy.\n{stdout}\n{stderr}"
+    )
+
+
 def _render_generated_modules() -> dict[str, str]:
     renderer = ResolversTemplateRenderer()
 
     empty_container = Container()
 
     scoped_container = Container()
-    scoped_container.register_concrete(
+    scoped_container.add_concrete(
         _MypySession,
-        concrete_type=_MypySession,
+        provides=_MypySession,
         scope=Scope.SESSION,
         lifetime=Lifetime.SCOPED,
     )
-    scoped_container.register_concrete(
+    scoped_container.add_concrete(
         _MypyRequest,
-        concrete_type=_MypyRequest,
+        provides=_MypyRequest,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
 
     async_factory_container = Container()
-    async_factory_container.register_factory(
-        _MypyAsyncFactoryService,
-        factory=_provide_async_factory_service,
+    async_factory_container.add_factory(
+        _provide_async_factory_service,
+        provides=_MypyAsyncFactoryService,
         lifetime=Lifetime.SCOPED,
     )
 
     sync_generator_container = Container()
-    sync_generator_container.register_generator(
-        _MypySyncGeneratorService,
-        generator=_provide_sync_generator_service,
+    sync_generator_container.add_generator(
+        _provide_sync_generator_service,
+        provides=_MypySyncGeneratorService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
 
     async_generator_container = Container()
-    async_generator_container.register_generator(
-        _MypyAsyncGeneratorService,
-        generator=_provide_async_generator_service,
+    async_generator_container.add_generator(
+        _provide_async_generator_service,
+        provides=_MypyAsyncGeneratorService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
 
     sync_context_manager_container = Container()
-    sync_context_manager_container.register_context_manager(
-        _MypySyncContextManagerService,
-        context_manager=_provide_sync_context_manager_service,
+    sync_context_manager_container.add_context_manager(
+        _provide_sync_context_manager_service,
+        provides=_MypySyncContextManagerService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
 
     async_context_manager_container = Container()
-    async_context_manager_container.register_context_manager(
-        _MypyAsyncContextManagerService,
-        context_manager=_provide_async_context_manager_service,
+    async_context_manager_container.add_context_manager(
+        _provide_async_context_manager_service,
+        provides=_MypyAsyncContextManagerService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -215,15 +287,15 @@ def _render_generated_modules() -> dict[str, str]:
     positional_type = int
     values_type = tuple[int, ...]
     options_type = dict[str, int]
-    mixed_dependency_shapes_container.register_instance(provides=positional_type, instance=1)
-    mixed_dependency_shapes_container.register_instance(provides=values_type, instance=(2, 3))
-    mixed_dependency_shapes_container.register_instance(
+    mixed_dependency_shapes_container.add_instance(1, provides=positional_type)
+    mixed_dependency_shapes_container.add_instance((2, 3), provides=values_type)
+    mixed_dependency_shapes_container.add_instance(
+        {"first": 1, "second": 2},
         provides=options_type,
-        instance={"first": 1, "second": 2},
     )
-    mixed_dependency_shapes_container.register_factory(
-        _MypyMixedShapeService,
-        factory=_provide_mixed_shape_service,
+    mixed_dependency_shapes_container.add_factory(
+        _provide_mixed_shape_service,
+        provides=_MypyMixedShapeService,
         dependencies=[
             ProviderDependency(
                 provides=positional_type,
@@ -241,53 +313,53 @@ def _render_generated_modules() -> dict[str, str]:
     )
 
     async_dependency_propagation_container = Container()
-    async_dependency_propagation_container.register_generator(
-        _MypyAsyncGeneratorService,
-        generator=_provide_async_generator_service,
+    async_dependency_propagation_container.add_generator(
+        _provide_async_generator_service,
+        provides=_MypyAsyncGeneratorService,
         lifetime=Lifetime.SCOPED,
     )
-    async_dependency_propagation_container.register_factory(
-        _MypyAsyncDependencyConsumer,
-        factory=_provide_async_dependency_consumer,
+    async_dependency_propagation_container.add_factory(
+        _provide_async_dependency_consumer,
+        provides=_MypyAsyncDependencyConsumer,
         lifetime=Lifetime.SCOPED,
     )
 
     mixed_async_cleanup_container = Container()
-    mixed_async_cleanup_container.register_generator(
-        _MypyAsyncGeneratorService,
-        generator=_provide_async_generator_service,
+    mixed_async_cleanup_container.add_generator(
+        _provide_async_generator_service,
+        provides=_MypyAsyncGeneratorService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    mixed_async_cleanup_container.register_context_manager(
-        _MypySyncContextManagerService,
-        context_manager=_provide_sync_context_manager_service,
+    mixed_async_cleanup_container.add_context_manager(
+        _provide_sync_context_manager_service,
+        provides=_MypySyncContextManagerService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    mixed_async_cleanup_container.register_factory(
-        _MypyAsyncDependencyConsumer,
-        factory=_provide_async_dependency_consumer,
+    mixed_async_cleanup_container.add_factory(
+        _provide_async_dependency_consumer,
+        provides=_MypyAsyncDependencyConsumer,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
 
     request_root_container = Container()
-    request_root_container.register_concrete(
+    request_root_container.add_concrete(
         _MypyRequestRootAppService,
-        concrete_type=_MypyRequestRootAppService,
+        provides=_MypyRequestRootAppService,
         scope=Scope.APP,
         lifetime=Lifetime.SCOPED,
     )
-    request_root_container.register_concrete(
+    request_root_container.add_concrete(
         _MypySession,
-        concrete_type=_MypySession,
+        provides=_MypySession,
         scope=Scope.SESSION,
         lifetime=Lifetime.SCOPED,
     )
-    request_root_container.register_concrete(
+    request_root_container.add_concrete(
         _MypyRequestRootRequestService,
-        concrete_type=_MypyRequestRootRequestService,
+        provides=_MypyRequestRootRequestService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )

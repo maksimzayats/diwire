@@ -52,7 +52,7 @@ class OverrideDecoratedFactoryService:
 
 def test_container_default_lock_mode_auto() -> None:
     container = Container()
-    container.register_concrete(concrete_type=ConcreteService)
+    container.add_concrete(ConcreteService)
 
     assert container._providers_registrations.get_by_type(ConcreteService).lock_mode == "auto"
 
@@ -69,11 +69,11 @@ def test_registration_default_from_container_applies_to_all_non_instance_registr
         yield ContextManagerService()
 
     container = Container(lock_mode=LockMode.NONE)
-    container.register_instance(instance=InstanceService())
-    container.register_concrete(concrete_type=ConcreteService)
-    container.register_factory(factory=build_factory)
-    container.register_generator(generator=build_generator)
-    container.register_context_manager(context_manager=build_context_manager)
+    container.add_instance(InstanceService())
+    container.add_concrete(ConcreteService)
+    container.add_factory(build_factory)
+    container.add_generator(build_generator)
+    container.add_context_manager(build_context_manager)
 
     assert (
         container._providers_registrations.get_by_type(InstanceService).lock_mode is LockMode.NONE
@@ -106,16 +106,16 @@ def test_registration_override_lock_mode_takes_precedence() -> None:
         return OverrideDecoratedFactoryService()
 
     container = Container(lock_mode=LockMode.NONE)
-    container.register_factory(factory=build_factory, lock_mode=LockMode.THREAD)
-    container.register_concrete(concrete_type=OverrideConcreteService, lock_mode=LockMode.ASYNC)
-    container.register_generator(generator=build_generator, lock_mode=LockMode.NONE)
-    container.register_context_manager(
-        context_manager=build_context_manager,
+    container.add_factory(build_factory, lock_mode=LockMode.THREAD)
+    container.add_concrete(OverrideConcreteService, lock_mode=LockMode.ASYNC)
+    container.add_generator(build_generator, lock_mode=LockMode.NONE)
+    container.add_context_manager(
+        build_context_manager,
         lock_mode=LockMode.ASYNC,
     )
 
-    decorator = container.register_factory(
-        OverrideDecoratedFactoryService,
+    decorator = container.add_factory(
+        provides=OverrideDecoratedFactoryService,
         lock_mode=LockMode.THREAD,
     )
     decorator(build_decorated_factory)
@@ -146,7 +146,7 @@ def test_register_instance_rejects_lock_mode_argument() -> None:
     container = Container()
 
     with pytest.raises(TypeError, match="lock_mode"):
-        cast("Any", container.register_instance)(
+        cast("Any", container.add_instance)(
             instance=InstanceService(),
             lock_mode=LockMode.THREAD,
         )

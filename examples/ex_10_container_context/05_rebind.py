@@ -20,8 +20,8 @@ class Service:
 
 def main() -> None:
     context = ContainerContext()
-    context.register_instance(instance=Message(value="context-message"))
-    context.register_concrete(concrete_type=Service)
+    context.add_instance(Message(value="context-message"))
+    context.add_concrete(Service)
 
     first = Container(autoregister_concrete_types=False)
     context.set_current(first)

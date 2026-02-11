@@ -74,22 +74,22 @@ class DefaultModelBox(ModelBox[M]):
 
 def main() -> None:
     container = Container(autoregister_concrete_types=False)
-    container.register_factory(IBox, factory=build_box)
+    container.add_factory(build_box, provides=IBox)
 
     box_int = cast("Box[int]", container.resolve(IBox[int]))
     print(f"box_int={box_int.type_arg.__name__}")  # => box_int=int
 
-    container.register_concrete(IBox[int], concrete_type=_SpecialIntBox)
+    container.add_concrete(_SpecialIntBox, provides=IBox[int])
     override = container.resolve(IBox[int])
     print(f"override={type(override).__name__}")  # => override=_SpecialIntBox
 
-    container.register_concrete(Repo, concrete_type=GenericRepo)
-    container.register_concrete(Repo[list[U]], concrete_type=ListRepo)
+    container.add_concrete(GenericRepo, provides=Repo)
+    container.add_concrete(ListRepo, provides=Repo[list[U]])
     specific_repo = cast("ListRepo[int]", container.resolve(Repo[list[int]]))
     print(f"specificity_item={specific_repo.item_type.__name__}")  # => specificity_item=int
 
     validation_container = Container(autoregister_concrete_types=False)
-    validation_container.register_concrete(ModelBox, concrete_type=DefaultModelBox)
+    validation_container.add_concrete(DefaultModelBox, provides=ModelBox)
     invalid_key = cast("Any", ModelBox)[str]
     try:
         validation_container.resolve(invalid_key)
@@ -100,9 +100,9 @@ def main() -> None:
     )  # => invalid_generic=DIWireInvalidGenericTypeArgumentError
 
     scoped_container = Container(autoregister_concrete_types=False)
-    scoped_container.register_factory(
-        IBox,
-        factory=build_box,
+    scoped_container.add_factory(
+        build_box,
+        provides=IBox,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )

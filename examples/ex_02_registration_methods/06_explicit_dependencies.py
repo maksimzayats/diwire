@@ -22,7 +22,7 @@ class ExplicitService:
 def main() -> None:
     container = Container(autoregister_concrete_types=False)
     raw = UntypedDependency(value="raw")
-    container.register_instance(UntypedDependency, instance=raw)
+    container.add_instance(raw, provides=UntypedDependency)
 
     def build_service(raw_dependency) -> ExplicitService:  # type: ignore[no-untyped-def]
         return ExplicitService(raw_dependency=raw_dependency)
@@ -34,7 +34,7 @@ def main() -> None:
             parameter=signature.parameters["raw_dependency"],
         ),
     ]
-    container.register_factory(ExplicitService, factory=build_service, dependencies=dependencies)
+    container.add_factory(build_service, provides=ExplicitService, dependencies=dependencies)
 
     resolved = container.resolve(ExplicitService)
     print(f"explicit_deps_ok={resolved.raw_dependency is raw}")  # => explicit_deps_ok=True

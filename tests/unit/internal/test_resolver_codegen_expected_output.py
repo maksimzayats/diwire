@@ -204,15 +204,15 @@ def test_codegen_matches_expected_for_empty_app_root_graph() -> None:
 def test_codegen_matches_expected_for_scoped_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
-    container.register_concrete(
+    container.add_concrete(
         _SnapshotSession,
-        concrete_type=_SnapshotSession,
+        provides=_SnapshotSession,
         scope=Scope.SESSION,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_concrete(
+    container.add_concrete(
         _SnapshotRequest,
-        concrete_type=_SnapshotRequest,
+        provides=_SnapshotRequest,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -224,9 +224,9 @@ def test_codegen_matches_expected_for_scoped_graph() -> None:
 def test_codegen_matches_expected_for_async_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
-    container.register_factory(
-        int,
-        factory=_provide_int_for_snapshot,
+    container.add_factory(
+        _provide_int_for_snapshot,
+        provides=int,
         lifetime=Lifetime.SCOPED,
     )
     generated = _render(container=container, root_scope=Scope.APP)
@@ -237,9 +237,9 @@ def test_codegen_matches_expected_for_async_graph() -> None:
 def test_codegen_matches_expected_for_sync_generator_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
-    container.register_generator(
-        _SnapshotGeneratorResource,
-        generator=_provide_sync_generator_resource,
+    container.add_generator(
+        _provide_sync_generator_resource,
+        provides=_SnapshotGeneratorResource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -251,9 +251,9 @@ def test_codegen_matches_expected_for_sync_generator_graph() -> None:
 def test_codegen_matches_expected_for_async_context_manager_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
-    container.register_context_manager(
-        _SnapshotAsyncContextResource,
-        context_manager=_provide_async_context_resource,
+    container.add_context_manager(
+        _provide_async_context_resource,
+        provides=_SnapshotAsyncContextResource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -270,12 +270,12 @@ def test_codegen_matches_expected_for_mixed_dependency_shape_graph() -> None:
 
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
-    container.register_instance(provides=positional_type, instance=1)
-    container.register_instance(provides=values_type, instance=(2, 3))
-    container.register_instance(provides=options_type, instance={"first": 1, "second": 2})
-    container.register_factory(
-        _SnapshotMixedShapeService,
-        factory=_build_snapshot_mixed_shape_service,
+    container.add_instance(1, provides=positional_type)
+    container.add_instance((2, 3), provides=values_type)
+    container.add_instance({"first": 1, "second": 2}, provides=options_type)
+    container.add_factory(
+        _build_snapshot_mixed_shape_service,
+        provides=_SnapshotMixedShapeService,
         dependencies=[
             ProviderDependency(
                 provides=positional_type,
@@ -299,21 +299,21 @@ def test_codegen_matches_expected_for_mixed_dependency_shape_graph() -> None:
 def test_codegen_matches_expected_for_request_root_filtered_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
-    container.register_concrete(
+    container.add_concrete(
         _SnapshotRequestRootAppService,
-        concrete_type=_SnapshotRequestRootAppService,
+        provides=_SnapshotRequestRootAppService,
         scope=Scope.APP,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_concrete(
+    container.add_concrete(
         _SnapshotRequestRootSessionService,
-        concrete_type=_SnapshotRequestRootSessionService,
+        provides=_SnapshotRequestRootSessionService,
         scope=Scope.SESSION,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_concrete(
+    container.add_concrete(
         _SnapshotRequestRootRequestService,
-        concrete_type=_SnapshotRequestRootRequestService,
+        provides=_SnapshotRequestRootRequestService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
@@ -325,21 +325,21 @@ def test_codegen_matches_expected_for_request_root_filtered_graph() -> None:
 def test_codegen_matches_expected_for_action_root_filtered_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
-    container.register_concrete(
+    container.add_concrete(
         _SnapshotActionRootRequestService,
-        concrete_type=_SnapshotActionRootRequestService,
+        provides=_SnapshotActionRootRequestService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_concrete(
+    container.add_concrete(
         _SnapshotActionRootActionService,
-        concrete_type=_SnapshotActionRootActionService,
+        provides=_SnapshotActionRootActionService,
         scope=Scope.ACTION,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_concrete(
+    container.add_concrete(
         _SnapshotActionRootStepService,
-        concrete_type=_SnapshotActionRootStepService,
+        provides=_SnapshotActionRootStepService,
         scope=Scope.STEP,
         lifetime=Lifetime.SCOPED,
     )
@@ -355,17 +355,17 @@ def test_codegen_matches_expected_for_async_cleanup_mixed_signature_graph() -> N
 
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
-    container.register_context_manager(
-        _SnapshotAsyncContextResource,
-        context_manager=_provide_async_context_resource,
+    container.add_context_manager(
+        _provide_async_context_resource,
+        provides=_SnapshotAsyncContextResource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.register_instance(provides=values_type, instance=(2, 3))
-    container.register_instance(provides=options_type, instance={"first": 1, "second": 2})
-    container.register_factory(
-        _SnapshotAsyncCleanupSignatureService,
-        factory=_build_snapshot_async_cleanup_signature_service,
+    container.add_instance((2, 3), provides=values_type)
+    container.add_instance({"first": 1, "second": 2}, provides=options_type)
+    container.add_factory(
+        _build_snapshot_async_cleanup_signature_service,
+        provides=_SnapshotAsyncCleanupSignatureService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
         dependencies=[
@@ -391,16 +391,16 @@ def test_codegen_matches_expected_for_async_cleanup_mixed_signature_graph() -> N
 def test_codegen_matches_expected_for_inject_wrapper_provider_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
-    container.register_instance(
-        _SnapshotInjectWrapperDependency,
-        instance=_SnapshotInjectWrapperDependency(),
+    container.add_instance(
+        _SnapshotInjectWrapperDependency(),
+        provides=_SnapshotInjectWrapperDependency,
     )
 
     build_service = container.inject(_build_snapshot_inject_wrapper_service)
 
-    container.register_factory(
-        _SnapshotInjectWrapperService,
-        factory=build_service,
+    container.add_factory(
+        build_service,
+        provides=_SnapshotInjectWrapperService,
         lifetime=Lifetime.TRANSIENT,
     )
     generated = _render(container=container, root_scope=Scope.APP)
@@ -411,16 +411,16 @@ def test_codegen_matches_expected_for_inject_wrapper_provider_graph() -> None:
 def test_codegen_matches_expected_for_async_inject_wrapper_provider_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
-    container.register_instance(
-        _SnapshotAsyncInjectWrapperDependency,
-        instance=_SnapshotAsyncInjectWrapperDependency(),
+    container.add_instance(
+        _SnapshotAsyncInjectWrapperDependency(),
+        provides=_SnapshotAsyncInjectWrapperDependency,
     )
 
     build_service = container.inject(_build_snapshot_async_inject_wrapper_service)
 
-    container.register_factory(
-        _SnapshotAsyncInjectWrapperService,
-        factory=build_service,
+    container.add_factory(
+        build_service,
+        provides=_SnapshotAsyncInjectWrapperService,
         lifetime=Lifetime.TRANSIENT,
     )
     generated = _render(container=container, root_scope=Scope.APP)
@@ -431,20 +431,20 @@ def test_codegen_matches_expected_for_async_inject_wrapper_provider_graph() -> N
 def test_codegen_matches_expected_for_nested_inline_root_inject_wrapper_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
-    container.register_instance(
-        _SnapshotInlineRootInjectDependency,
-        instance=_SnapshotInlineRootInjectDependency(),
+    container.add_instance(
+        _SnapshotInlineRootInjectDependency(),
+        provides=_SnapshotInlineRootInjectDependency,
     )
 
     build_inject_service = container.inject(_build_snapshot_inline_root_inject_service)
-    container.register_factory(
-        _SnapshotInlineRootInjectService,
-        factory=build_inject_service,
+    container.add_factory(
+        build_inject_service,
+        provides=_SnapshotInlineRootInjectService,
         lifetime=Lifetime.TRANSIENT,
     )
-    container.register_factory(
-        _SnapshotInlineRootRequestService,
-        factory=_build_snapshot_inline_root_request_service,
+    container.add_factory(
+        _build_snapshot_inline_root_request_service,
+        provides=_SnapshotInlineRootRequestService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.TRANSIENT,
     )
@@ -460,13 +460,13 @@ def test_codegen_matches_expected_for_inject_wrapper_varkw_argument_order_graph(
 
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
-    container.register_instance(provides=options_type, instance={"first": 1, "second": 2})
+    container.add_instance({"first": 1, "second": 2}, provides=options_type)
 
     build_service = container.inject(_build_snapshot_inject_wrapper_varkw_service)
 
-    container.register_factory(
-        _SnapshotInjectWrapperVarKwService,
-        factory=build_service,
+    container.add_factory(
+        build_service,
+        provides=_SnapshotInjectWrapperVarKwService,
         lifetime=Lifetime.TRANSIENT,
         dependencies=[
             ProviderDependency(
@@ -484,9 +484,9 @@ def test_codegen_matches_expected_for_inject_wrapper_varkw_argument_order_graph(
 def test_codegen_matches_expected_for_from_context_dependency_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
-    container.register_factory(
-        _SnapshotFromContextService,
-        factory=_build_snapshot_from_context_service,
+    container.add_factory(
+        _build_snapshot_from_context_service,
+        provides=_SnapshotFromContextService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.TRANSIENT,
     )

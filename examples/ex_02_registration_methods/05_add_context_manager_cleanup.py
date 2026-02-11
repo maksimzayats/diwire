@@ -1,4 +1,4 @@
-"""Focused example: ``register_context_manager`` cleanup on scope exit."""
+"""Focused example: ``add_context_manager`` cleanup on scope exit."""
 
 from __future__ import annotations
 
@@ -23,9 +23,9 @@ def main() -> None:
         finally:
             state["cleaned"] = True
 
-    container.register_context_manager(
-        Resource,
-        context_manager=provide_resource,
+    container.add_context_manager(
+        provide_resource,
+        provides=Resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )

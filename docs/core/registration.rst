@@ -17,7 +17,7 @@ Direct registration APIs
 Instances
 ^^^^^^^^^
 
-Use :meth:`diwire.Container.register_instance` to bind an already-created object:
+Use :meth:`diwire.Container.add_instance` to bind an already-created object:
 
 .. code-block:: python
 
@@ -26,12 +26,12 @@ Use :meth:`diwire.Container.register_instance` to bind an already-created object
    class Config: ...
 
    container = Container()
-   container.register_instance(instance=Config())
+   container.add_instance(Config())
 
 Concrete types
 ^^^^^^^^^^^^^^
 
-Use :meth:`diwire.Container.register_concrete` when you want to resolve ``provides`` but construct ``concrete_type``:
+Use :meth:`diwire.Container.add_concrete` when you want to resolve ``provides`` but construct ``concrete_type``:
 
 .. code-block:: python
 
@@ -50,12 +50,12 @@ Use :meth:`diwire.Container.register_concrete` when you want to resolve ``provid
 
 
    container = Container(autoregister_concrete_types=False)
-   container.register_concrete(provides=Clock, concrete_type=SystemClock)
+   container.add_concrete(SystemClock, provides=Clock)
 
 Factories
 ^^^^^^^^^
 
-Use :meth:`diwire.Container.register_factory` for custom construction logic (sync or async factories are supported):
+Use :meth:`diwire.Container.add_factory` for custom construction logic (sync or async factories are supported):
 
 .. code-block:: python
 
@@ -67,22 +67,22 @@ Use :meth:`diwire.Container.register_factory` for custom construction logic (syn
        return Client()
 
    container = Container(autoregister_concrete_types=False)
-   container.register_factory(provides=Client, factory=build_client)
+   container.add_factory(build_client, provides=Client)
 
 Cleanup providers
 ^^^^^^^^^^^^^^^^^
 
 For deterministic cleanup, use:
 
-- :meth:`diwire.Container.register_generator` for generator/async-generator providers
-- :meth:`diwire.Container.register_context_manager` for (async) context manager providers
+- :meth:`diwire.Container.add_generator` for generator/async-generator providers
+- :meth:`diwire.Container.add_context_manager` for (async) context manager providers
 
 See :doc:`/howto/examples/scopes` for a runnable cleanup example.
 
 Decorator forms
 ---------------
 
-``register_concrete()``, ``register_factory()``, ``register_generator()``, and ``register_context_manager()``
+``add_concrete()``, ``add_factory()``, ``add_generator()``, and ``add_context_manager()``
 all support decorator usage:
 
 .. code-block:: python
@@ -92,7 +92,7 @@ all support decorator usage:
    container = Container(autoregister_concrete_types=False)
 
 
-   @container.register_factory()
+   @container.add_factory()
    def build_value() -> int:
        return 1
 

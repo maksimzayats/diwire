@@ -14,7 +14,7 @@ class User:
 
 def main() -> None:
     container = Container(autoregister_concrete_types=False)
-    container.register_instance(instance=User(email="container@example.com"))
+    container.add_instance(User(email="container@example.com"))
 
     @container.inject
     def handler(user: Injected[User]) -> str:

@@ -83,7 +83,7 @@ def test_pyfunc_call_passes_through_when_no_injected_parameters() -> None:
 def test_pyfunc_call_wraps_injected_callable_and_restores_original() -> None:
     container = Container()
     default_dependency = _Service("container")
-    container.register_instance(_Service, instance=default_dependency)
+    container.add_instance(default_dependency, provides=_Service)
 
     def test_handler(service: Injected[_Service]) -> _Service:
         return service

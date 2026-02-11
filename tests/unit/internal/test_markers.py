@@ -148,8 +148,8 @@ def test_container_resolves_distinct_component_registrations() -> None:
         return ReplicaDatabase()
 
     container = Container()
-    container.register_factory(factory=build_primary)
-    container.register_factory(factory=build_replica)
+    container.add_factory(build_primary)
+    container.add_factory(build_replica)
 
     primary = container.resolve(PrimaryDatabaseComponent)
     replica = container.resolve(ReplicaDatabaseComponent)
@@ -168,9 +168,9 @@ def test_container_injects_component_marked_dependencies() -> None:
         return ReplicaDatabase()
 
     container = Container()
-    container.register_factory(factory=build_primary)
-    container.register_factory(factory=build_replica)
-    container.register_concrete(concrete_type=Repository)
+    container.add_factory(build_primary)
+    container.add_factory(build_replica)
+    container.add_concrete(Repository)
 
     repository = container.resolve(Repository)
 

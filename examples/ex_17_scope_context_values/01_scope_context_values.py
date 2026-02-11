@@ -44,21 +44,21 @@ def build_step_value(value: FromContext[int]) -> StepValue:
 
 def main() -> None:
     container = Container(autoregister_concrete_types=False)
-    container.register_factory(
-        RequestValue,
-        factory=build_request_value,
+    container.add_factory(
+        build_request_value,
+        provides=RequestValue,
         scope=Scope.REQUEST,
         lifetime=Lifetime.TRANSIENT,
     )
-    container.register_factory(
-        ActionValue,
-        factory=build_action_value,
+    container.add_factory(
+        build_action_value,
+        provides=ActionValue,
         scope=Scope.ACTION,
         lifetime=Lifetime.TRANSIENT,
     )
-    container.register_factory(
-        StepValue,
-        factory=build_step_value,
+    container.add_factory(
+        build_step_value,
+        provides=StepValue,
         scope=Scope.STEP,
         lifetime=Lifetime.TRANSIENT,
     )

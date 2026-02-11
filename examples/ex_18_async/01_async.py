@@ -2,8 +2,8 @@
 
 This module demonstrates:
 
-1. ``register_factory()`` with an ``async def`` factory + ``await container.aresolve(...)``.
-2. ``register_generator()`` with an async generator + ``async with container.enter_scope(...)`` cleanup.
+1. ``add_factory()`` with an ``async def`` factory + ``await container.aresolve(...)``.
+2. ``add_generator()`` with an async generator + ``async with container.enter_scope(...)`` cleanup.
 3. The sync/async boundary: resolving an async graph via ``resolve()`` raises an error.
 """
 
@@ -31,7 +31,7 @@ async def main() -> None:
         await asyncio.sleep(0)
         return AsyncService(value="ok")
 
-    container.register_factory(provides=AsyncService, factory=build_async_service)
+    container.add_factory(build_async_service, provides=AsyncService)
 
     service = await container.aresolve(AsyncService)
     print(f"async_factory_value={service.value}")  # => async_factory_value=ok
@@ -54,9 +54,9 @@ async def main() -> None:
             await asyncio.sleep(0)
             state["closed"] += 1
 
-    container.register_generator(
+    container.add_generator(
+        provide_async_resource,
         provides=AsyncResource,
-        generator=provide_async_resource,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )

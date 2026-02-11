@@ -1,4 +1,4 @@
-"""Focused example: ``register_instance`` for pre-built objects."""
+"""Focused example: ``add_instance`` for pre-built objects."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ class Config:
 def main() -> None:
     container = Container(autoregister_concrete_types=False)
     config = Config(value="singleton")
-    container.register_instance(Config, instance=config)
+    container.add_instance(config, provides=Config)
 
     first = container.resolve(Config)
     second = container.resolve(Config)

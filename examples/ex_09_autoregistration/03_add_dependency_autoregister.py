@@ -18,7 +18,7 @@ class Root:
 
 def main() -> None:
     container = Container(autoregister_dependencies=False)
-    container.register_concrete(concrete_type=Root, autoregister_dependencies=True)
+    container.add_concrete(Root, autoregister_dependencies=True)
 
     resolved = container.resolve(Root)
     autoregistered = isinstance(resolved.dependency, Dependency)

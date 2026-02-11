@@ -58,8 +58,8 @@ def main() -> None:
     print(f"autoregister_chain={autoregister_chain}")  # => autoregister_chain=True
 
     register_container = Container(autoregister_dependencies=False)
-    register_container.register_concrete(
-        concrete_type=RegisterRoot,
+    register_container.add_concrete(
+        RegisterRoot,
         autoregister_dependencies=True,
     )
     try:
@@ -93,7 +93,7 @@ def main() -> None:
         skipped_before_registration = False
 
     expected_uuid = uuid.UUID(int=0)
-    uuid_container.register_instance(instance=expected_uuid)
+    uuid_container.add_instance(expected_uuid)
     resolved_uuid = uuid_container.resolve(RootWithUuid)
     uuid_skipped_until_registered = (
         skipped_before_registration and resolved_uuid.request_id is expected_uuid
