@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib
+import pathlib
+import uuid
 import warnings
 from abc import ABC, abstractmethod
 from types import ModuleType
@@ -11,7 +13,9 @@ import pydantic
 import pytest
 from pydantic_settings import BaseSettings
 
+from diwire.autoregistration import ConcreteTypeAutoregistrationPolicy
 from diwire.container import Container
+from diwire.exceptions import DIWireDependencyNotRegisteredError
 from diwire.providers import Lifetime
 from diwire.scope import Scope
 
@@ -136,6 +140,25 @@ class RootWithPydanticSettingsDependency:
         self.dependency = dependency
 
 
+class RootWithBuiltinDep:
+    def __init__(self, token: str) -> None:
+        self.token = token
+
+
+class RootWithPathDep:
+    def __init__(self, path: pathlib.Path) -> None:
+        self.path = path
+
+
+class RootWithUuidDep:
+    def __init__(self, request_id: uuid.UUID) -> None:
+        self.request_id = request_id
+
+
+class _TestMetaclass(type):
+    pass
+
+
 def test_container_default_autoregisters_dependencies_during_registration() -> None:
     container = Container()
 
@@ -220,6 +243,55 @@ def test_dependency_autoregistration_ignores_registration_failures_and_continues
 
     assert container._providers_registrations.find_by_type(AbstractDependency) is None
     assert container._providers_registrations.find_by_type(ValidDependency) is not None
+
+
+def test_resolve_autoregistration_skips_builtin_dependency_types() -> None:
+    container = Container()
+
+    with pytest.raises(DIWireDependencyNotRegisteredError) as exc_info:
+        container.resolve(RootWithBuiltinDep)
+
+    message = str(exc_info.value)
+    assert repr(str) in message
+    assert repr(RootWithBuiltinDep) in message
+    assert container._providers_registrations.find_by_type(str) is None
+
+
+def test_resolve_autoregistration_skips_pathlib_path_dependency() -> None:
+    container = Container()
+
+    with pytest.raises(DIWireDependencyNotRegisteredError):
+        container.resolve(RootWithPathDep)
+
+    assert container._providers_registrations.find_by_type(pathlib.Path) is None
+    expected_path = pathlib.Path("x")
+    container.register_instance(
+        provides=pathlib.Path,
+        instance=expected_path,
+    )
+
+    resolved = container.resolve(RootWithPathDep)
+    assert resolved.path is expected_path
+
+
+def test_resolve_autoregistration_skips_uuid_dependency() -> None:
+    container = Container()
+
+    with pytest.raises(DIWireDependencyNotRegisteredError):
+        container.resolve(RootWithUuidDep)
+
+    assert container._providers_registrations.find_by_type(uuid.UUID) is None
+    expected_uuid = uuid.UUID(int=0)
+    container.register_instance(instance=expected_uuid)
+
+    resolved = container.resolve(RootWithUuidDep)
+    assert resolved.request_id is expected_uuid
+
+
+def test_autoregistration_policy_skips_metaclasses() -> None:
+    policy = ConcreteTypeAutoregistrationPolicy()
+
+    assert policy.is_eligible_concrete(_TestMetaclass) is False
 
 
 def test_factory_decorator_can_autoregister_dependencies() -> None:

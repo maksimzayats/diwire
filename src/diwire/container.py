@@ -18,7 +18,8 @@ from typing import (
     overload,
 )
 
-from diwire.exceptions import DIWireInvalidRegistrationError, DIWireScopeMismatchError
+from diwire.autoregistration import ConcreteTypeAutoregistrationPolicy
+from diwire.exceptions import DIWireError, DIWireInvalidRegistrationError, DIWireScopeMismatchError
 from diwire.injection import (
     INJECT_RESOLVER_KWARG,
     INJECT_WRAPPER_MARKER,
@@ -88,6 +89,7 @@ class Container:
         self._autoregister_concrete_types = autoregister_concrete_types
         self._autoregister_dependencies = autoregister_dependencies
 
+        self._concrete_autoregistration_policy = ConcreteTypeAutoregistrationPolicy()
         self._provider_dependencies_extractor = ProviderDependenciesExtractor()
         self._provider_return_type_extractor = ProviderReturnTypeExtractor()
         self._dependency_registration_validator = DependecyRegistrationValidator()
@@ -959,7 +961,7 @@ class Container:
         for dependency in dependencies:
             if self._providers_registrations.find_by_type(dependency.provides):
                 continue
-            with suppress(Exception):
+            with suppress(DIWireError):
                 self._autoregister_dependency(
                     dependency=dependency.provides,
                     scope=scope,
@@ -985,6 +987,9 @@ class Container:
                 lifetime=Lifetime.SINGLETON,
                 autoregister_dependencies=autoregister_dependencies,
             )
+            return
+
+        if not self._concrete_autoregistration_policy.is_eligible_concrete(dependency):
             return
 
         self.register_concrete(
@@ -1211,7 +1216,7 @@ class Container:
         for injected_parameter in injected_parameters:
             if self._providers_registrations.find_by_type(injected_parameter.dependency):
                 continue
-            with suppress(Exception):
+            with suppress(DIWireError):
                 self._autoregister_dependency(
                     dependency=injected_parameter.dependency,
                     scope=registration_scope,

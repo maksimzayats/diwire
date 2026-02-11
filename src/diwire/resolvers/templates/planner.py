@@ -6,7 +6,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from diwire.exceptions import DIWireInvalidProviderSpecError
+from diwire.exceptions import DIWireDependencyNotRegisteredError, DIWireInvalidProviderSpecError
 from diwire.injection import INJECT_WRAPPER_MARKER
 from diwire.lock_mode import LockMode
 from diwire.providers import (
@@ -204,7 +204,11 @@ class ResolverGenerationPlanner:
         cache_owner_scope_level = self._cache_owner_scope_level(spec=spec, is_cached=is_cached)
 
         dependency_specs = [
-            self._registrations.get_by_type(dependency.provides) for dependency in spec.dependencies
+            self._dependency_spec_or_error(
+                dependency_provides=dependency.provides,
+                requiring_provider=spec.provides,
+            )
+            for dependency in spec.dependencies
         ]
 
         sync_arguments = tuple(
@@ -372,7 +376,10 @@ class ResolverGenerationPlanner:
         requires_async = spec.is_async
         if not requires_async:
             for dependency in spec.dependencies:
-                dependency_spec = self._registrations.get_by_type(dependency.provides)
+                dependency_spec = self._dependency_spec_or_error(
+                    dependency_provides=dependency.provides,
+                    requiring_provider=spec.provides,
+                )
                 if self._resolve_requires_async(
                     slot=dependency_spec.slot,
                     by_slot=by_slot,
@@ -495,7 +502,10 @@ class ResolverGenerationPlanner:
         max_scope_level = spec.scope.level
 
         for dependency in spec.dependencies:
-            dependency_spec = self._registrations.get_by_type(dependency.provides)
+            dependency_spec = self._dependency_spec_or_error(
+                dependency_provides=dependency.provides,
+                requiring_provider=spec.provides,
+            )
             dependency_max_scope = self._resolve_max_required_scope_level(
                 slot=dependency_spec.slot,
                 by_slot=by_slot,
@@ -507,3 +517,18 @@ class ResolverGenerationPlanner:
         in_progress.remove(slot)
         max_scope_level_by_slot[slot] = max_scope_level
         return max_scope_level
+
+    def _dependency_spec_or_error(
+        self,
+        *,
+        dependency_provides: Any,
+        requiring_provider: Any,
+    ) -> ProviderSpec:
+        try:
+            return self._registrations.get_by_type(dependency_provides)
+        except KeyError as error:
+            msg = (
+                f"Dependency {dependency_provides!r} required by provider "
+                f"{requiring_provider!r} is not registered."
+            )
+            raise DIWireDependencyNotRegisteredError(msg) from error
