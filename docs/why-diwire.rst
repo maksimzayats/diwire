@@ -43,7 +43,7 @@ When you need explicit control, you still have it:
 - interface/protocol bindings via ``register_concrete(provides=..., concrete_type=...)``
 - instances via ``register_instance(instance=...)``
 - factories (sync/async/generator/context manager)
-- lifetimes (``TRANSIENT``, ``SINGLETON``, ``SCOPED``) and scope transitions
+- lifetimes (``TRANSIENT``, ``SCOPED``) and scope transitions (root-scoped ``SCOPED`` behaves like a singleton)
 - named registrations via ``Component(\"name\")``
 - open generics
 
@@ -51,4 +51,3 @@ Benchmarks
 ----------
 
 See :doc:`howto/advanced/performance` for benchmark methodology, reproducible commands, and results.
-

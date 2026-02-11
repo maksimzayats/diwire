@@ -1,5 +1,5 @@
 .. meta::
-   :description: diwire lifetimes example: TRANSIENT vs SINGLETON vs SCOPED.
+   :description: diwire lifetimes example: TRANSIENT vs SCOPED, including root-scoped singleton behavior.
 
 Lifetimes
 =========
@@ -7,7 +7,8 @@ Lifetimes
 What you'll learn
 -----------------
 
-- Choose between ``Lifetime.TRANSIENT``, ``Lifetime.SINGLETON``, and ``Lifetime.SCOPED``.
+- Choose between ``Lifetime.TRANSIENT`` and ``Lifetime.SCOPED``.
+- See how root-scoped ``Lifetime.SCOPED`` behaves like a singleton.
 
 Run locally
 -----------
@@ -22,4 +23,3 @@ Example
 .. literalinclude:: ../../../examples/ex_03_lifetimes/01_lifetimes.py
    :language: python
    :class: diwire-example py-run
-

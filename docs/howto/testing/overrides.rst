@@ -40,13 +40,13 @@ Registrations are replaceable. In general, override **before** the first resolve
    container.register_concrete(
        provides=EmailClient,
        concrete_type=RealEmailClient,
-       lifetime=Lifetime.SINGLETON,
+       lifetime=Lifetime.SCOPED,
    )
    # In tests: override BEFORE resolving anything that depends on it.
    container.register_concrete(
        provides=EmailClient,
        concrete_type=FakeEmailClient,
-       lifetime=Lifetime.SINGLETON,
+       lifetime=Lifetime.SCOPED,
    )
 
 Override using an instance (force a singleton)

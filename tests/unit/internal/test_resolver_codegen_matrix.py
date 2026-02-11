@@ -56,7 +56,7 @@ def _build_resolver_with_cleanup_mode(
     [
         ("instance", None, Scope.APP, True, None),
         ("concrete", Lifetime.TRANSIENT, Scope.APP, False, None),
-        ("factory", Lifetime.SINGLETON, Scope.APP, True, 1),
+        ("factory", Lifetime.SCOPED, Scope.APP, True, 1),
         ("factory", Lifetime.TRANSIENT, Scope.REQUEST, False, 2),
         ("factory", Lifetime.SCOPED, Scope.REQUEST, True, 1),
     ],
@@ -275,7 +275,7 @@ def test_codegen_matrix_cached_sync_path_lock_generation_follows_lock_mode(
     container.register_factory(
         _MatrixService,
         factory=_MatrixService,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
         lock_mode=lock_mode,
     )
     slot = container._providers_registrations.get_by_type(_MatrixService).slot
@@ -371,7 +371,7 @@ async def test_codegen_matrix_sync_only_graph_has_sync_async_parity() -> None:
     container.register_factory(
         _MatrixService,
         factory=_sync_only_service,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
 
     sync_resolved = container.resolve(_MatrixService)

@@ -28,7 +28,7 @@ Use ``register_concrete(provides=..., concrete_type=...)``:
    container.register_concrete(
        provides=Clock,
        concrete_type=SystemClock,
-       lifetime=Lifetime.SINGLETON,
+       lifetime=Lifetime.SCOPED,
    )
 
 Example (runnable)

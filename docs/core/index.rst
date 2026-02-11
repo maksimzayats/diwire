@@ -13,7 +13,7 @@ Recommended order
 
 1. :doc:`container` - auto-wiring, what gets resolved, and how keys work
 2. :doc:`registration` - explicit registration, decorators, and interfaces
-3. :doc:`lifetimes` - transient vs singleton vs scoped
+3. :doc:`lifetimes` - transient vs scoped (root-scoped scoped behaves like singleton)
 4. :doc:`scopes` - request-like scopes and deterministic cleanup
 5. :doc:`function-injection` - injecting into functions with ``Injected[T]``
 6. :doc:`components` - multiple implementations via ``Component("name")``

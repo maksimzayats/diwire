@@ -111,13 +111,10 @@ class Lifetime(Enum):
     """Defines the lifetime of a service in the container."""
 
     TRANSIENT = auto()
-    """A new instance is created every time the service is requested."""
-
-    SINGLETON = auto()
-    """A single instance is created and shared for the lifetime of the container."""
+    """No caching; a new instance is created every time the service is requested."""
 
     SCOPED = auto()
-    """Instance is shared within a scope, different instances across scopes."""
+    """Cached within the declared scope; root-scoped values behave like singletons."""
 
 
 class ProvidersRegistrations:

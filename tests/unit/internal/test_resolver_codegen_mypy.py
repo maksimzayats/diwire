@@ -175,7 +175,7 @@ def _render_generated_modules() -> dict[str, str]:
     async_factory_container.register_factory(
         _MypyAsyncFactoryService,
         factory=_provide_async_factory_service,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
 
     sync_generator_container = Container()
@@ -244,12 +244,12 @@ def _render_generated_modules() -> dict[str, str]:
     async_dependency_propagation_container.register_generator(
         _MypyAsyncGeneratorService,
         generator=_provide_async_generator_service,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
     async_dependency_propagation_container.register_factory(
         _MypyAsyncDependencyConsumer,
         factory=_provide_async_dependency_consumer,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
 
     mixed_async_cleanup_container = Container()
@@ -277,7 +277,7 @@ def _render_generated_modules() -> dict[str, str]:
         _MypyRequestRootAppService,
         concrete_type=_MypyRequestRootAppService,
         scope=Scope.APP,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
     request_root_container.register_concrete(
         _MypySession,

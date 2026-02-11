@@ -1,6 +1,7 @@
-"""Lifetimes: ``TRANSIENT``, ``SINGLETON``, and ``SCOPED``.
+"""Lifetimes: ``TRANSIENT`` and ``SCOPED``.
 
-See how object identity changes across repeated resolves and scope boundaries.
+See how object identity changes across repeated resolves and scope boundaries,
+including root-scoped ``SCOPED`` singleton behavior.
 """
 
 from __future__ import annotations
@@ -35,7 +36,7 @@ def main() -> None:
     container.register_concrete(
         SingletonService,
         concrete_type=SingletonService,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
     singleton_first = container.resolve(SingletonService)
     singleton_second = container.resolve(SingletonService)

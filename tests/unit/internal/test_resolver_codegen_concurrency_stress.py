@@ -43,7 +43,7 @@ def test_concurrency_stress_thread_safe_singleton_constructs_once() -> None:
     container.register_factory(
         _ThreadSingleton,
         factory=build_singleton,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.THREAD,
     )
     container._root_resolver = container._resolvers_manager.build_root_resolver(
@@ -80,7 +80,7 @@ def test_concurrency_stress_thread_unsafe_singleton_allows_parallel_construction
     container.register_factory(
         _ThreadSingleton,
         factory=build_singleton,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.NONE,
     )
     container._root_resolver = container._resolvers_manager.build_root_resolver(
@@ -233,7 +233,7 @@ async def test_concurrency_stress_async_safe_singleton_constructs_once() -> None
     container.register_factory(
         _AsyncSingleton,
         factory=build_singleton,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.ASYNC,
     )
 
@@ -262,7 +262,7 @@ async def test_concurrency_stress_async_unsafe_singleton_allows_parallel_constru
     container.register_factory(
         _AsyncSingleton,
         factory=build_singleton,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.NONE,
     )
 

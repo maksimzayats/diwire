@@ -18,7 +18,7 @@ class _SingletonService:
 
 def test_benchmark_diwire_resolve_singleton(benchmark: Any) -> None:
     container = DIWireContainer(lock_mode=LockMode.NONE)
-    container.register_concrete(_SingletonService, lifetime=Lifetime.SINGLETON)
+    container.register_concrete(_SingletonService, lifetime=Lifetime.SCOPED)
     first = container.resolve(_SingletonService)
     second = container.resolve(_SingletonService)
     assert first is second

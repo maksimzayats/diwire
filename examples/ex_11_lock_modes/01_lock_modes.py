@@ -1,6 +1,6 @@
 """Lock mode defaults and per-provider overrides.
 
-This module demonstrates lock behavior for cached (singleton) providers:
+This module demonstrates lock behavior for cached root-scoped (singleton) providers:
 
 1. Default ``lock_mode="auto"`` uses thread locks for sync-only graphs.
 2. Container-level ``lock_mode=LockMode.NONE`` disables locking.
@@ -51,13 +51,13 @@ def _singleton_two_thread_stats(
         container.register_factory(
             provides,
             factory=factory,
-            lifetime=Lifetime.SINGLETON,
+            lifetime=Lifetime.SCOPED,
         )
     else:
         container.register_factory(
             provides,
             factory=factory,
-            lifetime=Lifetime.SINGLETON,
+            lifetime=Lifetime.SCOPED,
             lock_mode=lock_mode,
         )
 

@@ -760,7 +760,7 @@ def test_inject_autoregister_registers_pydantic_settings_as_singleton_factory() 
     assert first is second
     assert settings_spec.factory is not None
     assert settings_spec.concrete_type is None
-    assert settings_spec.lifetime is Lifetime.SINGLETON
+    assert settings_spec.lifetime is Lifetime.SCOPED
     assert settings_spec.scope is Scope.APP
 
 

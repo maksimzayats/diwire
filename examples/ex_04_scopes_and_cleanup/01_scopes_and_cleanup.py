@@ -100,7 +100,7 @@ def main() -> None:
         SingletonResource,
         generator=provide_singleton_resource,
         scope=Scope.APP,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
     _ = container.resolve(SingletonResource)
     closed_before_close = singleton_state["closed"]

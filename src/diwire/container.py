@@ -70,7 +70,7 @@ class Container:
     def __init__(
         self,
         root_scope: BaseScope = Scope.APP,
-        default_lifetime: Lifetime = Lifetime.TRANSIENT,
+        default_lifetime: Lifetime = Lifetime.SCOPED,
         *,
         lock_mode: LockMode | Literal["auto"] = "auto",
         autoregister_concrete_types: bool = True,
@@ -79,8 +79,8 @@ class Container:
         """Initialize the container with an optional configuration.
 
         Args:
-            root_scope: The initial root scope for the container. All singleton providers will be tied to this scope. Defaults to Scope.APP.
-            default_lifetime: The lifetime that will be used for providers if not specified. Defaults to Lifetime.TRANSIENT.
+            root_scope: The initial root scope for the container. Root-scoped (singleton) cached providers are tied to this scope. Defaults to Scope.APP.
+            default_lifetime: The lifetime that will be used for providers if not specified. Defaults to Lifetime.SCOPED.
             lock_mode: Default lock strategy for non-instance registrations. Accepts LockMode or "auto". When set to "auto", sync-only graphs use thread locks and graphs containing async specs use async locks. In mixed graphs this means auto-mode sync cached paths are not thread-locked unless you override to LockMode.THREAD. Defaults to "auto".
             autoregister_concrete_types: Whether to automatically register concrete types when they are resolved if not already registered. Defaults to True.
             autoregister_dependencies: Whether to automatically register provider dependencies as concrete types during registration. It will respect `autoregister_concrete_types` flag. Defaults to True.
@@ -982,12 +982,12 @@ class Container:
     ) -> None:
         if is_pydantic_settings_subclass(dependency):
             # Settings are environment-backed configuration objects and should be
-            # auto-registered as root singletons via a no-arg factory.
+            # auto-registered as root-scoped (singleton) values via a no-arg factory.
             self.register_factory(
                 provides=dependency,
                 factory=lambda dependency_type=dependency: dependency_type(),
                 scope=self._root_scope,
-                lifetime=Lifetime.SINGLETON,
+                lifetime=Lifetime.SCOPED,
                 autoregister_dependencies=autoregister_dependencies,
             )
             return

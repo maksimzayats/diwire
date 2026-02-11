@@ -24,7 +24,8 @@ pydantic-settings
 
 If you use ``pydantic-settings``, diwire includes a small integration:
 
-- subclasses of ``pydantic_settings.BaseSettings`` are auto-registered as **singletons**
+- subclasses of ``pydantic_settings.BaseSettings`` are auto-registered as root-scoped
+  ``Lifetime.SCOPED`` values (singleton behavior)
 - the default factory is ``cls()``
 
 Runnable example: :doc:`/howto/examples/pydantic-settings`.
@@ -44,4 +45,3 @@ diwire does not require a dedicated FastAPI integration module. The recommended 
 ``@container.inject(scope=Scope.REQUEST)``.
 
 See :doc:`/howto/web/fastapi` and the runnable script :doc:`/howto/examples/fastapi`.
-

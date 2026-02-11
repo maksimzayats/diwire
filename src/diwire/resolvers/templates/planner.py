@@ -372,11 +372,7 @@ class ResolverGenerationPlanner:
     def _is_cached(self, *, spec: ProviderSpec) -> bool:
         if spec.instance is not None:
             return True
-        if spec.lifetime is Lifetime.TRANSIENT:
-            return False
-        if spec.lifetime is Lifetime.SINGLETON:
-            return True
-        return spec.lifetime is Lifetime.SCOPED
+        return spec.lifetime is not Lifetime.TRANSIENT
 
     def _cache_owner_scope_level(
         self,
@@ -388,11 +384,10 @@ class ResolverGenerationPlanner:
             return None
         if spec.instance is not None:
             return self._root_scope.level
-        if spec.lifetime is Lifetime.SINGLETON:
-            return self._root_scope.level
         if spec.lifetime is Lifetime.SCOPED:
             return spec.scope.level
-        return self._root_scope.level
+        msg = f"Cannot resolve cache owner for provider slot {spec.slot}: {spec.lifetime!r}."
+        raise DIWireInvalidProviderSpecError(msg)
 
     def _build_requires_async_by_slot(self) -> dict[int, bool]:
         by_slot = {spec.slot: spec for spec in self._work_specs}

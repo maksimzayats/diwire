@@ -227,7 +227,7 @@ def test_codegen_matches_expected_for_async_graph() -> None:
     container.register_factory(
         int,
         factory=_provide_int_for_snapshot,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
     generated = _render(container=container, root_scope=Scope.APP)
     expected = _read_expected("app_root_async.txt")
@@ -303,7 +303,7 @@ def test_codegen_matches_expected_for_request_root_filtered_graph() -> None:
         _SnapshotRequestRootAppService,
         concrete_type=_SnapshotRequestRootAppService,
         scope=Scope.APP,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
     container.register_concrete(
         _SnapshotRequestRootSessionService,

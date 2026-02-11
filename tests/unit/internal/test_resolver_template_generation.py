@@ -297,7 +297,7 @@ def test_renderer_output_is_deterministic_and_composable() -> None:
 def test_renderer_output_avoids_reflective_hot_path_tokens() -> None:
     container = Container()
     container.register_instance(_Config, instance=_Config())
-    container.register_concrete(_Service, concrete_type=_Service, lifetime=Lifetime.SINGLETON)
+    container.register_concrete(_Service, concrete_type=_Service, lifetime=Lifetime.SCOPED)
 
     code = ResolversTemplateRenderer().get_providers_code(
         root_scope=Scope.APP,
@@ -316,7 +316,7 @@ def test_renderer_logs_lock_strategy_once_per_compile_cache_miss(
     container.register_factory(
         _Service,
         factory=lambda: _Service(_Config()),
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
 
     caplog.set_level("INFO", logger="diwire.resolvers.templates.renderer")
@@ -332,11 +332,11 @@ def test_renderer_logs_lock_strategy_once_per_compile_cache_miss(
 
 def test_planner_selects_async_effective_lock_mode_when_async_specs_exist() -> None:
     container = Container()
-    container.register_factory(int, factory=_provide_int, lifetime=Lifetime.SINGLETON)
+    container.register_factory(int, factory=_provide_int, lifetime=Lifetime.SCOPED)
     container.register_factory(
         _AsyncService,
         factory=_provide_async_service,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
 
     plan = ResolverGenerationPlanner(
@@ -514,7 +514,7 @@ def test_renderer_raises_for_circular_dependency_graph() -> None:
 
 
 def test_renderer_documents_instance_lifetime_from_container_default() -> None:
-    container = Container(default_lifetime=Lifetime.SINGLETON)
+    container = Container(default_lifetime=Lifetime.SCOPED)
     container.register_instance(provides=_Config, instance=_Config())
 
     code = ResolversTemplateRenderer().get_providers_code(
@@ -532,7 +532,7 @@ def test_renderer_filters_providers_and_scopes_when_root_scope_is_request() -> N
         _Config,
         concrete_type=_Config,
         scope=Scope.APP,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
     container.register_concrete(
         _RequestRootSessionService,
@@ -581,7 +581,7 @@ def test_planner_raises_for_provider_spec_without_provider_object() -> None:
         planner._resolve_provider_attribute(spec=invalid_spec)
 
 
-def test_planner_cache_owner_falls_back_to_root_scope_for_unknown_cached_lifetime() -> None:
+def test_planner_raises_for_unknown_cached_lifetime() -> None:
     planner = ResolverGenerationPlanner(
         root_scope=Scope.REQUEST,
         registrations=ProvidersRegistrations(),
@@ -595,7 +595,11 @@ def test_planner_cache_owner_falls_back_to_root_scope_for_unknown_cached_lifetim
         needs_cleanup=False,
     )
 
-    assert planner._cache_owner_scope_level(spec=spec, is_cached=True) == Scope.REQUEST.level
+    with pytest.raises(
+        DIWireInvalidProviderSpecError,
+        match="Cannot resolve cache owner",
+    ):
+        planner._cache_owner_scope_level(spec=spec, is_cached=True)
 
 
 def test_planner_propagates_async_requirement_from_dependencies() -> None:
@@ -606,12 +610,12 @@ def test_planner_propagates_async_requirement_from_dependencies() -> None:
     container.register_generator(
         _AsyncGeneratorService,
         generator=_provide_async_generator_service,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
     container.register_factory(
         _AsyncDependencyConsumer,
         factory=_build_sync_consumer,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
 
     plan = ResolverGenerationPlanner(
@@ -633,7 +637,7 @@ def test_planner_dependency_order_helpers_cover_edge_paths() -> None:
     no_provider_spec = ProviderSpec(
         provides=_DependencyShapeService,
         instance=_DependencyShapeService(positional=1, values=(), options={}),
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope=Scope.APP,
         is_async=False,
         is_any_dependency_async=False,
@@ -689,7 +693,7 @@ def test_planner_dependency_order_helpers_cover_edge_paths() -> None:
     missing_spec = ProviderSpec(
         provides=int,
         instance=1,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope=Scope.APP,
         is_async=False,
         is_any_dependency_async=False,
@@ -714,7 +718,7 @@ def test_planner_max_required_scope_level_detects_cycles() -> None:
     spec = ProviderSpec(
         provides=int,
         instance=1,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
         scope=Scope.APP,
         is_async=False,
         is_any_dependency_async=False,

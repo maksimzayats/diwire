@@ -49,7 +49,7 @@ Use ``lock_mode="from_container"`` to explicitly inherit the container default.
 Threads and free-threaded Python
 --------------------------------
 
-diwire can use thread locks to make singleton/scoped-singleton sync resolution safe under concurrent access
+diwire can use thread locks to make root-scoped and scoped sync cached resolution safe under concurrent access
 (including free-threaded Python builds), depending on effective ``LockMode``.
 
 Async tasks

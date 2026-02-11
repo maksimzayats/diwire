@@ -30,8 +30,8 @@ Autoregister concrete types vs dependencies
 Pydantic settings auto-registration
 -----------------------------------
 
-If ``pydantic-settings`` is installed, subclasses of ``BaseSettings`` are auto-registered as root singletons via a
-no-argument factory.
+If ``pydantic-settings`` is installed, subclasses of ``BaseSettings`` are auto-registered as
+root-scoped ``Lifetime.SCOPED`` values (singleton behavior) via a no-argument factory.
 
 See :doc:`../../core/integrations` and :doc:`../examples/pydantic-settings`.
 
@@ -42,4 +42,3 @@ If a type has any scoped registration, resolving it outside the correct scope ra
 :class:`diwire.exceptions.DIWireScopeMismatchError` instead of silently creating an unscoped instance.
 
 Runnable example: :doc:`../examples/scopes`.
-

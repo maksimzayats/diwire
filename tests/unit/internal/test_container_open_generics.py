@@ -266,7 +266,7 @@ def test_container_context_replays_open_registrations_with_canonical_keys() -> N
 
 def test_open_singleton_cache_isolated_per_closed_dependency_key() -> None:
     container = Container()
-    container.register_factory(_IBox, factory=_create_box, lifetime=Lifetime.SINGLETON)
+    container.register_factory(_IBox, factory=_create_box, lifetime=Lifetime.SCOPED)
 
     int_first = container.resolve(_IBox[int])
     int_second = container.resolve(_IBox[int])

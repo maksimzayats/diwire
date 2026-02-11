@@ -21,7 +21,7 @@ def diwire_container() -> Container:
     container.register_concrete(
         Service,
         concrete_type=ServiceImpl,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
     return container
 

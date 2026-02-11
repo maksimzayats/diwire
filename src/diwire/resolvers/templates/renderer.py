@@ -10,7 +10,7 @@ from textwrap import indent
 from diwire.exceptions import DIWireInvalidProviderSpecError
 from diwire.injection import INJECT_RESOLVER_KWARG
 from diwire.lock_mode import LockMode
-from diwire.providers import ProviderDependency, ProvidersRegistrations
+from diwire.providers import Lifetime, ProviderDependency, ProvidersRegistrations
 from diwire.resolvers.templates.mini_jinja import Environment, Template
 from diwire.resolvers.templates.planner import (
     ProviderDependencyPlan,
@@ -93,6 +93,7 @@ class ResolversTemplateRenderer:
         self._sync_method_template = self._template(SYNC_METHOD_TEMPLATE)
         self._async_method_template = self._template(ASYNC_METHOD_TEMPLATE)
         self._build_function_template = self._template(BUILD_FUNCTION_TEMPLATE)
+        self._render_root_scope_level: int | None = None
 
     def get_providers_code(
         self,
@@ -113,20 +114,23 @@ class ResolversTemplateRenderer:
             registrations=registrations,
         ).build()
         self._log_plan_strategy(plan=plan)
+        self._render_root_scope_level = plan.root_scope_level
+        try:
+            module_docstring_block = self._render_module_docstring(plan=plan)
+            imports_block = self._render_imports(plan=plan)
+            globals_block = self._render_globals(plan=plan)
+            classes_block = self._render_classes(plan=plan)
+            build_block = self._render_build_function(plan=plan)
 
-        module_docstring_block = self._render_module_docstring(plan=plan)
-        imports_block = self._render_imports(plan=plan)
-        globals_block = self._render_globals(plan=plan)
-        classes_block = self._render_classes(plan=plan)
-        build_block = self._render_build_function(plan=plan)
-
-        return self._module_template.render(
-            module_docstring_block=module_docstring_block,
-            imports_block=imports_block,
-            globals_block=globals_block,
-            classes_block=classes_block,
-            build_block=build_block,
-        )
+            return self._module_template.render(
+                module_docstring_block=module_docstring_block,
+                imports_block=imports_block,
+                globals_block=globals_block,
+                classes_block=classes_block,
+                build_block=build_block,
+            )
+        finally:
+            self._render_root_scope_level = None
 
     def _render_imports(self, *, plan: ResolverGenerationPlan) -> str:
         uses_generator_context_helpers = any(
@@ -2390,7 +2394,14 @@ class ResolversTemplateRenderer:
     def _format_lifetime(self, *, workflow: ProviderWorkflowPlan) -> str:
         if workflow.lifetime is None:
             return "none"
-        return workflow.lifetime.name.lower()
+        if workflow.lifetime is Lifetime.TRANSIENT:
+            return "transient"
+        if (
+            self._render_root_scope_level is not None
+            and workflow.scope_level == self._render_root_scope_level
+        ):
+            return "singleton"
+        return "scoped"
 
     def _format_lock_mode(self, lock_mode: LockMode | str) -> str:
         if isinstance(lock_mode, LockMode):

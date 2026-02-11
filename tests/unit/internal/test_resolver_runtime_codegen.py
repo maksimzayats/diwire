@@ -173,7 +173,7 @@ def test_sync_singleton_uses_lambda_method_replacement_cache() -> None:
     container.register_factory(
         _SingletonService,
         factory=build_service,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
 
     first = container.resolve(_SingletonService)
@@ -203,7 +203,7 @@ async def test_async_singleton_uses_async_cached_method_replacement() -> None:
     container.register_factory(
         _SingletonService,
         factory=build_service,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
 
     first = await container.aresolve(_SingletonService)
@@ -745,7 +745,7 @@ def test_codegen_inject_wrapper_singleton_thread_safe_stress() -> None:
     container.register_factory(
         _DependsOnResource,
         factory=build_singleton,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.THREAD,
     )
     container.compile()
@@ -776,7 +776,7 @@ async def test_codegen_inject_wrapper_singleton_async_stress() -> None:
     container.register_factory(
         _DependsOnResource,
         factory=build_singleton,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.ASYNC,
     )
 
@@ -811,7 +811,7 @@ def test_codegen_inject_wrapper_unsafe_mode_stress_no_deadlock() -> None:
     container.register_factory(
         _DependsOnResource,
         factory=build_singleton,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.NONE,
     )
     container.compile()
@@ -1049,7 +1049,7 @@ def test_renderer_emits_thread_locks_for_sync_graph() -> None:
     container.register_factory(
         _SingletonService,
         factory=_SingletonService,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
 
     slot = container._providers_registrations.get_by_type(_SingletonService).slot
@@ -1071,12 +1071,12 @@ async def test_renderer_emits_async_locks_only_for_async_cached_paths() -> None:
     container.register_factory(
         _SingletonService,
         factory=build_async,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
     container.register_factory(
         _TransientService,
         factory=_TransientService,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
 
     async_slot = container._providers_registrations.get_by_type(_SingletonService).slot
@@ -1100,7 +1100,7 @@ def test_renderer_lock_mode_none_emits_no_lock_globals() -> None:
     container.register_factory(
         _SingletonService,
         factory=_SingletonService,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.NONE,
     )
 
@@ -1129,13 +1129,13 @@ def test_mixed_graph_thread_override_keeps_sync_singleton_thread_safe() -> None:
     container.register_factory(
         _SingletonService,
         factory=build_sync_singleton,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.THREAD,
     )
     container.register_factory(
         _TransientService,
         factory=build_async_singleton,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
     container.compile()
 
@@ -1169,19 +1169,19 @@ def test_mixed_graph_thread_override_keeps_sync_dependency_chain_thread_safe() -
     container.register_factory(
         _MixedSharedSyncDependency,
         factory=build_shared_dependency,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.THREAD,
     )
     container.register_factory(
         _MixedSyncConsumer,
         factory=build_consumer,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.THREAD,
     )
     container.register_factory(
         _MixedAsyncGraphDependency,
         factory=build_async_graph_dependency,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
     )
 
     shared_slot = container._providers_registrations.get_by_type(_MixedSharedSyncDependency).slot
@@ -1228,7 +1228,7 @@ def test_lock_mode_async_on_sync_cached_provider_leaves_sync_path_unlocked() -> 
     container.register_factory(
         _SingletonService,
         factory=build_singleton,
-        lifetime=Lifetime.SINGLETON,
+        lifetime=Lifetime.SCOPED,
         lock_mode=LockMode.ASYNC,
     )
     slot = container._providers_registrations.get_by_type(_SingletonService).slot

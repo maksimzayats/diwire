@@ -58,7 +58,7 @@ diwire is a type-driven dependency injection container with zero runtime depende
 Tests in `tests/` use fixtures from `conftest.py`:
 - `container()` - auto-registration enabled
 - `container_no_autoregister()` - manual registration only
-- `container_singleton()` - singleton as default lifetime
+- `container_singleton()` - root-scoped (`Scope.APP`) default caching behavior
 
 Test layout:
 - Unit tests (public API): `tests/unit/public/`
@@ -70,7 +70,7 @@ Test layout:
 
 Main exports from `diwire`:
 - `Container` - DI container
-- `Lifetime` - TRANSIENT, SINGLETON, SCOPED
+- `Lifetime` - TRANSIENT, SCOPED
 - `Scope` - APP, SESSION, REQUEST
 - `Injected` - Mark function parameters for injection (`Injected[T]`)
 - `Component` - Named component registration

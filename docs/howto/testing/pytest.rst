@@ -45,7 +45,7 @@ configuration. Injected parameters are always resolved from this root container.
        container.register_concrete(
            Service,
            concrete_type=FakeService,
-           lifetime=Lifetime.SINGLETON,
+           lifetime=Lifetime.SCOPED,
        )
        return container
 

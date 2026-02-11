@@ -770,8 +770,6 @@ class _OpenGenericResolver:  # pragma: no cover
     def _resolve_cache_owner(self, spec: _OpenGenericSpec) -> _OpenGenericResolver | None:
         if spec.lifetime is Lifetime.TRANSIENT:
             return None
-        if spec.lifetime is Lifetime.SINGLETON:
-            return self._root_wrapper
         return self._scope_owner_for_level(spec.scope.level)
 
     def _scope_owner_for_level(self, scope_level: int) -> _OpenGenericResolver | None:
