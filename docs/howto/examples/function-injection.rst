@@ -91,6 +91,38 @@ Generated resolver code passes it only when invoking providers decorated with
        handler = request_scope.resolve(Handler)
        print(handler.session.request_id)
 
+Advanced: auto-open scope (default)
+-----------------------------------
+
+By default, inject wrappers can open and close the requested scope automatically.
+
+.. code-block:: python
+   :class: diwire-example py-run
+
+   from diwire import Container, Injected, Lifetime, Scope
+
+
+   class RequestService:
+       def run(self) -> str:
+           return "ok"
+
+
+   container = Container()
+   container.register_concrete(
+       RequestService,
+       concrete_type=RequestService,
+       scope=Scope.REQUEST,
+       lifetime=Lifetime.SCOPED,
+   )
+
+
+   @container.inject(scope=Scope.REQUEST)
+   def handler(service: Injected[RequestService]) -> str:
+       return service.run()
+
+
+   print(handler())
+
 Read more
 ---------
 

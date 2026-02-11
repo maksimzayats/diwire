@@ -247,6 +247,24 @@ def test_inject_supports_factory_form() -> None:
     assert cast("Any", handler)() == "factory"
 
 
+def test_inject_supports_auto_open_scope_forwarding() -> None:
+    context = ContainerContext()
+    context.register_concrete(
+        _RequestDependency,
+        concrete_type=_RequestDependency,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    context.set_current(Container())
+
+    @context.inject(scope=Scope.REQUEST, auto_open_scope=True)
+    def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
+        return dep
+
+    resolved = cast("Any", handler)()
+    assert isinstance(resolved, _RequestDependency)
+
+
 def test_inject_rejects_reserved_internal_resolver_parameter_name() -> None:
     context = ContainerContext()
 

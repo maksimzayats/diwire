@@ -331,6 +331,7 @@ class ContainerContext:
         *,
         scope: BaseScope | None = None,
         autoregister_dependencies: bool | None = None,
+        auto_open_scope: bool = True,
     ) -> Callable[[InjectableF], InjectableF]: ...
 
     def inject(
@@ -339,6 +340,7 @@ class ContainerContext:
         *,
         scope: BaseScope | None = None,
         autoregister_dependencies: bool | None = None,
+        auto_open_scope: bool = True,
     ) -> InjectableF | Callable[[InjectableF], InjectableF]:
         """Decorate a callable with lazy injection delegated to the current container."""
 
@@ -347,6 +349,7 @@ class ContainerContext:
                 callable_obj=callable_obj,
                 scope=scope,
                 autoregister_dependencies=autoregister_dependencies,
+                auto_open_scope=auto_open_scope,
             )
 
         if func is None:
@@ -359,11 +362,13 @@ class ContainerContext:
         callable_obj: InjectableF,
         scope: BaseScope | None,
         autoregister_dependencies: bool | None,
+        auto_open_scope: bool,
     ) -> Callable[..., Any]:
         container = self.get_current()
         injected_decorator = container.inject(
             scope=scope,
             autoregister_dependencies=autoregister_dependencies,
+            auto_open_scope=auto_open_scope,
         )
         return injected_decorator(callable_obj)
 
@@ -373,6 +378,7 @@ class ContainerContext:
         callable_obj: InjectableF,
         scope: BaseScope | None,
         autoregister_dependencies: bool | None,
+        auto_open_scope: bool,
     ) -> InjectableF:
         signature = inspect.signature(callable_obj)
         if INJECT_RESOLVER_KWARG in signature.parameters:
@@ -392,6 +398,7 @@ class ContainerContext:
                     callable_obj=callable_obj,
                     scope=scope,
                     autoregister_dependencies=autoregister_dependencies,
+                    auto_open_scope=auto_open_scope,
                 )
                 async_injected = cast("Callable[..., Awaitable[Any]]", injected)
                 return await async_injected(*args, **kwargs)
@@ -405,6 +412,7 @@ class ContainerContext:
                     callable_obj=callable_obj,
                     scope=scope,
                     autoregister_dependencies=autoregister_dependencies,
+                    auto_open_scope=auto_open_scope,
                 )
                 return injected(*args, **kwargs)
 

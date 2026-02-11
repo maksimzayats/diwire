@@ -27,6 +27,7 @@ Decorator style
 - ``@container.inject``
 - ``@container.inject()``
 - ``@container.inject(scope=Scope.REQUEST, autoregister_dependencies=True)``
+- ``@container.inject(scope=Scope.REQUEST, auto_open_scope=False)``
 
 Example:
 
@@ -46,10 +47,38 @@ Behavior notes
 
 - injected parameters are removed from runtime ``__signature__``
 - callers can still override injected values by passing explicit keyword arguments
-- no implicit scope chain opening happens inside the wrapper
+- by default, the wrapper may enter/exit a scope to satisfy scoped dependencies
+- to disable implicit scope opening, set ``auto_open_scope=False``
 
 Generated resolver code passes an internal kwarg (``__diwire_resolver``) only for inject-wrapped providers.
 This is an internal mechanism; user code should not pass it directly unless integrating at a low level.
+
+Auto-open scopes (default)
+--------------------------
+
+Injected callables may open scopes automatically. The wrapper opens a scope only when needed and
+closes it at the end of the call.
+
+.. code-block:: python
+
+   from diwire import Container, Injected, Lifetime, Scope
+
+   class RequestService:
+       pass
+
+   container = Container()
+   container.register_concrete(
+       RequestService,
+       concrete_type=RequestService,
+       scope=Scope.REQUEST,
+       lifetime=Lifetime.SCOPED,
+   )
+
+   @container.inject(scope=Scope.REQUEST)
+   def handler(service: Injected[RequestService]) -> RequestService:
+       return service
+
+   service = handler()
 
 Naming note
 -----------

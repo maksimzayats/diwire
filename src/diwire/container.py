@@ -18,7 +18,7 @@ from typing import (
     overload,
 )
 
-from diwire.exceptions import DIWireInvalidRegistrationError
+from diwire.exceptions import DIWireInvalidRegistrationError, DIWireScopeMismatchError
 from diwire.injection import (
     INJECT_RESOLVER_KWARG,
     INJECT_WRAPPER_MARKER,
@@ -786,6 +786,7 @@ class Container:
         *,
         scope: BaseScope | None = None,
         autoregister_dependencies: bool | None = None,
+        auto_open_scope: bool = True,
     ) -> Callable[[InjectableF], InjectableF]: ...
 
     def inject(
@@ -794,6 +795,7 @@ class Container:
         *,
         scope: BaseScope | None = None,
         autoregister_dependencies: bool | None = None,
+        auto_open_scope: bool = True,
     ) -> InjectableF | Callable[[InjectableF], InjectableF]:
         """Decorate a callable to auto-inject parameters marked with Injected[T]."""
 
@@ -802,6 +804,7 @@ class Container:
                 callable_obj=callable_obj,
                 scope=scope,
                 autoregister_dependencies=autoregister_dependencies,
+                auto_open_scope=auto_open_scope,
             )
 
         if func is None:
@@ -814,6 +817,7 @@ class Container:
         callable_obj: InjectableF,
         scope: BaseScope | None,
         autoregister_dependencies: bool | None,
+        auto_open_scope: bool,
     ) -> InjectableF:
         signature = inspect.signature(callable_obj)
         if INJECT_RESOLVER_KWARG in signature.parameters:
@@ -852,35 +856,79 @@ class Container:
                 ),
             )
 
+        get_target_scope = self._build_injected_target_scope_getter(
+            explicit_scope=scope,
+            inferred_scope_level=inferred_scope_level,
+            injected_parameters=injected_parameters,
+            callable_name=callable_name,
+            auto_open_scope=auto_open_scope,
+        )
+
         if inspect.iscoroutinefunction(callable_obj):
 
             @functools.wraps(callable_obj)
             async def _async_injected(*args: Any, **kwargs: Any) -> Any:
-                resolver = self._resolve_inject_resolver(kwargs)
-                bound_arguments = signature.bind_partial(*args, **kwargs)
-                for injected_parameter in injected_parameters:
-                    if injected_parameter.name in bound_arguments.arguments:
-                        continue
-                    bound_arguments.arguments[injected_parameter.name] = await resolver.aresolve(
-                        injected_parameter.dependency,
+                base_resolver = self._resolve_inject_resolver(kwargs)
+                target_scope = get_target_scope()
+                maybe_scoped = self._enter_scope_if_needed(
+                    base_resolver=base_resolver,
+                    target_scope=target_scope,
+                )
+
+                if maybe_scoped is base_resolver:
+                    bound_arguments = await self._resolve_async_injected_arguments(
+                        resolver=maybe_scoped,
+                        signature=signature,
+                        args=args,
+                        kwargs=kwargs,
+                        injected_parameters=injected_parameters,
                     )
-                async_callable = cast("Callable[..., Awaitable[Any]]", callable_obj)
-                return await async_callable(*bound_arguments.args, **bound_arguments.kwargs)
+                    async_callable = cast("Callable[..., Awaitable[Any]]", callable_obj)
+                    return await async_callable(*bound_arguments.args, **bound_arguments.kwargs)
+
+                async_scoped_resolver = cast("Any", maybe_scoped)
+                async with async_scoped_resolver:
+                    bound_arguments = await self._resolve_async_injected_arguments(
+                        resolver=maybe_scoped,
+                        signature=signature,
+                        args=args,
+                        kwargs=kwargs,
+                        injected_parameters=injected_parameters,
+                    )
+                    async_callable = cast("Callable[..., Awaitable[Any]]", callable_obj)
+                    return await async_callable(*bound_arguments.args, **bound_arguments.kwargs)
 
             wrapped_callable: Callable[..., Any] = _async_injected
         else:
 
             @functools.wraps(callable_obj)
             def _sync_injected(*args: Any, **kwargs: Any) -> Any:
-                resolver = self._resolve_inject_resolver(kwargs)
-                bound_arguments = signature.bind_partial(*args, **kwargs)
-                for injected_parameter in injected_parameters:
-                    if injected_parameter.name in bound_arguments.arguments:
-                        continue
-                    bound_arguments.arguments[injected_parameter.name] = resolver.resolve(
-                        injected_parameter.dependency,
+                base_resolver = self._resolve_inject_resolver(kwargs)
+                target_scope = get_target_scope()
+                maybe_scoped = self._enter_scope_if_needed(
+                    base_resolver=base_resolver,
+                    target_scope=target_scope,
+                )
+
+                if maybe_scoped is base_resolver:
+                    bound_arguments = self._resolve_sync_injected_arguments(
+                        resolver=maybe_scoped,
+                        signature=signature,
+                        args=args,
+                        kwargs=kwargs,
+                        injected_parameters=injected_parameters,
                     )
-                return callable_obj(*bound_arguments.args, **bound_arguments.kwargs)
+                    return callable_obj(*bound_arguments.args, **bound_arguments.kwargs)
+
+                with maybe_scoped:
+                    bound_arguments = self._resolve_sync_injected_arguments(
+                        resolver=maybe_scoped,
+                        signature=signature,
+                        args=args,
+                        kwargs=kwargs,
+                        injected_parameters=injected_parameters,
+                    )
+                    return callable_obj(*bound_arguments.args, **bound_arguments.kwargs)
 
             wrapped_callable = _sync_injected
 
@@ -962,10 +1010,125 @@ class Container:
         cache[dependency] = max_scope_level
         return max_scope_level
 
+    def _resolve_sync_injected_arguments(
+        self,
+        *,
+        resolver: ResolverProtocol,
+        signature: inspect.Signature,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        injected_parameters: tuple[InjectedParameter, ...],
+    ) -> inspect.BoundArguments:
+        bound_arguments = signature.bind_partial(*args, **kwargs)
+        for injected_parameter in injected_parameters:
+            if injected_parameter.name in bound_arguments.arguments:
+                continue
+            bound_arguments.arguments[injected_parameter.name] = resolver.resolve(
+                injected_parameter.dependency,
+            )
+        return bound_arguments
+
+    async def _resolve_async_injected_arguments(
+        self,
+        *,
+        resolver: ResolverProtocol,
+        signature: inspect.Signature,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        injected_parameters: tuple[InjectedParameter, ...],
+    ) -> inspect.BoundArguments:
+        bound_arguments = signature.bind_partial(*args, **kwargs)
+        for injected_parameter in injected_parameters:
+            if injected_parameter.name in bound_arguments.arguments:
+                continue
+            bound_arguments.arguments[injected_parameter.name] = await resolver.aresolve(
+                injected_parameter.dependency,
+            )
+        return bound_arguments
+
     def _resolve_inject_resolver(self, kwargs: dict[str, Any]) -> ResolverProtocol:
         if INJECT_RESOLVER_KWARG in kwargs:
             return cast("ResolverProtocol", kwargs.pop(INJECT_RESOLVER_KWARG))
         return self.compile()
+
+    def _build_injected_target_scope_getter(
+        self,
+        *,
+        explicit_scope: BaseScope | None,
+        inferred_scope_level: int,
+        injected_parameters: tuple[InjectedParameter, ...],
+        callable_name: str,
+        auto_open_scope: bool,
+    ) -> Callable[[], BaseScope | None]:
+        if not auto_open_scope:
+
+            def _no_scope() -> BaseScope | None:
+                return None
+
+            return _no_scope
+        if explicit_scope is not None:
+
+            def _explicit_scope() -> BaseScope:
+                return explicit_scope
+
+            return _explicit_scope
+
+        revision = self._graph_revision
+        inferred_scope = self._find_scope_by_level(scope_level=inferred_scope_level)
+        cached_target_scope = inferred_scope
+
+        def _resolve_target_scope() -> BaseScope:
+            nonlocal cached_target_scope, revision
+
+            # Registrations can be mutated after decoration time (including after the wrapper is created),
+            # so infer target scope lazily on call and re-check when the graph revision changes.
+            if cached_target_scope is not None and revision == self._graph_revision:
+                return cached_target_scope
+
+            current_inferred_level = self._infer_injected_scope_level(
+                injected_parameters=injected_parameters,
+            )
+            candidate = self._find_scope_by_level(scope_level=current_inferred_level)
+            if candidate is None:
+                msg = (
+                    f"Callable '{callable_name}' inferred scope level {current_inferred_level} has no "
+                    "matching scope in the root scope owner."
+                )
+                raise DIWireInvalidRegistrationError(msg)
+
+            revision = self._graph_revision
+            cached_target_scope = candidate
+            return candidate
+
+        return _resolve_target_scope
+
+    def _find_scope_by_level(self, *, scope_level: int) -> BaseScope | None:
+        return next(
+            (candidate for candidate in self._root_scope.owner() if candidate.level == scope_level),
+            None,
+        )
+
+    def _enter_scope_if_needed(
+        self,
+        *,
+        base_resolver: ResolverProtocol,
+        target_scope: BaseScope | None,
+    ) -> ResolverProtocol:
+        if target_scope is None:
+            return base_resolver
+        if target_scope.level == self._root_scope.level:
+            return base_resolver
+        try:
+            return base_resolver.enter_scope(target_scope)
+        except DIWireScopeMismatchError as error:
+            if self._is_already_deep_enough_scope_error(error):
+                return base_resolver
+            raise
+
+    @staticmethod
+    def _is_already_deep_enough_scope_error(error: DIWireScopeMismatchError) -> bool:
+        message = str(error)
+        return message.startswith("Cannot enter scope level ") and " from level " in message
 
     def _callable_name(self, callable_obj: Callable[..., Any]) -> str:
         return getattr(callable_obj, "__qualname__", repr(callable_obj))

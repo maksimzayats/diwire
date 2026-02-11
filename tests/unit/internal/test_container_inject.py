@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from collections.abc import Generator
 from typing import Annotated, Any, Generic, NamedTuple, TypeVar, cast
 
 import pytest
@@ -29,6 +30,10 @@ class _InjectedAsyncDependency:
 
 
 class _RequestDependency:
+    pass
+
+
+class _RequestScopedResource:
     pass
 
 
@@ -312,6 +317,194 @@ def test_inject_infers_scope_depth_from_dependency_graph() -> None:
             assert isinstance(resolved.dependency, _RequestDependency)
 
 
+def test_inject_auto_open_scope_from_root_without_resolver() -> None:
+    container = Container()
+    cleanup_called = False
+
+    def _provide_resource() -> Generator[_RequestScopedResource, None, None]:
+        nonlocal cleanup_called
+        try:
+            yield _RequestScopedResource()
+        finally:
+            cleanup_called = True
+
+    container.register_generator(
+        _RequestScopedResource,
+        generator=_provide_resource,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    @container.inject(scope=Scope.REQUEST, auto_open_scope=True)
+    def handler(resource: Injected[_RequestScopedResource]) -> _RequestScopedResource:
+        return resource
+
+    injected_handler = cast("Any", handler)
+    resolved = injected_handler()
+    assert isinstance(resolved, _RequestScopedResource)
+    assert cleanup_called is True
+
+
+def test_inject_auto_open_scope_from_parent_internal_resolver() -> None:
+    container = Container()
+    cleanup_called = False
+
+    def _provide_resource() -> Generator[_RequestScopedResource, None, None]:
+        nonlocal cleanup_called
+        try:
+            yield _RequestScopedResource()
+        finally:
+            cleanup_called = True
+
+    container.register_generator(
+        _RequestScopedResource,
+        generator=_provide_resource,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    @container.inject(scope=Scope.REQUEST, auto_open_scope=True)
+    def handler(resource: Injected[_RequestScopedResource]) -> _RequestScopedResource:
+        return resource
+
+    injected_handler = cast("Any", handler)
+    with container.enter_scope(Scope.SESSION) as session_scope:
+        resolved = injected_handler(__diwire_resolver=session_scope)
+        assert isinstance(resolved, _RequestScopedResource)
+        assert cleanup_called is True
+
+
+def test_inject_auto_open_scope_is_noop_when_target_scope_is_already_opened() -> None:
+    container = Container()
+    cleanup_called = False
+
+    def _provide_resource() -> Generator[_RequestScopedResource, None, None]:
+        nonlocal cleanup_called
+        try:
+            yield _RequestScopedResource()
+        finally:
+            cleanup_called = True
+
+    container.register_generator(
+        _RequestScopedResource,
+        generator=_provide_resource,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    @container.inject(scope=Scope.REQUEST, auto_open_scope=True)
+    def handler(resource: Injected[_RequestScopedResource]) -> _RequestScopedResource:
+        return resource
+
+    injected_handler = cast("Any", handler)
+    with container.enter_scope(Scope.REQUEST) as request_scope:
+        resolved = injected_handler(__diwire_resolver=request_scope)
+        assert isinstance(resolved, _RequestScopedResource)
+        assert cleanup_called is False
+
+    assert cleanup_called is True
+
+
+def test_inject_auto_open_scope_infers_target_scope() -> None:
+    container = Container()
+    container.register_concrete(
+        _RequestDependency,
+        concrete_type=_RequestDependency,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    @container.inject(auto_open_scope=True)
+    def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
+        return dep
+
+    injected_handler = cast("Any", handler)
+    resolved = injected_handler()
+    assert isinstance(resolved, _RequestDependency)
+
+
+def test_inject_auto_open_scope_infers_target_scope_after_late_registration() -> None:
+    container = Container()
+
+    @container.inject(auto_open_scope=True)
+    def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
+        return dep
+
+    container.register_concrete(
+        _RequestDependency,
+        concrete_type=_RequestDependency,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    injected_handler = cast("Any", handler)
+    resolved = injected_handler()
+    assert isinstance(resolved, _RequestDependency)
+
+
+def test_inject_auto_open_scope_swallow_scope_mismatch_for_deeper_resolver() -> None:
+    container = Container()
+    dependency = _InjectedSyncDependency("value")
+    container.register_instance(_InjectedSyncDependency, instance=dependency)
+
+    @container.inject(scope=Scope.SESSION, auto_open_scope=True)
+    def handler(dep: Injected[_InjectedSyncDependency]) -> _InjectedSyncDependency:
+        return dep
+
+    injected_handler = cast("Any", handler)
+    with container.enter_scope(Scope.REQUEST) as request_scope:
+        resolved = injected_handler(__diwire_resolver=request_scope)
+        assert resolved is dependency
+
+
+def test_inject_auto_open_scope_reraises_non_shallower_scope_mismatch() -> None:
+    container = Container()
+    dependency = _InjectedSyncDependency("value")
+    container.register_instance(_InjectedSyncDependency, instance=dependency)
+
+    class _Resolver:
+        def resolve(self, _dependency: object) -> _InjectedSyncDependency:
+            return dependency
+
+        def enter_scope(self, _scope: object) -> object:
+            msg = "invalid transition"
+            raise DIWireScopeMismatchError(msg)
+
+    @container.inject(scope=Scope.REQUEST, auto_open_scope=True)
+    def handler(dep: Injected[_InjectedSyncDependency]) -> _InjectedSyncDependency:
+        return dep
+
+    injected_handler = cast("Any", handler)
+    with pytest.raises(DIWireScopeMismatchError, match="invalid transition"):
+        injected_handler(__diwire_resolver=_Resolver())
+
+
+def test_inject_auto_open_scope_raises_when_inferred_scope_has_no_matching_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    container = Container()
+
+    def _missing_scope(*, scope_level: int) -> None:
+        _ = scope_level
+
+    monkeypatch.setattr(
+        container,
+        "_find_scope_by_level",
+        _missing_scope,
+    )
+
+    with pytest.raises(
+        DIWireInvalidRegistrationError,
+        match="has no matching scope in the root scope owner",
+    ):
+
+        @container.inject(auto_open_scope=True)
+        def _handler(dep: Injected[_InjectedSyncDependency]) -> _InjectedSyncDependency:
+            return dep
+
+        cast("Any", _handler)()
+
+
 @pytest.mark.asyncio
 async def test_inject_async_scope_mismatch_without_request_resolver() -> None:
     container = Container()
@@ -322,7 +515,7 @@ async def test_inject_async_scope_mismatch_without_request_resolver() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject
+    @container.inject(auto_open_scope=False)
     async def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
         return dep
 
@@ -333,6 +526,25 @@ async def test_inject_async_scope_mismatch_without_request_resolver() -> None:
     with container.enter_scope() as request_scope:
         resolved = await injected_handler(__diwire_resolver=request_scope)
         assert isinstance(resolved, _RequestDependency)
+
+
+@pytest.mark.asyncio
+async def test_inject_async_auto_open_scope_without_manual_scope_management() -> None:
+    container = Container()
+    container.register_concrete(
+        _RequestDependency,
+        concrete_type=_RequestDependency,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    @container.inject(scope=Scope.REQUEST, auto_open_scope=True)
+    async def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
+        return dep
+
+    injected_handler = cast("Any", handler)
+    resolved = await injected_handler()
+    assert isinstance(resolved, _RequestDependency)
 
 
 def test_inject_nested_wrappers_propagate_same_resolver() -> None:
@@ -613,7 +825,7 @@ def test_inject_scope_mismatch_is_raised_when_no_compatible_resolver_is_provided
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject
+    @container.inject(auto_open_scope=False)
     def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
         return dep
 
