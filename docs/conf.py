@@ -49,7 +49,9 @@ html_css_files: list[str] = ["custom.css"]
 templates_path: list[str] = ["_templates"]
 html_theme_options = {
     "source_repository": "https://github.com/maksimzayats/diwire",
-    "source_branch": os.environ.get("DIWIRE_DOCS_SOURCE_BRANCH", "main"),
+    "source_branch": (
+        os.environ.get("DIWIRE_DOCS_SOURCE_BRANCH") or os.environ.get("GITHUB_REF_NAME") or "main"
+    ).strip(),
     "source_directory": "docs",
     "top_of_page_buttons": ["view", "edit"],
 }

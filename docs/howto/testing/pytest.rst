@@ -74,23 +74,30 @@ Container fixture
 Using container_context in tests
 --------------------------------
 
-If your app uses :data:`diwire.container_context`, set/reset it in a fixture:
+If your app uses :data:`diwire.container_context`, bind it in a fixture.
+
+``container_context`` is process-global for that instance and ``set_current()`` does not return a token. Prefer either:
+
+- bind once at session startup, or
+- create and use an app-owned ``ContainerContext()`` instance for test isolation.
 
 .. code-block:: python
 
    import pytest
 
-   from diwire import Container, container_context
+   from diwire import Container, ContainerContext
 
 
    @pytest.fixture
-   def container() -> Container:
+   def container_context() -> ContainerContext:
+       return ContainerContext()
+
+
+   @pytest.fixture
+   def container(container_context: ContainerContext) -> Container:
        container = Container()
-       token = container_context.set_current(container)
-       try:
-           yield container
-       finally:
-           container_context.reset(token)
+       container_context.set_current(container)
+       return container
 
 Cleaning up scopes
 ------------------

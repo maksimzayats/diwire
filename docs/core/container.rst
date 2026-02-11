@@ -1,19 +1,19 @@
 .. meta::
-   :description: How the diwire Container resolves dependencies from type hints, how auto-registration works, and what counts as a service key.
+   :description: How the diwire Container resolves dependencies from type hints, how auto-registration works, and what counts as a dependency key.
 
 Container
 =========
 
 The :class:`diwire.Container` is responsible for two things:
 
-1. **Registration**: mapping a "service key" (usually a type) to an instance or a factory.
+1. **Registration**: mapping a dependency key (usually a type) to a provider.
 2. **Resolution**: creating objects by inspecting type hints and recursively resolving dependencies.
 
 Auto-wiring (default)
 ---------------------
 
-By default, diwire will auto-register concrete classes as you resolve them.
-This is what enables the "zero configuration" experience:
+By default, diwire will auto-register concrete classes as you resolve them. This enables the “zero configuration”
+experience:
 
 .. code-block:: python
 
@@ -33,12 +33,12 @@ This is what enables the "zero configuration" experience:
 
 
    container = Container()
-   service = container.resolve(Service)
+   _ = container.resolve(Service)
 
-When you resolve ``Service``, the container sees it needs ``Repo`` and resolves that too.
+Runnable example: :doc:`/howto/examples/quickstart`.
 
 Strict mode (no auto-registration)
-----------------------------------------
+----------------------------------
 
 If you want full control, disable auto-registration:
 
@@ -46,23 +46,24 @@ If you want full control, disable auto-registration:
 
    from diwire import Container
 
-   container = Container(autoregister_concrete_types=False)
+   container = Container(autoregister_concrete_types=False, autoregister_dependencies=False)
 
-In this mode, resolving an unregistered service raises :class:`diwire.exceptions.DIWireServiceNotRegisteredError`.
+In this mode, resolving a dependency that is not registered raises
+:class:`diwire.exceptions.DIWireDependencyNotRegisteredError`.
 
-Service keys
-------------
+Dependency keys
+---------------
 
-In practice you'll use these keys:
+In practice you’ll use these keys:
 
-- **Types**: ``container.register(Logger)``, ``container.resolve(Logger)``
-- **Annotated components**: ``Annotated[Cache, Component("primary")]`` (see :doc:`components`)
+- **Types**: ``UserService``, ``Repository``, ...
+- **Named components** via ``Annotated[T, Component(\"name\")]``.
+- **Closed generics** (e.g. ``Box[User]``) when using open-generic registrations.
 
-The container also supports registering under other keys (e.g. strings), but using types keeps the API discoverable
-and maximizes help from type checkers.
+Avoid “string keys”: they are harder to type-check and harder to discover.
 
 Next
 ----
 
-Go to :doc:`registration` to learn every explicit registration style (classes, factories, instances, decorators,
-interfaces/protocols, and open generics).
+Go to :doc:`registration` for the explicit registration APIs, and :doc:`scopes` for scope transitions and cleanup.
+

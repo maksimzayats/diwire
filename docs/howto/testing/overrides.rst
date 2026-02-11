@@ -37,9 +37,17 @@ Registrations are replaceable. In general, override **before** the first resolve
            ...
 
 
-   container.register(EmailClient, concrete_class=RealEmailClient, lifetime=Lifetime.SINGLETON)
+   container.register_concrete(
+       provides=EmailClient,
+       concrete_type=RealEmailClient,
+       lifetime=Lifetime.SINGLETON,
+   )
    # In tests: override BEFORE resolving anything that depends on it.
-   container.register(EmailClient, concrete_class=FakeEmailClient, lifetime=Lifetime.SINGLETON)
+   container.register_concrete(
+       provides=EmailClient,
+       concrete_type=FakeEmailClient,
+       lifetime=Lifetime.SINGLETON,
+   )
 
 Override using an instance (force a singleton)
 ----------------------------------------------
@@ -49,6 +57,6 @@ Registering an instance is a great way to override something even if it was reso
 .. code-block:: python
 
    fake = FakeEmailClient()
-   container.register(EmailClient, instance=fake, lifetime=Lifetime.SINGLETON)
+   container.register_instance(provides=EmailClient, instance=fake)
 
 Because the container uses the instance directly, subsequent resolves return exactly that object.

@@ -7,11 +7,18 @@ Lifetime
 .. autoclass:: diwire.Lifetime
    :members:
 
+LockMode
+--------
+
+.. autoclass:: diwire.LockMode
+   :members:
+
 Scope
 -----
 
-.. autoclass:: diwire.Scope
-   :members:
+.. autoclass:: diwire.scope.BaseScope
+
+.. autodata:: diwire.Scope
 
 Injected
 --------
@@ -22,3 +29,8 @@ Component
 ---------
 
 .. autoclass:: diwire.Component
+
+FromContext
+-----------
+
+.. autoclass:: diwire.FromContext

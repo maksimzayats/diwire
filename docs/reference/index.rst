@@ -1,5 +1,5 @@
 .. meta::
-   :description: diwire API reference for Container, ScopedContainer, container_context, and public types.
+   :description: diwire API reference for Container, ContainerContext, container_context, and public types.
 
 API reference
 =============
@@ -10,8 +10,7 @@ The public API is intentionally small and stable.
    :maxdepth: 2
 
    container
-   container_interface
-   scopes
+   container_context
    context
    types
    exceptions

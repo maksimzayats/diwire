@@ -1,14 +1,15 @@
 .. meta::
-   :description: Type-driven dependency injection for Python. Zero dependencies. Auto-wiring from type hints, scoped lifetimes, async resolution, and generator-based cleanup.
-   :keywords: dependency injection, python dependency injection, di container, inversion of control, ioc, type hints, fastapi dependency injection
+   :description: Type-driven dependency injection for Python. Zero runtime dependencies. Compiled resolver, scopes+cleanup, async, open generics, and Injected/FromContext markers.
+   :keywords: dependency injection, python dependency injection, di container, inversion of control, ioc, type hints dependency injection
 
 diwire
 ======
 
-**Type-driven dependency injection for Python. Zero dependencies. Zero boilerplate.**
+**Type-driven dependency injection for Python. Zero runtime dependencies.**
 
-diwire is a dependency injection container for Python 3.10+ that builds your object graph from type hints alone.
-It supports scoped lifetimes, async-first resolution, generator-based cleanup, and open generics.
+diwire is a dependency injection container for Python 3.10+ that builds your object graph from type hints.
+It supports scopes + deterministic cleanup, async resolution, open generics, and fast steady-state resolution via
+compiled resolvers.
 
 Installation
 ------------
@@ -22,7 +23,7 @@ Installation
    pip install diwire
 
 Quick start
-------------------------
+-----------
 
 Define your classes. Resolve the top-level one. diwire figures out the rest.
 
@@ -31,7 +32,7 @@ Define your classes. Resolve the top-level one. diwire figures out the rest.
 
    from dataclasses import dataclass
 
-   from diwire import Container, Lifetime
+   from diwire import Container
 
 
    @dataclass
@@ -49,16 +50,30 @@ Define your classes. Resolve the top-level one. diwire figures out the rest.
        repo: UserRepository
 
 
-   container = Container(autoregister_default_lifetime=Lifetime.TRANSIENT)
+   container = Container()
    service = container.resolve(UserService)
    print(service.repo.db.host)  # => localhost
+
+Why diwire
+----------
+
+- **Zero runtime dependencies**: drop it into any project.
+- **Compiled resolver**: build fast resolution paths once with ``compile()``.
+- **Scopes + cleanup**: per-request caching and deterministic cleanup via generators/async-generators.
+- **Open generics**: register ``Box[T]`` once and resolve ``Box[User]`` safely.
+- **Function injection**: ``Injected[T]`` and ``FromContext[T]`` markers keep signatures explicit and typed.
+
+Performance
+-----------
+
+For reproducible benchmarks and methodology, see :doc:`howto/advanced/performance`.
 
 What to read next
 -----------------
 
-- :doc:`howto/examples/index` - a step-by-step tutorial you can run and copy-paste
-- :doc:`core/index` - the concepts behind the tutorial (the "why it works")
-- :doc:`howto/index` - a cookbook of real-world scenarios (frameworks, patterns, testing)
+- :doc:`howto/examples/index` - runnable scripts sourced from ``examples/``
+- :doc:`core/index` - the mental model behind the tutorial
+- :doc:`howto/index` - frameworks, testing, and patterns
 - :doc:`reference/index` - API reference for the public surface area
 
 .. toctree::
@@ -71,3 +86,4 @@ What to read next
    core/index
    howto/index
    reference/index
+

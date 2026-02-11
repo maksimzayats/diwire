@@ -1,109 +1,67 @@
 .. meta::
-   :description: Scopes in diwire: request-style scoping, per-scope caching, nested scopes, and deterministic cleanup using generator factories.
+   :description: Scopes in diwire: ordered scope levels, default enter_scope() transitions, per-scope caching, and deterministic cleanup.
 
 Scopes & cleanup
 ================
 
-Scopes give you a way to say: "for this unit of work (request/job), reuse scoped services and clean them up at the end."
+Scopes give you a way to say: “for this unit of work (request/job), reuse scoped services and clean them up at the end.”
 
-Creating a scope
-----------------
+Scope model
+-----------
 
-Use :meth:`diwire.Container.enter_scope` as a context manager:
+``Scope`` is an *ordered scope tree* implemented as a collection of :class:`diwire.scope.BaseScope` instances.
+Each scope has:
 
-See the runnable scripts in :doc:`/howto/examples/scopes` (Scope basics section).
+- a numeric ``level`` (depth)
+- a ``skippable`` flag used for default transitions
 
-Initial app scope
------------------
+The built-in scope collection is available as :data:`diwire.Scope` (an instance, not an enum).
 
-By default, ``Container()`` starts with an active app scope (``Scope.APP``).
-Calling ``enter_scope()`` creates a nested scope under that app scope.
-Close the initial app scope by calling ``container.close()`` or
-``container.aclose()``.
+Entering scopes
+---------------
+
+Use :meth:`diwire.Container.enter_scope` as a context manager.
+
+``enter_scope()`` (no argument) transitions to the next **non-skippable** scope level.
+With the built-in tree this means ``APP -> REQUEST`` by skipping ``SESSION``.
+
+You can also enter an explicit scope level with ``enter_scope(Scope.SESSION)`` or ``enter_scope(Scope.REQUEST)``.
+
+Runnable example: :doc:`/howto/examples/scopes`.
 
 Scoped lifetime
 ---------------
 
-To share an instance *within* a scope, register it as ``Lifetime.SCOPED`` and provide a scope name:
+To cache a provider *within* a scope, register it as ``Lifetime.SCOPED`` and set ``scope=...`` to a
+:class:`diwire.scope.BaseScope` value:
 
-The ``Scope`` enum provides three built-in scope names:
+.. code-block:: python
 
-- ``Scope.APP`` (``"app"``) -- application-wide scope (one per container or app lifetime)
-- ``Scope.SESSION`` (``"session"``) -- connection or session scope (e.g., websocket or user session)
-- ``Scope.REQUEST`` (``"request"``) -- request or job scope (one per request or unit of work)
+   from diwire import Container, Lifetime, Scope
 
-Scope parameters accept any string, so you can also provide a custom name like ``"tenant"`` or ``"task"``.
+   class RequestSession: ...
 
-See the runnable scripts in :doc:`/howto/examples/scopes` (SCOPED lifetime section).
+   container = Container(autoregister_concrete_types=False)
+   container.register_concrete(
+       RequestSession,
+       concrete_type=RequestSession,
+       scope=Scope.REQUEST,
+       lifetime=Lifetime.SCOPED,
+   )
 
-Generator factories (deterministic cleanup)
-----------------------------------------------
+Cleanup
+-------
 
-When you need cleanup (close a session, release a lock, return a connection to a pool), use a generator factory.
-diwire will close the generator when the scope exits, running your ``finally`` block.
-If you register a generator factory without specifying a scope, it is attached to the
-initial app scope and cleaned up when you call ``container.close()`` or
-``container.aclose()``.
+For deterministic cleanup, use generator / async-generator providers (or context manager providers). diwire will run
+cleanup when the owning scope exits.
 
-See the runnable scripts in :doc:`/howto/examples/scopes` (Generator factories section).
-
-Nested scopes
--------------
-
-Scopes can be nested. A nested scope can still access services registered for its parent scopes.
-
-See the runnable scripts in :doc:`/howto/examples/scopes` (Nested scopes section).
+Runnable example: :doc:`/howto/examples/scopes`.
 
 Scope context values
 --------------------
 
-You can attach per-scope context values when entering a scope and resolve them via
-``FromContext[T]`` in providers or injected callables.
+You can attach per-scope context values when entering a scope and resolve them via ``FromContext[T]`` in providers or
+in injected callables.
 
-- Context values are visible to the scope where they were provided and all child scopes.
-- Child scopes can override parent values by passing the same key again.
-- Keys are unwrapped dependency tokens:
-  ``FromContext[int]`` uses key ``int``.
-  ``FromContext[Annotated[Db, Component("replica")]]`` uses that full ``Annotated`` token.
+Runnable example: :doc:`/howto/examples/scope-context-values`.
 
-.. code-block:: python
-
-   from diwire import Container, FromContext, Lifetime, Scope
-
-   class RequestValue:
-       def __init__(self, value: int) -> None:
-           self.value = value
-
-   def build_request_value(value: FromContext[int]) -> RequestValue:
-       return RequestValue(value=value)
-
-   container = Container()
-   container.register_factory(
-       RequestValue,
-       factory=build_request_value,
-       scope=Scope.REQUEST,
-       lifetime=Lifetime.TRANSIENT,
-   )
-
-   with container.enter_scope(Scope.REQUEST, context={int: 123}) as request_scope:
-       assert request_scope.resolve(RequestValue).value == 123
-
-Imperative close
-----------------
-
-You can also manage scopes imperatively:
-
-.. code-block:: python
-
-   from diwire import Scope
-
-   scope = container.enter_scope(Scope.REQUEST)
-   try:
-       ...
-   finally:
-       scope.close()
-
-There are also convenience methods for closing active scopes by name:
-
-- :meth:`diwire.Container.close_scope`
-- :meth:`diwire.Container.aclose_scope`

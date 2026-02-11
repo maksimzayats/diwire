@@ -8,17 +8,28 @@
 [![codecov](https://codecov.io/gh/MaksimZayats/diwire/graph/badge.svg)](https://codecov.io/gh/MaksimZayats/diwire)
 [![Docs](https://img.shields.io/badge/docs-diwire.dev-blue)](https://docs.diwire.dev)
 
-diwire is a dependency injection container for Python 3.10+ that builds your object graph from type hints alone. It
-supports scoped lifetimes, async-first resolution, generator-based cleanup,
-open generics, and free-threaded Python (no-GIL) — all with zero runtime dependencies.
+diwire is a dependency injection container for Python 3.10+ that builds your object graph from type hints. It supports
+scopes + deterministic cleanup, async resolution, open generics, fast steady-state resolution via compiled
+resolvers, and free-threaded Python (no-GIL) — all with zero runtime dependencies.
 
-## Quick Start
+## Installation
+
+```bash
+uv add diwire
+```
+
+```bash
+pip install diwire
+```
+
+## Quick start (auto-wiring)
 
 Define your classes. Resolve the top-level one. diwire figures out the rest.
 
 ```python
 from dataclasses import dataclass
-from diwire import Container, Lifetime, Scope
+
+from diwire import Container
 
 
 @dataclass
@@ -36,150 +47,69 @@ class UserService:
     repo: UserRepository
 
 
-container = Container(autoregister_default_lifetime=Lifetime.TRANSIENT)
+container = Container()
 service = container.resolve(UserService)
-
 print(service.repo.db.host)  # => localhost
 ```
 
-No registration calls. No configuration. diwire reads the type hints on `UserService`, sees it needs a `UserRepository`,
-which needs a `Database`, and builds the entire chain automatically.
+## Registration
 
-## Installation
-
-```bash
-uv add diwire
-```
-
-```bash
-pip install diwire
-```
-
-## Features
-
-### Auto-Wiring
-
-Dependencies are resolved from type hints — no manual wiring required.
+Use explicit registrations when you need configuration objects, interfaces/protocols, cleanup, or multiple
+implementations.
 
 ```python
-from dataclasses import dataclass
-from diwire import Container, Scope
+from typing import Protocol
+
+from diwire import Container, Lifetime
 
 
-@dataclass
-class Logger:
-    level: str = "INFO"
+class Clock(Protocol):
+    def now(self) -> str: ...
 
 
-@dataclass
-class AuthService:
-    logger: Logger
+class SystemClock:
+    def now(self) -> str:
+        return "now"
 
 
-@dataclass
-class App:
-    auth: AuthService
-    logger: Logger
+container = Container(autoregister_concrete_types=False)
+container.register_concrete(
+    provides=Clock,
+    concrete_type=SystemClock,
+    lifetime=Lifetime.SINGLETON,
+)
 
-
-container = Container()
-app = container.resolve(App)
-
-print(app.auth.logger.level)  # => INFO
-print(app.logger.level)  # => INFO
+print(container.resolve(Clock).now())  # => now
 ```
 
-### Decorator Registration
-
-Use `@container.register` as a decorator on classes, factory functions, and static methods — with or without parameters.
+Decorator forms are available for concrete types and factories:
 
 ```python
-from dataclasses import dataclass
-from typing import Annotated, Protocol
+from diwire import Container
 
-from diwire import Container, Lifetime, Scope, Component
-
-
-class IDatabase(Protocol):
-    def query(self, sql: str) -> str: ...
+container = Container(autoregister_concrete_types=False)
 
 
-container = Container()
+@container.register_factory()
+def build_answer() -> int:
+    return 42
 
 
-# Bare decorator — registers the class with default lifetime
-@container.register
-class Config:
-    debug: bool = True
-
-
-# With lifetime parameter
-@container.register(lifetime=Lifetime.SINGLETON)
-class Logger:
-    def log(self, msg: str) -> None:
-        print(f"[LOG] {msg}")
-
-
-# Interface binding via decorator
-@container.register(IDatabase, lifetime=Lifetime.SINGLETON)
-class PostgresDatabase:
-    def query(self, sql: str) -> str:
-        return f"result of: {sql}"
-
-
-# Factory function — return type is inferred from annotation
-@container.register
-def create_connection_string(config: Config) -> Annotated[str, Component("connection_string")]:
-    return f"postgres://localhost?debug={config.debug}"
-
-
-print(container.resolve(Config).debug)  # => True
-print(container.resolve(IDatabase).query("SELECT 1"))  # => result of: SELECT 1
-print(container.resolve(Annotated[str, Component("connection_string")]))  # => postgres://localhost?debug=True
+print(container.resolve(int))  # => 42
 ```
 
-### Lifetimes
+## Scopes & cleanup
 
-Control how instances are created and shared.
-
-| Lifetime    | Behavior                                         |
-|-------------|--------------------------------------------------|
-| `TRANSIENT` | New instance every time                          |
-| `SINGLETON` | One shared instance for the container's lifetime |
-| `SCOPED`    | One instance per scope (e.g. per request)        |
-
-```python
-from dataclasses import dataclass
-from diwire import Container, Lifetime, Scope
-
-
-@dataclass
-class Config:
-    debug: bool = True
-
-
-container = Container()
-container.register(Config, lifetime=Lifetime.SINGLETON)
-
-a = container.resolve(Config)
-b = container.resolve(Config)
-print(a is b)  # => True
-
-container.register(Config, lifetime=Lifetime.TRANSIENT)
-c = container.resolve(Config)
-print(a is c)  # => False
-```
-
-### Scopes & Cleanup
-
-Scopes manage per-request lifetimes. Generator factories clean up automatically when the scope exits.
+Use `Lifetime.SCOPED` for per-request/per-job caching. Use generator/async-generator providers for deterministic
+cleanup on scope exit.
 
 ```python
 from collections.abc import Generator
+
 from diwire import Container, Lifetime, Scope
 
 
-class DBSession:
+class Session:
     def __init__(self) -> None:
         self.closed = False
 
@@ -187,346 +117,118 @@ class DBSession:
         self.closed = True
 
 
-def session_factory() -> Generator[DBSession, None, None]:
-    session = DBSession()
+def session_factory() -> Generator[Session, None, None]:
+    session = Session()
     try:
         yield session
     finally:
-        session.close()  # runs automatically on scope exit
+        session.close()
 
 
-container = Container()
-container.register(DBSession, factory=session_factory, lifetime=Lifetime.SCOPED, scope=Scope.REQUEST)
+container = Container(autoregister_concrete_types=False)
+container.register_generator(
+    provides=Session,
+    generator=session_factory,
+    scope=Scope.REQUEST,
+    lifetime=Lifetime.SCOPED,
+)
 
-with container.enter_scope(Scope.REQUEST) as scope:
-    session = scope.resolve(DBSession)
+with container.enter_scope() as request_scope:
+    session = request_scope.resolve(Session)
     print(session.closed)  # => False
 
 print(session.closed)  # => True
 ```
 
-### Auto-Register Safety
+## Function injection
 
-When auto-registration is enabled and a type already has a scoped registration, diwire raises
-`DIWireScopeMismatchError` instead of silently creating a second, unscoped instance. This prevents bugs where you
-expect a scoped service but accidentally resolve it outside the correct scope.
+Mark injected parameters as `Injected[T]` and wrap callables with `@container.inject`.
 
 ```python
-from dataclasses import dataclass
+from diwire import Container, Injected
 
-from diwire import Container, Lifetime, Scope
 
-
-@dataclass
-class Session:
-    active: bool = True
-
-
-container = Container()
-container.register(Session, lifetime=Lifetime.SCOPED, scope=Scope.REQUEST)
-
-# Resolving outside any scope raises — no silent fallback
-# container.resolve(Session)  # => DIWireScopeMismatchError
-
-# Resolving inside the correct scope works
-with container.enter_scope(Scope.REQUEST) as scope:
-    session = scope.resolve(Session)
-    print(session.active)  # => True
-
-# Unregistered types still auto-register normally
-@dataclass
-class Logger:
-    level: str = "INFO"
-
-print(container.resolve(Logger).level)  # => INFO
-```
-
-### Async Support
-
-`aresolve()` works with async factories and async generators. Independent dependencies are resolved in parallel via
-`asyncio.gather()`.
-
-```python
-import asyncio
-from collections.abc import AsyncGenerator
-
-from diwire import Container, Lifetime, Scope
-
-
-class AsyncClient:
-    def __init__(self) -> None:
-        self.connected: bool = False
-
-    async def connect(self) -> None:
-        self.connected = True
-
-    async def close(self) -> None:
-        self.connected = False
-
-
-async def client_factory() -> AsyncGenerator[AsyncClient, None]:
-    client = AsyncClient()
-    await client.connect()
-    try:
-        yield client
-    finally:
-        await client.close()
-
-
-async def main() -> None:
-    container = Container()
-    container.register(
-        AsyncClient,
-        factory=client_factory,
-        lifetime=Lifetime.SCOPED,
-        scope=Scope.REQUEST,
-    )
-
-    async with container.enter_scope(Scope.REQUEST) as scope:
-        client = await scope.aresolve(AsyncClient)
-        print(client.connected)  # => True
-
-    print(client.connected)  # => False
-
-
-asyncio.run(main())
-```
-
-### Function Injection
-
-Mark parameters with `Injected[T]` to inject dependencies while keeping other parameters caller-provided.
-
-```python
-from dataclasses import dataclass
-
-from diwire import Container, Injected, Scope
-
-
-@dataclass
-class EmailService:
-    smtp_host: str = "smtp.example.com"
-
-    def send(self, to: str, subject: str) -> str:
-        return f"Sent '{subject}' to {to} via {self.smtp_host}"
-
-
-def send_email(
-    to: str,
-    *,
-    mailer: Injected[EmailService],
-) -> str:
-    return mailer.send(to=to, subject="Hello!")
-
-
-container = Container()
-send = container.resolve(send_email)
-print(send(to="user@example.com"))  # => Sent 'Hello!' to user@example.com via smtp.example.com
-```
-
-### Interface Binding
-
-Register a protocol or abstract base class and resolve it to a concrete implementation.
-
-```python
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Protocol
-from diwire import Container, Lifetime, Scope
-
-
-class Clock(Protocol):
-    def now(self) -> str: ...
-
-
-@dataclass
-class SystemClock:
-    def now(self) -> str:
-        return datetime.now().isoformat(timespec="seconds")
-
-
-container = Container()
-container.register(Clock, concrete_class=SystemClock, lifetime=Lifetime.SINGLETON)
-
-clock = container.resolve(Clock)
-print(type(clock).__name__)  # => SystemClock
-```
-
-### Named Components
-
-Use `Component` to register multiple implementations of the same interface.
-
-```python
-from dataclasses import dataclass
-from typing import Annotated, Protocol
-from diwire import Container, Scope, Component
-
-
-class Cache(Protocol):
-    def get(self, key: str) -> str: ...
-
-
-@dataclass
-class RedisCache:
-    def get(self, key: str) -> str:
-        return f"redis:{key}"
-
-
-@dataclass
-class MemoryCache:
-    def get(self, key: str) -> str:
-        return f"memory:{key}"
-
-
-container = Container()
-container.register(Annotated[Cache, Component("primary")], instance=RedisCache())
-container.register(Annotated[Cache, Component("fallback")], instance=MemoryCache())
-
-primary: Cache = container.resolve(Annotated[Cache, Component("primary")])
-fallback: Cache = container.resolve(Annotated[Cache, Component("fallback")])
-
-print(primary.get("user:1"))  # => redis:user:1
-print(fallback.get("user:1"))  # => memory:user:1
-```
-
-### Open Generics
-
-Register open generic factories and resolve closed generics with type-safe validation. TypeVar bounds and constraints
-are enforced at resolution time.
-
-```python
-from dataclasses import dataclass
-from typing import Generic, TypeVar
-from diwire import Container, Scope
-
-
-class Model:
-    pass
-
-
-T = TypeVar("T")
-M = TypeVar("M", bound=Model)
-
-
-@dataclass
-class AnyBox(Generic[T]):
-    value: str
-
-
-@dataclass
-class ModelBox(Generic[M]):
-    model: M
-
-
-container = Container()
-
-
-@container.register(AnyBox[T])
-def create_any_box(type_arg: type[T]) -> AnyBox[T]:
-    return AnyBox(value=type_arg.__name__)
-
-
-@container.register(ModelBox[M])
-def create_model_box(model_cls: type[M]) -> ModelBox[M]:
-    return ModelBox(model=model_cls())
-
-
-print(container.resolve(AnyBox[int]))  # => AnyBox(value='int')
-print(container.resolve(ModelBox[Model]))  # => ModelBox(model=<Model ...>)
-```
-
-### Global Context
-
-`container_context` provides a context-local global container for app-wide lazy resolution.
-
-```python
-from dataclasses import dataclass
-
-from diwire import Container, Injected, Scope, container_context
-
-
-@container_context.register()
-@dataclass
 class Service:
-    name: str = "diwire"
+    def run(self) -> str:
+        return "ok"
 
 
-@container_context.resolve()
-def greet(service: Injected[Service]) -> str:
-    return f"hello {service.name}"
+container = Container()
+
+
+@container.inject
+def handler(service: Injected[Service]) -> str:
+    return service.run()
+
+
+print(handler())  # => ok
+```
+
+## Named components
+
+Use `Annotated[T, Component("name")]` when you need multiple registrations for the same base type.
+
+```python
+from typing import Annotated, TypeAlias
+
+from diwire import Component, Container
+
+
+class Cache:
+    def __init__(self, label: str) -> None:
+        self.label = label
+
+
+PrimaryCache: TypeAlias = Annotated[Cache, Component("primary")]
+FallbackCache: TypeAlias = Annotated[Cache, Component("fallback")]
+
+
+container = Container(autoregister_concrete_types=False)
+container.register_instance(provides=PrimaryCache, instance=Cache(label="redis"))
+container.register_instance(provides=FallbackCache, instance=Cache(label="memory"))
+
+print(container.resolve(PrimaryCache).label)  # => redis
+print(container.resolve(FallbackCache).label)  # => memory
+```
+
+## container_context (optional)
+
+If you can't (or don't want to) pass a `Container` everywhere, use `container_context`.
+
+`container_context` stores one shared active container per `ContainerContext` instance (process-global for that
+instance). It also supports deferred replay: registrations made before binding are recorded and replayed when you later
+call `set_current(...)`.
+
+```python
+from diwire import Container, Injected, container_context
+
+
+class Service:
+    def run(self) -> str:
+        return "ok"
+
+
+@container_context.inject
+def handler(service: Injected[Service]) -> str:
+    return service.run()
 
 
 container = Container()
 container_context.set_current(container)
 
-print(greet())  # => hello diwire
+print(handler())  # => ok
 ```
 
-### Compilation
+## Performance
 
-`compile()` precomputes the dependency graph into specialized providers, eliminating runtime reflection and dict
-lookups. The container auto-compiles on first resolve by default.
+Benchmarks + methodology live in the docs: [Performance](https://docs.diwire.dev/howto/advanced/performance/).
 
-```python
-from dataclasses import dataclass
-from diwire import Container, Lifetime, Scope
+## Docs
 
-
-@dataclass
-class ServiceA:
-    pass
-
-
-@dataclass
-class ServiceB:
-    a: ServiceA
-
-
-container = Container()
-container.register(ServiceA, lifetime=Lifetime.SINGLETON)
-container.register(ServiceB, lifetime=Lifetime.TRANSIENT)
-
-container.compile()  # pre-resolve the dependency graph
-
-b = container.resolve(ServiceB)  # no reflection at resolve time
-```
-
-Set `auto_compile=False` on the container to control compilation timing manually.
-
-## Tested Integrations
-
-diwire works out of the box with classes that use generated `__init__` methods:
-
-- **dataclasses** — standard library
-- **namedtuple** — `typing.NamedTuple`
-- **[pydantic](https://docs.pydantic.dev/)** — `BaseModel` and `@pydantic.dataclasses.dataclass`
-- **[attrs](https://www.attrs.org/)** — `@attrs.define`
-- **[msgspec](https://jcristharif.com/msgspec/)** — `msgspec.Struct`
-
-No adapters or plugins needed — diwire extracts dependencies from type hints automatically.
-
-## API Reference
-
-| Symbol              | Description                                                                                                                  |
-|---------------------|------------------------------------------------------------------------------------------------------------------------------|
-| `Container`         | DI container — `register`, `resolve`, `aresolve`, `enter_scope`, `close_scope`, `aclose_scope`, `compile`, `close`, `aclose` |
-| `Lifetime`          | `TRANSIENT`, `SINGLETON`, `SCOPED`                                                                                           |
-| `Scope`             | `APP`, `SESSION`, `REQUEST`                                                                                                  |
-| `Injected`          | Parameter marker — `Injected[T]`                                                                                             |
-| `Component`         | Named component key — `Annotated[T, Component("name")]`                                                                      |
-| `container_context` | Context-local global container — `set_current`, `register`, `resolve`                                                        |
-| `ScopedContainer`   | Scoped container returned by `enter_scope()`                                                                                 |
-
-## Examples & Documentation
-
-Documentation: https://docs.diwire.dev
-
-Examples: https://docs.diwire.dev/howto/examples/ (runnable scripts and real-world scenarios: patterns, async, FastAPI,
-and error handling).
-
-## Contributing
-
-Contributions are welcome. Please open an issue or pull request on [GitHub](https://github.com/maksimzayats/diwire).
+- [Tutorial (runnable examples)](https://docs.diwire.dev/howto/examples/)
+- [Core concepts](https://docs.diwire.dev/core/)
+- [API reference](https://docs.diwire.dev/reference/)
 
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).
