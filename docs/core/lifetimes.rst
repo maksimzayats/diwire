@@ -30,7 +30,7 @@ See the runnable script in :doc:`/howto/examples/basics` (Lifetimes section).
        pass
 
 
-   container = Container(autoregister=False)
+   container = Container(autoregister_concrete_types=False)
    container.register(TransientService, lifetime=Lifetime.TRANSIENT)
    container.register(SingletonService, lifetime=Lifetime.SINGLETON)
 

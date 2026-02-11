@@ -137,7 +137,7 @@ class RootWithPydanticSettingsDependency:
 
 
 def test_container_default_autoregisters_dependencies_during_registration() -> None:
-    container = Container(autoregister_dependencies=True)
+    container = Container()
 
     container.register_concrete(concrete_type=RootWithDirectDependency)
 
@@ -147,7 +147,7 @@ def test_container_default_autoregisters_dependencies_during_registration() -> N
 
 
 def test_registration_override_can_disable_dependency_autoregistration() -> None:
-    container = Container(autoregister_dependencies=True)
+    container = Container()
 
     container.register_concrete(
         concrete_type=RootWithDirectDependency,
@@ -169,7 +169,7 @@ def test_registration_override_can_enable_dependency_autoregistration() -> None:
 
 
 def test_dependency_autoregistration_is_recursive() -> None:
-    container = Container(autoregister_dependencies=True)
+    container = Container()
 
     container.register_concrete(concrete_type=RootWithNestedDependencies)
 
@@ -178,7 +178,7 @@ def test_dependency_autoregistration_is_recursive() -> None:
 
 
 def test_dependency_autoregistration_skips_already_registered_dependency() -> None:
-    container = Container(autoregister_dependencies=True)
+    container = Container()
     container.register_concrete(concrete_type=ExistingDependency)
     existing_spec = container._providers_registrations.get_by_type(ExistingDependency)
 
@@ -203,7 +203,7 @@ def test_dependency_autoregistration_uses_parent_scope_and_lifetime() -> None:
 
 
 def test_dependency_autoregistration_ignores_registration_failures_and_continues() -> None:
-    container = Container(autoregister_dependencies=True)
+    container = Container()
 
     container.register_concrete(concrete_type=RootWithMixedDependencies)
 
@@ -225,10 +225,7 @@ def test_factory_decorator_can_autoregister_dependencies() -> None:
 
 
 def test_resolve_autoregistration_integration_registers_dependency_chain() -> None:
-    container = Container(
-        autoregister=True,
-        autoregister_dependencies=True,
-    )
+    container = Container()
 
     resolved = container.resolve(ResolveRoot)
 
@@ -238,7 +235,7 @@ def test_resolve_autoregistration_integration_registers_dependency_chain() -> No
 
 
 def test_resolve_autoregisters_pydantic_settings_as_singleton_factory() -> None:
-    container = Container(autoregister=True)
+    container = Container()
 
     first = container.resolve(PydanticSettingsDependency)
     second = container.resolve(PydanticSettingsDependency)
@@ -252,7 +249,7 @@ def test_resolve_autoregisters_pydantic_settings_as_singleton_factory() -> None:
 
 
 def test_dependency_autoregistration_registers_pydantic_settings_as_root_singleton() -> None:
-    container = Container(autoregister_dependencies=True)
+    container = Container()
 
     container.register_concrete(
         concrete_type=RootWithPydanticSettingsDependency,
@@ -283,7 +280,7 @@ def test_resolve_autoregisters_pydantic_v1_settings_as_singleton_factory() -> No
         class PydanticV1SettingsDependency(base_settings_type):
             value: int = 7
 
-        container = Container(autoregister=True)
+        container = Container()
         first = container.resolve(PydanticV1SettingsDependency)
         second = container.resolve(PydanticV1SettingsDependency)
 

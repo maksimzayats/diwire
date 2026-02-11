@@ -91,7 +91,7 @@ Demonstrates ``DIWireMissingDependenciesError`` when a required dependency canno
 
    def main() -> None:
        # Disable auto-registration to see DIWireMissingDependenciesError
-       container = Container(autoregister=False)
+       container = Container(autoregister_concrete_types=False)
 
        # Only register UserService, not ExternalAPI
        container.register(UserService)
@@ -107,9 +107,9 @@ Demonstrates ``DIWireMissingDependenciesError`` when a required dependency canno
            print(f"  Service key: {e.service_key}")
            print(f"  Missing dependencies: {e.missing}")
 
-       # With autoregister=True (default), simple classes would be auto-registered
-       print("\nWith autoregister=True (default):")
-       container_auto = Container(autoregister=True)
+       # With autoregister_concrete_types=True (default), simple classes would be auto-registered
+       print("\nWith autoregister_concrete_types=True (default):")
+       container_auto = Container()
        container_auto.register(UserService)
 
        # Note: ExternalAPI still fails because it has a non-injectable 'api_key' param
@@ -204,7 +204,7 @@ This prevents the container from silently auto-registering a second, unscoped in
 
 
    def main() -> None:
-       container = Container(autoregister=True)
+       container = Container()
        container.register(Session, lifetime=Lifetime.SCOPED, scope=Scope.REQUEST)
 
        print("Resolving a SCOPED service outside its scope:\n")

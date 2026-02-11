@@ -14,7 +14,7 @@ Disable auto-registration (strict mode)
 
    from diwire import Container
 
-   container = Container(autoregister=False)
+   container = Container(autoregister_concrete_types=False)
 
 Strict mode is useful when you want your app to fail fast if anything is missing.
 

@@ -69,8 +69,8 @@ class Container:
         default_lifetime: Lifetime = Lifetime.TRANSIENT,
         *,
         lock_mode: LockMode | Literal["auto"] = "auto",
-        autoregister: bool = False,
-        autoregister_dependencies: bool = False,
+        autoregister_concrete_types: bool = True,
+        autoregister_dependencies: bool = True,
     ) -> None:
         """Initialize the container with an optional configuration.
 
@@ -78,14 +78,14 @@ class Container:
             root_scope: The initial root scope for the container. All singleton providers will be tied to this scope. Defaults to Scope.APP.
             default_lifetime: The lifetime that will be used for providers if not specified. Defaults to Lifetime.TRANSIENT.
             lock_mode: Default lock strategy for non-instance registrations. Accepts LockMode or "auto". When set to "auto", sync-only graphs use thread locks and graphs containing async specs use async locks. In mixed graphs this means auto-mode sync cached paths are not thread-locked unless you override to LockMode.THREAD. Defaults to "auto".
-            autoregister: Whether to automatically register dependencies when they are resolved if not already registered. Defaults to False.
-            autoregister_dependencies: Whether to automatically register provider dependencies as concrete types during registration. Defaults to False.
+            autoregister_concrete_types: Whether to automatically register concrete types when they are resolved if not already registered. Defaults to True.
+            autoregister_dependencies: Whether to automatically register provider dependencies as concrete types during registration. It will respect `autoregister_concrete_types` flag. Defaults to True.
 
         """
         self._root_scope = root_scope
         self._default_lifetime = default_lifetime
         self._lock_mode = lock_mode
-        self._autoregister = autoregister
+        self._autoregister_concrete_types = autoregister_concrete_types
         self._autoregister_dependencies = autoregister_dependencies
 
         self._provider_dependencies_extractor = ProviderDependenciesExtractor()
@@ -935,7 +935,10 @@ class Container:
 
         return lock_mode
 
-    def _resolve_autoregister_dependencies(self, autoregister_dependencies: bool | None) -> bool:
+    def _resolve_autoregister_dependencies(
+        self,
+        autoregister_dependencies: bool | None,
+    ) -> bool:
         if autoregister_dependencies is None:
             return self._autoregister_dependencies
         return autoregister_dependencies
@@ -990,7 +993,7 @@ class Container:
         )
 
     def _ensure_autoregistration(self, dependency: Any) -> None:
-        if not self._autoregister:
+        if not self._autoregister_concrete_types:
             return
 
         if self._providers_registrations.find_by_type(dependency):
@@ -1084,7 +1087,9 @@ class Container:
 
         inspected_callable = self._injected_callable_inspector.inspect_callable(callable_obj)
         injected_parameters = inspected_callable.injected_parameters
-        resolved_autoregister = self._resolve_autoregister_dependencies(autoregister_dependencies)
+        resolved_autoregister = self._resolve_autoregister_dependencies(
+            autoregister_dependencies,
+        )
         if resolved_autoregister:
             self._autoregister_injected_dependencies(
                 injected_parameters=injected_parameters,
@@ -1419,7 +1424,7 @@ class Container:
                     ),
                 )
             self._root_resolver = root_resolver
-        if not self._autoregister:
+        if not self._autoregister_concrete_types:
             self._bind_container_entrypoints(target=self._root_resolver)
 
         return self._root_resolver

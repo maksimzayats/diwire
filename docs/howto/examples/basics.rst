@@ -28,7 +28,7 @@ Class registration
 
 
    def main() -> None:
-       container = Container(autoregister=False)
+       container = Container(autoregister_concrete_types=False)
        container.register(Logger)
 
        logger = container.resolve(Logger)
@@ -61,7 +61,7 @@ Factory registration
 
 
    def main() -> None:
-       container = Container(autoregister=False)
+       container = Container(autoregister_concrete_types=False)
        container.register(Database, factory=create_database)
 
        db = container.resolve(Database)
@@ -86,7 +86,7 @@ Instance registration
 
 
    def main() -> None:
-       container = Container(autoregister=False)
+       container = Container(autoregister_concrete_types=False)
 
        # Instance registrations are always singletons.
        cache_instance = Cache()
@@ -124,7 +124,7 @@ Demonstrates the difference between:
 
 
    def main() -> None:
-       container = Container(autoregister=False)
+       container = Container(autoregister_concrete_types=False)
 
        # TRANSIENT: new instance every time
        container.register(TransientService, lifetime=Lifetime.TRANSIENT)
@@ -253,7 +253,7 @@ Class decorators
 
    from diwire import Container, Lifetime
 
-   container = Container(autoregister=False)
+   container = Container(autoregister_concrete_types=False)
 
 
    @container.register
@@ -290,7 +290,7 @@ Factory function decorators
 
    from diwire import Container
 
-   container = Container(autoregister=False)
+   container = Container(autoregister_concrete_types=False)
 
 
    @dataclass
@@ -322,7 +322,7 @@ Factory decorators with injected dependencies
 
    from diwire import Container
 
-   container = Container(autoregister=False)
+   container = Container(autoregister_concrete_types=False)
 
 
    @dataclass
@@ -367,7 +367,7 @@ Protocol/interface binding
        def query(self, sql: str) -> str: ...
 
 
-   container = Container(autoregister=False)
+   container = Container(autoregister_concrete_types=False)
 
 
    @container.register(Database, lifetime=Lifetime.SINGLETON)

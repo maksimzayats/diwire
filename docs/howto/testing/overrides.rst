@@ -21,7 +21,7 @@ Registrations are replaceable. In general, override **before** the first resolve
 
    from diwire import Container, Lifetime
 
-   container = Container(autoregister=False)
+   container = Container(autoregister_concrete_types=False)
 
    class EmailClient(Protocol):
        def send(self, to: str, subject: str) -> None: ...

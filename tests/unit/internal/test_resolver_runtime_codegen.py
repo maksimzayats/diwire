@@ -201,7 +201,7 @@ async def test_async_singleton_uses_async_cached_method_replacement() -> None:
 
 
 def test_compile_returns_cached_resolver_and_rebinds_entrypoints() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.register_instance(_Resource, instance=_Resource())
 
     initial_resolver = container._root_resolver
@@ -230,7 +230,7 @@ def test_compile_returns_cached_resolver_and_rebinds_entrypoints() -> None:
 
 def test_resolve_auto_compiles_root_resolver_when_uncompiled() -> None:
     resource = _Resource()
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.register_instance(_Resource, instance=resource)
 
     initial_resolver = container._root_resolver
@@ -247,7 +247,7 @@ def test_resolve_auto_compiles_root_resolver_when_uncompiled() -> None:
 @pytest.mark.asyncio
 async def test_aresolve_auto_compiles_root_resolver_when_uncompiled() -> None:
     resource = _Resource()
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.register_instance(_Resource, instance=resource)
 
     initial_resolver = container._root_resolver
@@ -262,7 +262,7 @@ async def test_aresolve_auto_compiles_root_resolver_when_uncompiled() -> None:
 
 
 def test_compile_wraps_codegen_resolver_when_open_generic_registry_present() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.register_concrete(_OpenRuntimeService, concrete_type=_OpenRuntimeServiceImpl)
 
     compiled_resolver = container.compile()
@@ -275,7 +275,7 @@ def test_compile_wraps_codegen_resolver_when_open_generic_registry_present() -> 
 
 
 def test_enter_scope_auto_compiles_root_resolver_when_uncompiled() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.register_concrete(
         _RequestService,
         concrete_type=_RequestService,
@@ -332,7 +332,7 @@ def test_registering_after_compile_invalidates_compilation_and_rebinds_lazy_entr
     def build_context_manager() -> _ManagedContext:
         return _ManagedContext()
 
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     previous_resolver = container.compile()
 
     registrations: tuple[tuple[str, Any], ...] = (
@@ -401,7 +401,7 @@ def test_autoregister_keeps_container_entrypoints_and_skips_existing_registratio
     class _AutoRegisteredService:
         pass
 
-    container = Container(autoregister=True)
+    container = Container()
 
     first = container.resolve(_AutoRegisteredService)
     root_resolver = container._root_resolver
@@ -740,7 +740,7 @@ def test_codegen_inject_wrapper_unsafe_mode_stress_no_deadlock() -> None:
 
 
 def test_generated_dispatch_raises_for_unknown_dependency_in_sync_and_async_paths() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
 
     with pytest.raises(DIWireDependencyNotRegisteredError):
         container.resolve(object)

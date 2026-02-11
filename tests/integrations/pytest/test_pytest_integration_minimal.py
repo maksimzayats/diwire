@@ -17,7 +17,7 @@ class _FakeService(_Service):
 
 @pytest.fixture()
 def diwire_container() -> Container:
-    container = Container(autoregister=False)
+    container = Container(autoregister_concrete_types=False)
     container.register_concrete(
         _Service,
         concrete_type=_FakeService,

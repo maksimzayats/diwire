@@ -482,7 +482,7 @@ def test_inject_auto_open_scope_reraises_non_shallower_scope_mismatch() -> None:
 def test_inject_auto_open_scope_raises_when_inferred_scope_has_no_matching_scope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    container = Container()
+    container = Container(autoregister_dependencies=False)
 
     def _missing_scope(*, scope_level: int) -> None:
         _ = scope_level
@@ -610,7 +610,7 @@ def test_inject_rejects_explicit_scope_shallower_than_inferred() -> None:
 
 
 def test_inject_revalidates_explicit_scope_after_late_registration_sync() -> None:
-    container = Container()
+    container = Container(autoregister_dependencies=False)
 
     @container.inject(scope=Scope.SESSION)
     def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
@@ -630,7 +630,7 @@ def test_inject_revalidates_explicit_scope_after_late_registration_sync() -> Non
 
 @pytest.mark.asyncio
 async def test_inject_revalidates_explicit_scope_after_late_registration_async() -> None:
-    container = Container()
+    container = Container(autoregister_dependencies=False)
 
     @container.inject(scope=Scope.SESSION)
     async def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
@@ -723,7 +723,7 @@ def test_inject_autoregister_registers_pydantic_settings_as_singleton_factory() 
 
 
 def test_inject_autoregister_false_disables_default_autoregistration() -> None:
-    container = Container(autoregister_dependencies=True)
+    container = Container()
 
     @container.inject(autoregister_dependencies=False)
     def handler(dep: Injected[_AutoRoot]) -> _AutoRoot:
@@ -734,7 +734,7 @@ def test_inject_autoregister_false_disables_default_autoregistration() -> None:
 
 
 def test_inject_autoregister_none_uses_container_default() -> None:
-    container = Container(autoregister_dependencies=True)
+    container = Container()
 
     @container.inject
     def handler(dep: Injected[_AutoRoot]) -> _AutoRoot:

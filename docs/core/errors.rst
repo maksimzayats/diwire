@@ -12,7 +12,7 @@ Missing dependencies
 
 This usually means one of:
 
-- you disabled auto-registration (``Container(autoregister=False)``) and forgot to register something
+- you disabled auto-registration (``Container(autoregister_concrete_types=False)``) and forgot to register something
 - a constructor parameter is a primitive (``str``, ``int``, ...) and you didn't register an instance/factory
 - you tried to resolve an interface/protocol without binding a concrete implementation
 

@@ -46,7 +46,7 @@ If you want full control, disable auto-registration:
 
    from diwire import Container
 
-   container = Container(autoregister=False)
+   container = Container(autoregister_concrete_types=False)
 
 In this mode, resolving an unregistered service raises :class:`diwire.exceptions.DIWireServiceNotRegisteredError`.
 

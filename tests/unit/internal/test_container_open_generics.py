@@ -324,7 +324,7 @@ def test_open_scoped_cache_works_when_entering_action_scope_directly() -> None:
 
 
 def test_resolving_open_generic_without_type_arguments_remains_unregistered() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.register_concrete(_IBox, concrete_type=_Box)
 
     with pytest.raises(DIWireDependencyNotRegisteredError):
@@ -332,7 +332,7 @@ def test_resolving_open_generic_without_type_arguments_remains_unregistered() ->
 
 
 def test_autoregister_skips_open_generic_dependencies_when_match_exists() -> None:
-    container = Container(autoregister=True)
+    container = Container()
     container.register_concrete(_IBox, concrete_type=_Box)
 
     resolved = container.resolve(_IBox[int])

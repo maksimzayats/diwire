@@ -222,7 +222,7 @@ class Session:
     active: bool = True
 
 
-container = Container(autoregister=True)
+container = Container()
 container.register(Session, lifetime=Lifetime.SCOPED, scope=Scope.REQUEST)
 
 # Resolving outside any scope raises — no silent fallback

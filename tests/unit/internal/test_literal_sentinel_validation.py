@@ -216,7 +216,9 @@ def _context_manager() -> Generator[_Service, None, None]:
             "inject\\(\\) parameter 'scope'",
         ),
         (
-            lambda container: container.inject(autoregister_dependencies=cast("Any", None)),
+            lambda container: container.inject(
+                autoregister_dependencies=cast("Any", None),
+            ),
             "inject\\(\\) parameter 'autoregister_dependencies'",
         ),
     ],
