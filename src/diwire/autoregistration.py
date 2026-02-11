@@ -8,6 +8,8 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, TypeGuard
 
+from diwire.type_checks import is_runtime_class
+
 
 @dataclass(frozen=True, slots=True)
 class ConcreteTypeAutoregistrationPolicy:
@@ -25,7 +27,7 @@ class ConcreteTypeAutoregistrationPolicy:
 
     def is_eligible_concrete(self, candidate: object) -> TypeGuard[type[Any]]:
         """Return true when a candidate can be auto-registered as a concrete provider."""
-        if not isinstance(candidate, type):
+        if not is_runtime_class(candidate):
             return False
         if candidate.__module__ == "builtins":
             return False

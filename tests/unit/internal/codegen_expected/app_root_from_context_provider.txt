@@ -262,7 +262,7 @@ class RootResolver:
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: RootResolver
-        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
+        Dependency wiring: value (positional_or_keyword) -> context [Annotated]
         Behavior: Builds the provider value in this resolver, enforcing scope guards and cache policy.
         """
 
@@ -293,7 +293,7 @@ class RootResolver:
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: RootResolver
-        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
+        Dependency wiring: value (positional_or_keyword) -> context [Annotated]
         Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
         """
 
@@ -505,7 +505,7 @@ class _SessionResolver:
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: _SessionResolver
-        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
+        Dependency wiring: value (positional_or_keyword) -> context [Annotated]
         Behavior: Builds the provider value in this resolver, enforcing scope guards and cache policy.
         """
 
@@ -536,7 +536,7 @@ class _SessionResolver:
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: _SessionResolver
-        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
+        Dependency wiring: value (positional_or_keyword) -> context [Annotated]
         Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
         """
 
@@ -731,7 +731,7 @@ class _RequestResolver:
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: _RequestResolver
-        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
+        Dependency wiring: value (positional_or_keyword) -> context [Annotated]
         Behavior: Builds the provider value in this resolver, enforcing scope guards and cache policy.
         """
 
@@ -760,7 +760,7 @@ class _RequestResolver:
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: _RequestResolver
-        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
+        Dependency wiring: value (positional_or_keyword) -> context [Annotated]
         Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
         """
 
@@ -943,7 +943,7 @@ class _ActionResolver:
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: _ActionResolver
-        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
+        Dependency wiring: value (positional_or_keyword) -> context [Annotated]
         Behavior: This resolver delegates to the provider declaration scope because the dependency graph does not require deeper scope access.
         """
 
@@ -973,7 +973,7 @@ class _ActionResolver:
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: _ActionResolver
-        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
+        Dependency wiring: value (positional_or_keyword) -> context [Annotated]
         Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
         """
 
@@ -1136,7 +1136,7 @@ class _StepResolver:
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: _StepResolver
-        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
+        Dependency wiring: value (positional_or_keyword) -> context [Annotated]
         Behavior: This resolver delegates to the provider declaration scope because the dependency graph does not require deeper scope access.
         """
 
@@ -1166,7 +1166,7 @@ class _StepResolver:
         Graph requires async: False
         Cleanup callbacks required: False
         Resolver class handling this call: _StepResolver
-        Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]
+        Dependency wiring: value (positional_or_keyword) -> context [Annotated]
         Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
         """
 

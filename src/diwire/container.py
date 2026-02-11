@@ -45,6 +45,7 @@ from diwire.providers import (
 from diwire.resolvers.manager import ResolversManager
 from diwire.resolvers.protocol import ResolverProtocol
 from diwire.scope import BaseScope, Scope
+from diwire.type_checks import is_runtime_class
 from diwire.validators import DependecyRegistrationValidator
 
 T = TypeVar("T")
@@ -606,7 +607,7 @@ class Container:
             raise DIWireInvalidRegistrationError(msg)
 
         if concrete_type_value == "infer":
-            if isinstance(resolved_provides, type):
+            if is_runtime_class(resolved_provides):
                 return resolved_provides, resolved_provides
 
             msg = (

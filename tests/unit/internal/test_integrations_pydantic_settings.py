@@ -57,3 +57,18 @@ def test_load_pydantic_v1_base_falls_back_to_pydantic_module(monkeypatch: Any) -
 
 def test_is_pydantic_settings_subclass_returns_false_for_non_type() -> None:
     assert pydantic_settings_integration.is_pydantic_settings_subclass("not-a-class") is False
+
+
+def test_is_pydantic_settings_subclass_returns_false_on_issubclass_type_error(
+    monkeypatch: Any,
+) -> None:
+    class _Candidate:
+        pass
+
+    monkeypatch.setattr(
+        pydantic_settings_integration,
+        "SETTINGS_BASES",
+        ("not-a-class",),
+    )
+
+    assert pydantic_settings_integration.is_pydantic_settings_subclass(_Candidate) is False

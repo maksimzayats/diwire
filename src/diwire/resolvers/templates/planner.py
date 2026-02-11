@@ -17,6 +17,7 @@ from diwire.providers import (
     ProvidersRegistrations,
 )
 from diwire.scope import BaseScope
+from diwire.type_checks import is_runtime_class
 
 DispatchKind = Literal["identity", "equality_map"]
 DependencyPlanKind = Literal["provider", "context"]
@@ -334,7 +335,7 @@ class ResolverGenerationPlanner:
         )
 
     def _resolve_dispatch_kind(self, *, provides: Any) -> DispatchKind:
-        if isinstance(provides, type):
+        if is_runtime_class(provides):
             return "identity"
         return "equality_map"
 

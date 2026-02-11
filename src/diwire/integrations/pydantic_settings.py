@@ -4,6 +4,8 @@ import importlib
 import warnings
 from typing import Any
 
+from diwire.type_checks import is_runtime_class
+
 _PYDANTIC_V1_WARNING_PATTERN = (
     r"Core Pydantic V1 functionality isn't compatible with Python 3\.14 or greater\."
 )
@@ -58,9 +60,12 @@ SETTINGS_BASES: tuple[type[Any], ...] = _build_settings_bases()
 
 def is_pydantic_settings_subclass(candidate: object) -> bool:
     """Return true when candidate subclasses a supported Pydantic settings base."""
-    if not isinstance(candidate, type):
+    if not is_runtime_class(candidate):
         return False
-    return any(issubclass(candidate, base) for base in SETTINGS_BASES)
+    try:
+        return any(issubclass(candidate, base) for base in SETTINGS_BASES)
+    except TypeError:
+        return False
 
 
 __all__ = [

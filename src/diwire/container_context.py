@@ -25,6 +25,7 @@ from diwire.providers import (
 )
 from diwire.resolvers.protocol import ResolverProtocol
 from diwire.scope import BaseScope
+from diwire.type_checks import is_runtime_class
 
 T = TypeVar("T")
 F = TypeVar("F", bound=Callable[..., Any])
@@ -434,7 +435,7 @@ class ContainerContext:
             raise DIWireInvalidRegistrationError(msg)
 
         if concrete_type_value == "infer":
-            if isinstance(normalized_provides, type):
+            if is_runtime_class(normalized_provides):
                 return normalized_provides, normalized_provides
 
             msg = (
