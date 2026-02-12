@@ -3,9 +3,20 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from diwire.container import Container
+from diwire.lock_mode import LockMode
+
 BENCHMARK_ITERATIONS = 100_000
 BENCHMARK_WARMUP_ROUNDS = 3
 BENCHMARK_ROUNDS = 5
+
+
+def make_diwire_benchmark_container() -> Container:
+    return Container(
+        lock_mode=LockMode.NONE,
+        autoregister_concrete_types=False,
+        autoregister_dependencies=False,
+    )
 
 
 def run_benchmark(

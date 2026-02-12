@@ -5,11 +5,9 @@ from typing import Any
 import rodi
 from dishka import Provider
 
-from diwire.container import Container as DIWireContainer
-from diwire.lock_mode import LockMode
 from diwire.providers import Lifetime
 from tests.benchmarks.dishka_helpers import DishkaBenchmarkScope, make_dishka_benchmark_container
-from tests.benchmarks.helpers import run_benchmark
+from tests.benchmarks.helpers import make_diwire_benchmark_container, run_benchmark
 
 
 class _Dep0:
@@ -42,13 +40,14 @@ class _Root:
 
 
 def test_benchmark_diwire_resolve_deep_transient_chain(benchmark: Any) -> None:
-    container = DIWireContainer(lock_mode=LockMode.NONE)
+    container = make_diwire_benchmark_container()
     container.add_concrete(_Dep0, lifetime=Lifetime.TRANSIENT)
     container.add_concrete(_Dep1, lifetime=Lifetime.TRANSIENT)
     container.add_concrete(_Dep2, lifetime=Lifetime.TRANSIENT)
     container.add_concrete(_Dep3, lifetime=Lifetime.TRANSIENT)
     container.add_concrete(_Dep4, lifetime=Lifetime.TRANSIENT)
     container.add_concrete(_Root, lifetime=Lifetime.TRANSIENT)
+    container.compile()
     first = container.resolve(_Root)
     second = container.resolve(_Root)
     assert first is not second

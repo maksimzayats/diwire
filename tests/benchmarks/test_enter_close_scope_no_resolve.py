@@ -4,9 +4,8 @@ from typing import Any
 
 import rodi
 
-from diwire.container import Container as DIWireContainer
-from diwire.lock_mode import LockMode
 from tests.benchmarks.dishka_helpers import DishkaBenchmarkScope, make_dishka_benchmark_container
+from tests.benchmarks.helpers import make_diwire_benchmark_container
 
 _BENCHMARK_ITERATIONS = 100_000
 _BENCHMARK_WARMUP_ROUNDS = 3
@@ -14,8 +13,9 @@ _BENCHMARK_ROUNDS = 5
 
 
 def test_benchmark_diwire_enter_close_scope_no_resolve(benchmark: Any) -> None:
-    container = DIWireContainer(lock_mode=LockMode.NONE)
+    container = make_diwire_benchmark_container()
     container.add_instance(42, provides=int)
+    container.compile()
     assert container.resolve(int) == 42
     with container.enter_scope() as scope:
         assert scope.resolve(int) == 42

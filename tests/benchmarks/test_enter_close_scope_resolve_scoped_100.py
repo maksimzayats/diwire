@@ -5,12 +5,10 @@ from typing import Any
 import rodi
 from dishka import Provider
 
-from diwire.container import Container as DIWireContainer
-from diwire.lock_mode import LockMode
 from diwire.providers import Lifetime
 from diwire.scope import Scope
 from tests.benchmarks.dishka_helpers import DishkaBenchmarkScope, make_dishka_benchmark_container
-from tests.benchmarks.helpers import run_benchmark
+from tests.benchmarks.helpers import make_diwire_benchmark_container, run_benchmark
 
 
 class _ScopedService:
@@ -18,12 +16,13 @@ class _ScopedService:
 
 
 def test_benchmark_diwire_enter_close_scope_resolve_scoped_100(benchmark: Any) -> None:
-    container = DIWireContainer(lock_mode=LockMode.NONE)
+    container = make_diwire_benchmark_container()
     container.add_concrete(
         _ScopedService,
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
     )
+    container.compile()
     with container.enter_scope(Scope.REQUEST) as first_scope:
         first = first_scope.resolve(_ScopedService)
         second = first_scope.resolve(_ScopedService)

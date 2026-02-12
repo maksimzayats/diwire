@@ -5,12 +5,10 @@ from typing import Any
 import rodi
 from dishka import Provider
 
-from diwire.container import Container as DIWireContainer
-from diwire.lock_mode import LockMode
 from diwire.providers import Lifetime
 from diwire.scope import Scope
 from tests.benchmarks.dishka_helpers import DishkaBenchmarkScope, make_dishka_benchmark_container
-from tests.benchmarks.helpers import run_benchmark
+from tests.benchmarks.helpers import make_diwire_benchmark_container, run_benchmark
 
 
 class _SharedDependency:
@@ -28,7 +26,7 @@ class _RootScopedService:
 
 
 def test_benchmark_diwire_resolve_mixed_lifetimes(benchmark: Any) -> None:
-    container = DIWireContainer(lock_mode=LockMode.NONE)
+    container = make_diwire_benchmark_container()
     container.add_concrete(_SharedDependency, lifetime=Lifetime.SCOPED)
     container.add_concrete(_PerResolveDependency, lifetime=Lifetime.TRANSIENT)
     container.add_concrete(
@@ -36,6 +34,7 @@ def test_benchmark_diwire_resolve_mixed_lifetimes(benchmark: Any) -> None:
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,
     )
+    container.compile()
     with container.enter_scope(Scope.REQUEST) as first_scope:
         first = first_scope.resolve(_RootScopedService)
         second = first_scope.resolve(_RootScopedService)
