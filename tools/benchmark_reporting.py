@@ -8,7 +8,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final, cast
 
-BENCHMARK_LIBRARIES: Final[tuple[str, ...]] = ("diwire", "rodi", "dishka")
+BENCHMARK_LIBRARIES: Final[tuple[str, ...]] = ("diwire", "rodi", "dishka", "punq")
+REQUIRED_BENCHMARK_LIBRARIES: Final[tuple[str, ...]] = ("diwire", "rodi", "dishka")
+OPTIONAL_BENCHMARK_LIBRARIES: Final[tuple[str, ...]] = ("punq",)
 _BENCHMARK_NAME_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^test_benchmark_(?P<library>[a-z0-9]+)_",
 )
@@ -37,7 +39,7 @@ class BenchmarkReport:
     libraries: tuple[str, ...]
     scenarios: tuple[str, ...]
     files: dict[str, str]
-    ops: dict[str, dict[str, float]]
+    ops: dict[str, dict[str, float | None]]
     speedup_diwire_over_rodi: dict[str, float]
     speedup_diwire_over_dishka: dict[str, float]
 
@@ -54,7 +56,7 @@ class BenchmarkReport:
             "libraries": list(self.libraries),
             "scenarios": list(self.scenarios),
             "files": self.files,
-            "ops": self.ops,
+            "ops": _ops_to_json(ops_by_library=self.ops),
             "speedup_diwire_over_rodi": self.speedup_diwire_over_rodi,
             "speedup_diwire_over_dishka": self.speedup_diwire_over_dishka,
         }
@@ -76,25 +78,29 @@ def normalize_benchmark_report(
 ) -> BenchmarkReport:
     """Normalize raw pytest-benchmark payload into a stable matrix format."""
     benchmark_entries = _read_benchmark_entries(raw_payload)
-    files_by_scenario, ops_by_library = _collect_benchmark_data(benchmark_entries)
+    files_by_scenario, raw_ops_by_library = _collect_benchmark_data(benchmark_entries)
     scenarios = tuple(sorted(files_by_scenario))
     if not scenarios:
         msg = "No benchmark results found in raw payload."
         raise BenchmarkReportError(msg)
 
-    _validate_complete_matrix(ops_by_library=ops_by_library, scenarios=scenarios)
+    _validate_required_matrix(ops_by_library=raw_ops_by_library, scenarios=scenarios)
 
     speedup_over_rodi = _compute_speedup(
-        ops_by_library=ops_by_library,
+        ops_by_library=raw_ops_by_library,
         scenarios=scenarios,
         baseline_library="rodi",
     )
     speedup_over_dishka = _compute_speedup(
-        ops_by_library=ops_by_library,
+        ops_by_library=raw_ops_by_library,
         scenarios=scenarios,
         baseline_library="dishka",
     )
     metadata = _build_metadata(raw_payload=raw_payload, source_raw_file=source_raw_file)
+    ops_by_library = _build_optional_matrix(
+        raw_ops_by_library=raw_ops_by_library,
+        scenarios=scenarios,
+    )
 
     return BenchmarkReport(
         metadata=metadata,
@@ -117,17 +123,18 @@ def render_benchmark_markdown(report: BenchmarkReport) -> str:
         f"- Python: `{report.metadata.python_version}`",
         f"- Datetime (UTC): `{report.metadata.datetime_utc}`",
         "",
-        "| Scenario | diwire | rodi | dishka | speedup diwire/rodi | speedup diwire/dishka |",
-        "| --- | --- | --- | --- | --- | --- |",
+        "| Scenario | diwire | rodi | dishka | punq | speedup diwire/rodi | speedup diwire/dishka |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
     ]
     for scenario in report.scenarios:
         diwire_ops = _format_ops(report.ops["diwire"][scenario])
         rodi_ops = _format_ops(report.ops["rodi"][scenario])
         dishka_ops = _format_ops(report.ops["dishka"][scenario])
+        punq_ops = _format_ops(report.ops["punq"][scenario])
         speedup_over_rodi = f"{report.speedup_diwire_over_rodi[scenario]:.2f}x"
         speedup_over_dishka = f"{report.speedup_diwire_over_dishka[scenario]:.2f}x"
         lines.append(
-            f"| {scenario} | {diwire_ops} | {rodi_ops} | {dishka_ops} "
+            f"| {scenario} | {diwire_ops} | {rodi_ops} | {dishka_ops} | {punq_ops} "
             f"| {speedup_over_rodi} | {speedup_over_dishka} |",
         )
     return "\n".join(lines) + "\n"
@@ -280,16 +287,33 @@ def _store_ops(
     ops_by_library[library][scenario] = ops
 
 
-def _validate_complete_matrix(
+def _validate_required_matrix(
     *,
     ops_by_library: dict[str, dict[str, float]],
     scenarios: tuple[str, ...],
 ) -> None:
     for scenario in scenarios:
-        for library in BENCHMARK_LIBRARIES:
+        for library in REQUIRED_BENCHMARK_LIBRARIES:
             if scenario not in ops_by_library[library]:
                 msg = f"Missing benchmark entry for library '{library}' in scenario '{scenario}'."
                 raise BenchmarkReportError(msg)
+
+
+def _build_optional_matrix(
+    *,
+    raw_ops_by_library: dict[str, dict[str, float]],
+    scenarios: tuple[str, ...],
+) -> dict[str, dict[str, float | None]]:
+    normalized_ops_by_library: dict[str, dict[str, float | None]] = {}
+    for library in REQUIRED_BENCHMARK_LIBRARIES:
+        normalized_ops_by_library[library] = {
+            scenario: raw_ops_by_library[library][scenario] for scenario in scenarios
+        }
+    for library in OPTIONAL_BENCHMARK_LIBRARIES:
+        normalized_ops_by_library[library] = {
+            scenario: raw_ops_by_library[library].get(scenario) for scenario in scenarios
+        }
+    return normalized_ops_by_library
 
 
 def _compute_speedup(
@@ -393,8 +417,20 @@ def _read_float(container: dict[str, object], *, key: str) -> float:
     raise BenchmarkReportError(msg)
 
 
-def _format_ops(value: float) -> str:
+def _format_ops(value: float | None) -> str:
+    if value is None:
+        return "-"
     return f"{value:,.0f}"
+
+
+def _ops_to_json(
+    *,
+    ops_by_library: dict[str, dict[str, float | None]],
+) -> dict[str, dict[str, float | str]]:
+    return {
+        library: {scenario: "-" if ops is None else ops for scenario, ops in scenario_ops.items()}
+        for library, scenario_ops in ops_by_library.items()
+    }
 
 
 if __name__ == "__main__":  # pragma: no cover

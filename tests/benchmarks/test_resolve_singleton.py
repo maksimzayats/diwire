@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import punq
 import rodi
 from dishka import Provider
 
@@ -54,3 +55,16 @@ def test_benchmark_dishka_resolve_singleton(benchmark: Any) -> None:
         _ = container.get(_SingletonService)
 
     run_benchmark(benchmark, bench_dishka_singleton)
+
+
+def test_benchmark_punq_resolve_singleton(benchmark: Any) -> None:
+    container = punq.Container()
+    container.register(_SingletonService, scope=punq.Scope.singleton)
+    first = container.resolve(_SingletonService)
+    second = container.resolve(_SingletonService)
+    assert first is second
+
+    def bench_punq_singleton() -> None:
+        _ = container.resolve(_SingletonService)
+
+    run_benchmark(benchmark, bench_punq_singleton)

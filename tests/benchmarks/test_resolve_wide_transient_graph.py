@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import punq
 import rodi
 from dishka import Provider
 
@@ -116,3 +117,26 @@ def test_benchmark_dishka_resolve_wide_transient_graph(benchmark: Any) -> None:
         _ = container.get(_Root)
 
     run_benchmark(benchmark, bench_dishka_wide_graph, iterations=25_000)
+
+
+def test_benchmark_punq_resolve_wide_transient_graph(benchmark: Any) -> None:
+    container = punq.Container()
+    container.register(_DepA)
+    container.register(_DepB)
+    container.register(_DepC)
+    container.register(_DepD)
+    container.register(_DepE)
+    container.register(_Root)
+    first = container.resolve(_Root)
+    second = container.resolve(_Root)
+    assert first is not second
+    assert first.dep_a is not second.dep_a
+    assert first.dep_b is not second.dep_b
+    assert first.dep_c is not second.dep_c
+    assert first.dep_d is not second.dep_d
+    assert first.dep_e is not second.dep_e
+
+    def bench_punq_wide_graph() -> None:
+        _ = container.resolve(_Root)
+
+    run_benchmark(benchmark, bench_punq_wide_graph, iterations=25_000)
