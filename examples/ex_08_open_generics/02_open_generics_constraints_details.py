@@ -9,7 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar, cast
 
-from diwire import Container, DIWireInvalidGenericTypeArgumentError
+from diwire import Container
+from diwire.exceptions import DIWireInvalidGenericTypeArgumentError
 
 Allowed = TypeVar("Allowed", int, str)
 

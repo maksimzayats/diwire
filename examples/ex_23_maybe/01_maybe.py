@@ -11,7 +11,8 @@ This topic demonstrates:
 
 from __future__ import annotations
 
-from diwire import Container, DIWireDependencyNotRegisteredError, Maybe
+from diwire import Container, Maybe
+from diwire.exceptions import DIWireDependencyNotRegisteredError
 
 
 class ApiClient:

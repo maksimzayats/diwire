@@ -11,7 +11,8 @@ This topic demonstrates:
 
 from __future__ import annotations
 
-from diwire import Container, DIWireDependencyNotRegisteredError, FromContext, Lifetime, Scope
+from diwire import Container, FromContext, Lifetime, Scope
+from diwire.exceptions import DIWireDependencyNotRegisteredError
 
 
 class RequestValue:

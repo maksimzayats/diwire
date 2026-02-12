@@ -12,17 +12,6 @@ from diwire._internal.markers import (
 )
 from diwire._internal.providers import Lifetime
 from diwire._internal.scope import BaseScope, Scope
-from diwire.exceptions import (
-    DIWireAsyncDependencyInSyncContextError,
-    DIWireContainerNotSetError,
-    DIWireDependencyNotRegisteredError,
-    DIWireError,
-    DIWireInvalidGenericTypeArgumentError,
-    DIWireInvalidProviderSpecError,
-    DIWireInvalidRegistrationError,
-    DIWireProviderDependencyInferenceError,
-    DIWireScopeMismatchError,
-)
 
 __all__ = [
     "All",
@@ -31,15 +20,6 @@ __all__ = [
     "Component",
     "Container",
     "ContainerContext",
-    "DIWireAsyncDependencyInSyncContextError",
-    "DIWireContainerNotSetError",
-    "DIWireDependencyNotRegisteredError",
-    "DIWireError",
-    "DIWireInvalidGenericTypeArgumentError",
-    "DIWireInvalidProviderSpecError",
-    "DIWireInvalidRegistrationError",
-    "DIWireProviderDependencyInferenceError",
-    "DIWireScopeMismatchError",
     "FromContext",
     "Injected",
     "Lifetime",

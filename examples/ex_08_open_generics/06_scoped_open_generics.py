@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Generic, TypeVar
 
-from diwire import Container, DIWireScopeMismatchError, Lifetime, Scope
+from diwire import Container, Lifetime, Scope
+from diwire.exceptions import DIWireScopeMismatchError
 
 T = TypeVar("T")
 

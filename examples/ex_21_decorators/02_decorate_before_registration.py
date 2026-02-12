@@ -9,7 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated
 
-from diwire import Component, Container, DIWireInvalidRegistrationError
+from diwire import Component, Container
+from diwire.exceptions import DIWireInvalidRegistrationError
 
 
 class Repo:

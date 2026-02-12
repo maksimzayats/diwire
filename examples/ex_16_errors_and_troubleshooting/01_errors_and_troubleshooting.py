@@ -9,15 +9,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar, cast
 
-from diwire import (
-    Container,
+from diwire import Container, Scope
+from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
     DIWireDependencyNotRegisteredError,
     DIWireInvalidGenericTypeArgumentError,
     DIWireInvalidRegistrationError,
     DIWireProviderDependencyInferenceError,
     DIWireScopeMismatchError,
-    Scope,
 )
 
 

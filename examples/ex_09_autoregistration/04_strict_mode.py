@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, DIWireDependencyNotRegisteredError
+from diwire import Container
+from diwire.exceptions import DIWireDependencyNotRegisteredError
 
 
 class Dependency:

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from diwire import Container, DIWireInvalidRegistrationError
+from diwire import Container
+from diwire.exceptions import DIWireInvalidRegistrationError
 
 
 def main() -> None:
