@@ -1,4 +1,4 @@
-.PHONY: format lint test docs benchmark benchmark-json benchmark-report
+.PHONY: format lint test docs examples-readme benchmark benchmark-json benchmark-report
 
 format:
 	uv run ruff format .
@@ -20,6 +20,9 @@ test-all-pythons:
 docs:
 	rm -rf docs/_build
 	uv run sphinx-build -b html docs docs/_build/html
+
+examples-readme:
+	uv run python -m tools.generate_examples_readme
 
 # === Benchmark Commands ===
 
