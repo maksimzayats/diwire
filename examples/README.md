@@ -3923,8 +3923,8 @@ def build_repo(model: type[T]) -> Repo[T]:
 
 def main() -> None:
     container = Container(autoregister_concrete_types=False)
-    container.add_factory(build_repo, provides=Repo[T])
-    container.decorate(provides=Repo[T], decorator=TimedRepo)
+    container.add_factory(build_repo, provides=Repo)
+    container.decorate(provides=Repo, decorator=TimedRepo)
 
     int_repo = container.resolve(Repo[int])
     str_repo = container.resolve(Repo[str])
