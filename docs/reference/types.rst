@@ -30,6 +30,11 @@ Component
 
 .. autoclass:: diwire.Component
 
+All
+---
+
+.. autoclass:: diwire.All
+
 FromContext
 -----------
 

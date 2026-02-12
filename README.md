@@ -13,6 +13,30 @@ scopes + deterministic cleanup, async resolution, open generics, fast steady-sta
 resolvers, and free-threaded Python (no-GIL) — all with zero runtime dependencies.
 The default registration lifetime is ``Lifetime.SCOPED`` (root-scoped caching by default).
 
+## Why diwire
+
+- **Zero runtime dependencies**: easy to adopt anywhere. ([Why diwire](https://docs.diwire.dev/why-diwire/))
+- **Compiled resolver**: ``compile()`` generates a resolver specialized to your registrations. ([Compilation](https://docs.diwire.dev/core/compilation/))
+- **Scopes + deterministic cleanup**: generator/async-generator providers clean up on scope exit. ([Scopes](https://docs.diwire.dev/core/scopes/))
+- **Async resolution**: ``aresolve()`` mirrors ``resolve()`` and async providers are first-class. ([Async](https://docs.diwire.dev/core/async/))
+- **Open generics**: register once, resolve for many type parameters. ([Open generics](https://docs.diwire.dev/core/open-generics/))
+- **Function injection**: ``Injected[T]`` and ``FromContext[T]`` for ergonomic handlers. ([Function injection](https://docs.diwire.dev/core/function-injection/))
+- **Named components + collect-all**: ``Component(\"name\")`` and ``All[T]``. ([Components](https://docs.diwire.dev/core/components/))
+- **Concurrency + free-threaded builds**: configurable locking via ``LockMode``. ([Concurrency](https://docs.diwire.dev/howto/advanced/concurrency/))
+
+## Performance (benchmarked)
+
+Benchmarks + methodology live in the docs: [Performance](https://docs.diwire.dev/howto/advanced/performance/).
+
+In this benchmark suite on CPython ``3.12.5`` (Apple M1 Pro, strict mode):
+
+- Speedup over ``rodi`` ranges from **1.22×** to **2.19×**.
+- Speedup over ``dishka`` ranges from **1.81×** to **7.76×**.
+- Resolve-only comparisons (includes ``punq`` in non-scope scenarios): speedup ranges from **3.31×** to **268.84×**.
+
+Results vary by environment, Python version, and hardware. Re-run ``make benchmark-report`` and
+``make benchmark-report-resolve`` on your target runtime before drawing final conclusions for production workloads.
+
 ## Installation
 
 ```bash
@@ -58,6 +82,17 @@ print(service.repo.db.host)  # => localhost
 Use explicit registrations when you need configuration objects, interfaces/protocols, cleanup, or multiple
 implementations.
 
+**Strict mode (recommended for production):**
+
+```python
+from diwire import Container
+
+container = Container(
+    autoregister_concrete_types=False,
+    autoregister_dependencies=False,
+)
+```
+
 ```python
 from typing import Protocol
 
@@ -74,7 +109,9 @@ class SystemClock:
 
 
 container = Container(autoregister_concrete_types=False)
-container.add_concrete(SystemClock, provides=Clock,
+container.add_concrete(
+    SystemClock,
+    provides=Clock,
     lifetime=Lifetime.SCOPED,
 )
 
@@ -125,7 +162,9 @@ def session_factory() -> Generator[Session, None, None]:
 
 
 container = Container(autoregister_concrete_types=False)
-container.add_generator(session_factory, provides=Session,
+container.add_generator(
+    session_factory,
+    provides=Session,
     scope=Scope.REQUEST,
     lifetime=Lifetime.SCOPED,
 )
@@ -169,7 +208,7 @@ For registration ergonomics, you can also pass `component="name"` to `add_*` met
 ```python
 from typing import Annotated, TypeAlias
 
-from diwire import Component, Container
+from diwire import All, Component, Container
 
 
 class Cache:
@@ -187,6 +226,7 @@ container.add_instance(Cache(label="memory"), provides=Cache, component="fallbac
 
 print(container.resolve(PrimaryCache).label)  # => redis
 print(container.resolve(FallbackCache).label)  # => memory
+print([cache.label for cache in container.resolve(All[Cache])])  # => ['redis', 'memory']
 ```
 
 Resolution/injection keys are still `Annotated[..., Component(...)]` at runtime.
@@ -219,9 +259,12 @@ container_context.set_current(container)
 print(handler())  # => ok
 ```
 
-## Performance
+## Stability
 
-Benchmarks + methodology live in the docs: [Performance](https://docs.diwire.dev/howto/advanced/performance/).
+diwire targets a stable, small public API.
+
+- Backward-incompatible changes only happen in major releases.
+- Deprecations are announced first and kept for at least one minor release (when practical).
 
 ## Docs
 

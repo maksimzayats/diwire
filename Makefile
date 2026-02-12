@@ -1,4 +1,4 @@
-.PHONY: format lint test docs examples-readme benchmark benchmark-json benchmark-report
+.PHONY: format lint test docs examples-readme benchmark benchmark-json benchmark-report benchmark-report-all benchmark-json-resolve benchmark-report-resolve
 
 format:
 	uv run ruff format .
@@ -47,4 +47,30 @@ benchmark-report: benchmark-json
 		--input benchmark-results/raw-benchmark.json \
 		--markdown benchmark-results/benchmark-table.md \
 		--json benchmark-results/benchmark-table.json \
-		--comment benchmark-results/pr-comment.md
+		--comment benchmark-results/pr-comment.md \
+		--libraries diwire,rodi,dishka
+
+benchmark-report-all: benchmark-json
+	uv run python -m tools.benchmark_reporting \
+		--input benchmark-results/raw-benchmark.json \
+		--markdown benchmark-results/benchmark-table-all.md \
+		--json benchmark-results/benchmark-table-all.json \
+		--comment benchmark-results/pr-comment-all.md \
+		--libraries diwire,rodi,dishka,punq
+
+benchmark-json-resolve:
+	mkdir -p benchmark-results
+	uv run pytest \
+		tests/benchmarks/test_resolve_transient.py \
+		tests/benchmarks/test_resolve_singleton.py \
+		tests/benchmarks/test_resolve_deep_transient_chain.py \
+		tests/benchmarks/test_resolve_wide_transient_graph.py \
+		--benchmark-only -q --benchmark-json=benchmark-results/raw-benchmark-resolve.json
+
+benchmark-report-resolve: benchmark-json-resolve
+	uv run python -m tools.benchmark_reporting \
+		--input benchmark-results/raw-benchmark-resolve.json \
+		--markdown benchmark-results/benchmark-table-resolve.md \
+		--json benchmark-results/benchmark-table-resolve.json \
+		--comment benchmark-results/pr-comment-resolve.md \
+		--libraries diwire,rodi,dishka,punq

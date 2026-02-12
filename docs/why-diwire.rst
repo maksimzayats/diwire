@@ -17,6 +17,14 @@ The goals
 - **Zero runtime dependencies**: easy to adopt in any environment.
 - **Fast steady-state**: compiled resolvers reduce overhead on hot paths.
 
+Stability
+---------
+
+diwire targets a stable, small public API.
+
+- Backward-incompatible changes only happen in major releases.
+- Deprecations are announced first and kept for at least one minor release (when practical).
+
 What “type-driven” means in practice
 ------------------------------------
 

@@ -10,12 +10,17 @@ ignore = [
     "D104", # Missing docstring in public package
     "D105", # Missing docstring in magic method
     "D107", # Missing docstring in __init__
+    "D203", # Conflicts with D211 (no blank line before class)
+    "D213", # Conflicts with D212 (multi-line summary at first line)
 
     # Type annotations (flake8-annotations)
     "ANN401", # Dynamically typed expressions (Any) disallowed
 
     # Line length (pycodestyle)
     "E501", # Line too long (handled by formatter)
+
+    # Formatter conflicts
+    "COM812", # Trailing comma conflicts with formatter
 
     # Type checking imports (flake8-type-checking)
     "TC001", # Move first-party import into TYPE_CHECKING block
