@@ -26,7 +26,12 @@ class ConcreteTypeAutoregistrationPolicy:
     )
 
     def is_eligible_concrete(self, candidate: object) -> TypeGuard[type[Any]]:
-        """Return true when a candidate can be auto-registered as a concrete provider."""
+        """Return true when a candidate can be auto-registered as a concrete provider.
+
+        Args:
+            candidate: Value being checked for eligibility or runtime type constraints.
+
+        """
         if not is_runtime_class(candidate):
             return False
         if candidate.__module__ == "builtins":

@@ -221,7 +221,12 @@ class _OpenGenericRegistry:
         )
 
     def restore(self, snapshot: Snapshot) -> None:
-        """Restore registry state from a previous snapshot."""
+        """Restore registry state from a previous snapshot.
+
+        Args:
+            snapshot: Previously captured snapshot state to restore into the registry.
+
+        """
         self._specs_by_key = dict(snapshot.specs_by_key)
         self._registration_counter = snapshot.registration_counter
 

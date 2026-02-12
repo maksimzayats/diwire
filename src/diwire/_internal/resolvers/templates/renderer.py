@@ -107,7 +107,13 @@ class ResolversTemplateRenderer:
         root_scope: BaseScope,
         registrations: ProvidersRegistrations,
     ) -> str:
-        """Render generated resolver code for the current registrations."""
+        """Render generated resolver code for the current registrations.
+
+        Args:
+            root_scope: Root scope used to initialize the resolver.
+            registrations: Provider registrations used to build resolver instances or generated code.
+
+        """
         # Design contract mirrored from planner:
         # emit class-based direct-call runtime with method-replacement caches and no reflective hot path.
         _ = RenderContext(

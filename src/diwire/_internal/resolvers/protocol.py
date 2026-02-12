@@ -23,7 +23,12 @@ class ResolverProtocol(Protocol):
     def resolve(self, dependency: Any) -> Any: ...
 
     def resolve(self, dependency: Any) -> Any:
-        """Resolve the given dependency and return its instance."""
+        """Resolve the given dependency and return its instance.
+
+        Args:
+            dependency: Dependency key to resolve.
+
+        """
 
     @overload
     async def aresolve(self, dependency: type[T]) -> T: ...
@@ -32,7 +37,12 @@ class ResolverProtocol(Protocol):
     async def aresolve(self, dependency: Any) -> Any: ...
 
     async def aresolve(self, dependency: Any) -> Any:
-        """Resolve the given dependency asynchronously and return its instance."""
+        """Resolve the given dependency asynchronously and return its instance.
+
+        Args:
+            dependency: Dependency key to resolve.
+
+        """
 
     def enter_scope(
         self,
@@ -40,7 +50,13 @@ class ResolverProtocol(Protocol):
         *,
         context: Mapping[Any, Any] | None = None,
     ) -> ResolverProtocol:
-        """Enter a new scope and return a new resolver for that scope."""
+        """Enter a new scope and return a new resolver for that scope.
+
+        Args:
+            scope: Scope value used to filter registrations or open nested resolution scope.
+            context: Optional mapping of context values to bind in the entered scope.
+
+        """
 
     def __enter__(self) -> Self:
         """Enter the resolver context."""
@@ -78,7 +94,14 @@ class ResolverProtocol(Protocol):
         exc_value: BaseException | None = None,
         traceback: TracebackType | None = None,
     ) -> None:
-        """Close the resolver by forwarding to ``__exit__`` with the given exception context."""
+        """Close the resolver by forwarding to ``__exit__`` with the given exception context.
+
+        Args:
+            exc_type: Exception type forwarded to close hooks.
+            exc_value: Exception instance forwarded to close hooks.
+            traceback: Traceback forwarded to close hooks.
+
+        """
 
     async def aclose(
         self,
@@ -86,7 +109,14 @@ class ResolverProtocol(Protocol):
         exc_value: BaseException | None = None,
         traceback: TracebackType | None = None,
     ) -> None:
-        """Asynchronously close the resolver by forwarding to ``__aexit__``."""
+        """Asynchronously close the resolver by forwarding to ``__aexit__``.
+
+        Args:
+            exc_type: Exception type forwarded to close hooks.
+            exc_value: Exception instance forwarded to close hooks.
+            traceback: Traceback forwarded to close hooks.
+
+        """
 
 
 class BuildRootResolverFunctionProtocol(Protocol):

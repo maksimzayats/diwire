@@ -62,7 +62,12 @@ class Environment:
             raise ValueError(msg)
 
     def from_string(self, text: str) -> Template:
-        """Compile a template string into a renderable template object."""
+        """Compile a template string into a renderable template object.
+
+        Args:
+            text: Template source text to compile.
+
+        """
         parser = _Parser(tokens=_tokenize(text))
         return Template(nodes=parser.parse())
 
@@ -74,7 +79,12 @@ class Template:
         self._nodes = nodes
 
     def render(self, **context: object) -> str:
-        """Render template with keyword-only context variables."""
+        """Render template with keyword-only context variables.
+
+        Args:
+            context: Optional mapping of context values to bind in the entered scope.
+
+        """
         return _render_nodes(nodes=self._nodes, context=context)
 
 

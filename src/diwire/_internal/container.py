@@ -992,6 +992,13 @@ class Container:
         Decoration rules are persistent for the container lifetime. If a binding
         exists now, decoration is applied immediately. Otherwise the rule is
         stored and applied automatically when the key is registered later.
+
+        Args:
+            provides: Dependency key whose binding should be decorated.
+            component: Optional component marker used to qualify the dependency key.
+            decorator: Factory-style callable that receives the inner value and returns a decorated value.
+            inner_parameter: Optional decorator parameter name that should receive the inner value.
+
         """
         if provides is None:
             msg = "decorate() parameter 'provides' must not be None."

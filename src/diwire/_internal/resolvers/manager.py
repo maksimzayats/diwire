@@ -20,6 +20,11 @@ class ResolversManager:
         """Get the root resolver for the given registrations.
 
         Generates the resolver code dynamically based on the provided registrations and root scope.
+
+        Args:
+            root_scope: Root scope used to initialize the resolver.
+            registrations: Provider registrations used to build resolver instances or generated code.
+
         """
         code = self._template_renderer.get_providers_code(
             root_scope=root_scope,

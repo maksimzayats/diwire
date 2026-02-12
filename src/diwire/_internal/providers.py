@@ -183,13 +183,23 @@ class ProvidersRegistrations:
         )
 
     def restore(self, snapshot: Snapshot) -> None:
-        """Restore registrations from a previous snapshot."""
+        """Restore registrations from a previous snapshot.
+
+        Args:
+            snapshot: Previously captured snapshot state to restore into the registry.
+
+        """
         self._registrations_by_type = dict(snapshot.registrations_by_type)
         self._registrations_by_slot = dict(snapshot.registrations_by_slot)
         self._refresh_needs_cleanup_flags()
 
     def add(self, spec: ProviderSpec) -> None:
-        """Add a new provider specification to the registrations."""
+        """Add a new provider specification to the registrations.
+
+        Args:
+            spec: Provider specification to register.
+
+        """
         if previous_spec := self._registrations_by_type.get(spec.provides):
             self._registrations_by_slot.pop(previous_spec.slot, None)
         self._registrations_by_type[spec.provides] = spec
@@ -197,19 +207,39 @@ class ProvidersRegistrations:
         self._refresh_needs_cleanup_flags()
 
     def get_by_type(self, dep_type: UserDependency) -> ProviderSpec:
-        """Get a provider specification by the type of dependency it provides."""
+        """Get a provider specification by the type of dependency it provides.
+
+        Args:
+            dep_type: Dependency type key to look up.
+
+        """
         return self._registrations_by_type[dep_type]
 
     def find_by_type(self, dep_type: UserDependency) -> ProviderSpec | None:
-        """Get a provider specification by dependency type, if it exists."""
+        """Get a provider specification by dependency type, if it exists.
+
+        Args:
+            dep_type: Dependency type key to look up.
+
+        """
         return self._registrations_by_type.get(dep_type)
 
     def get_by_slot(self, slot: int) -> ProviderSpec:
-        """Get a provider specification by its unique slot number."""
+        """Get a provider specification by its unique slot number.
+
+        Args:
+            slot: Provider slot identifier to look up.
+
+        """
         return self._registrations_by_slot[slot]
 
     def get_by_scope(self, scope: BaseScope | None) -> list[ProviderSpec]:
-        """Get all provider specifications registered for a specific scope."""
+        """Get all provider specifications registered for a specific scope.
+
+        Args:
+            scope: Scope value used to filter registrations or open nested resolution scope.
+
+        """
         return [spec for spec in self._registrations_by_type.values() if spec.scope == scope]
 
     def values(self) -> list[ProviderSpec]:
@@ -249,7 +279,12 @@ class ProviderDependenciesExtractor:
         self,
         concrete_type: ConcreteTypeProvider[Any],
     ) -> list[ProviderDependency]:
-        """Extract dependencies from a concrete type-based provider."""
+        """Extract dependencies from a concrete type-based provider.
+
+        Args:
+            concrete_type: Concrete class provider to inspect or validate.
+
+        """
         return self._extract_dependencies(
             provider=concrete_type,
             provider_name=concrete_type.__qualname__,
@@ -260,7 +295,12 @@ class ProviderDependenciesExtractor:
         self,
         factory: FactoryProvider[Any],
     ) -> list[ProviderDependency]:
-        """Extract dependencies from a factory-based provider."""
+        """Extract dependencies from a factory-based provider.
+
+        Args:
+            factory: Factory provider callable to inspect or validate.
+
+        """
         return self._extract_dependencies(
             provider=factory,
             provider_name=self._provider_name(factory),
@@ -271,7 +311,12 @@ class ProviderDependenciesExtractor:
         self,
         generator: GeneratorProvider[Any],
     ) -> list[ProviderDependency]:
-        """Extract dependencies from a generator-based provider."""
+        """Extract dependencies from a generator-based provider.
+
+        Args:
+            generator: Generator provider callable to inspect or validate.
+
+        """
         return self._extract_dependencies(
             provider=generator,
             provider_name=self._provider_name(generator),
@@ -282,7 +327,12 @@ class ProviderDependenciesExtractor:
         self,
         context_manager: ContextManagerProvider[Any],
     ) -> list[ProviderDependency]:
-        """Extract dependencies from a context manager-based provider."""
+        """Extract dependencies from a context manager-based provider.
+
+        Args:
+            context_manager: Context manager provider callable to inspect or validate.
+
+        """
         return self._extract_dependencies(
             provider=context_manager,
             provider_name=self._provider_name(context_manager),
@@ -294,7 +344,13 @@ class ProviderDependenciesExtractor:
         concrete_type: ConcreteTypeProvider[Any],
         dependencies: list[ProviderDependency],
     ) -> list[ProviderDependency]:
-        """Validate explicit dependencies for a concrete type-based provider."""
+        """Validate explicit dependencies for a concrete type-based provider.
+
+        Args:
+            concrete_type: Concrete class provider to inspect or validate.
+            dependencies: Explicit dependency declarations to validate or inspect for async requirements.
+
+        """
         return self._validate_explicit_dependencies(
             provider=concrete_type,
             provider_name=concrete_type.__qualname__,
@@ -307,7 +363,13 @@ class ProviderDependenciesExtractor:
         factory: FactoryProvider[Any],
         dependencies: list[ProviderDependency],
     ) -> list[ProviderDependency]:
-        """Validate explicit dependencies for a factory-based provider."""
+        """Validate explicit dependencies for a factory-based provider.
+
+        Args:
+            factory: Factory provider callable to inspect or validate.
+            dependencies: Explicit dependency declarations to validate or inspect for async requirements.
+
+        """
         return self._validate_explicit_dependencies(
             provider=factory,
             provider_name=self._provider_name(factory),
@@ -320,7 +382,13 @@ class ProviderDependenciesExtractor:
         generator: GeneratorProvider[Any],
         dependencies: list[ProviderDependency],
     ) -> list[ProviderDependency]:
-        """Validate explicit dependencies for a generator-based provider."""
+        """Validate explicit dependencies for a generator-based provider.
+
+        Args:
+            generator: Generator provider callable to inspect or validate.
+            dependencies: Explicit dependency declarations to validate or inspect for async requirements.
+
+        """
         return self._validate_explicit_dependencies(
             provider=generator,
             provider_name=self._provider_name(generator),
@@ -333,7 +401,13 @@ class ProviderDependenciesExtractor:
         context_manager: ContextManagerProvider[Any],
         dependencies: list[ProviderDependency],
     ) -> list[ProviderDependency]:
-        """Validate explicit dependencies for a context manager-based provider."""
+        """Validate explicit dependencies for a context manager-based provider.
+
+        Args:
+            context_manager: Context manager provider callable to inspect or validate.
+            dependencies: Explicit dependency declarations to validate or inspect for async requirements.
+
+        """
         return self._validate_explicit_dependencies(
             provider=context_manager,
             provider_name=self._provider_name(context_manager),
@@ -551,7 +625,12 @@ class ProviderReturnTypeExtractor:
         self,
         factory: FactoryProvider[Any],
     ) -> bool:
-        """Check whether a factory provider itself is asynchronous."""
+        """Check whether a factory provider itself is asynchronous.
+
+        Args:
+            factory: Factory provider callable to inspect or validate.
+
+        """
         return inspect.iscoroutinefunction(factory) or self.return_annotation_matches_origins(
             provider=factory,
             expected_origins=(Awaitable, Coroutine),
@@ -561,7 +640,12 @@ class ProviderReturnTypeExtractor:
         self,
         generator: GeneratorProvider[Any],
     ) -> bool:
-        """Check whether a generator provider itself is asynchronous."""
+        """Check whether a generator provider itself is asynchronous.
+
+        Args:
+            generator: Generator provider callable to inspect or validate.
+
+        """
         return inspect.isasyncgenfunction(generator) or self.return_annotation_matches_origins(
             provider=generator,
             expected_origins=(AsyncGenerator,),
@@ -571,7 +655,12 @@ class ProviderReturnTypeExtractor:
         self,
         context_manager: ContextManagerProvider[Any],
     ) -> bool:
-        """Check whether a context manager provider itself is asynchronous."""
+        """Check whether a context manager provider itself is asynchronous.
+
+        Args:
+            context_manager: Context manager provider callable to inspect or validate.
+
+        """
         unwrapped_context_manager = inspect.unwrap(context_manager)
         if inspect.isasyncgenfunction(unwrapped_context_manager):
             return True
@@ -600,7 +689,12 @@ class ProviderReturnTypeExtractor:
         self,
         dependencies: list[ProviderDependency],
     ) -> bool:
-        """Check whether provider dependencies require asynchronous resolution."""
+        """Check whether provider dependencies require asynchronous resolution.
+
+        Args:
+            dependencies: Explicit dependency declarations to validate or inspect for async requirements.
+
+        """
         return any(
             self.annotation_matches_origins(
                 annotation=dependency.provides,
@@ -613,7 +707,12 @@ class ProviderReturnTypeExtractor:
         self,
         factory: FactoryProvider[Any],
     ) -> Any:
-        """Extract a return type from a factory-based provider."""
+        """Extract a return type from a factory-based provider.
+
+        Args:
+            factory: Factory provider callable to inspect or validate.
+
+        """
         return_annotation, annotation_error = self._resolved_return_annotation(factory)
         provider_name = self._provider_name(factory)
         if return_annotation is _MISSING_ANNOTATION:
@@ -638,7 +737,12 @@ class ProviderReturnTypeExtractor:
         self,
         generator: GeneratorProvider[Any],
     ) -> Any:
-        """Extract a return type from a generator-based provider."""
+        """Extract a return type from a generator-based provider.
+
+        Args:
+            generator: Generator provider callable to inspect or validate.
+
+        """
         return_annotation, annotation_error = self._resolved_return_annotation(generator)
         provider_name = self._provider_name(generator)
         if return_annotation is _MISSING_ANNOTATION:
@@ -666,7 +770,12 @@ class ProviderReturnTypeExtractor:
         self,
         context_manager: ContextManagerProvider[Any],
     ) -> Any:
-        """Extract a return type from a context manager-based provider."""
+        """Extract a return type from a context manager-based provider.
+
+        Args:
+            context_manager: Context manager provider callable to inspect or validate.
+
+        """
         return_annotation, annotation_error = self._resolved_return_annotation(context_manager)
         provider_name = self._provider_name(context_manager)
         if return_annotation is not _MISSING_ANNOTATION:
@@ -709,7 +818,13 @@ class ProviderReturnTypeExtractor:
         provider: Callable[..., Any],
         expected_origins: tuple[type[Any], ...],
     ) -> bool:
-        """Check whether provider return annotation origin matches one of expected origins."""
+        """Check whether provider return annotation origin matches one of expected origins.
+
+        Args:
+            provider: Provider callable or type whose return annotation is being checked.
+            expected_origins: Allowed annotation origins for a successful match check.
+
+        """
         return_annotation, _annotation_error = self._resolved_return_annotation(provider)
         if return_annotation is _MISSING_ANNOTATION:
             return False
@@ -724,7 +839,13 @@ class ProviderReturnTypeExtractor:
         annotation: Any,
         expected_origins: tuple[type[Any], ...],
     ) -> bool:
-        """Check whether annotation origin matches one of expected origins."""
+        """Check whether annotation origin matches one of expected origins.
+
+        Args:
+            annotation: Annotation value to inspect or normalize.
+            expected_origins: Allowed annotation origins for a successful match check.
+
+        """
         annotation = self.unwrap_annotated(annotation)
         origin = get_origin(annotation)
         if origin in expected_origins:
@@ -735,7 +856,12 @@ class ProviderReturnTypeExtractor:
         self,
         annotation: Any,
     ) -> Any:
-        """Recursively unwrap Annotated[T, ...] into T."""
+        """Recursively unwrap Annotated[T, ...] into T.
+
+        Args:
+            annotation: Annotation value to inspect or normalize.
+
+        """
         if get_origin(annotation) is not Annotated:
             return annotation
         annotation_args = get_args(annotation)

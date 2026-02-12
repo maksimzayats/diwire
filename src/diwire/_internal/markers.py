@@ -232,7 +232,12 @@ else:
 
 
 def is_maybe_annotation(annotation: Any) -> bool:
-    """Return True when annotation is Annotated[..., MaybeMarker()]."""
+    """Return True when annotation is Annotated[..., MaybeMarker()].
+
+    Args:
+        annotation: Annotation value to inspect or normalize.
+
+    """
     if get_origin(annotation) is not Annotated:
         return False
     annotation_args = get_args(annotation)
@@ -243,7 +248,12 @@ def is_maybe_annotation(annotation: Any) -> bool:
 
 
 def strip_maybe_annotation(annotation: Any) -> Any:
-    """Strip Maybe marker while preserving non-maybe Annotated metadata."""
+    """Strip Maybe marker while preserving non-maybe Annotated metadata.
+
+    Args:
+        annotation: Annotation value to inspect or normalize.
+
+    """
     if not is_maybe_annotation(annotation):
         return annotation
 
@@ -257,7 +267,12 @@ def strip_maybe_annotation(annotation: Any) -> Any:
 
 
 def is_from_context_annotation(annotation: Any) -> bool:
-    """Return True when annotation is Annotated[..., FromContextMarker()]."""
+    """Return True when annotation is Annotated[..., FromContextMarker()].
+
+    Args:
+        annotation: Annotation value to inspect or normalize.
+
+    """
     if get_origin(annotation) is not Annotated:
         return False
     annotation_args = get_args(annotation)
@@ -268,7 +283,12 @@ def is_from_context_annotation(annotation: Any) -> bool:
 
 
 def strip_from_context_annotation(annotation: Any) -> Any:
-    """Strip FromContext marker while preserving non-context Annotated metadata."""
+    """Strip FromContext marker while preserving non-context Annotated metadata.
+
+    Args:
+        annotation: Annotation value to inspect or normalize.
+
+    """
     if not is_from_context_annotation(annotation):
         return annotation
 
@@ -282,17 +302,32 @@ def strip_from_context_annotation(annotation: Any) -> Any:
 
 
 def is_provider_annotation(annotation: Any) -> bool:
-    """Return True when annotation is Annotated[..., ProviderMarker(...)]."""
+    """Return True when annotation is Annotated[..., ProviderMarker(...)].
+
+    Args:
+        annotation: Annotation value to inspect or normalize.
+
+    """
     return _extract_provider_marker(annotation) is not None
 
 
 def is_all_annotation(annotation: Any) -> bool:
-    """Return True when annotation is Annotated[..., AllMarker(...)]."""
+    """Return True when annotation is Annotated[..., AllMarker(...)].
+
+    Args:
+        annotation: Annotation value to inspect or normalize.
+
+    """
     return _extract_all_marker(annotation) is not None
 
 
 def strip_provider_annotation(annotation: Any) -> Any:
-    """Return inner dependency key for Provider/AsyncProvider annotations."""
+    """Return inner dependency key for Provider/AsyncProvider annotations.
+
+    Args:
+        annotation: Annotation value to inspect or normalize.
+
+    """
     marker = _extract_provider_marker(annotation)
     if marker is None:
         return annotation
@@ -300,7 +335,12 @@ def strip_provider_annotation(annotation: Any) -> Any:
 
 
 def strip_all_annotation(annotation: Any) -> Any:
-    """Return inner dependency key for All[...] annotations."""
+    """Return inner dependency key for All[...] annotations.
+
+    Args:
+        annotation: Annotation value to inspect or normalize.
+
+    """
     marker = _extract_all_marker(annotation)
     if marker is None:
         return annotation
@@ -308,7 +348,12 @@ def strip_all_annotation(annotation: Any) -> Any:
 
 
 def is_async_provider_annotation(annotation: Any) -> bool:
-    """Return True when annotation is AsyncProvider[...] marker."""
+    """Return True when annotation is AsyncProvider[...] marker.
+
+    Args:
+        annotation: Annotation value to inspect or normalize.
+
+    """
     marker = _extract_provider_marker(annotation)
     if marker is None:
         return False
@@ -316,7 +361,12 @@ def is_async_provider_annotation(annotation: Any) -> bool:
 
 
 def component_base_key(annotation: Any) -> Any | None:
-    """Return base dependency key for ``Annotated[Base, Component(...)]`` registrations."""
+    """Return base dependency key for ``Annotated[Base, Component(...)]`` registrations.
+
+    Args:
+        annotation: Annotation value to inspect or normalize.
+
+    """
     if get_origin(annotation) is not Annotated:
         return None
     annotation_args = get_args(annotation)
@@ -365,7 +415,12 @@ def _build_provider_annotation(*, item: T, is_async: bool) -> Annotated[T, Provi
 
 
 def build_annotated_key(params: tuple[object, ...]) -> Any:
-    """Return Annotated[...] with a pre-built params tuple (Py 3.10+ compatible)."""
+    """Return Annotated[...] with a pre-built params tuple (Py 3.10+ compatible).
+
+    Args:
+        params: Pre-built tuple of Annotated arguments to combine into a dependency key.
+
+    """
     try:
         return Annotated.__class_getitem__(params)  # type: ignore[attr-defined]
     except AttributeError:
