@@ -995,10 +995,12 @@ class ContainerContext:
 
 
 container_context = ContainerContext()
-"""Process-global container proxy used by module-level registration decorators.
+"""Process-global container proxy for global-style container operations.
 
 Bind once during application startup, then use decorators from
-``diwire.registration_decorators`` safely across modules.
+``container_context.add_concrete``, ``container_context.add_factory``,
+``container_context.add_generator``, and ``container_context.add_context_manager``
+across modules.
 
 Examples:
     .. code-block:: python
