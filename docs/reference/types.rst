@@ -35,6 +35,11 @@ FromContext
 
 .. autoclass:: diwire.FromContext
 
+Maybe
+-----
+
+.. autoclass:: diwire.Maybe
+
 Provider
 --------
 

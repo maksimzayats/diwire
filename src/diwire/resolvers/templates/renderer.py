@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 from textwrap import indent
+from typing import Any
 
 from diwire.exceptions import DIWireInvalidProviderSpecError
 from diwire.injection import INJECT_RESOLVER_KWARG
@@ -43,6 +44,7 @@ from diwire.scope import BaseScope, BaseScopes, Scope
 _INDENT = " " * 4
 _MIN_CONSTRUCTOR_BASE_ARGUMENTS = 4
 _MAX_INLINE_ROOT_DEPENDENCY_DEPTH = 3
+_OMIT_INLINE_ARGUMENT: Any = object()
 _GENERATOR_SOURCE = (
     "diwire.resolvers.templates.renderer.ResolversTemplateRenderer.get_providers_code"
 )
@@ -270,6 +272,9 @@ class ResolversTemplateRenderer:
         resolve_from_context_method_block = self._indent_block(
             self._render_resolve_from_context_method(),
         )
+        is_registered_dependency_method_block = self._indent_block(
+            self._render_is_registered_dependency_method(),
+        )
 
         if plan.has_cleanup:
             exit_method_block = self._indent_block(CONTEXT_EXIT_WITH_CLEANUP_TEMPLATE)
@@ -315,6 +320,7 @@ class ResolversTemplateRenderer:
             resolve_method_block=resolve_method_block,
             aresolve_method_block=aresolve_method_block,
             resolve_from_context_method_block=resolve_from_context_method_block,
+            is_registered_dependency_method_block=is_registered_dependency_method_block,
             enter_method_block=self._indent_block(enter_method_block),
             exit_method_block=exit_method_block,
             aenter_method_block=self._indent_block(aenter_method_block),
@@ -955,6 +961,22 @@ class ResolversTemplateRenderer:
             )
         body_lines.extend(
             [
+                "if is_maybe_annotation(dependency):",
+                "    inner = strip_maybe_annotation(dependency)",
+                "    if is_provider_annotation(inner):",
+                "        provider_inner = strip_provider_annotation(inner)",
+                "        if is_async_provider_annotation(inner):",
+                "            return lambda: self.aresolve(provider_inner)",
+                "        return lambda: self.resolve(provider_inner)",
+                "    if is_from_context_annotation(inner):",
+                "        key = strip_from_context_annotation(inner)",
+                "        try:",
+                "            return self._resolve_from_context(key)",
+                "        except DIWireDependencyNotRegisteredError:",
+                "            return None",
+                "    if not self._is_registered_dependency(inner):",
+                "        return None",
+                "    return self.resolve(inner)",
                 "if is_provider_annotation(dependency):",
                 "    inner = strip_provider_annotation(dependency)",
                 "    if is_async_provider_annotation(dependency):",
@@ -1030,6 +1052,22 @@ class ResolversTemplateRenderer:
             )
         body_lines.extend(
             [
+                "if is_maybe_annotation(dependency):",
+                "    inner = strip_maybe_annotation(dependency)",
+                "    if is_provider_annotation(inner):",
+                "        provider_inner = strip_provider_annotation(inner)",
+                "        if is_async_provider_annotation(inner):",
+                "            return lambda: self.aresolve(provider_inner)",
+                "        return lambda: self.resolve(provider_inner)",
+                "    if is_from_context_annotation(inner):",
+                "        key = strip_from_context_annotation(inner)",
+                "        try:",
+                "            return self._resolve_from_context(key)",
+                "        except DIWireDependencyNotRegisteredError:",
+                "            return None",
+                "    if not self._is_registered_dependency(inner):",
+                "        return None",
+                "    return await self.aresolve(inner)",
                 "if is_provider_annotation(dependency):",
                 "    inner = strip_provider_annotation(dependency)",
                 "    if is_async_provider_annotation(dependency):",
@@ -1073,6 +1111,13 @@ class ResolversTemplateRenderer:
                 '")'
             ),
             "    raise DIWireDependencyNotRegisteredError(msg)",
+        ]
+        return self._join_lines(lines)
+
+    def _render_is_registered_dependency_method(self) -> str:
+        lines = [
+            "def _is_registered_dependency(self, dependency: Any) -> bool:",
+            "    return dependency in _dep_registered_keys",
         ]
         return self._join_lines(lines)
 
@@ -1694,6 +1739,8 @@ class ResolversTemplateRenderer:
         workflow_by_slot: dict[int, ProviderWorkflowPlan],
     ) -> tuple[str, ...]:
         arguments: list[str] = []
+        prefer_positional = workflow.dependency_order_is_signature_order
+        skip_positional_only = False
         root_scope_level = min(scope_by_level)
         root_scope = scope_by_level[root_scope_level]
         expression_context = DependencyExpressionContext(
@@ -1707,18 +1754,39 @@ class ResolversTemplateRenderer:
 
         for dependency_plan in self._dependency_plans_for_workflow(workflow=workflow):
             dependency = dependency_plan.dependency
-            expression = self._dependency_expression_for_plan(
-                workflow=workflow,
-                dependency_plan=dependency_plan,
-                is_async_call=is_async_call,
-                context=expression_context,
-                workflow_by_slot=workflow_by_slot,
-            )
+            parameter_kind = dependency.parameter.kind
+            if skip_positional_only and parameter_kind is inspect.Parameter.POSITIONAL_ONLY:
+                continue
+            if dependency_plan.kind == "omit":
+                if parameter_kind in {
+                    inspect.Parameter.POSITIONAL_ONLY,
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                }:
+                    prefer_positional = False
+                if parameter_kind is inspect.Parameter.POSITIONAL_ONLY:
+                    skip_positional_only = True
+                continue
+            if dependency_plan.kind == "literal":
+                expression = dependency_plan.literal_expression
+                if expression is None:
+                    msg = (
+                        f"Literal dependency plan for slot {workflow.slot} dependency index "
+                        f"{dependency_plan.dependency_index} is missing literal expression."
+                    )
+                    raise ValueError(msg)
+            else:
+                expression = self._dependency_expression_for_plan(
+                    workflow=workflow,
+                    dependency_plan=dependency_plan,
+                    is_async_call=is_async_call,
+                    context=expression_context,
+                    workflow_by_slot=workflow_by_slot,
+                )
             arguments.append(
                 self._format_dependency_argument(
                     dependency=dependency,
                     expression=expression,
-                    prefer_positional=workflow.dependency_order_is_signature_order,
+                    prefer_positional=prefer_positional,
                 ),
             )
 
@@ -1739,6 +1807,21 @@ class ResolversTemplateRenderer:
         context: DependencyExpressionContext,
         workflow_by_slot: dict[int, ProviderWorkflowPlan],
     ) -> str:
+        if dependency_plan.kind == "literal":
+            literal_expression = dependency_plan.literal_expression
+            if literal_expression is None:
+                msg = (
+                    f"Literal dependency plan for slot {workflow.slot} dependency index "
+                    f"{dependency_plan.dependency_index} is missing literal expression."
+                )
+                raise ValueError(msg)
+            return literal_expression
+        if dependency_plan.kind == "omit":
+            msg = (
+                f"Omit dependency plan for slot {workflow.slot} dependency index "
+                f"{dependency_plan.dependency_index} has no expression."
+            )
+            raise ValueError(msg)
         if dependency_plan.kind == "provider_handle":
             return self._provider_handle_dependency_expression(
                 workflow=workflow,
@@ -1978,48 +2061,82 @@ class ResolversTemplateRenderer:
         depth: int,
     ) -> tuple[str, ...] | None:
         arguments: list[str] = []
+        prefer_positional = dependency_workflow.dependency_order_is_signature_order
+        skip_positional_only = False
         for dependency_plan in self._dependency_plans_for_workflow(workflow=dependency_workflow):
             dependency = dependency_plan.dependency
-            nested_expression: str | None
-            if dependency_plan.kind == "provider_handle":
-                provider_inner_slot = dependency_plan.provider_inner_slot
-                if provider_inner_slot is None:
-                    return None
-                if dependency_plan.provider_is_async:
-                    nested_expression = (
-                        f"lambda: {context.root_resolver_expr}.aresolve_{provider_inner_slot}()"
-                    )
-                else:
-                    nested_expression = (
-                        f"lambda: {context.root_resolver_expr}.resolve_{provider_inner_slot}()"
-                    )
-            elif dependency_plan.kind == "context":
-                if dependency_plan.ctx_key_global_name is None:
-                    return None
-                nested_expression = (
-                    f"{context.root_resolver_expr}._resolve_from_context("
-                    f"{dependency_plan.ctx_key_global_name})"
-                )
-            else:
-                slot = dependency_plan.dependency_slot
-                if slot is None:
-                    return None
-                nested_expression = self._inline_root_nested_dependency_expression(
-                    slot=slot,
-                    requires_async=dependency_plan.dependency_requires_async,
-                    context=context,
-                    depth=depth,
-                )
+            parameter_kind = dependency.parameter.kind
+            if skip_positional_only and parameter_kind is inspect.Parameter.POSITIONAL_ONLY:
+                continue
+            nested_expression = self._inline_root_dependency_expression_for_plan(
+                dependency_plan=dependency_plan,
+                context=context,
+                depth=depth,
+            )
+            if nested_expression is _OMIT_INLINE_ARGUMENT:
+                if parameter_kind in {
+                    inspect.Parameter.POSITIONAL_ONLY,
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                }:
+                    prefer_positional = False
+                if parameter_kind is inspect.Parameter.POSITIONAL_ONLY:
+                    skip_positional_only = True
+                continue
             if nested_expression is None:
+                return None
+            if not isinstance(nested_expression, str):
                 return None
             arguments.append(
                 self._format_dependency_argument(
                     dependency=dependency,
                     expression=nested_expression,
-                    prefer_positional=dependency_workflow.dependency_order_is_signature_order,
+                    prefer_positional=prefer_positional,
                 ),
             )
         return tuple(arguments)
+
+    def _inline_root_dependency_expression_for_plan(
+        self,
+        *,
+        dependency_plan: ProviderDependencyPlan,
+        context: DependencyExpressionContext,
+        depth: int,
+    ) -> str | object | None:
+        expression: str | object | None
+        if dependency_plan.kind == "omit":
+            expression = _OMIT_INLINE_ARGUMENT
+        elif dependency_plan.kind == "literal":
+            expression = dependency_plan.literal_expression
+        elif dependency_plan.kind == "provider_handle":
+            provider_inner_slot = dependency_plan.provider_inner_slot
+            if provider_inner_slot is None:
+                expression = None
+            elif dependency_plan.provider_is_async:
+                expression = (
+                    f"lambda: {context.root_resolver_expr}.aresolve_{provider_inner_slot}()"
+                )
+            else:
+                expression = f"lambda: {context.root_resolver_expr}.resolve_{provider_inner_slot}()"
+        elif dependency_plan.kind == "context":
+            if dependency_plan.ctx_key_global_name is None:
+                expression = None
+            else:
+                expression = (
+                    f"{context.root_resolver_expr}._resolve_from_context("
+                    f"{dependency_plan.ctx_key_global_name})"
+                )
+        else:
+            slot = dependency_plan.dependency_slot
+            if slot is None:
+                expression = None
+            else:
+                expression = self._inline_root_nested_dependency_expression(
+                    slot=slot,
+                    requires_async=dependency_plan.dependency_requires_async,
+                    context=context,
+                    depth=depth,
+                )
+        return expression
 
     def _inline_root_nested_dependency_expression(
         self,
@@ -2293,9 +2410,11 @@ class ResolversTemplateRenderer:
         body_lines.extend(
             [
                 "global _all_slots_by_key",
+                "global _dep_registered_keys",
                 "",
                 "# Rebuild All[...] indexes for collect-all dependency dispatch.",
                 "_all_slots_by_key = {}",
+                "_dep_registered_keys = set()",
                 "all_slots_by_key: dict[Any, list[int]] = {}",
                 "",
             ],
@@ -2332,6 +2451,8 @@ class ResolversTemplateRenderer:
                     f"registration_{workflow.slot} = registrations.get_by_slot({workflow.slot})",
                     "# Capture dependency identity token used by `resolve`/`aresolve` dispatch.",
                     f"_dep_{workflow.slot}_type = registration_{workflow.slot}.provides",
+                    "# Track dependency keys that are directly registered in this compiled graph.",
+                    f"_dep_registered_keys.add(_dep_{workflow.slot}_type)",
                     "# Capture provider object (instance/type/factory/generator/context manager).",
                     (
                         f"_provider_{workflow.slot} = "
@@ -2373,8 +2494,9 @@ class ResolversTemplateRenderer:
                         "# Capture context key token used by FromContext dependencies.",
                         (
                             f"{dependency_plan.ctx_key_global_name} = strip_from_context_annotation("
+                            f"strip_maybe_annotation("
                             f"registration_{workflow.slot}.dependencies"
-                            f"[{dependency_plan.dependency_index}].provides)"
+                            f"[{dependency_plan.dependency_index}].provides))"
                         ),
                     ],
                 )

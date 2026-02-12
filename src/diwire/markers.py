@@ -40,6 +40,10 @@ class FromContextMarker:
     """Marker that indicates dependency value should be taken from scope context."""
 
 
+class MaybeMarker:
+    """Marker that indicates dependency is optional and may resolve to ``None``."""
+
+
 class ProviderMarker(NamedTuple):
     """Marker for lazy resolver-bound provider callables."""
 
@@ -114,6 +118,12 @@ if TYPE_CHECKING:
     It returns an empty tuple when no matching registrations exist.
     """
 
+    Maybe = T | None  # type: ignore[misc]
+    """Mark a dependency as explicitly optional.
+
+    At runtime ``Maybe[T]`` becomes ``Annotated[T, MaybeMarker()]``.
+    """
+
 else:
 
     class Injected:
@@ -173,6 +183,20 @@ else:
                 return _build_annotated((inner, *metadata, FromContextMarker()))
             return _build_annotated((item, FromContextMarker()))
 
+    class Maybe:
+        """Mark a dependency as explicitly optional.
+
+        At runtime ``Maybe[T]`` resolves to ``Annotated[T, MaybeMarker()]``.
+        """
+
+        def __class_getitem__(cls, item: T) -> Annotated[T, MaybeMarker]:
+            if get_origin(item) is Annotated:
+                args = get_args(item)
+                inner = args[0]
+                metadata = args[1:]
+                return _build_annotated((inner, *metadata, MaybeMarker()))
+            return _build_annotated((item, MaybeMarker()))
+
     class Provider:
         """Mark a dependency for lazy resolver-bound sync provider injection."""
 
@@ -205,6 +229,31 @@ else:
                 args = get_args(item)
                 base_key = args[0]
             return _build_annotated((base_key, AllMarker(dependency_key=base_key)))
+
+
+def is_maybe_annotation(annotation: Any) -> bool:
+    """Return True when annotation is Annotated[..., MaybeMarker()]."""
+    if get_origin(annotation) is not Annotated:
+        return False
+    annotation_args = get_args(annotation)
+    if len(annotation_args) < _ANNOTATED_MARKER_MIN_ARGS:
+        return False
+    metadata = annotation_args[1:]
+    return any(isinstance(item, MaybeMarker) for item in metadata)
+
+
+def strip_maybe_annotation(annotation: Any) -> Any:
+    """Strip Maybe marker while preserving non-maybe Annotated metadata."""
+    if not is_maybe_annotation(annotation):
+        return annotation
+
+    annotation_args = get_args(annotation)
+    parameter_type = annotation_args[0]
+    metadata = annotation_args[1:]
+    filtered_metadata = tuple(item for item in metadata if not isinstance(item, MaybeMarker))
+    if not filtered_metadata:
+        return parameter_type
+    return _build_annotated((parameter_type, *filtered_metadata))
 
 
 def is_from_context_annotation(annotation: Any) -> bool:

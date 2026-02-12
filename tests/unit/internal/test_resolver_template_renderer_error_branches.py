@@ -6,6 +6,7 @@ import pytest
 
 from diwire import Container, Scope
 from diwire.providers import ProviderDependency
+from diwire.resolvers.templates import renderer as renderer_module
 from diwire.resolvers.templates.planner import (
     ProviderDependencyPlan,
     ProviderWorkflowPlan,
@@ -150,3 +151,235 @@ def test_all_dependency_expression_can_inline_root_cached_dependency() -> None:
     )
 
     assert "_root_resolver" in expression
+
+
+def test_dependency_expression_for_plan_raises_for_omit_plan() -> None:
+    renderer = ResolversTemplateRenderer()
+    plan = _plan_for_renderer()
+    workflow = plan.workflows[0]
+    parameter = inspect.Parameter(
+        "dep",
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+    )
+    dependency = ProviderDependency(
+        provides=int,
+        parameter=parameter,
+    )
+    dependency_plan = ProviderDependencyPlan(
+        kind="omit",
+        dependency=dependency,
+        dependency_index=0,
+    )
+
+    with pytest.raises(ValueError, match="has no expression"):
+        renderer._dependency_expression_for_plan(
+            workflow=workflow,
+            dependency_plan=dependency_plan,
+            is_async_call=False,
+            context=DependencyExpressionContext(
+                class_scope_level=plan.scopes[0].scope_level,
+                root_scope=plan.scopes[0],
+                workflow_by_slot=_workflow_by_slot(plan),
+            ),
+            workflow_by_slot=_workflow_by_slot(plan),
+        )
+
+
+def test_dependency_expression_for_plan_raises_for_literal_plan_without_expression() -> None:
+    renderer = ResolversTemplateRenderer()
+    plan = _plan_for_renderer()
+    workflow = plan.workflows[0]
+    parameter = inspect.Parameter(
+        "dep",
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+    )
+    dependency = ProviderDependency(
+        provides=int,
+        parameter=parameter,
+    )
+    dependency_plan = ProviderDependencyPlan(
+        kind="literal",
+        dependency=dependency,
+        dependency_index=0,
+        literal_expression=None,
+    )
+
+    with pytest.raises(ValueError, match="missing literal expression"):
+        renderer._dependency_expression_for_plan(
+            workflow=workflow,
+            dependency_plan=dependency_plan,
+            is_async_call=False,
+            context=DependencyExpressionContext(
+                class_scope_level=plan.scopes[0].scope_level,
+                root_scope=plan.scopes[0],
+                workflow_by_slot=_workflow_by_slot(plan),
+            ),
+            workflow_by_slot=_workflow_by_slot(plan),
+        )
+
+
+def test_dependency_expression_for_plan_returns_literal_expression() -> None:
+    renderer = ResolversTemplateRenderer()
+    plan = _plan_for_renderer()
+    workflow = plan.workflows[0]
+    parameter = inspect.Parameter(
+        "dep",
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+    )
+    dependency = ProviderDependency(
+        provides=int,
+        parameter=parameter,
+    )
+    dependency_plan = ProviderDependencyPlan(
+        kind="literal",
+        dependency=dependency,
+        dependency_index=0,
+        literal_expression="None",
+    )
+
+    expression = renderer._dependency_expression_for_plan(
+        workflow=workflow,
+        dependency_plan=dependency_plan,
+        is_async_call=False,
+        context=DependencyExpressionContext(
+            class_scope_level=plan.scopes[0].scope_level,
+            root_scope=plan.scopes[0],
+            workflow_by_slot=_workflow_by_slot(plan),
+        ),
+        workflow_by_slot=_workflow_by_slot(plan),
+    )
+
+    assert expression == "None"
+
+
+def test_inline_root_dependency_expression_for_plan_covers_all_new_plan_kinds() -> None:
+    renderer = ResolversTemplateRenderer()
+    plan = _plan_for_renderer()
+    context = DependencyExpressionContext(
+        class_scope_level=plan.scopes[0].scope_level,
+        root_scope=plan.scopes[0],
+        workflow_by_slot=_workflow_by_slot(plan),
+    )
+    parameter = inspect.Parameter(
+        "dep",
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+    )
+    dependency = ProviderDependency(
+        provides=int,
+        parameter=parameter,
+    )
+
+    omit_plan = ProviderDependencyPlan(
+        kind="omit",
+        dependency=dependency,
+        dependency_index=0,
+    )
+    literal_plan = ProviderDependencyPlan(
+        kind="literal",
+        dependency=dependency,
+        dependency_index=0,
+        literal_expression="None",
+    )
+    provider_handle_missing_slot_plan = ProviderDependencyPlan(
+        kind="provider_handle",
+        dependency=dependency,
+        dependency_index=0,
+        provider_inner_slot=None,
+    )
+    provider_handle_sync_plan = ProviderDependencyPlan(
+        kind="provider_handle",
+        dependency=dependency,
+        dependency_index=0,
+        provider_inner_slot=1,
+        provider_is_async=False,
+    )
+    provider_handle_async_plan = ProviderDependencyPlan(
+        kind="provider_handle",
+        dependency=dependency,
+        dependency_index=0,
+        provider_inner_slot=1,
+        provider_is_async=True,
+    )
+    context_missing_key_plan = ProviderDependencyPlan(
+        kind="context",
+        dependency=dependency,
+        dependency_index=0,
+        ctx_key_global_name=None,
+    )
+    context_key_plan = ProviderDependencyPlan(
+        kind="context",
+        dependency=dependency,
+        dependency_index=0,
+        ctx_key_global_name="_ctx_1_0_key",
+    )
+    provider_missing_slot_plan = ProviderDependencyPlan(
+        kind="provider",
+        dependency=dependency,
+        dependency_index=0,
+        dependency_slot=None,
+    )
+
+    assert (
+        renderer._inline_root_dependency_expression_for_plan(
+            dependency_plan=omit_plan,
+            context=context,
+            depth=0,
+        )
+        is renderer_module._OMIT_INLINE_ARGUMENT
+    )
+    assert (
+        renderer._inline_root_dependency_expression_for_plan(
+            dependency_plan=literal_plan,
+            context=context,
+            depth=0,
+        )
+        == "None"
+    )
+    assert (
+        renderer._inline_root_dependency_expression_for_plan(
+            dependency_plan=provider_handle_missing_slot_plan,
+            context=context,
+            depth=0,
+        )
+        is None
+    )
+    assert (
+        renderer._inline_root_dependency_expression_for_plan(
+            dependency_plan=provider_handle_sync_plan,
+            context=context,
+            depth=0,
+        )
+        == "lambda: self._root_resolver.resolve_1()"
+    )
+    assert (
+        renderer._inline_root_dependency_expression_for_plan(
+            dependency_plan=provider_handle_async_plan,
+            context=context,
+            depth=0,
+        )
+        == "lambda: self._root_resolver.aresolve_1()"
+    )
+    assert (
+        renderer._inline_root_dependency_expression_for_plan(
+            dependency_plan=context_missing_key_plan,
+            context=context,
+            depth=0,
+        )
+        is None
+    )
+    assert (
+        renderer._inline_root_dependency_expression_for_plan(
+            dependency_plan=context_key_plan,
+            context=context,
+            depth=0,
+        )
+        == "self._root_resolver._resolve_from_context(_ctx_1_0_key)"
+    )
+    assert (
+        renderer._inline_root_dependency_expression_for_plan(
+            dependency_plan=provider_missing_slot_plan,
+            context=context,
+            depth=0,
+        )
+        is None
+    )

@@ -39,9 +39,11 @@ IMPORTS_TEMPLATE = dedent(
         is_all_annotation,
         component_base_key,
         is_from_context_annotation,
+        is_maybe_annotation,
         is_provider_annotation,
         strip_all_annotation,
         strip_from_context_annotation,
+        strip_maybe_annotation,
         strip_provider_annotation,
     )
     from diwire.providers import ProvidersRegistrations
@@ -50,17 +52,18 @@ IMPORTS_TEMPLATE = dedent(
 
 GLOBALS_TEMPLATE = dedent(
     """
-    _MISSING_RESOLVER: Any = object()
-    _MISSING_CACHE: Any = object()
-    _MISSING_PROVIDER: Any = object()
-    _all_slots_by_key: dict[Any, tuple[int, ...]] = {}
+_MISSING_RESOLVER: Any = object()
+_MISSING_CACHE: Any = object()
+_MISSING_PROVIDER: Any = object()
+_all_slots_by_key: dict[Any, tuple[int, ...]] = {}
+_dep_registered_keys: set[Any] = set()
 
-    {{ provider_globals_block }}
-    {% if lock_globals_block %}
+{{ provider_globals_block }}
+{% if lock_globals_block %}
 
-    {{ lock_globals_block }}
-    {% endif %}
-    """,
+{{ lock_globals_block }}
+{% endif %}
+""",
 ).strip()
 
 CLASS_TEMPLATE = dedent(
@@ -83,6 +86,8 @@ CLASS_TEMPLATE = dedent(
     {{ aresolve_method_block }}
 
     {{ resolve_from_context_method_block }}
+
+    {{ is_registered_dependency_method_block }}
 
     {{ enter_method_block }}
 

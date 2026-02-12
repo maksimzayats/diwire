@@ -19,7 +19,11 @@ from diwire.injection import INJECT_RESOLVER_KWARG, INJECT_WRAPPER_MARKER
 from diwire.lock_mode import LockMode
 from diwire.markers import (
     is_async_provider_annotation,
+    is_from_context_annotation,
+    is_maybe_annotation,
     is_provider_annotation,
+    strip_from_context_annotation,
+    strip_maybe_annotation,
     strip_provider_annotation,
 )
 from diwire.providers import (
@@ -40,6 +44,7 @@ if TYPE_CHECKING:
 OpenProviderKind = Literal["concrete_type", "factory", "generator", "context_manager"]
 OpenBindingKind = Literal["dependency", "generic_argument", "generic_argument_type"]
 _MISSING_CACHE = object()
+_MAYBE_UNHANDLED = object()
 
 
 @dataclass(frozen=True, slots=True)
@@ -346,6 +351,9 @@ class _OpenGenericResolver:  # pragma: no cover
         self._owned_scope_wrappers: tuple[_OpenGenericResolver, ...] = ()
 
     def resolve(self, dependency: Any) -> Any:
+        maybe_value = self._resolve_maybe_sync(dependency=dependency)
+        if maybe_value is not _MAYBE_UNHANDLED:
+            return maybe_value
         if is_provider_annotation(dependency):
             inner_dependency = strip_provider_annotation(dependency)
             if is_async_provider_annotation(dependency):
@@ -363,6 +371,9 @@ class _OpenGenericResolver:  # pragma: no cover
             )
 
     async def aresolve(self, dependency: Any) -> Any:
+        maybe_value = await self._resolve_maybe_async(dependency=dependency)
+        if maybe_value is not _MAYBE_UNHANDLED:
+            return maybe_value
         if is_provider_annotation(dependency):
             inner_dependency = strip_provider_annotation(dependency)
             if is_async_provider_annotation(dependency):
@@ -378,6 +389,54 @@ class _OpenGenericResolver:  # pragma: no cover
                 dependency=dependency,
                 match=open_match,
             )
+
+    def _is_registered_dependency(self, dependency: Any) -> bool:
+        base_registered_checker = getattr(self._base_resolver, "_is_registered_dependency", None)
+        if callable(base_registered_checker) and base_registered_checker(dependency):
+            return True
+        return self._registry.find_best_match(dependency) is not None
+
+    def _resolve_maybe_sync(self, *, dependency: Any) -> Any:
+        if not is_maybe_annotation(dependency):
+            return _MAYBE_UNHANDLED
+
+        inner_dependency = strip_maybe_annotation(dependency)
+        if is_from_context_annotation(inner_dependency):
+            return self._resolve_maybe_from_context_sync(inner_dependency)
+        if not self._is_registered_dependency(inner_dependency):
+            return None
+        return self.resolve(inner_dependency)
+
+    async def _resolve_maybe_async(self, *, dependency: Any) -> Any:
+        if not is_maybe_annotation(dependency):
+            return _MAYBE_UNHANDLED
+
+        inner_dependency = strip_maybe_annotation(dependency)
+        if is_from_context_annotation(inner_dependency):
+            return await self._resolve_maybe_from_context_async(inner_dependency)
+        if not self._is_registered_dependency(inner_dependency):
+            return None
+        return await self.aresolve(inner_dependency)
+
+    def _resolve_maybe_from_context_sync(self, dependency: Any) -> Any | None:
+        context_key = strip_from_context_annotation(dependency)
+        resolve_from_context = getattr(self._base_resolver, "_resolve_from_context", None)
+        try:
+            if callable(resolve_from_context):
+                return resolve_from_context(context_key)
+            return self._base_resolver.resolve(dependency)
+        except DIWireDependencyNotRegisteredError:
+            return None
+
+    async def _resolve_maybe_from_context_async(self, dependency: Any) -> Any | None:
+        context_key = strip_from_context_annotation(dependency)
+        resolve_from_context = getattr(self._base_resolver, "_resolve_from_context", None)
+        try:
+            if callable(resolve_from_context):
+                return resolve_from_context(context_key)
+            return await self._base_resolver.aresolve(dependency)
+        except DIWireDependencyNotRegisteredError:
+            return None
 
     def enter_scope(
         self,

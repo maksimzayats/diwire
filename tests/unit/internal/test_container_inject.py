@@ -1138,3 +1138,40 @@ def test_inject_resolves_open_generic_dependency_via_wrapper_fallback() -> None:
 
     injected_handler = cast("Any", handler)
     assert injected_handler() == "str"
+
+
+def test_is_registered_in_resolver_fallback_checks_container_and_open_generic_registrations() -> (
+    None
+):
+    container = Container(
+        autoregister_concrete_types=False,
+        autoregister_dependencies=False,
+    )
+    resolver_without_registered_checker = cast("Any", object())
+
+    assert (
+        container._is_registered_in_resolver(
+            resolver=resolver_without_registered_checker,
+            dependency=_InjectedOpenBox[str],
+        )
+        is False
+    )
+
+    dependency = _InjectedSyncDependency("registered")
+    container.add_instance(dependency, provides=_InjectedSyncDependency)
+    assert (
+        container._is_registered_in_resolver(
+            resolver=resolver_without_registered_checker,
+            dependency=_InjectedSyncDependency,
+        )
+        is True
+    )
+
+    container.add_concrete(_InjectedOpenBoxImpl, provides=_InjectedOpenBox)
+    assert (
+        container._is_registered_in_resolver(
+            resolver=resolver_without_registered_checker,
+            dependency=_InjectedOpenBox[str],
+        )
+        is True
+    )

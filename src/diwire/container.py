@@ -40,8 +40,11 @@ from diwire.markers import (
     ProviderMarker,
     component_base_key,
     is_all_annotation,
+    is_from_context_annotation,
+    is_maybe_annotation,
     is_provider_annotation,
     strip_all_annotation,
+    strip_maybe_annotation,
     strip_provider_annotation,
 )
 from diwire.open_generics import OpenGenericRegistry, OpenGenericResolver, canonicalize_open_key
@@ -2107,6 +2110,15 @@ class Container:
         known_level = cache.get(dependency)
         if known_level is not None:
             return known_level
+        if is_maybe_annotation(dependency):
+            maybe_inner_dependency = strip_maybe_annotation(dependency)
+            inferred_level = self._infer_dependency_scope_level(
+                dependency=maybe_inner_dependency,
+                cache=cache,
+                in_progress=in_progress,
+            )
+            cache[dependency] = inferred_level
+            return inferred_level
         if is_provider_annotation(dependency):
             provider_inner_dependency = strip_provider_annotation(dependency)
             inferred_level = self._infer_dependency_scope_level(
@@ -2201,9 +2213,29 @@ class Container:
         for injected_parameter in injected_parameters:
             if injected_parameter.name in bound_arguments.arguments:
                 continue
-            bound_arguments.arguments[injected_parameter.name] = resolver.resolve(
-                injected_parameter.dependency,
-            )
+            dependency = injected_parameter.dependency
+            if is_maybe_annotation(dependency):
+                inner_dependency = strip_maybe_annotation(dependency)
+                if is_provider_annotation(inner_dependency) or is_from_context_annotation(
+                    inner_dependency,
+                ):
+                    bound_arguments.arguments[injected_parameter.name] = resolver.resolve(
+                        dependency,
+                    )
+                    continue
+                if not self._is_registered_in_resolver(
+                    resolver=resolver,
+                    dependency=inner_dependency,
+                ):
+                    parameter = signature.parameters[injected_parameter.name]
+                    if parameter.default is inspect.Parameter.empty:
+                        bound_arguments.arguments[injected_parameter.name] = None
+                    continue
+                bound_arguments.arguments[injected_parameter.name] = resolver.resolve(
+                    inner_dependency,
+                )
+                continue
+            bound_arguments.arguments[injected_parameter.name] = resolver.resolve(dependency)
         for context_parameter in context_parameters:
             if context_parameter.name in bound_arguments.arguments:
                 continue
@@ -2226,8 +2258,30 @@ class Container:
         for injected_parameter in injected_parameters:
             if injected_parameter.name in bound_arguments.arguments:
                 continue
+            dependency = injected_parameter.dependency
+            if is_maybe_annotation(dependency):
+                inner_dependency = strip_maybe_annotation(dependency)
+                if is_provider_annotation(inner_dependency) or is_from_context_annotation(
+                    inner_dependency,
+                ):
+                    bound_arguments.arguments[injected_parameter.name] = await resolver.aresolve(
+                        dependency,
+                    )
+                    continue
+                if not self._is_registered_in_resolver(
+                    resolver=resolver,
+                    dependency=inner_dependency,
+                ):
+                    parameter = signature.parameters[injected_parameter.name]
+                    if parameter.default is inspect.Parameter.empty:
+                        bound_arguments.arguments[injected_parameter.name] = None
+                    continue
+                bound_arguments.arguments[injected_parameter.name] = await resolver.aresolve(
+                    inner_dependency,
+                )
+                continue
             bound_arguments.arguments[injected_parameter.name] = await resolver.aresolve(
-                injected_parameter.dependency,
+                dependency,
             )
         for context_parameter in context_parameters:
             if context_parameter.name in bound_arguments.arguments:
@@ -2236,6 +2290,19 @@ class Container:
                 context_parameter.dependency,
             )
         return bound_arguments
+
+    def _is_registered_in_resolver(
+        self,
+        *,
+        resolver: ResolverProtocol,
+        dependency: Any,
+    ) -> bool:
+        is_registered_dependency = getattr(resolver, "_is_registered_dependency", None)
+        if callable(is_registered_dependency):
+            return bool(is_registered_dependency(dependency))
+        if self._providers_registrations.find_by_type(dependency) is not None:
+            return True
+        return self._open_generic_registry.find_best_match(dependency) is not None
 
     def _resolve_inject_resolver(self, kwargs: dict[str, Any]) -> ResolverProtocol:
         if INJECT_RESOLVER_KWARG in kwargs:

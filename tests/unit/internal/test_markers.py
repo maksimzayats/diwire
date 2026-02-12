@@ -16,15 +16,19 @@ from diwire.markers import (
     FromContextMarker,
     Injected,
     InjectedMarker,
+    Maybe,
+    MaybeMarker,
     Provider,
     ProviderMarker,
     component_base_key,
     is_all_annotation,
     is_async_provider_annotation,
     is_from_context_annotation,
+    is_maybe_annotation,
     is_provider_annotation,
     strip_all_annotation,
     strip_from_context_annotation,
+    strip_maybe_annotation,
     strip_provider_annotation,
 )
 from diwire.providers import ProviderDependenciesExtractor
@@ -124,6 +128,34 @@ def test_from_context_helpers_detect_and_strip_marker() -> None:
     assert strip_from_context_annotation(dependency) == PrimaryDatabaseComponent
     assert is_from_context_annotation(int) is False
     assert strip_from_context_annotation(int) is int
+
+
+def test_maybe_wraps_dependency_with_marker() -> None:
+    dependency = Maybe[Database]
+
+    assert get_origin(dependency) is Annotated
+    annotation_args = get_args(dependency)
+    assert annotation_args[0] is Database
+    assert isinstance(annotation_args[1], MaybeMarker)
+
+
+def test_maybe_preserves_component_marker_metadata_when_nested() -> None:
+    dependency = Maybe[PrimaryDatabaseComponent]
+
+    assert get_origin(dependency) is Annotated
+    annotation_args = get_args(dependency)
+    assert annotation_args[0] is Database
+    assert annotation_args[1] == Component("primary")
+    assert isinstance(annotation_args[2], MaybeMarker)
+
+
+def test_maybe_helpers_detect_and_strip_marker() -> None:
+    dependency = Maybe[PrimaryDatabaseComponent]
+
+    assert is_maybe_annotation(dependency) is True
+    assert strip_maybe_annotation(dependency) == PrimaryDatabaseComponent
+    assert is_maybe_annotation(int) is False
+    assert strip_maybe_annotation(int) is int
 
 
 def test_provider_wraps_dependency_with_provider_marker() -> None:
@@ -243,9 +275,11 @@ def test_is_from_context_annotation_handles_invalid_annotated_shape(
     sentinel = object()
 
     assert markers_module.is_from_context_annotation(sentinel) is False
+    assert markers_module.is_maybe_annotation(sentinel) is False
     assert markers_module.is_provider_annotation(sentinel) is False
     assert markers_module.is_all_annotation(sentinel) is False
     assert markers_module.strip_all_annotation(sentinel) is sentinel
+    assert markers_module.strip_maybe_annotation(sentinel) is sentinel
     assert markers_module.component_base_key(sentinel) is None
 
 

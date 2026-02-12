@@ -11,7 +11,7 @@ from typing import Any, Literal, cast
 import pytest
 
 from diwire.container import Container
-from diwire.exceptions import DIWireInvalidProviderSpecError
+from diwire.exceptions import DIWireDependencyNotRegisteredError, DIWireInvalidProviderSpecError
 from diwire.lock_mode import LockMode
 from diwire.providers import Lifetime, ProviderDependency, ProviderSpec, ProvidersRegistrations
 from diwire.resolvers.templates import renderer as renderer_module
@@ -89,6 +89,10 @@ class _RequestRootOnlyService:
 
 
 class _RequestRootSessionService:
+    pass
+
+
+class _MissingPlannerDependency:
     pass
 
 
@@ -625,6 +629,59 @@ def test_planner_propagates_async_requirement_from_dependencies() -> None:
 
     workflow_by_type = {workflow.provides: workflow for workflow in plan.workflows}
     assert workflow_by_type[_AsyncDependencyConsumer].requires_async is True
+
+
+def test_planner_raises_for_missing_non_optional_dependency() -> None:
+    def _build_service(_dependency: _MissingPlannerDependency) -> _Service:
+        return _Service(config=_Config())
+
+    container = Container(
+        autoregister_concrete_types=False,
+        autoregister_dependencies=False,
+    )
+    container.add_factory(
+        _build_service,
+        provides=_Service,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with pytest.raises(DIWireDependencyNotRegisteredError, match="is not registered"):
+        ResolverGenerationPlanner(
+            root_scope=Scope.APP,
+            registrations=container._providers_registrations,
+        ).build()
+
+
+def test_plan_provider_dependency_raises_via_non_optional_missing_lookup_path() -> None:
+    planner = ResolverGenerationPlanner(
+        root_scope=Scope.APP,
+        registrations=ProvidersRegistrations(),
+    )
+    dependency = ProviderDependency(
+        provides=_MissingPlannerDependency,
+        parameter=inspect.Parameter(
+            "_dependency",
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        ),
+    )
+    spec = ProviderSpec(
+        provides=_Service,
+        factory=lambda: _Service(config=_Config()),
+        lifetime=Lifetime.TRANSIENT,
+        scope=Scope.APP,
+        is_async=False,
+        is_any_dependency_async=False,
+        needs_cleanup=False,
+    )
+
+    with pytest.raises(DIWireDependencyNotRegisteredError, match="is not registered"):
+        planner._plan_provider_dependency(
+            spec=spec,
+            dependency_index=0,
+            dependency=dependency,
+            dependency_key=dependency.provides,
+            optional=False,
+        )
 
 
 def test_planner_dependency_order_helpers_cover_edge_paths() -> None:
