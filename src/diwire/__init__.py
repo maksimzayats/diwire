@@ -11,6 +11,7 @@ from diwire._internal.markers import (
     Provider,
 )
 from diwire._internal.providers import Lifetime
+from diwire._internal.resolvers.protocol import ResolverProtocol
 from diwire._internal.scope import BaseScope, Scope
 
 __all__ = [
@@ -26,6 +27,7 @@ __all__ = [
     "LockMode",
     "Maybe",
     "Provider",
+    "ResolverProtocol",
     "Scope",
     "container_context",
 ]

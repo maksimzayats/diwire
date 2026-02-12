@@ -278,11 +278,11 @@ class Container:
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
-    ) -> ConcreteTypeRegistrationDecorator[Any]: ...
+    ) -> Callable[[C], C]: ...
 
     def add_concrete(
         self,
-        concrete_type: type[Any] | Literal["from_decorator"] = "from_decorator",
+        concrete_type: C | Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
         component: object | None = None,
@@ -291,7 +291,7 @@ class Container:
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
-    ) -> None | ConcreteTypeRegistrationDecorator[Any]:
+    ) -> None | Callable[[C], C]:
         """Register a concrete type provider.
 
         Supports direct calls and decorator form. ``provides`` may be a protocol,
@@ -342,7 +342,7 @@ class Container:
                 class CachedRepo(SqlRepo): ...
 
         """
-        decorator: ConcreteTypeRegistrationDecorator[Any] = ConcreteTypeRegistrationDecorator(
+        decorator: _ConcreteTypeRegistrationDecorator[Any] = _ConcreteTypeRegistrationDecorator(
             container=self,
             scope=scope,
             lifetime=lifetime,
@@ -525,7 +525,7 @@ class Container:
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
-    ) -> FactoryRegistrationDecorator[Any]: ...
+    ) -> Callable[[F], F]: ...
 
     def add_factory(
         self,
@@ -540,7 +540,7 @@ class Container:
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
-    ) -> None | FactoryRegistrationDecorator[Any]:
+    ) -> None | Callable[[F], F]:
         """Register a factory provider.
 
         Supports direct calls and decorator form. ``provides`` may be a protocol,
@@ -587,7 +587,7 @@ class Container:
                     return Box(value_type)
 
         """
-        decorator: FactoryRegistrationDecorator[Any] = FactoryRegistrationDecorator(
+        decorator: _FactoryRegistrationDecorator[Any] = _FactoryRegistrationDecorator(
             container=self,
             scope=scope,
             lifetime=lifetime,
@@ -691,7 +691,7 @@ class Container:
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
-    ) -> GeneratorRegistrationDecorator[Any]: ...
+    ) -> Callable[[F], F]: ...
 
     def add_generator(
         self,
@@ -708,7 +708,7 @@ class Container:
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
-    ) -> None | GeneratorRegistrationDecorator[Any]:
+    ) -> None | Callable[[F], F]:
         """Register a generator or async-generator provider with cleanup.
 
         The yielded value is resolved as the dependency, and teardown runs when
@@ -746,7 +746,7 @@ class Container:
                         yield session
 
         """
-        decorator: GeneratorRegistrationDecorator[Any] = GeneratorRegistrationDecorator(
+        decorator: _GeneratorRegistrationDecorator[Any] = _GeneratorRegistrationDecorator(
             container=self,
             scope=scope,
             lifetime=lifetime,
@@ -848,7 +848,7 @@ class Container:
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
-    ) -> ContextManagerRegistrationDecorator[Any]: ...
+    ) -> Callable[[F], F]: ...
 
     def add_context_manager(
         self,
@@ -861,7 +861,7 @@ class Container:
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
-    ) -> None | ContextManagerRegistrationDecorator[Any]:
+    ) -> None | Callable[[F], F]:
         """Register a context-manager or async-context-manager provider.
 
         The entered value is resolved as the dependency, and ``__exit__`` /
@@ -898,7 +898,7 @@ class Container:
                     return Session(engine)
 
         """
-        decorator: ContextManagerRegistrationDecorator[Any] = ContextManagerRegistrationDecorator(
+        decorator: _ContextManagerRegistrationDecorator[Any] = _ContextManagerRegistrationDecorator(
             container=self,
             scope=scope,
             lifetime=lifetime,
@@ -2942,7 +2942,7 @@ class Container:
 
 
 @dataclass(slots=True, kw_only=True)
-class ConcreteTypeRegistrationDecorator(Generic[T]):
+class _ConcreteTypeRegistrationDecorator(Generic[T]):
     """A decorator for registering concrete type providers in the container."""
 
     container: Container
@@ -2971,7 +2971,7 @@ class ConcreteTypeRegistrationDecorator(Generic[T]):
 
 
 @dataclass(slots=True, kw_only=True)
-class FactoryRegistrationDecorator(Generic[T]):
+class _FactoryRegistrationDecorator(Generic[T]):
     """A decorator for registering factory providers in the container."""
 
     container: Container
@@ -3000,7 +3000,7 @@ class FactoryRegistrationDecorator(Generic[T]):
 
 
 @dataclass(slots=True, kw_only=True)
-class GeneratorRegistrationDecorator(Generic[T]):
+class _GeneratorRegistrationDecorator(Generic[T]):
     """A decorator for registering generator providers in the container."""
 
     container: Container
@@ -3029,7 +3029,7 @@ class GeneratorRegistrationDecorator(Generic[T]):
 
 
 @dataclass(slots=True, kw_only=True)
-class ContextManagerRegistrationDecorator(Generic[T]):
+class _ContextManagerRegistrationDecorator(Generic[T]):
     """A decorator for registering context manager providers in the container."""
 
     container: Container

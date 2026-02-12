@@ -8,11 +8,6 @@ from typing import Any, cast
 import pytest
 
 from diwire import Container
-from diwire._internal.container import (
-    ConcreteTypeRegistrationDecorator,
-    ContextManagerRegistrationDecorator,
-    GeneratorRegistrationDecorator,
-)
 from diwire._internal.providers import ContextManagerProvider, FactoryProvider, GeneratorProvider
 from diwire.exceptions import DIWireInvalidRegistrationError
 
@@ -240,25 +235,19 @@ def test_explicit_provides_bypasses_return_type_inference_for_all_provider_kinds
 def test_register_concrete_without_arguments_returns_decorator() -> None:
     container = Container()
 
-    assert isinstance(container.add_concrete(), ConcreteTypeRegistrationDecorator)
+    assert callable(container.add_concrete())
 
 
 def test_register_generator_with_decorator_sentinel_returns_decorator() -> None:
     container = Container()
 
-    assert isinstance(
-        container.add_generator(),
-        GeneratorRegistrationDecorator,
-    )
+    assert callable(container.add_generator())
 
 
 def test_register_context_manager_with_decorator_sentinel_returns_decorator() -> None:
     container = Container()
 
-    assert isinstance(
-        container.add_context_manager(),
-        ContextManagerRegistrationDecorator,
-    )
+    assert callable(container.add_context_manager())
 
 
 def test_register_concrete_with_provides_only_uses_the_same_concrete_type() -> None:
