@@ -6,7 +6,7 @@ import uuid
 import warnings
 from abc import ABC, abstractmethod
 from types import ModuleType
-from typing import Any, NamedTuple, cast
+from typing import Any, Generic, NamedTuple, TypeVar, cast
 
 import msgspec
 import pydantic
@@ -16,6 +16,7 @@ from pydantic_settings import BaseSettings
 from diwire.autoregistration import ConcreteTypeAutoregistrationPolicy
 from diwire.container import Container
 from diwire.exceptions import DIWireDependencyNotRegisteredError
+from diwire.markers import AsyncProvider, Provider
 from diwire.providers import Lifetime
 from diwire.scope import Scope
 
@@ -153,6 +154,21 @@ class RootWithPathDep:
 class RootWithUuidDep:
     def __init__(self, request_id: uuid.UUID) -> None:
         self.request_id = request_id
+
+
+class _AutoProviderDependency:
+    pass
+
+
+_OpenT = TypeVar("_OpenT")
+
+
+class _OpenAutoregDependency(Generic[_OpenT]):
+    pass
+
+
+def _build_open_autoreg_dependency(type_arg: type[_OpenT]) -> _OpenAutoregDependency[_OpenT]:
+    return _OpenAutoregDependency()
 
 
 class _TestMetaclass(type):
@@ -318,6 +334,91 @@ def test_resolve_autoregistration_integration_registers_dependency_chain() -> No
     assert isinstance(resolved, ResolveRoot)
     assert isinstance(resolved.dependency, ResolveDependency)
     assert container._providers_registrations.find_by_type(ResolveDependency) is not None
+
+
+def test_resolve_provider_dependency_key_autoregisters_inner_dependency() -> None:
+    container = Container(default_lifetime=Lifetime.TRANSIENT)
+
+    provider = container.resolve(Provider[_AutoProviderDependency])
+    first = provider()
+    second = provider()
+
+    assert isinstance(first, _AutoProviderDependency)
+    assert isinstance(second, _AutoProviderDependency)
+    assert first is not second
+
+
+@pytest.mark.asyncio
+async def test_resolve_async_provider_dependency_key_autoregisters_inner_dependency() -> None:
+    container = Container(default_lifetime=Lifetime.TRANSIENT)
+
+    provider = container.resolve(AsyncProvider[_AutoProviderDependency])
+    first = await provider()
+    second = await provider()
+
+    assert isinstance(first, _AutoProviderDependency)
+    assert isinstance(second, _AutoProviderDependency)
+    assert first is not second
+
+
+def test_resolve_provider_dependency_key_uses_existing_registration_without_recompile() -> None:
+    container = Container(default_lifetime=Lifetime.TRANSIENT)
+    container.add_concrete(_AutoProviderDependency)
+    container.compile()
+    graph_revision_before = container._graph_revision
+
+    provider = container.resolve(Provider[_AutoProviderDependency])
+    resolved = provider()
+
+    assert isinstance(resolved, _AutoProviderDependency)
+    assert container._graph_revision == graph_revision_before
+
+
+def test_resolve_reraises_when_missing_dependency_cannot_be_autoregistered() -> None:
+    container = Container()
+
+    with pytest.raises(DIWireDependencyNotRegisteredError):
+        container.resolve(str)
+
+
+@pytest.mark.asyncio
+async def test_aresolve_provider_dependency_key_autoregisters_then_reuses_compilation() -> None:
+    container = Container(default_lifetime=Lifetime.TRANSIENT)
+
+    first_provider = await container.aresolve(Provider[_AutoProviderDependency])
+    second_provider = await container.aresolve(Provider[_AutoProviderDependency])
+    first = first_provider()
+    second = second_provider()
+
+    assert isinstance(first, _AutoProviderDependency)
+    assert isinstance(second, _AutoProviderDependency)
+    assert first is not second
+
+
+@pytest.mark.asyncio
+async def test_aresolve_autoregisters_on_miss_and_reraises_when_graph_unchanged() -> None:
+    container = Container()
+
+    resolved = await container.aresolve(ResolveRoot)
+
+    assert isinstance(resolved, ResolveRoot)
+    with pytest.raises(DIWireDependencyNotRegisteredError):
+        await container.aresolve(str)
+
+
+def test_ensure_autoregistration_short_circuits_for_disabled_and_open_generic() -> None:
+    strict_container = Container(autoregister_concrete_types=False)
+
+    strict_container._ensure_autoregistration(DirectDependency)
+
+    assert strict_container._providers_registrations.find_by_type(DirectDependency) is None
+
+    container = Container()
+    container.add_factory(_build_open_autoreg_dependency, provides=_OpenAutoregDependency)
+
+    container._ensure_autoregistration(_OpenAutoregDependency[int])
+
+    assert container._providers_registrations.find_by_type(_OpenAutoregDependency[int]) is None
 
 
 def test_resolve_autoregisters_pydantic_settings_as_singleton_factory() -> None:

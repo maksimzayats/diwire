@@ -19,7 +19,12 @@ from typing import (
 )
 
 from diwire.autoregistration import ConcreteTypeAutoregistrationPolicy
-from diwire.exceptions import DIWireError, DIWireInvalidRegistrationError, DIWireScopeMismatchError
+from diwire.exceptions import (
+    DIWireDependencyNotRegisteredError,
+    DIWireError,
+    DIWireInvalidRegistrationError,
+    DIWireScopeMismatchError,
+)
 from diwire.injection import (
     INJECT_CONTEXT_KWARG,
     INJECT_RESOLVER_KWARG,
@@ -30,7 +35,7 @@ from diwire.injection import (
 )
 from diwire.integrations.pydantic_settings import is_pydantic_settings_subclass
 from diwire.lock_mode import LockMode
-from diwire.markers import is_provider_annotation, strip_provider_annotation
+from diwire.markers import ProviderMarker, is_provider_annotation, strip_provider_annotation
 from diwire.open_generics import OpenGenericRegistry, OpenGenericResolver
 from diwire.providers import (
     ContextManagerProvider,
@@ -1638,9 +1643,19 @@ class Container:
         return max_scope_level
 
     def _unwrap_provider_dependency_key(self, dependency: Any) -> Any:
-        if not is_provider_annotation(dependency):
+        provider_inner_dependency = self._extract_provider_inner_dependency_fast(dependency)
+        if provider_inner_dependency is None:
             return dependency
-        return strip_provider_annotation(dependency)
+        return provider_inner_dependency
+
+    def _extract_provider_inner_dependency_fast(self, dependency: Any) -> Any | None:
+        metadata = getattr(dependency, "__metadata__", None)
+        if metadata is None:
+            return None
+        for marker in metadata:
+            if isinstance(marker, ProviderMarker):
+                return marker.dependency_key
+        return None
 
     def _resolve_sync_injected_arguments(
         self,
@@ -1974,10 +1989,30 @@ class Container:
                 service = container.resolve(Service)
 
         """
-        self._ensure_autoregistration(dependency)
-        resolver = self.compile()
+        resolver = self._root_resolver
+        if resolver is None:
+            resolver = self.compile()
 
-        return resolver.resolve(dependency)
+        if not self._autoregister_concrete_types:
+            return resolver.resolve(dependency)
+
+        provider_inner_dependency = self._extract_provider_inner_dependency_fast(dependency)
+        if provider_inner_dependency is not None:
+            graph_revision_before = self._graph_revision
+            self._ensure_autoregistration(provider_inner_dependency)
+            if self._graph_revision != graph_revision_before:
+                resolver = self.compile()
+            return resolver.resolve(dependency)
+
+        try:
+            return resolver.resolve(dependency)
+        except DIWireDependencyNotRegisteredError:
+            graph_revision_before = self._graph_revision
+            self._ensure_autoregistration(dependency)
+            if self._graph_revision == graph_revision_before:
+                raise
+            resolver = self.compile()
+            return resolver.resolve(dependency)
 
     @overload
     async def aresolve(self, dependency: type[T]) -> T: ...
@@ -2013,10 +2048,30 @@ class Container:
                 client = await container.aresolve(Client)
 
         """
-        self._ensure_autoregistration(dependency)
-        resolver = self.compile()
+        resolver = self._root_resolver
+        if resolver is None:
+            resolver = self.compile()
 
-        return await resolver.aresolve(dependency)
+        if not self._autoregister_concrete_types:
+            return await resolver.aresolve(dependency)
+
+        provider_inner_dependency = self._extract_provider_inner_dependency_fast(dependency)
+        if provider_inner_dependency is not None:
+            graph_revision_before = self._graph_revision
+            self._ensure_autoregistration(provider_inner_dependency)
+            if self._graph_revision != graph_revision_before:
+                resolver = self.compile()
+            return await resolver.aresolve(dependency)
+
+        try:
+            return await resolver.aresolve(dependency)
+        except DIWireDependencyNotRegisteredError:
+            graph_revision_before = self._graph_revision
+            self._ensure_autoregistration(dependency)
+            if self._graph_revision == graph_revision_before:
+                raise
+            resolver = self.compile()
+            return await resolver.aresolve(dependency)
 
     def enter_scope(
         self,
