@@ -207,7 +207,7 @@ class ContainerContext:
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
-    ) -> None | Callable[[C], C]:
+    ) -> Callable[[C], C] | None:
         """Record and apply a concrete registration with direct/decorator forms.
 
         Args:
@@ -329,7 +329,7 @@ class ContainerContext:
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
-    ) -> None | Callable[[F], F]:
+    ) -> Callable[[F], F] | None:
         """Record and apply a factory registration with direct/decorator forms.
 
         Args:
@@ -443,7 +443,7 @@ class ContainerContext:
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
-    ) -> None | Callable[[F], F]:
+    ) -> Callable[[F], F] | None:
         """Record and apply a generator registration with direct/decorator forms.
 
         Args:
@@ -551,7 +551,7 @@ class ContainerContext:
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
-    ) -> None | Callable[[F], F]:
+    ) -> Callable[[F], F] | None:
         """Record and apply a context-manager registration.
 
         Args:

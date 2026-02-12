@@ -291,7 +291,7 @@ class Container:
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
-    ) -> None | Callable[[C], C]:
+    ) -> Callable[[C], C] | None:
         """Register a concrete type provider.
 
         Supports direct calls and decorator form. ``provides`` may be a protocol,
@@ -540,7 +540,7 @@ class Container:
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
-    ) -> None | Callable[[F], F]:
+    ) -> Callable[[F], F] | None:
         """Register a factory provider.
 
         Supports direct calls and decorator form. ``provides`` may be a protocol,
@@ -708,7 +708,7 @@ class Container:
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
-    ) -> None | Callable[[F], F]:
+    ) -> Callable[[F], F] | None:
         """Register a generator or async-generator provider with cleanup.
 
         The yielded value is resolved as the dependency, and teardown runs when
@@ -861,7 +861,7 @@ class Container:
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
-    ) -> None | Callable[[F], F]:
+    ) -> Callable[[F], F] | None:
         """Register a context-manager or async-context-manager provider.
 
         The entered value is resolved as the dependency, and ``__exit__`` /
