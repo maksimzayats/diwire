@@ -226,6 +226,12 @@ class _OpenGenericRegistry:
     def values(self) -> tuple[_OpenGenericSpec, ...]:
         return tuple(self._specs_by_key.values())
 
+    def find_exact(self, provides: Any) -> _OpenGenericSpec | None:
+        canonical_key = canonicalize_open_key(provides)
+        if canonical_key is None:
+            return None
+        return self._specs_by_key.get(canonical_key)
+
     def register(  # noqa: PLR0913
         self,
         *,

@@ -8,6 +8,7 @@ from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from types import TracebackType
 from typing import (
+    Annotated,
     Any,
     Generic,
     Literal,
@@ -36,7 +37,7 @@ from diwire.injection import (
 from diwire.integrations.pydantic_settings import is_pydantic_settings_subclass
 from diwire.lock_mode import LockMode
 from diwire.markers import ProviderMarker, is_provider_annotation, strip_provider_annotation
-from diwire.open_generics import OpenGenericRegistry, OpenGenericResolver
+from diwire.open_generics import OpenGenericRegistry, OpenGenericResolver, canonicalize_open_key
 from diwire.providers import (
     ContextManagerProvider,
     FactoryProvider,
@@ -154,6 +155,9 @@ class Container:
         self._registration_mutation_depth: int = 0
         self._registration_mutation_snapshot: _ContainerGraphSnapshot | None = None
         self._registration_mutation_failed: bool = False
+        self._decoration_rules_by_provides: dict[Any, list[_DecorationRule]] = {}
+        self._decoration_chain_by_provides: dict[Any, _DecorationChain] = {}
+        self._decoration_counter: int = 0
         self._injected_scope_contracts: list[_InjectedScopeContract] = []
         self._container_entrypoints: dict[str, Callable[..., Any]] = {
             method_name: getattr(self, method_name) for method_name in self._ENTRYPOINT_METHOD_NAMES
@@ -202,10 +206,14 @@ class Container:
             msg = "add_instance() parameter 'provides' must not be None; use 'infer'."
             raise DIWireInvalidRegistrationError(msg)
 
+        registration_provides, has_decoration_chain = self._resolve_registration_target_provides(
+            resolved_provides,
+        )
+
         with self._registration_mutation():
             self._providers_registrations.add(
                 ProviderSpec(
-                    provides=resolved_provides,
+                    provides=registration_provides,
                     instance=instance,
                     lifetime=self._default_lifetime,
                     scope=self._root_scope,
@@ -215,7 +223,10 @@ class Container:
                     lock_mode=LockMode.NONE,
                 ),
             )
-            self._invalidate_compilation()
+            self._finalize_registration_after_binding(
+                original_provides=resolved_provides,
+                has_decoration_chain=has_decoration_chain,
+            )
 
     @overload
     def add_concrete(
@@ -349,11 +360,14 @@ class Container:
         )
 
         resolved_lock_mode = self._resolve_provider_lock_mode(lock_mode)
+        registration_provides, has_decoration_chain = self._resolve_registration_target_provides(
+            resolved_provides,
+        )
 
         with self._registration_mutation():
             if (
                 self._open_generic_registry.register(
-                    provides=resolved_provides,
+                    provides=registration_provides,
                     provider_kind="concrete_type",
                     provider=resolved_concrete_type,
                     lifetime=resolved_lifetime,
@@ -374,7 +388,10 @@ class Container:
                         resolved_autoregister_dependencies,
                     ),
                 )
-                self._invalidate_compilation()
+                self._finalize_registration_after_binding(
+                    original_provides=resolved_provides,
+                    has_decoration_chain=has_decoration_chain,
+                )
                 return None
 
             (
@@ -394,7 +411,7 @@ class Container:
                 )
                 self._providers_registrations.add(
                     ProviderSpec(
-                        provides=resolved_provides,
+                        provides=registration_provides,
                         factory=concrete_factory,
                         lifetime=resolved_lifetime,
                         scope=resolved_scope,
@@ -413,12 +430,15 @@ class Container:
                         resolved_autoregister_dependencies,
                     ),
                 )
-                self._invalidate_compilation()
+                self._finalize_registration_after_binding(
+                    original_provides=resolved_provides,
+                    has_decoration_chain=has_decoration_chain,
+                )
                 return None
 
             self._providers_registrations.add(
                 ProviderSpec(
-                    provides=resolved_provides,
+                    provides=registration_provides,
                     concrete_type=resolved_concrete_type,
                     lifetime=resolved_lifetime,
                     scope=resolved_scope,
@@ -437,7 +457,10 @@ class Container:
                     resolved_autoregister_dependencies,
                 ),
             )
-            self._invalidate_compilation()
+            self._finalize_registration_after_binding(
+                original_provides=resolved_provides,
+                has_decoration_chain=has_decoration_chain,
+            )
 
             return None
 
@@ -888,6 +911,465 @@ class Container:
         )
         return None
 
+    def decorate(
+        self,
+        *,
+        provides: Any,
+        decorator: Callable[..., Any],
+        inner_parameter: str | None = None,
+    ) -> None:
+        """Decorate an existing or future provider binding for a dependency key.
+
+        Decoration rules are persistent for the container lifetime. If a binding
+        exists now, decoration is applied immediately. Otherwise the rule is
+        stored and applied automatically when the key is registered later.
+        """
+        if provides is None:
+            msg = "decorate() parameter 'provides' must not be None."
+            raise DIWireInvalidRegistrationError(msg)
+        normalized_provides = self._normalize_decoration_provides_key(provides)
+
+        with self._registration_mutation():
+            self._register_decoration_rule(
+                provides=normalized_provides,
+                decorator=decorator,
+                inner_parameter=inner_parameter,
+            )
+            if self._decoration_chain_by_provides.get(normalized_provides) is not None:
+                self._ensure_chain_keys(provides=normalized_provides)
+                self._rebuild_decoration_chain(provides=normalized_provides)
+                self._invalidate_compilation()
+                return
+            if self._has_registered_binding(normalized_provides):
+                self._apply_pending_decorations(provides=normalized_provides)
+                self._invalidate_compilation()
+
+    def _register_decoration_rule(
+        self,
+        *,
+        provides: Any,
+        decorator: Callable[..., Any],
+        inner_parameter: str | None,
+    ) -> None:
+        decorator_callable = self._validate_decorator_callable(decorator)
+        dependencies = self._extract_decoration_dependencies(
+            decorator=decorator_callable,
+        )
+        resolved_inner_parameter = self._resolve_decoration_inner_parameter(
+            provides=provides,
+            dependencies=dependencies,
+            inner_parameter=inner_parameter,
+            decorator=decorator_callable,
+        )
+        is_async = self._provider_return_type_extractor.is_factory_async(decorator_callable)
+
+        rules = self._decoration_rules_by_provides.setdefault(provides, [])
+        rules.append(
+            _DecorationRule(
+                decorator=decorator_callable,
+                inner_parameter=resolved_inner_parameter,
+                dependencies=tuple(dependencies),
+                is_async=is_async,
+            ),
+        )
+
+    def _validate_decorator_callable(
+        self,
+        decorator: Any,
+    ) -> Callable[..., Any]:
+        decorator_value = cast("Any", decorator)
+        if not callable(decorator_value):
+            msg = "decorate() parameter 'decorator' must be callable."
+            raise DIWireInvalidRegistrationError(msg)
+
+        unwrapped = inspect.unwrap(decorator_value)
+        if inspect.isgeneratorfunction(unwrapped) or inspect.isasyncgenfunction(unwrapped):
+            msg = (
+                "decorate() parameter 'decorator' must be a sync/async factory-style "
+                "callable, not a generator or async-generator function."
+            )
+            raise DIWireInvalidRegistrationError(msg)
+
+        return cast("Callable[..., Any]", decorator_value)
+
+    def _extract_decoration_dependencies(
+        self,
+        *,
+        decorator: Callable[..., Any],
+    ) -> list[ProviderDependency]:
+        try:
+            return self._provider_dependencies_extractor.extract_from_factory(
+                factory=decorator,
+            )
+        except DIWireError as error:
+            msg = (
+                "decorate() could not infer dependencies for decorator "
+                f"'{self._callable_name(decorator)}': {error}"
+            )
+            raise DIWireInvalidRegistrationError(msg) from error
+
+    def _resolve_decoration_inner_parameter(
+        self,
+        *,
+        provides: Any,
+        dependencies: list[ProviderDependency],
+        inner_parameter: str | None,
+        decorator: Callable[..., Any],
+    ) -> str:
+        if inner_parameter is not None:
+            if any(dependency.parameter.name == inner_parameter for dependency in dependencies):
+                return inner_parameter
+            msg = (
+                "decorate() parameter 'inner_parameter' must match one of the decorator's "
+                "injectable parameters."
+            )
+            raise DIWireInvalidRegistrationError(msg)
+
+        matched_parameter_names = [
+            dependency.parameter.name
+            for dependency in dependencies
+            if dependency.provides == provides
+        ]
+        if len(matched_parameter_names) == 1:
+            return matched_parameter_names[0]
+        if not matched_parameter_names:
+            msg = (
+                "decorate() could not infer the inner parameter for decorator "
+                f"'{self._callable_name(decorator)}' and provides {provides!r}. "
+                "Pass inner_parameter='...'."
+            )
+            raise DIWireInvalidRegistrationError(msg)
+
+        msg = (
+            "decorate() found multiple inner parameter candidates for decorator "
+            f"'{self._callable_name(decorator)}' and provides {provides!r}. "
+            "Pass inner_parameter='...'."
+        )
+        raise DIWireInvalidRegistrationError(msg)
+
+    def _finalize_registration_after_binding(
+        self,
+        *,
+        original_provides: Any,
+        has_decoration_chain: bool,
+    ) -> None:
+        normalized_provides = self._normalize_decoration_provides_key(original_provides)
+        if has_decoration_chain:
+            self._rebuild_decoration_chain(provides=normalized_provides)
+        elif self._decoration_rules_by_provides.get(normalized_provides):
+            self._apply_pending_decorations(provides=normalized_provides)
+        self._invalidate_compilation()
+
+    def _resolve_registration_target_provides(self, provides: Any) -> tuple[Any, bool]:
+        normalized_provides = self._normalize_decoration_provides_key(provides)
+        chain = self._decoration_chain_by_provides.get(normalized_provides)
+        if chain is None:
+            return provides, False
+        return chain.base_key, True
+
+    def _apply_pending_decorations(self, *, provides: Any) -> None:
+        rules = self._decoration_rules_by_provides.get(provides)
+        if not rules:
+            return
+        if not self._has_registered_binding(provides):
+            return
+
+        rule_count = len(rules)
+        chain = self._build_decoration_chain(
+            provides=provides,
+            rule_count=rule_count,
+        )
+        self._move_current_binding_to_base_key(
+            provides=provides,
+            base_key=chain.base_key,
+        )
+        self._rebuild_decoration_chain(
+            provides=provides,
+            chain=chain,
+        )
+        self._decoration_chain_by_provides[provides] = chain
+
+    def _ensure_chain_keys(self, *, provides: Any) -> None:
+        chain = self._decoration_chain_by_provides.get(provides)
+        if chain is None:
+            return
+        rules = self._decoration_rules_by_provides.get(provides, [])
+        expected_layers = len(rules)
+        if expected_layers == len(chain.layer_keys):
+            return
+        if expected_layers < len(chain.layer_keys):
+            msg = f"Decoration chain for {provides!r} has more layers than rules."
+            raise DIWireInvalidRegistrationError(msg)
+        while len(chain.layer_keys) < expected_layers:
+            insertion_index = max(len(chain.layer_keys) - 1, 0)
+            chain.layer_keys.insert(
+                insertion_index,
+                self._create_decoration_alias_key(
+                    provides=provides,
+                    layer=insertion_index,
+                ),
+            )
+
+    def _build_decoration_chain(
+        self,
+        *,
+        provides: Any,
+        rule_count: int,
+    ) -> _DecorationChain:
+        base_key = self._create_decoration_alias_key(
+            provides=provides,
+            layer=-1,
+        )
+        layer_keys: list[Any] = [provides]
+        if rule_count > 1:
+            layer_keys = [
+                self._create_decoration_alias_key(
+                    provides=provides,
+                    layer=layer,
+                )
+                for layer in range(rule_count - 1)
+            ]
+            layer_keys.append(provides)
+        return _DecorationChain(
+            base_key=base_key,
+            layer_keys=layer_keys,
+        )
+
+    def _move_current_binding_to_base_key(
+        self,
+        *,
+        provides: Any,
+        base_key: Any,
+    ) -> None:
+        if self._is_open_generic_provides(provides):
+            open_spec = self._open_generic_registry.find_exact(provides)
+            if open_spec is None:
+                msg = f"Cannot decorate {provides!r}: base open-generic binding is not registered."
+                raise DIWireInvalidRegistrationError(msg)
+            dependencies = [binding.dependency for binding in open_spec.bindings]
+            self._open_generic_registry.register(
+                provides=base_key,
+                provider_kind=open_spec.provider_kind,
+                provider=open_spec.provider,
+                lifetime=open_spec.lifetime,
+                scope=open_spec.scope,
+                lock_mode=open_spec.lock_mode,
+                is_async=open_spec.is_async,
+                is_any_dependency_async=open_spec.is_any_dependency_async,
+                needs_cleanup=open_spec.needs_cleanup,
+                dependencies=dependencies,
+            )
+            return
+
+        provider_spec = self._providers_registrations.find_by_type(provides)
+        if provider_spec is None:
+            msg = f"Cannot decorate {provides!r}: base binding is not registered."
+            raise DIWireInvalidRegistrationError(msg)
+
+        self._providers_registrations.add(
+            self._copy_provider_spec_with_new_key(
+                provider_spec=provider_spec,
+                provides=base_key,
+            ),
+        )
+
+    def _copy_provider_spec_with_new_key(
+        self,
+        *,
+        provider_spec: ProviderSpec,
+        provides: Any,
+    ) -> ProviderSpec:
+        return ProviderSpec(
+            provides=provides,
+            instance=provider_spec.instance,
+            concrete_type=provider_spec.concrete_type,
+            factory=provider_spec.factory,
+            generator=provider_spec.generator,
+            context_manager=provider_spec.context_manager,
+            dependencies=list(provider_spec.dependencies),
+            is_async=provider_spec.is_async,
+            is_any_dependency_async=provider_spec.is_any_dependency_async,
+            needs_cleanup=provider_spec.needs_cleanup,
+            lock_mode=provider_spec.lock_mode,
+            lifetime=provider_spec.lifetime,
+            scope=provider_spec.scope,
+        )
+
+    def _rebuild_decoration_chain(
+        self,
+        *,
+        provides: Any,
+        chain: _DecorationChain | None = None,
+    ) -> None:
+        active_chain = (
+            chain if chain is not None else self._decoration_chain_by_provides.get(provides)
+        )
+        if active_chain is None:
+            return
+        rules = self._decoration_rules_by_provides.get(provides)
+        if not rules:
+            return
+        if len(active_chain.layer_keys) != len(rules):
+            msg = f"Decoration chain for {provides!r} is out of sync with rules."
+            raise DIWireInvalidRegistrationError(msg)
+
+        base_metadata = self._resolve_decoration_base_metadata(
+            provides=provides,
+            base_key=active_chain.base_key,
+        )
+        inner_key = active_chain.base_key
+
+        for index, rule in enumerate(rules):
+            out_key = active_chain.layer_keys[index]
+            dependencies = self._build_decorator_dependencies(
+                rule=rule,
+                inner_key=inner_key,
+            )
+            is_any_dependency_async = self._provider_return_type_extractor.is_any_dependency_async(
+                dependencies,
+            )
+
+            if base_metadata.is_open_generic:
+                self._register_open_generic_decorator_layer(
+                    provides=out_key,
+                    rule=rule,
+                    dependencies=dependencies,
+                    metadata=base_metadata,
+                    is_any_dependency_async=is_any_dependency_async,
+                )
+            else:
+                self._providers_registrations.add(
+                    ProviderSpec(
+                        provides=out_key,
+                        factory=rule.decorator,
+                        lifetime=base_metadata.lifetime,
+                        scope=base_metadata.scope,
+                        dependencies=dependencies,
+                        is_async=rule.is_async,
+                        is_any_dependency_async=is_any_dependency_async,
+                        needs_cleanup=False,
+                        lock_mode=base_metadata.lock_mode,
+                    ),
+                )
+
+            self._autoregister_provider_dependencies(
+                dependencies=dependencies,
+                scope=base_metadata.scope,
+                lifetime=base_metadata.lifetime,
+                enabled=self._resolve_autoregister_dependencies(None),
+            )
+            inner_key = out_key
+
+    def _build_decorator_dependencies(
+        self,
+        *,
+        rule: _DecorationRule,
+        inner_key: Any,
+    ) -> list[ProviderDependency]:
+        resolved_dependencies: list[ProviderDependency] = []
+        inner_resolved = False
+        for dependency in rule.dependencies:
+            if dependency.parameter.name == rule.inner_parameter:
+                resolved_dependencies.append(
+                    ProviderDependency(
+                        provides=inner_key,
+                        parameter=dependency.parameter,
+                    ),
+                )
+                inner_resolved = True
+            else:
+                resolved_dependencies.append(dependency)
+        if inner_resolved:
+            return resolved_dependencies
+        msg = (
+            "decorate() configured an unknown inner parameter "
+            f"'{rule.inner_parameter}' for decorator '{self._callable_name(rule.decorator)}'."
+        )
+        raise DIWireInvalidRegistrationError(msg)
+
+    def _register_open_generic_decorator_layer(
+        self,
+        *,
+        provides: Any,
+        rule: _DecorationRule,
+        dependencies: list[ProviderDependency],
+        metadata: _DecorationBaseMetadata,
+        is_any_dependency_async: bool,
+    ) -> None:
+        registered_spec = self._open_generic_registry.register(
+            provides=provides,
+            provider_kind="factory",
+            provider=rule.decorator,
+            lifetime=metadata.lifetime,
+            scope=metadata.scope,
+            lock_mode=metadata.lock_mode,
+            is_async=rule.is_async,
+            is_any_dependency_async=is_any_dependency_async,
+            needs_cleanup=False,
+            dependencies=dependencies,
+        )
+        if registered_spec is None:
+            msg = f"Cannot register open-generic decorator layer for key {provides!r}."
+            raise DIWireInvalidRegistrationError(msg)
+
+    def _resolve_decoration_base_metadata(
+        self,
+        *,
+        provides: Any,
+        base_key: Any,
+    ) -> _DecorationBaseMetadata:
+        if self._is_open_generic_provides(provides):
+            open_spec = self._open_generic_registry.find_exact(base_key)
+            if open_spec is None:
+                msg = f"Decoration base binding for {provides!r} is missing."
+                raise DIWireInvalidRegistrationError(msg)
+            return _DecorationBaseMetadata(
+                lifetime=open_spec.lifetime,
+                scope=open_spec.scope,
+                lock_mode=open_spec.lock_mode,
+                is_open_generic=True,
+            )
+
+        provider_spec = self._providers_registrations.find_by_type(base_key)
+        if provider_spec is None:
+            msg = f"Decoration base binding for {provides!r} is missing."
+            raise DIWireInvalidRegistrationError(msg)
+        if provider_spec.lifetime is None:
+            msg = f"Decoration base binding for {provides!r} has no lifetime."
+            raise DIWireInvalidRegistrationError(msg)
+        return _DecorationBaseMetadata(
+            lifetime=provider_spec.lifetime,
+            scope=provider_spec.scope,
+            lock_mode=provider_spec.lock_mode,
+            is_open_generic=False,
+        )
+
+    def _has_registered_binding(self, provides: Any) -> bool:
+        if self._is_open_generic_provides(provides):
+            return self._open_generic_registry.find_exact(provides) is not None
+        return self._providers_registrations.find_by_type(provides) is not None
+
+    def _normalize_decoration_provides_key(self, provides: Any) -> Any:
+        canonical_open_key = canonicalize_open_key(provides)
+        if canonical_open_key is None:
+            return provides
+        return canonical_open_key
+
+    def _create_decoration_alias_key(
+        self,
+        *,
+        provides: Any,
+        layer: int,
+    ) -> Any:
+        self._decoration_counter += 1
+        alias_id = self._decoration_counter
+        if self._is_open_generic_provides(provides):
+            return Annotated[provides, _OpenDecorationAlias(id=alias_id, layer=layer)]
+        return type(f"_DIWireInner_{alias_id}", (), {})
+
+    def _is_open_generic_provides(self, provides: Any) -> bool:
+        return canonicalize_open_key(provides) is not None
+
     def _resolve_concrete_registration_types(
         self,
         *,
@@ -1005,10 +1487,14 @@ class Container:
         dependencies: list[ProviderDependency],
         resolved_autoregister_dependencies: bool | None,
     ) -> None:
+        registration_provides, has_decoration_chain = self._resolve_registration_target_provides(
+            provides,
+        )
+
         with self._registration_mutation():
             if (
                 self._open_generic_registry.register(
-                    provides=provides,
+                    provides=registration_provides,
                     provider_kind=provider_kind,
                     provider=provider,
                     lifetime=lifetime,
@@ -1029,12 +1515,15 @@ class Container:
                         resolved_autoregister_dependencies,
                     ),
                 )
-                self._invalidate_compilation()
+                self._finalize_registration_after_binding(
+                    original_provides=provides,
+                    has_decoration_chain=has_decoration_chain,
+                )
                 return
 
             if provider_field == "factory":
                 provider_spec = ProviderSpec(
-                    provides=provides,
+                    provides=registration_provides,
                     factory=cast("FactoryProvider[Any]", provider),
                     lifetime=lifetime,
                     scope=scope,
@@ -1046,7 +1535,7 @@ class Container:
                 )
             elif provider_field == "generator":
                 provider_spec = ProviderSpec(
-                    provides=provides,
+                    provides=registration_provides,
                     generator=cast("GeneratorProvider[Any]", provider),
                     lifetime=lifetime,
                     scope=scope,
@@ -1058,7 +1547,7 @@ class Container:
                 )
             else:
                 provider_spec = ProviderSpec(
-                    provides=provides,
+                    provides=registration_provides,
                     context_manager=cast("ContextManagerProvider[Any]", provider),
                     lifetime=lifetime,
                     scope=scope,
@@ -1078,7 +1567,10 @@ class Container:
                     resolved_autoregister_dependencies,
                 ),
             )
-            self._invalidate_compilation()
+            self._finalize_registration_after_binding(
+                original_provides=provides,
+                has_decoration_chain=has_decoration_chain,
+            )
             return
 
     def _resolve_concrete_registration_dependencies(
@@ -1910,6 +2402,18 @@ class Container:
             self._registration_mutation_snapshot = _ContainerGraphSnapshot(
                 providers_registrations=self._providers_registrations.snapshot(),
                 open_generic_registry=self._open_generic_registry.snapshot(),
+                decoration_rules_by_provides={
+                    provides: list(rules)
+                    for provides, rules in self._decoration_rules_by_provides.items()
+                },
+                decoration_chain_by_provides={
+                    provides: _DecorationChain(
+                        base_key=chain.base_key,
+                        layer_keys=list(chain.layer_keys),
+                    )
+                    for provides, chain in self._decoration_chain_by_provides.items()
+                },
+                decoration_counter=self._decoration_counter,
             )
             self._registration_mutation_failed = False
 
@@ -1928,6 +2432,18 @@ class Container:
                     snapshot = cast("_ContainerGraphSnapshot", self._registration_mutation_snapshot)
                     self._providers_registrations.restore(snapshot.providers_registrations)
                     self._open_generic_registry.restore(snapshot.open_generic_registry)
+                    self._decoration_rules_by_provides = {
+                        provides: list(rules)
+                        for provides, rules in snapshot.decoration_rules_by_provides.items()
+                    }
+                    self._decoration_chain_by_provides = {
+                        provides: _DecorationChain(
+                            base_key=chain.base_key,
+                            layer_keys=list(chain.layer_keys),
+                        )
+                        for provides, chain in snapshot.decoration_chain_by_provides.items()
+                    }
+                    self._decoration_counter = snapshot.decoration_counter
                     self._invalidate_compilation()
                 self._registration_mutation_snapshot = None
                 self._registration_mutation_failed = False
@@ -2319,6 +2835,37 @@ class _InjectedScopeContract:
 
 
 @dataclass(frozen=True, slots=True)
+class _DecorationRule:
+    decorator: Callable[..., Any]
+    inner_parameter: str
+    dependencies: tuple[ProviderDependency, ...]
+    is_async: bool
+
+
+@dataclass(slots=True)
+class _DecorationChain:
+    base_key: Any
+    layer_keys: list[Any]
+
+
+@dataclass(frozen=True, slots=True)
+class _OpenDecorationAlias:
+    id: int
+    layer: int
+
+
+@dataclass(frozen=True, slots=True)
+class _DecorationBaseMetadata:
+    lifetime: Lifetime
+    scope: BaseScope
+    lock_mode: LockMode | Literal["auto"]
+    is_open_generic: bool
+
+
+@dataclass(frozen=True, slots=True)
 class _ContainerGraphSnapshot:
     providers_registrations: ProvidersRegistrations.Snapshot
     open_generic_registry: OpenGenericRegistry.Snapshot
+    decoration_rules_by_provides: dict[Any, list[_DecorationRule]]
+    decoration_chain_by_provides: dict[Any, _DecorationChain]
+    decoration_counter: int

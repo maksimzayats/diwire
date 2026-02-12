@@ -36,6 +36,7 @@ _RegistrationMethod: TypeAlias = Literal[
     "add_factory",
     "add_generator",
     "add_context_manager",
+    "decorate",
 ]
 
 
@@ -605,6 +606,48 @@ class ContainerContext:
             },
         )
         return None
+
+    def decorate(
+        self,
+        *,
+        provides: Any,
+        decorator: Callable[..., Any],
+        inner_parameter: str | None = None,
+    ) -> None:
+        """Record and apply a provider decoration operation.
+
+        Args:
+            provides: Dependency key to decorate.
+            decorator: Factory-style callable wrapping the inner dependency.
+            inner_parameter: Optional decorator parameter name receiving inner.
+
+        Raises:
+            DIWireInvalidRegistrationError: If arguments are invalid.
+
+        """
+        if provides is None:
+            msg = "decorate() parameter 'provides' must not be None."
+            raise DIWireInvalidRegistrationError(msg)
+        decorator_value = cast("Any", decorator)
+        if not callable(decorator_value):
+            msg = "decorate() parameter 'decorator' must be callable."
+            raise DIWireInvalidRegistrationError(msg)
+        unwrapped = inspect.unwrap(decorator_value)
+        if inspect.isgeneratorfunction(unwrapped) or inspect.isasyncgenfunction(unwrapped):
+            msg = (
+                "decorate() parameter 'decorator' must be a sync/async factory-style "
+                "callable, not a generator or async-generator function."
+            )
+            raise DIWireInvalidRegistrationError(msg)
+
+        self._record_registration(
+            method_name="decorate",
+            registration_kwargs={
+                "provides": provides,
+                "decorator": cast("Callable[..., Any]", decorator_value),
+                "inner_parameter": inner_parameter,
+            },
+        )
 
     def _normalize_concrete_registration_types(
         self,

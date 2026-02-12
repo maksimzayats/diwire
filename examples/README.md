@@ -38,6 +38,7 @@ make examples-readme
 - [18. Async](#ex-18-async)
 - [19. Class Context Managers](#ex-19-class-context-managers)
 - [20. Providers](#ex-20-providers)
+- [21. Decorators](#ex-21-decorators)
 
 <a id="ex-01-quickstart"></a>
 ## 01. Quickstart
@@ -3662,6 +3663,277 @@ def main() -> None:
     print(f"transient_before_call={transient_before}")  # => transient_before_call=0
     print(f"transient_after_calls={transient_after}")  # => transient_after_calls=2
     print(f"transient_same_identity={transient_same}")  # => transient_same_identity=False
+
+
+if __name__ == "__main__":
+    main()
+```
+
+<a id="ex-21-decorators"></a>
+## 21. Decorators
+
+Files:
+- [01_decorators.py](#ex-21-decorators--01-decorators-py)
+- [02_decorate_before_registration.py](#ex-21-decorators--02-decorate-before-registration-py)
+- [03_open_generic_decorate.py](#ex-21-decorators--03-open-generic-decorate-py)
+
+<a id="ex-21-decorators--01-decorators-py"></a>
+### 01_decorators.py ([ex_21_decorators/01_decorators.py](ex_21_decorators/01_decorators.py))
+
+Decorators: tracing, stacking order, and base re-registration.
+
+This example shows practical ``Container.decorate(...)`` usage:
+
+1. Decorate an existing binding (``TracedHttpClient``).
+2. Stack another decorator and confirm ordering (last call is outermost).
+3. Re-register the base binding and keep the same decorator chain.
+
+```python
+from __future__ import annotations
+
+from collections.abc import Generator
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import Protocol
+
+from diwire import Container
+
+
+class HttpClient(Protocol):
+    def get(self, path: str) -> str: ...
+
+
+class RequestsHttpClient:
+    def __init__(self, base_url: str) -> None:
+        self.base_url = base_url
+
+    def get(self, path: str) -> str:
+        return f"requests:{self.base_url}{path}"
+
+
+class AltHttpClient:
+    def __init__(self, base_url: str) -> None:
+        self.base_url = base_url
+
+    def get(self, path: str) -> str:
+        return f"alt:{self.base_url}{path}"
+
+
+@dataclass(slots=True)
+class Tracer:
+    spans: list[str] = field(default_factory=list)
+
+    @contextmanager
+    def span(self, name: str) -> Generator[None, None, None]:
+        self.spans.append(name)
+        yield
+
+
+class TracedHttpClient:
+    def __init__(self, inner: HttpClient, tracer: Tracer) -> None:
+        self.inner = inner
+        self.tracer = tracer
+
+    def get(self, path: str) -> str:
+        with self.tracer.span("http.get"):
+            return self.inner.get(path)
+
+
+class MetricsHttpClient:
+    def __init__(self, inner: HttpClient) -> None:
+        self.inner = inner
+        self.calls = 0
+
+    def get(self, path: str) -> str:
+        self.calls += 1
+        return self.inner.get(path)
+
+
+def main() -> None:
+    container = Container(autoregister_concrete_types=False)
+    container.add_instance("https://api.example.com", provides=str)
+    tracer = Tracer()
+    container.add_instance(tracer, provides=Tracer)
+    container.add_concrete(RequestsHttpClient, provides=HttpClient)
+
+    container.decorate(provides=HttpClient, decorator=TracedHttpClient)
+    traced_client = container.resolve(HttpClient)
+    traced_result = traced_client.get("/health")
+    print(f"traced_layer={type(traced_client).__name__}")  # => traced_layer=TracedHttpClient
+    print(
+        f"traced_inner={type(traced_client.inner).__name__}",
+    )  # => traced_inner=RequestsHttpClient
+    print(
+        f"traced_result={traced_result}",
+    )  # => traced_result=requests:https://api.example.com/health
+    print(f"spans_after_traced={len(tracer.spans)}")  # => spans_after_traced=1
+
+    container.decorate(provides=HttpClient, decorator=MetricsHttpClient)
+    stacked_client = container.resolve(HttpClient)
+    stacked_result = stacked_client.get("/users")
+    print(f"stack_outer={type(stacked_client).__name__}")  # => stack_outer=MetricsHttpClient
+    print(f"stack_inner={type(stacked_client.inner).__name__}")  # => stack_inner=TracedHttpClient
+    print(
+        f"stack_base={type(stacked_client.inner.inner).__name__}",
+    )  # => stack_base=RequestsHttpClient
+    print(
+        f"stack_result={stacked_result}",
+    )  # => stack_result=requests:https://api.example.com/users
+    print(f"metric_calls={stacked_client.calls}")  # => metric_calls=1
+
+    container.add_concrete(AltHttpClient, provides=HttpClient)
+    rebound_client = container.resolve(HttpClient)
+    rebound_result = rebound_client.get("/rebased")
+    print(
+        f"rebound_base={type(rebound_client.inner.inner).__name__}",
+    )  # => rebound_base=AltHttpClient
+    print(
+        f"rebound_result={rebound_result}",
+    )  # => rebound_result=alt:https://api.example.com/rebased
+
+
+if __name__ == "__main__":
+    main()
+```
+
+<a id="ex-21-decorators--02-decorate-before-registration-py"></a>
+### 02_decorate_before_registration.py ([ex_21_decorators/02_decorate_before_registration.py](ex_21_decorators/02_decorate_before_registration.py))
+
+Decorate before registration and use explicit ``inner_parameter``.
+
+Highlights:
+
+1. Register a decoration rule before the base provider exists.
+2. Decorate an ``Annotated`` key while the wrapper keeps ``inner`` typed as base protocol.
+3. Handle ambiguous inner-parameter inference with an explicit parameter name.
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Annotated
+
+from diwire import Component, Container
+from diwire.exceptions import DIWireInvalidRegistrationError
+
+
+class Repo:
+    def get(self, key: str) -> str:
+        raise NotImplementedError
+
+
+class SqlRepo(Repo):
+    def get(self, key: str) -> str:
+        return f"sql:{key}"
+
+
+PrimaryRepo = Annotated[Repo, Component("primary")]
+
+
+@dataclass(slots=True)
+class CachedRepo(Repo):
+    inner: Repo
+    cache_hits: int = 0
+
+    def get(self, key: str) -> str:
+        self.cache_hits += 1
+        return self.inner.get(key)
+
+
+class AmbiguousDecorator(Repo):
+    def __init__(self, first: Repo, second: Repo) -> None:
+        self.first = first
+        self.second = second
+
+    def get(self, key: str) -> str:
+        return self.first.get(key)
+
+
+def main() -> None:
+    container = Container(autoregister_concrete_types=False)
+    container.decorate(
+        provides=PrimaryRepo,
+        decorator=CachedRepo,
+        inner_parameter="inner",
+    )
+    container.add_concrete(SqlRepo, provides=PrimaryRepo)
+
+    decorated = container.resolve(PrimaryRepo)
+    print(type(decorated).__name__)
+    print(type(decorated.inner).__name__)
+    print(decorated.get("account-42"))
+
+    ambiguous_error: str
+    try:
+        container.decorate(provides=Repo, decorator=AmbiguousDecorator)
+    except DIWireInvalidRegistrationError as error:
+        ambiguous_error = type(error).__name__
+    print(ambiguous_error)
+
+    container.decorate(
+        provides=Repo,
+        decorator=AmbiguousDecorator,
+        inner_parameter="first",
+    )
+    container.add_concrete(SqlRepo, provides=Repo)
+    resolved = container.resolve(Repo)
+    print(type(resolved).__name__)
+    print(type(resolved.first).__name__)
+
+
+if __name__ == "__main__":
+    main()
+```
+
+<a id="ex-21-decorators--03-open-generic-decorate-py"></a>
+### 03_open_generic_decorate.py ([ex_21_decorators/03_open_generic_decorate.py](ex_21_decorators/03_open_generic_decorate.py))
+
+Open-generic decoration.
+
+This example decorates ``Repo[T]`` and resolves multiple closed keys.
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Generic, TypeVar
+
+from diwire import Container
+
+T = TypeVar("T")
+
+
+class Repo(Generic[T]):
+    pass
+
+
+@dataclass(slots=True)
+class SqlRepo(Repo[T]):
+    model: type[T]
+
+
+@dataclass(slots=True)
+class TimedRepo(Repo[T]):
+    inner: Repo[T]
+
+
+def build_repo(model: type[T]) -> Repo[T]:
+    return SqlRepo(model=model)
+
+
+def main() -> None:
+    container = Container(autoregister_concrete_types=False)
+    container.add_factory(build_repo, provides=Repo[T])
+    container.decorate(provides=Repo[T], decorator=TimedRepo)
+
+    int_repo = container.resolve(Repo[int])
+    str_repo = container.resolve(Repo[str])
+
+    print(type(int_repo).__name__)
+    print(type(int_repo.inner).__name__)
+    print(type(str_repo.inner).__name__)
+    print(int_repo.inner.model is int)
+    print(str_repo.inner.model is str)
 
 
 if __name__ == "__main__":

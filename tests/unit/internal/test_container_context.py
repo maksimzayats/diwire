@@ -26,6 +26,11 @@ class _Service:
         self.value = value
 
 
+class _DecoratedService:
+    def __init__(self, inner: _Service) -> None:
+        self.inner = inner
+
+
 class _RequestDependency:
     pass
 
@@ -121,6 +126,19 @@ def test_register_before_bind_replays_on_set_current() -> None:
 
     resolved = container.resolve(_ConcreteService)
     assert isinstance(resolved, _ConcreteService)
+
+
+def test_decorate_before_bind_replays_on_set_current() -> None:
+    context = ContainerContext()
+    context.decorate(provides=_Service, decorator=_DecoratedService)
+    context.add_factory(lambda: _Service("base"), provides=_Service)
+
+    container = Container()
+    context.set_current(container)
+
+    resolved = container.resolve(_Service)
+    assert isinstance(resolved, _DecoratedService)
+    assert resolved.inner.value == "base"
 
 
 def test_replay_preserves_canonical_open_key_override_order() -> None:

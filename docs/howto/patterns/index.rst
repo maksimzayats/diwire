@@ -12,5 +12,6 @@ These pages describe patterns you can apply across frameworks and architectures.
    request-scope
    unit-of-work
    resources
+   decorators
    interfaces
    handler-classes
