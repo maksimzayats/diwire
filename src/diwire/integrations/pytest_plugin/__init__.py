@@ -6,7 +6,6 @@ from diwire._internal.integrations.pytest_plugin import (
 )
 
 __all__ = [
-    "_diwire_state",
     "diwire_container",
     "pytest_pycollect_makeitem",
     "pytest_pyfunc_call",
