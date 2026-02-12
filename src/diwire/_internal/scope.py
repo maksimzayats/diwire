@@ -76,7 +76,6 @@ class Scopes(BaseScopes):
 
     """
 
-    RUNTIME: BaseScope = field(default=BaseScope(0, skippable=True))
     APP: BaseScope = field(default=BaseScope(1))
     SESSION: BaseScope = field(default=BaseScope(2, skippable=True))
     REQUEST: BaseScope = field(default=BaseScope(3))
