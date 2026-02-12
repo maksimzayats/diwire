@@ -473,6 +473,22 @@ def test_codegen_matches_expected_for_from_context_dependency_graph() -> None:
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 
+def test_normalize_dynamic_metadata_normalizes_annotated_symbol_variants() -> None:
+    short_symbol = "Dependency wiring: value (positional_or_keyword) -> context [Annotated]\n"
+    qualified_symbol = (
+        "Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]\n"
+    )
+
+    normalized_short_symbol = _normalize_dynamic_metadata(short_symbol)
+    normalized_qualified_symbol = _normalize_dynamic_metadata(qualified_symbol)
+
+    assert normalized_short_symbol == normalized_qualified_symbol
+    assert (
+        normalized_short_symbol
+        == "Dependency wiring: value (positional_or_keyword) -> context [typing.Annotated]\n"
+    )
+
+
 def _render(*, container: Container, root_scope: BaseScope) -> str:
     renderer = ResolversTemplateRenderer()
     return renderer.get_providers_code(
@@ -486,8 +502,9 @@ def _read_expected(file_name: str) -> str:
 
 
 def _normalize_dynamic_metadata(code: str) -> str:
-    return re.sub(
+    normalized = re.sub(
         r"diwire version used for generation: .*",
         "diwire version used for generation: <dynamic>",
         code,
     )
+    return re.sub(r"\[(?:typing\.)?Annotated\]", "[typing.Annotated]", normalized)
