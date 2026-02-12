@@ -8,7 +8,6 @@ import pytest
 
 from diwire.container import Container
 from diwire.exceptions import DIWireInvalidProviderSpecError, DIWireProviderDependencyInferenceError
-from diwire.providers import ProviderDependency
 
 
 class UntypedDependency:
@@ -36,16 +35,10 @@ def test_explicit_dependencies_bypass_inference() -> None:
         return Service()
 
     signature = inspect.signature(build_service)
-    dependencies = [
-        ProviderDependency(
-            provides=UntypedDependency,
-            parameter=signature.parameters["raw_dependency"],
-        ),
-        ProviderDependency(
-            provides=TypedDependency,
-            parameter=signature.parameters["typed_dependency"],
-        ),
-    ]
+    dependencies = {
+        UntypedDependency: signature.parameters["raw_dependency"],
+        TypedDependency: signature.parameters["typed_dependency"],
+    }
 
     container = Container()
     container.add_factory(build_service, provides=Service, dependencies=dependencies)
@@ -76,12 +69,9 @@ def test_decorator_registration_accepts_explicit_dependencies() -> None:
         return Service()
 
     signature = inspect.signature(build_service)
-    dependencies = [
-        ProviderDependency(
-            provides=UntypedDependency,
-            parameter=signature.parameters["raw_dependency"],
-        ),
-    ]
+    dependencies = {
+        UntypedDependency: signature.parameters["raw_dependency"],
+    }
 
     container = Container()
     decorator = container.add_factory(provides=Service, dependencies=dependencies)
@@ -100,15 +90,12 @@ def test_explicit_dependencies_reject_unknown_parameter() -> None:
     def build_service(dep: TypedDependency) -> Service:
         return Service()
 
-    dependencies = [
-        ProviderDependency(
-            provides=TypedDependency,
-            parameter=inspect.Parameter(
-                "unknown_param",
-                inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            ),
+    dependencies = {
+        TypedDependency: inspect.Parameter(
+            "unknown_param",
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
         ),
-    ]
+    }
 
     container = Container()
 
@@ -121,10 +108,10 @@ def test_explicit_dependencies_reject_duplicates() -> None:
         return Service()
 
     parameter = inspect.signature(build_service).parameters["dep"]
-    dependencies = [
-        ProviderDependency(provides=TypedDependency, parameter=parameter),
-        ProviderDependency(provides=UntypedDependency, parameter=parameter),
-    ]
+    dependencies = {
+        TypedDependency: parameter,
+        UntypedDependency: parameter,
+    }
 
     container = Container()
 
@@ -136,12 +123,9 @@ def test_explicit_dependencies_reject_kind_mismatch() -> None:
     def build_service(dep: TypedDependency) -> Service:
         return Service()
 
-    dependencies = [
-        ProviderDependency(
-            provides=TypedDependency,
-            parameter=inspect.Parameter("dep", inspect.Parameter.KEYWORD_ONLY),
-        ),
-    ]
+    dependencies = {
+        TypedDependency: inspect.Parameter("dep", inspect.Parameter.KEYWORD_ONLY),
+    }
 
     container = Container()
 
@@ -151,12 +135,9 @@ def test_explicit_dependencies_reject_kind_mismatch() -> None:
 
 def test_explicit_dependencies_for_concrete_type_are_validated() -> None:
     signature = inspect.signature(ConcreteService.__init__)
-    dependencies = [
-        ProviderDependency(
-            provides=TypedDependency,
-            parameter=signature.parameters["dep"],
-        ),
-    ]
+    dependencies = {
+        TypedDependency: signature.parameters["dep"],
+    }
 
     container = Container()
     container.add_concrete(ConcreteService, provides=Service, dependencies=dependencies)
@@ -171,12 +152,9 @@ def test_explicit_dependencies_for_generator_are_validated() -> None:
         yield Service()
 
     signature = inspect.signature(build_service)
-    dependencies = [
-        ProviderDependency(
-            provides=TypedDependency,
-            parameter=signature.parameters["dep"],
-        ),
-    ]
+    dependencies = {
+        TypedDependency: signature.parameters["dep"],
+    }
 
     container = Container()
     container.add_generator(build_service, provides=Service, dependencies=dependencies)
@@ -192,12 +170,9 @@ def test_explicit_dependencies_for_context_manager_are_validated() -> None:
         yield Service()
 
     signature = inspect.signature(build_service)
-    dependencies = [
-        ProviderDependency(
-            provides=TypedDependency,
-            parameter=signature.parameters["dep"],
-        ),
-    ]
+    dependencies = {
+        TypedDependency: signature.parameters["dep"],
+    }
 
     container = Container()
     container.add_context_manager(

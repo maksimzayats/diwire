@@ -1,4 +1,4 @@
-"""Focused example: explicit ``ProviderDependency`` mapping."""
+"""Focused example: explicit dependency mapping."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import inspect
 from dataclasses import dataclass
 
 from diwire import Container
-from diwire.providers import ProviderDependency
 
 
 @dataclass(slots=True)
@@ -28,12 +27,9 @@ def main() -> None:
         return ExplicitService(raw_dependency=raw_dependency)
 
     signature = inspect.signature(build_service)
-    dependencies = [
-        ProviderDependency(
-            provides=UntypedDependency,
-            parameter=signature.parameters["raw_dependency"],
-        ),
-    ]
+    dependencies = {
+        UntypedDependency: signature.parameters["raw_dependency"],
+    }
     container.add_factory(build_service, provides=ExplicitService, dependencies=dependencies)
 
     resolved = container.resolve(ExplicitService)

@@ -431,20 +431,11 @@ def test_renderer_dependency_wiring_supports_positional_varargs_and_varkw() -> N
     container.add_factory(
         _provide_dependency_shape_service,
         provides=_DependencyShapeService,
-        dependencies=[
-            ProviderDependency(
-                provides=positional_type,
-                parameter=signature.parameters["positional"],
-            ),
-            ProviderDependency(
-                provides=values_type,
-                parameter=signature.parameters["values"],
-            ),
-            ProviderDependency(
-                provides=options_type,
-                parameter=signature.parameters["options"],
-            ),
-        ],
+        dependencies={
+            positional_type: signature.parameters["positional"],
+            values_type: signature.parameters["values"],
+            options_type: signature.parameters["options"],
+        },
     )
 
     code = ResolversTemplateRenderer().get_providers_code(

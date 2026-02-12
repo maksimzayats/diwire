@@ -8,7 +8,7 @@ import pytest
 from diwire.container import Container
 from diwire.exceptions import DIWireDependencyNotRegisteredError
 from diwire.markers import FromContext, Injected, Maybe, Provider
-from diwire.providers import Lifetime, ProviderDependency
+from diwire.providers import Lifetime
 from diwire.scope import Scope
 
 
@@ -233,16 +233,10 @@ def test_missing_optional_positional_or_keyword_dependency_uses_keywords_for_fol
     container.add_factory(
         _build_shifted_optional_result,
         provides=_ShiftedOptionalResult,
-        dependencies=[
-            ProviderDependency(
-                provides=Maybe[_MaybeDependency],
-                parameter=signature.parameters["dependency"],
-            ),
-            ProviderDependency(
-                provides=int,
-                parameter=signature.parameters["value"],
-            ),
-        ],
+        dependencies={
+            Maybe[_MaybeDependency]: signature.parameters["dependency"],
+            int: signature.parameters["value"],
+        },
     )
 
     resolved = container.resolve(_ShiftedOptionalResult)
@@ -260,16 +254,10 @@ def test_missing_optional_positional_only_dependency_omits_subsequent_positional
     container.add_factory(
         _build_positional_only_optional_result,
         provides=_PositionalOnlyOptionalResult,
-        dependencies=[
-            ProviderDependency(
-                provides=Maybe[_MaybeDependency],
-                parameter=signature.parameters["dependency"],
-            ),
-            ProviderDependency(
-                provides=int,
-                parameter=signature.parameters["value"],
-            ),
-        ],
+        dependencies={
+            Maybe[_MaybeDependency]: signature.parameters["dependency"],
+            int: signature.parameters["value"],
+        },
     )
 
     resolved = container.resolve(_PositionalOnlyOptionalResult)
@@ -284,12 +272,9 @@ def test_missing_optional_varargs_dependency_resolves_to_empty_tuple_literal() -
     container.add_factory(
         _build_varargs_optional_result,
         provides=tuple[int, ...],
-        dependencies=[
-            ProviderDependency(
-                provides=Maybe[_MaybeDependency],
-                parameter=signature.parameters["values"],
-            ),
-        ],
+        dependencies={
+            Maybe[_MaybeDependency]: signature.parameters["values"],
+        },
     )
 
     resolved = container.resolve(tuple[int, ...])
@@ -303,12 +288,9 @@ def test_missing_optional_kwargs_dependency_resolves_to_empty_dict_literal() -> 
     container.add_factory(
         _build_kwargs_optional_result,
         provides=dict[str, int],
-        dependencies=[
-            ProviderDependency(
-                provides=Maybe[_MaybeDependency],
-                parameter=signature.parameters["values"],
-            ),
-        ],
+        dependencies={
+            Maybe[_MaybeDependency]: signature.parameters["values"],
+        },
     )
 
     resolved = container.resolve(dict[str, int])

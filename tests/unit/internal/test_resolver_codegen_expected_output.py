@@ -8,7 +8,7 @@ from pathlib import Path
 
 from diwire.container import Container
 from diwire.markers import FromContext, Injected
-from diwire.providers import Lifetime, ProviderDependency, ProviderSpec
+from diwire.providers import Lifetime, ProviderSpec
 from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire.scope import BaseScope, Scope
 
@@ -276,20 +276,11 @@ def test_codegen_matches_expected_for_mixed_dependency_shape_graph() -> None:
     container.add_factory(
         _build_snapshot_mixed_shape_service,
         provides=_SnapshotMixedShapeService,
-        dependencies=[
-            ProviderDependency(
-                provides=positional_type,
-                parameter=signature.parameters["positional"],
-            ),
-            ProviderDependency(
-                provides=values_type,
-                parameter=signature.parameters["values"],
-            ),
-            ProviderDependency(
-                provides=options_type,
-                parameter=signature.parameters["options"],
-            ),
-        ],
+        dependencies={
+            positional_type: signature.parameters["positional"],
+            values_type: signature.parameters["values"],
+            options_type: signature.parameters["options"],
+        },
     )
     generated = _render(container=container, root_scope=Scope.APP)
     expected = _read_expected("app_root_mixed_dependency_shapes.txt")
@@ -368,20 +359,11 @@ def test_codegen_matches_expected_for_async_cleanup_mixed_signature_graph() -> N
         provides=_SnapshotAsyncCleanupSignatureService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
-        dependencies=[
-            ProviderDependency(
-                provides=_SnapshotAsyncContextResource,
-                parameter=signature.parameters["dependency"],
-            ),
-            ProviderDependency(
-                provides=values_type,
-                parameter=signature.parameters["values"],
-            ),
-            ProviderDependency(
-                provides=options_type,
-                parameter=signature.parameters["options"],
-            ),
-        ],
+        dependencies={
+            _SnapshotAsyncContextResource: signature.parameters["dependency"],
+            values_type: signature.parameters["values"],
+            options_type: signature.parameters["options"],
+        },
     )
     generated = _render(container=container, root_scope=Scope.APP)
     expected = _read_expected("app_root_async_cleanup_signature_mixed.txt")
@@ -468,12 +450,9 @@ def test_codegen_matches_expected_for_inject_wrapper_varkw_argument_order_graph(
         build_service,
         provides=_SnapshotInjectWrapperVarKwService,
         lifetime=Lifetime.TRANSIENT,
-        dependencies=[
-            ProviderDependency(
-                provides=options_type,
-                parameter=signature.parameters["options"],
-            ),
-        ],
+        dependencies={
+            options_type: signature.parameters["options"],
+        },
     )
 
     generated = _render(container=container, root_scope=Scope.APP)

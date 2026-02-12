@@ -257,7 +257,7 @@ class Container:
         component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> None: ...
@@ -271,7 +271,7 @@ class Container:
         component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> ConcreteTypeRegistrationDecorator[Any]: ...
@@ -284,7 +284,7 @@ class Container:
         component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> None | ConcreteTypeRegistrationDecorator[Any]:
@@ -305,8 +305,8 @@ class Container:
             scope: Provider scope, or ``"from_container"`` to inherit root scope.
             lifetime: Provider lifetime, or ``"from_container"`` to inherit
                 container default.
-            dependencies: Explicit dependencies, or ``"infer"`` for annotation
-                inference.
+            dependencies: Explicit dependency mapping from dependency key to
+                provider parameter, or ``"infer"`` for annotation inference.
             lock_mode: Lock strategy, or ``"from_container"`` to inherit the
                 container lock mode.
             autoregister_dependencies: Override dependency autoregistration for
@@ -504,7 +504,7 @@ class Container:
         component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> None: ...
@@ -518,7 +518,7 @@ class Container:
         component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> FactoryRegistrationDecorator[Any]: ...
@@ -533,7 +533,7 @@ class Container:
         component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> None | FactoryRegistrationDecorator[Any]:
@@ -551,7 +551,7 @@ class Container:
                 ``Annotated[provides, Component(...)]``.
             scope: Provider scope, or ``"from_container"``.
             lifetime: Provider lifetime, or ``"from_container"``.
-            dependencies: Explicit dependencies, or ``"infer"``.
+            dependencies: Explicit dependency mapping, or ``"infer"``.
             lock_mode: Lock strategy, or ``"from_container"``.
             autoregister_dependencies: Override dependency autoregistration for
                 this registration.
@@ -670,7 +670,7 @@ class Container:
         component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> None: ...
@@ -684,7 +684,7 @@ class Container:
         component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> GeneratorRegistrationDecorator[Any]: ...
@@ -701,7 +701,7 @@ class Container:
         component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> None | GeneratorRegistrationDecorator[Any]:
@@ -717,7 +717,7 @@ class Container:
                 ``Annotated[provides, Component(...)]``.
             scope: Provider scope, or ``"from_container"``.
             lifetime: Provider lifetime, or ``"from_container"``.
-            dependencies: Explicit dependencies, or ``"infer"``.
+            dependencies: Explicit dependency mapping, or ``"infer"``.
             lock_mode: Lock strategy, or ``"from_container"``.
             autoregister_dependencies: Override dependency autoregistration.
 
@@ -827,7 +827,7 @@ class Container:
         component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> None: ...
@@ -841,7 +841,7 @@ class Container:
         component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> ContextManagerRegistrationDecorator[Any]: ...
@@ -854,7 +854,7 @@ class Container:
         component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> None | ContextManagerRegistrationDecorator[Any]:
@@ -870,7 +870,7 @@ class Container:
                 ``Annotated[provides, Component(...)]``.
             scope: Provider scope, or ``"from_container"``.
             lifetime: Provider lifetime, or ``"from_container"``.
-            dependencies: Explicit dependencies, or ``"infer"``.
+            dependencies: Explicit dependency mapping, or ``"infer"``.
             lock_mode: Lock strategy, or ``"from_container"``.
             autoregister_dependencies: Override dependency autoregistration.
 
@@ -1542,17 +1542,35 @@ class Container:
     def _resolve_registration_dependencies(
         self,
         *,
-        dependencies: list[ProviderDependency] | Literal["infer"],
+        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"],
         method_name: str,
     ) -> list[ProviderDependency] | None:
         dependencies_value = cast("Any", dependencies)
         if dependencies_value == "infer":
             return None
-        if isinstance(dependencies_value, list):
-            return cast("list[ProviderDependency]", dependencies_value)
+        if not isinstance(dependencies_value, Mapping):
+            msg = (
+                f"{method_name}() parameter 'dependencies' must be a "
+                "mapping[Any, inspect.Parameter] or 'infer'."
+            )
+            raise DIWireInvalidRegistrationError(msg)
 
-        msg = f"{method_name}() parameter 'dependencies' must be a list or 'infer'."
-        raise DIWireInvalidRegistrationError(msg)
+        resolved_dependencies: list[ProviderDependency] = []
+        for provides_key, parameter in dependencies_value.items():
+            if not isinstance(parameter, inspect.Parameter):
+                msg = (
+                    f"{method_name}() parameter 'dependencies' must be a "
+                    "mapping[Any, inspect.Parameter] or 'infer'."
+                )
+                raise DIWireInvalidRegistrationError(msg)
+            resolved_dependencies.append(
+                ProviderDependency(
+                    provides=provides_key,
+                    parameter=parameter,
+                ),
+            )
+
+        return resolved_dependencies
 
     def _resolve_registration_autoregister_dependencies(
         self,
@@ -2928,7 +2946,7 @@ class ConcreteTypeRegistrationDecorator(Generic[T]):
     lifetime: Lifetime | Literal["from_container"] = "from_container"
     provides: Any | Literal["infer"] = "infer"
     component: object | None = None
-    dependencies: list[ProviderDependency] | Literal["infer"] = "infer"
+    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
     autoregister_dependencies: bool | Literal["from_container"] = "from_container"
 
@@ -2957,7 +2975,7 @@ class FactoryRegistrationDecorator(Generic[T]):
     lifetime: Lifetime | Literal["from_container"] = "from_container"
     provides: Any | Literal["infer"] = "infer"
     component: object | None = None
-    dependencies: list[ProviderDependency] | Literal["infer"] = "infer"
+    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
     autoregister_dependencies: bool | Literal["from_container"] = "from_container"
 
@@ -2986,7 +3004,7 @@ class GeneratorRegistrationDecorator(Generic[T]):
     lifetime: Lifetime | Literal["from_container"] = "from_container"
     provides: Any | Literal["infer"] = "infer"
     component: object | None = None
-    dependencies: list[ProviderDependency] | Literal["infer"] = "infer"
+    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
     autoregister_dependencies: bool | Literal["from_container"] = "from_container"
 
@@ -3015,7 +3033,7 @@ class ContextManagerRegistrationDecorator(Generic[T]):
     lifetime: Lifetime | Literal["from_container"] = "from_container"
     provides: Any | Literal["infer"] = "infer"
     component: object | None = None
-    dependencies: list[ProviderDependency] | Literal["infer"] = "infer"
+    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
     autoregister_dependencies: bool | Literal["from_container"] = "from_container"
 

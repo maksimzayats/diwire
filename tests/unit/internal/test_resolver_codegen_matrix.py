@@ -10,7 +10,7 @@ import pytest
 from diwire.container import Container
 from diwire.exceptions import DIWireAsyncDependencyInSyncContextError, DIWireScopeMismatchError
 from diwire.lock_mode import LockMode
-from diwire.providers import Lifetime, ProviderDependency
+from diwire.providers import Lifetime
 from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire.scope import Scope
 
@@ -312,9 +312,9 @@ def test_codegen_matrix_signature_wiring_for_required_parameters(signature_kind:
     container.add_factory(
         builder,
         provides=_SignatureService,
-        dependencies=[
-            ProviderDependency(provides=int, parameter=signature.parameters["value"]),
-        ],
+        dependencies={
+            int: signature.parameters["value"],
+        },
     )
 
     resolved = container.resolve(_SignatureService)
@@ -352,12 +352,9 @@ def test_codegen_matrix_signature_wiring_for_variadic_parameters(signature_kind:
     container.add_factory(
         builder,
         provides=_SignatureService,
-        dependencies=[
-            ProviderDependency(
-                provides=values_type,
-                parameter=parameter,
-            ),
-        ],
+        dependencies={
+            values_type: parameter,
+        },
     )
 
     resolved = container.resolve(_SignatureService)

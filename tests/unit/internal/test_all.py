@@ -8,7 +8,6 @@ import pytest
 
 from diwire import All, Component, Container, Injected, Lifetime, Scope
 from diwire.exceptions import DIWireInvalidProviderSpecError
-from diwire.providers import ProviderDependency
 
 
 class EventHandler(Protocol):
@@ -176,12 +175,9 @@ def test_all_provider_dependency_is_rejected_for_double_star_kwargs() -> None:
     container.add_factory(
         build_consumer,
         provides=_AllConsumer,
-        dependencies=[
-            ProviderDependency(
-                provides=All[EventHandler],
-                parameter=signature.parameters["handlers"],
-            ),
-        ],
+        dependencies={
+            All[EventHandler]: signature.parameters["handlers"],
+        },
     )
 
     with pytest.raises(

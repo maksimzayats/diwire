@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+import inspect
+from collections.abc import Callable, Mapping
 from typing import Any, Literal, TypeVar, overload
 
 from diwire.container_context import container_context
 from diwire.lock_mode import LockMode
-from diwire.providers import Lifetime, ProviderDependency
+from diwire.providers import Lifetime
 from diwire.scope import BaseScope
 
 C = TypeVar("C", bound=type[Any])
@@ -22,7 +23,7 @@ def add_concrete(
     component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
-    dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
     lock_mode: LockMode | Literal["from_container"] = "from_container",
     autoregister_dependencies: bool | Literal["from_container"] = "from_container",
 ) -> C: ...
@@ -36,7 +37,7 @@ def add_concrete(
     component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
-    dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
     lock_mode: LockMode | Literal["from_container"] = "from_container",
     autoregister_dependencies: bool | Literal["from_container"] = "from_container",
 ) -> Callable[[C], C]: ...
@@ -49,7 +50,7 @@ def add_concrete(  # noqa: PLR0913
     component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
-    dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
     lock_mode: LockMode | Literal["from_container"] = "from_container",
     autoregister_dependencies: bool | Literal["from_container"] = "from_container",
 ) -> C | Callable[[C], C]:
@@ -66,7 +67,7 @@ def add_concrete(  # noqa: PLR0913
         component: Optional component marker value forwarded to the container.
         scope: Registration scope or ``"from_container"``.
         lifetime: Provider lifetime or ``"from_container"``.
-        dependencies: Explicit dependencies list or ``"infer"``.
+        dependencies: Explicit dependency mapping or ``"infer"``.
         lock_mode: Locking mode or ``"from_container"``.
         autoregister_dependencies: Override dependency autoregistration behavior.
 
@@ -122,7 +123,7 @@ def add_factory(
     component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
-    dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
     lock_mode: LockMode | Literal["from_container"] = "from_container",
     autoregister_dependencies: bool | Literal["from_container"] = "from_container",
 ) -> FactoryF: ...
@@ -136,7 +137,7 @@ def add_factory(
     component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
-    dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
     lock_mode: LockMode | Literal["from_container"] = "from_container",
     autoregister_dependencies: bool | Literal["from_container"] = "from_container",
 ) -> Callable[[FactoryF], FactoryF]: ...
@@ -149,7 +150,7 @@ def add_factory(  # noqa: PLR0913
     component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
-    dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
     lock_mode: LockMode | Literal["from_container"] = "from_container",
     autoregister_dependencies: bool | Literal["from_container"] = "from_container",
 ) -> FactoryF | Callable[[FactoryF], FactoryF]:
@@ -165,7 +166,7 @@ def add_factory(  # noqa: PLR0913
         component: Optional component marker value forwarded to the container.
         scope: Registration scope or ``"from_container"``.
         lifetime: Provider lifetime or ``"from_container"``.
-        dependencies: Explicit dependencies list or ``"infer"``.
+        dependencies: Explicit dependency mapping or ``"infer"``.
         lock_mode: Locking mode or ``"from_container"``.
         autoregister_dependencies: Override dependency autoregistration behavior.
 
@@ -221,7 +222,7 @@ def add_generator(
     component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
-    dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
     lock_mode: LockMode | Literal["from_container"] = "from_container",
     autoregister_dependencies: bool | Literal["from_container"] = "from_container",
 ) -> GeneratorF: ...
@@ -235,7 +236,7 @@ def add_generator(
     component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
-    dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
     lock_mode: LockMode | Literal["from_container"] = "from_container",
     autoregister_dependencies: bool | Literal["from_container"] = "from_container",
 ) -> Callable[[GeneratorF], GeneratorF]: ...
@@ -248,7 +249,7 @@ def add_generator(  # noqa: PLR0913
     component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
-    dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
     lock_mode: LockMode | Literal["from_container"] = "from_container",
     autoregister_dependencies: bool | Literal["from_container"] = "from_container",
 ) -> GeneratorF | Callable[[GeneratorF], GeneratorF]:
@@ -264,7 +265,7 @@ def add_generator(  # noqa: PLR0913
         component: Optional component marker value forwarded to the container.
         scope: Registration scope or ``"from_container"``.
         lifetime: Provider lifetime or ``"from_container"``.
-        dependencies: Explicit dependencies list or ``"infer"``.
+        dependencies: Explicit dependency mapping or ``"infer"``.
         lock_mode: Locking mode or ``"from_container"``.
         autoregister_dependencies: Override dependency autoregistration behavior.
 
@@ -321,7 +322,7 @@ def add_context_manager(
     component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
-    dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
     lock_mode: LockMode | Literal["from_container"] = "from_container",
     autoregister_dependencies: bool | Literal["from_container"] = "from_container",
 ) -> ContextManagerF: ...
@@ -335,7 +336,7 @@ def add_context_manager(
     component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
-    dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
     lock_mode: LockMode | Literal["from_container"] = "from_container",
     autoregister_dependencies: bool | Literal["from_container"] = "from_container",
 ) -> Callable[[ContextManagerF], ContextManagerF]: ...
@@ -348,7 +349,7 @@ def add_context_manager(  # noqa: PLR0913
     component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
-    dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
+    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
     lock_mode: LockMode | Literal["from_container"] = "from_container",
     autoregister_dependencies: bool | Literal["from_container"] = "from_container",
 ) -> ContextManagerF | Callable[[ContextManagerF], ContextManagerF]:
@@ -365,7 +366,7 @@ def add_context_manager(  # noqa: PLR0913
         component: Optional component marker value forwarded to the container.
         scope: Registration scope or ``"from_container"``.
         lifetime: Provider lifetime or ``"from_container"``.
-        dependencies: Explicit dependencies list or ``"infer"``.
+        dependencies: Explicit dependency mapping or ``"infer"``.
         lock_mode: Locking mode or ``"from_container"``.
         autoregister_dependencies: Override dependency autoregistration behavior.
 

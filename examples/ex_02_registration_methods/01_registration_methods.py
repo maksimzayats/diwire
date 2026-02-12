@@ -7,7 +7,7 @@ Learn when to use:
 3. ``add_factory`` for custom build logic.
 4. ``add_generator`` for resources with teardown on scope exit.
 5. ``add_context_manager`` for context-managed resources.
-6. Explicit ``dependencies=[ProviderDependency(...)]`` to bypass inference.
+6. Explicit ``dependencies={dependency_key: inspect.Parameter(...)}`` to bypass inference.
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 
 from diwire import Container, Lifetime, Scope
-from diwire.providers import ProviderDependency
 
 
 @dataclass(slots=True)
@@ -116,12 +115,9 @@ def main() -> None:
         return ExplicitDependencyService(raw_dependency=raw_dependency)
 
     signature = inspect.signature(build_explicit_service)
-    explicit_dependencies = [
-        ProviderDependency(
-            provides=UntypedDependency,
-            parameter=signature.parameters["raw_dependency"],
-        ),
-    ]
+    explicit_dependencies = {
+        UntypedDependency: signature.parameters["raw_dependency"],
+    }
     container.add_factory(
         build_explicit_service,
         provides=ExplicitDependencyService,

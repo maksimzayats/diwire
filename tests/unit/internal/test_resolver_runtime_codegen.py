@@ -19,7 +19,7 @@ from diwire.exceptions import (
 )
 from diwire.lock_mode import LockMode
 from diwire.markers import FromContext, Injected
-from diwire.providers import Lifetime, ProviderDependency, ProviderSpec
+from diwire.providers import Lifetime, ProviderSpec
 from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire.scope import Scope
 
@@ -1879,9 +1879,9 @@ def test_var_positional_dependency_wiring_expands_iterable_dependency() -> None:
     container.add_factory(
         build_service,
         provides=_VarArgsService,
-        dependencies=[
-            ProviderDependency(provides=values_type, parameter=values_parameter),
-        ],
+        dependencies={
+            values_type: values_parameter,
+        },
     )
 
     resolved = container.resolve(_VarArgsService)
@@ -1904,9 +1904,9 @@ def test_var_keyword_dependency_wiring_expands_mapping_dependency() -> None:
     container.add_factory(
         build_service,
         provides=_KwArgsService,
-        dependencies=[
-            ProviderDependency(provides=options_type, parameter=options_parameter),
-        ],
+        dependencies={
+            options_type: options_parameter,
+        },
     )
 
     resolved = container.resolve(_KwArgsService)

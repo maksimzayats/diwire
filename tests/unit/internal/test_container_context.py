@@ -17,7 +17,7 @@ from diwire.exceptions import (
 )
 from diwire.lock_mode import LockMode
 from diwire.markers import Component, FromContext, Injected
-from diwire.providers import Lifetime, ProviderDependency
+from diwire.providers import Lifetime
 from diwire.scope import Scope
 
 
@@ -494,15 +494,12 @@ def test_registration_dependencies_are_copied_for_replay() -> None:
         _ = service
         return _RequestDependency()
 
-    explicit_dependencies = [
-        ProviderDependency(
-            provides=_Service,
-            parameter=inspect.Parameter(
-                "service",
-                kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            ),
+    explicit_dependencies = {
+        _Service: inspect.Parameter(
+            "service",
+            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
         ),
-    ]
+    }
     context.add_factory(
         provide_request,
         provides=_RequestDependency,

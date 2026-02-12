@@ -8,7 +8,7 @@ from pathlib import Path
 from mypy import api as mypy_api
 
 from diwire.container import Container
-from diwire.providers import Lifetime, ProviderDependency, ProviderSpec
+from diwire.providers import Lifetime, ProviderSpec
 from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire.scope import Scope
 
@@ -296,20 +296,11 @@ def _render_generated_modules() -> dict[str, str]:
     mixed_dependency_shapes_container.add_factory(
         _provide_mixed_shape_service,
         provides=_MypyMixedShapeService,
-        dependencies=[
-            ProviderDependency(
-                provides=positional_type,
-                parameter=mixed_signature.parameters["positional"],
-            ),
-            ProviderDependency(
-                provides=values_type,
-                parameter=mixed_signature.parameters["values"],
-            ),
-            ProviderDependency(
-                provides=options_type,
-                parameter=mixed_signature.parameters["options"],
-            ),
-        ],
+        dependencies={
+            positional_type: mixed_signature.parameters["positional"],
+            values_type: mixed_signature.parameters["values"],
+            options_type: mixed_signature.parameters["options"],
+        },
     )
 
     async_dependency_propagation_container = Container()

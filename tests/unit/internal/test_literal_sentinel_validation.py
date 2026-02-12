@@ -440,6 +440,32 @@ def test_container_context_register_instance_accepts_non_class_provides_key() ->
     assert context._operations[0].kwargs["provides"] == "service_key"
 
 
+def test_container_rejects_dependencies_mapping_with_non_parameter_value() -> None:
+    container = Container()
+
+    with pytest.raises(
+        DIWireInvalidRegistrationError,
+        match="add_factory\\(\\) parameter 'dependencies'",
+    ):
+        container.add_factory(
+            _factory,
+            dependencies=cast("Any", {_Service: object()}),
+        )
+
+
+def test_container_context_rejects_dependencies_mapping_with_non_parameter_value() -> None:
+    context = ContainerContext()
+
+    with pytest.raises(
+        DIWireInvalidRegistrationError,
+        match="add_factory\\(\\) parameter 'dependencies'",
+    ):
+        context.add_factory(
+            _factory,
+            dependencies=cast("Any", {_Service: object()}),
+        )
+
+
 def test_container_context_register_concrete_infers_from_class_provides() -> None:
     context = ContainerContext()
     context.add_concrete(_Service)
