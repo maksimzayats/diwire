@@ -185,7 +185,7 @@ class Container:
         instance: T,
         *,
         provides: Any | Literal["infer"] = "infer",
-        component: object | None = None,
+        component: Component | Any | None = None,
     ) -> None:
         """Register a pre-built instance as a provider.
 
@@ -258,7 +258,7 @@ class Container:
         concrete_type: type[Any],
         *,
         provides: Any | Literal["infer"] = "infer",
-        component: object | None = None,
+        component: Component | Any | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
@@ -272,7 +272,7 @@ class Container:
         concrete_type: Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
-        component: object | None = None,
+        component: Component | Any | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
@@ -285,7 +285,7 @@ class Container:
         concrete_type: C | Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
-        component: object | None = None,
+        component: Component | Any | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
@@ -505,7 +505,7 @@ class Container:
         factory: Callable[..., Any] | Callable[..., Awaitable[Any]],
         *,
         provides: Any | Literal["infer"] = "infer",
-        component: object | None = None,
+        component: Component | Any | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
@@ -519,7 +519,7 @@ class Container:
         factory: Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
-        component: object | None = None,
+        component: Component | Any | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
@@ -534,7 +534,7 @@ class Container:
         ) = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
-        component: object | None = None,
+        component: Component | Any | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
@@ -671,7 +671,7 @@ class Container:
         ),
         *,
         provides: Any | Literal["infer"] = "infer",
-        component: object | None = None,
+        component: Component | Any | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
@@ -685,7 +685,7 @@ class Container:
         generator: Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
-        component: object | None = None,
+        component: Component | Any | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
@@ -702,7 +702,7 @@ class Container:
         ) = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
-        component: object | None = None,
+        component: Component | Any | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
@@ -828,7 +828,7 @@ class Container:
         context_manager: ContextManagerProvider[Any],
         *,
         provides: Any | Literal["infer"] = "infer",
-        component: object | None = None,
+        component: Component | Any | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
@@ -842,7 +842,7 @@ class Container:
         context_manager: Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
-        component: object | None = None,
+        component: Component | Any | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
@@ -855,7 +855,7 @@ class Container:
         context_manager: ContextManagerProvider[Any] | Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
-        component: object | None = None,
+        component: Component | Any | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
@@ -983,7 +983,7 @@ class Container:
         self,
         *,
         provides: Any,
-        component: object | None = None,
+        component: Component | Any | None = None,
         decorator: Callable[..., Any],
         inner_parameter: str | None = None,
     ) -> None:
@@ -1486,7 +1486,7 @@ class Container:
         self,
         *,
         provides: Any,
-        component: object | None,
+        component: Component | Any | None,
         method_name: str,
     ) -> Any:
         if component is None:
@@ -1508,7 +1508,7 @@ class Container:
         metadata = annotation_args[1:]
         return build_annotated_key((provides_inner, *metadata, component_marker))
 
-    def _normalize_registration_component(self, *, component: object) -> Component:
+    def _normalize_registration_component(self, *, component: Component | Any) -> Component:
         if isinstance(component, Component):
             return component
         return Component(component)
@@ -2949,7 +2949,7 @@ class _ConcreteTypeRegistrationDecorator(Generic[T]):
     scope: BaseScope | Literal["from_container"] = "from_container"
     lifetime: Lifetime | Literal["from_container"] = "from_container"
     provides: Any | Literal["infer"] = "infer"
-    component: object | None = None
+    component: Component | Any | None = None
     dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
     autoregister_dependencies: bool | Literal["from_container"] = "from_container"
@@ -2978,7 +2978,7 @@ class _FactoryRegistrationDecorator(Generic[T]):
     scope: BaseScope | Literal["from_container"] = "from_container"
     lifetime: Lifetime | Literal["from_container"] = "from_container"
     provides: Any | Literal["infer"] = "infer"
-    component: object | None = None
+    component: Component | Any | None = None
     dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
     autoregister_dependencies: bool | Literal["from_container"] = "from_container"
@@ -3007,7 +3007,7 @@ class _GeneratorRegistrationDecorator(Generic[T]):
     scope: BaseScope | Literal["from_container"] = "from_container"
     lifetime: Lifetime | Literal["from_container"] = "from_container"
     provides: Any | Literal["infer"] = "infer"
-    component: object | None = None
+    component: Component | Any | None = None
     dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
     autoregister_dependencies: bool | Literal["from_container"] = "from_container"
@@ -3036,7 +3036,7 @@ class _ContextManagerRegistrationDecorator(Generic[T]):
     scope: BaseScope | Literal["from_container"] = "from_container"
     lifetime: Lifetime | Literal["from_container"] = "from_container"
     provides: Any | Literal["infer"] = "infer"
-    component: object | None = None
+    component: Component | Any | None = None
     dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
     autoregister_dependencies: bool | Literal["from_container"] = "from_container"
