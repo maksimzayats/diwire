@@ -1,6 +1,6 @@
-"""Open-generic decoration.
+"""Open-generic decoration in one screen.
 
-This example decorates ``Repo[T]`` and resolves multiple closed keys.
+Register once for ``Repo[T]``, decorate once, then resolve many closed types.
 """
 
 from __future__ import annotations
@@ -33,17 +33,17 @@ def build_repo(model: type[T]) -> Repo[T]:
 
 def main() -> None:
     container = Container(autoregister_concrete_types=False)
-    container.add_factory(build_repo, provides=Repo[T])
-    container.decorate(provides=Repo[T], decorator=TimedRepo)
+    container.add_factory(build_repo, provides=Repo)
+    container.decorate(provides=Repo, decorator=TimedRepo)
 
     int_repo = container.resolve(Repo[int])
     str_repo = container.resolve(Repo[str])
 
-    print(type(int_repo).__name__)
-    print(type(int_repo.inner).__name__)
-    print(type(str_repo.inner).__name__)
-    print(int_repo.inner.model is int)
-    print(str_repo.inner.model is str)
+    print(f"outer_type={type(int_repo).__name__}")
+    print(f"int_inner_type={type(int_repo.inner).__name__}")
+    print(f"str_inner_type={type(str_repo.inner).__name__}")
+    print(f"int_model_ok={int_repo.inner.model is int}")
+    print(f"str_model_ok={str_repo.inner.model is str}")
 
 
 if __name__ == "__main__":

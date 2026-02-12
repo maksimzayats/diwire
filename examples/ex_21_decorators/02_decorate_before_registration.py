@@ -1,10 +1,7 @@
-"""Decorate before registration and use explicit ``inner_parameter``.
+"""Two readability-focused patterns.
 
-Highlights:
-
-1. Register a decoration rule before the base provider exists.
-2. Decorate an ``Annotated`` key while the wrapper keeps ``inner`` typed as base protocol.
-3. Handle ambiguous inner-parameter inference with an explicit parameter name.
+1. ``decorate(...)`` can be called before ``add_*``.
+2. ``inner_parameter=...`` removes ambiguity when inference is unclear.
 """
 
 from __future__ import annotations
@@ -49,6 +46,7 @@ class AmbiguousDecorator(Repo):
 
 
 def main() -> None:
+    # Pattern A: decorate first, register later.
     container = Container(autoregister_concrete_types=False)
     container.decorate(
         provides=PrimaryRepo,
@@ -58,10 +56,11 @@ def main() -> None:
     container.add_concrete(SqlRepo, provides=PrimaryRepo)
 
     decorated = container.resolve(PrimaryRepo)
-    print(type(decorated).__name__)
-    print(type(decorated.inner).__name__)
-    print(decorated.get("account-42"))
+    print(f"pattern_a_outer={type(decorated).__name__}")
+    print(f"pattern_a_inner={type(decorated.inner).__name__}")
+    print(f"pattern_a_result={decorated.get('account-42')}")
 
+    # Pattern B: ambiguous decorator needs explicit inner_parameter.
     ambiguous_error: str
     try:
         container.decorate(provides=Repo, decorator=AmbiguousDecorator)
@@ -76,8 +75,9 @@ def main() -> None:
     )
     container.add_concrete(SqlRepo, provides=Repo)
     resolved = container.resolve(Repo)
-    print(type(resolved).__name__)
-    print(type(resolved.first).__name__)
+    print(f"pattern_b_error={ambiguous_error}")
+    print(f"pattern_b_outer={type(resolved).__name__}")
+    print(f"pattern_b_inner={type(resolved.first).__name__}")
 
 
 if __name__ == "__main__":

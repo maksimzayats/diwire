@@ -3680,116 +3680,116 @@ Files:
 <a id="ex-21-decorators--01-decorators-py"></a>
 ### 01_decorators.py ([ex_21_decorators/01_decorators.py](ex_21_decorators/01_decorators.py))
 
-Decorators: tracing, stacking order, and base re-registration.
+Decorators: the easiest mental model.
 
-This example shows practical ``Container.decorate(...)`` usage:
+Read this file top-to-bottom in three steps:
 
-1. Decorate an existing binding (``TracedHttpClient``).
-2. Stack another decorator and confirm ordering (last call is outermost).
-3. Re-register the base binding and keep the same decorator chain.
+1. Register a base service (``Greeter`` -> ``SimpleGreeter``).
+2. Add decorators; each new call becomes the new outer layer.
+3. Re-register the base service; decorators stay in place automatically.
 
 ```python
 from __future__ import annotations
 
-from collections.abc import Generator
-from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Protocol
 
 from diwire import Container
 
 
-class HttpClient(Protocol):
-    def get(self, path: str) -> str: ...
+class Greeter(Protocol):
+    def greet(self, name: str) -> str: ...
 
 
-class RequestsHttpClient:
-    def __init__(self, base_url: str) -> None:
-        self.base_url = base_url
+class SimpleGreeter:
+    def __init__(self, prefix: str) -> None:
+        self.prefix = prefix
 
-    def get(self, path: str) -> str:
-        return f"requests:{self.base_url}{path}"
+    def greet(self, name: str) -> str:
+        return f"{self.prefix} {name}"
 
 
-class AltHttpClient:
-    def __init__(self, base_url: str) -> None:
-        self.base_url = base_url
+class FriendlyGreeter:
+    def __init__(self, prefix: str) -> None:
+        self.prefix = prefix
 
-    def get(self, path: str) -> str:
-        return f"alt:{self.base_url}{path}"
+    def greet(self, name: str) -> str:
+        return f"{self.prefix}, {name}!"
 
 
 @dataclass(slots=True)
 class Tracer:
-    spans: list[str] = field(default_factory=list)
+    events: list[str]
 
-    @contextmanager
-    def span(self, name: str) -> Generator[None, None, None]:
-        self.spans.append(name)
-        yield
+    def record(self, event: str) -> None:
+        self.events.append(event)
 
 
-class TracedHttpClient:
-    def __init__(self, inner: HttpClient, tracer: Tracer) -> None:
+class TracedGreeter:
+    def __init__(self, inner: Greeter, tracer: Tracer) -> None:
         self.inner = inner
         self.tracer = tracer
 
-    def get(self, path: str) -> str:
-        with self.tracer.span("http.get"):
-            return self.inner.get(path)
+    def greet(self, name: str) -> str:
+        self.tracer.record("greet")
+        return self.inner.greet(name)
 
 
-class MetricsHttpClient:
-    def __init__(self, inner: HttpClient) -> None:
+class CountingGreeter:
+    def __init__(self, inner: Greeter) -> None:
         self.inner = inner
         self.calls = 0
 
-    def get(self, path: str) -> str:
+    def greet(self, name: str) -> str:
         self.calls += 1
-        return self.inner.get(path)
+        return self.inner.greet(name)
 
 
 def main() -> None:
     container = Container(autoregister_concrete_types=False)
-    container.add_instance("https://api.example.com", provides=str)
-    tracer = Tracer()
+    container.add_instance("Hello", provides=str)
+    tracer = Tracer(events=[])
     container.add_instance(tracer, provides=Tracer)
-    container.add_concrete(RequestsHttpClient, provides=HttpClient)
+    container.add_concrete(SimpleGreeter, provides=Greeter)
 
-    container.decorate(provides=HttpClient, decorator=TracedHttpClient)
-    traced_client = container.resolve(HttpClient)
-    traced_result = traced_client.get("/health")
-    print(f"traced_layer={type(traced_client).__name__}")  # => traced_layer=TracedHttpClient
+    # Step 1: one decorator.
+    container.decorate(provides=Greeter, decorator=TracedGreeter)
+    traced_greeter = container.resolve(Greeter)
+    traced_result = traced_greeter.greet("Sam")
+    print(f"step1_outer={type(traced_greeter).__name__}")  # => step1_outer=TracedGreeter
     print(
-        f"traced_inner={type(traced_client.inner).__name__}",
-    )  # => traced_inner=RequestsHttpClient
+        f"step1_inner={type(traced_greeter.inner).__name__}",
+    )  # => step1_inner=SimpleGreeter
     print(
-        f"traced_result={traced_result}",
-    )  # => traced_result=requests:https://api.example.com/health
-    print(f"spans_after_traced={len(tracer.spans)}")  # => spans_after_traced=1
+        f"step1_result={traced_result}",
+    )  # => step1_result=Hello Sam
+    print(f"step1_events={len(tracer.events)}")  # => step1_events=1
 
-    container.decorate(provides=HttpClient, decorator=MetricsHttpClient)
-    stacked_client = container.resolve(HttpClient)
-    stacked_result = stacked_client.get("/users")
-    print(f"stack_outer={type(stacked_client).__name__}")  # => stack_outer=MetricsHttpClient
-    print(f"stack_inner={type(stacked_client.inner).__name__}")  # => stack_inner=TracedHttpClient
+    # Step 2: add another decorator; this one becomes outermost.
+    container.decorate(provides=Greeter, decorator=CountingGreeter)
+    stacked_greeter = container.resolve(Greeter)
+    stacked_result = stacked_greeter.greet("Pat")
+    print(f"step2_outer={type(stacked_greeter).__name__}")  # => step2_outer=CountingGreeter
+    print(f"step2_inner={type(stacked_greeter.inner).__name__}")  # => step2_inner=TracedGreeter
     print(
-        f"stack_base={type(stacked_client.inner.inner).__name__}",
-    )  # => stack_base=RequestsHttpClient
+        f"step2_base={type(stacked_greeter.inner.inner).__name__}",
+    )  # => step2_base=SimpleGreeter
     print(
-        f"stack_result={stacked_result}",
-    )  # => stack_result=requests:https://api.example.com/users
-    print(f"metric_calls={stacked_client.calls}")  # => metric_calls=1
+        f"step2_result={stacked_result}",
+    )  # => step2_result=Hello Pat
+    print(f"step2_calls={stacked_greeter.calls}")  # => step2_calls=1
 
-    container.add_concrete(AltHttpClient, provides=HttpClient)
-    rebound_client = container.resolve(HttpClient)
-    rebound_result = rebound_client.get("/rebased")
+    # Step 3: replace the base binding; decorators remain.
+    container.add_instance("Hi", provides=str)
+    container.add_concrete(FriendlyGreeter, provides=Greeter)
+    rebound_greeter = container.resolve(Greeter)
+    rebound_result = rebound_greeter.greet("Lee")
     print(
-        f"rebound_base={type(rebound_client.inner.inner).__name__}",
-    )  # => rebound_base=AltHttpClient
+        f"step3_base={type(rebound_greeter.inner.inner).__name__}",
+    )  # => step3_base=FriendlyGreeter
     print(
-        f"rebound_result={rebound_result}",
-    )  # => rebound_result=alt:https://api.example.com/rebased
+        f"step3_result={rebound_result}",
+    )  # => step3_result=Hi, Lee!
 
 
 if __name__ == "__main__":
@@ -3799,13 +3799,10 @@ if __name__ == "__main__":
 <a id="ex-21-decorators--02-decorate-before-registration-py"></a>
 ### 02_decorate_before_registration.py ([ex_21_decorators/02_decorate_before_registration.py](ex_21_decorators/02_decorate_before_registration.py))
 
-Decorate before registration and use explicit ``inner_parameter``.
+Two readability-focused patterns.
 
-Highlights:
-
-1. Register a decoration rule before the base provider exists.
-2. Decorate an ``Annotated`` key while the wrapper keeps ``inner`` typed as base protocol.
-3. Handle ambiguous inner-parameter inference with an explicit parameter name.
+1. ``decorate(...)`` can be called before ``add_*``.
+2. ``inner_parameter=...`` removes ambiguity when inference is unclear.
 
 ```python
 from __future__ import annotations
@@ -3850,6 +3847,7 @@ class AmbiguousDecorator(Repo):
 
 
 def main() -> None:
+    # Pattern A: decorate first, register later.
     container = Container(autoregister_concrete_types=False)
     container.decorate(
         provides=PrimaryRepo,
@@ -3859,10 +3857,11 @@ def main() -> None:
     container.add_concrete(SqlRepo, provides=PrimaryRepo)
 
     decorated = container.resolve(PrimaryRepo)
-    print(type(decorated).__name__)
-    print(type(decorated.inner).__name__)
-    print(decorated.get("account-42"))
+    print(f"pattern_a_outer={type(decorated).__name__}")
+    print(f"pattern_a_inner={type(decorated.inner).__name__}")
+    print(f"pattern_a_result={decorated.get('account-42')}")
 
+    # Pattern B: ambiguous decorator needs explicit inner_parameter.
     ambiguous_error: str
     try:
         container.decorate(provides=Repo, decorator=AmbiguousDecorator)
@@ -3877,8 +3876,9 @@ def main() -> None:
     )
     container.add_concrete(SqlRepo, provides=Repo)
     resolved = container.resolve(Repo)
-    print(type(resolved).__name__)
-    print(type(resolved.first).__name__)
+    print(f"pattern_b_error={ambiguous_error}")
+    print(f"pattern_b_outer={type(resolved).__name__}")
+    print(f"pattern_b_inner={type(resolved.first).__name__}")
 
 
 if __name__ == "__main__":
@@ -3888,9 +3888,9 @@ if __name__ == "__main__":
 <a id="ex-21-decorators--03-open-generic-decorate-py"></a>
 ### 03_open_generic_decorate.py ([ex_21_decorators/03_open_generic_decorate.py](ex_21_decorators/03_open_generic_decorate.py))
 
-Open-generic decoration.
+Open-generic decoration in one screen.
 
-This example decorates ``Repo[T]`` and resolves multiple closed keys.
+Register once for ``Repo[T]``, decorate once, then resolve many closed types.
 
 ```python
 from __future__ import annotations
@@ -3929,11 +3929,11 @@ def main() -> None:
     int_repo = container.resolve(Repo[int])
     str_repo = container.resolve(Repo[str])
 
-    print(type(int_repo).__name__)
-    print(type(int_repo.inner).__name__)
-    print(type(str_repo.inner).__name__)
-    print(int_repo.inner.model is int)
-    print(str_repo.inner.model is str)
+    print(f"outer_type={type(int_repo).__name__}")
+    print(f"int_inner_type={type(int_repo.inner).__name__}")
+    print(f"str_inner_type={type(str_repo.inner).__name__}")
+    print(f"int_model_ok={int_repo.inner.model is int}")
+    print(f"str_model_ok={str_repo.inner.model is str}")
 
 
 if __name__ == "__main__":
