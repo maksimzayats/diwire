@@ -12,9 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, Injected
-from diwire.container_context import ContainerContext
-from diwire.exceptions import DIWireContainerNotSetError
+from diwire import Container, ContainerContext, DIWireContainerNotSetError, Injected
 
 
 @dataclass(slots=True)

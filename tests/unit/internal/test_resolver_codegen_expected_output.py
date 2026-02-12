@@ -6,11 +6,9 @@ from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from diwire.container import Container
-from diwire.markers import FromContext, Injected
-from diwire.providers import Lifetime, ProviderSpec
-from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
-from diwire.scope import BaseScope, Scope
+from diwire import BaseScope, Container, FromContext, Injected, Lifetime, Scope
+from diwire._internal.providers import ProviderSpec
+from diwire._internal.resolvers.templates.renderer import ResolversTemplateRenderer
 
 _EXPECTED_DIR = Path(__file__).with_name("codegen_expected")
 

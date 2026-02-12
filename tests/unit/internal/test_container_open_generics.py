@@ -9,17 +9,14 @@ from typing import Annotated, Any, Generic, TypeVar, cast
 
 import pytest
 
-from diwire.container import Container
-from diwire.container_context import ContainerContext
+from diwire import Component, Container, ContainerContext, Injected, Lifetime, Scope
+from diwire._internal.providers import ProviderDependency
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
     DIWireDependencyNotRegisteredError,
     DIWireInvalidGenericTypeArgumentError,
     DIWireScopeMismatchError,
 )
-from diwire.markers import Component, Injected
-from diwire.providers import Lifetime, ProviderDependency
-from diwire.scope import Scope
 
 T = TypeVar("T")
 U = TypeVar("U")

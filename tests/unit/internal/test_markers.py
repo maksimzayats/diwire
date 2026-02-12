@@ -5,9 +5,9 @@ from typing import Annotated, Protocol, TypeAlias, get_args, get_origin
 
 import pytest
 
-import diwire.markers as markers_module
-from diwire.container import Container
-from diwire.markers import (
+import diwire._internal.markers as markers_module
+from diwire import Container
+from diwire._internal.markers import (
     All,
     AllMarker,
     AsyncProvider,
@@ -31,7 +31,7 @@ from diwire.markers import (
     strip_maybe_annotation,
     strip_provider_annotation,
 )
-from diwire.providers import ProviderDependenciesExtractor
+from diwire._internal.providers import ProviderDependenciesExtractor
 
 
 class Database(Protocol):

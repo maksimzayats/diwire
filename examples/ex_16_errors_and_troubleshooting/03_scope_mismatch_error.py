@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from diwire import Container, Scope
-from diwire.exceptions import DIWireScopeMismatchError
+from diwire import Container, DIWireScopeMismatchError, Scope
 
 
 class RequestDependency:

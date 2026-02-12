@@ -7,15 +7,14 @@ from typing import Any, Generic, TypeVar, cast
 
 import pytest
 
-from diwire import open_generics
+from diwire import BaseScope, Lifetime, LockMode, Scope
+from diwire._internal import open_generics
+from diwire._internal.providers import ProviderDependency
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
     DIWireInvalidGenericTypeArgumentError,
     DIWireScopeMismatchError,
 )
-from diwire.lock_mode import LockMode
-from diwire.providers import Lifetime, ProviderDependency
-from diwire.scope import BaseScope, Scope
 
 T = TypeVar("T")
 U = TypeVar("U")

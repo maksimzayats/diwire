@@ -6,8 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from diwire.container import Container
-from diwire.lock_mode import LockMode
+from diwire import Container, LockMode
 
 
 class InstanceService:

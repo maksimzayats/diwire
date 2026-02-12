@@ -5,11 +5,10 @@ from typing import Any, cast
 
 import pytest
 
-from diwire.container import Container
+from diwire import Container, Lifetime, Scope
+from diwire._internal.providers import ProviderSpec
+from diwire._internal.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire.exceptions import DIWireInvalidProviderSpecError
-from diwire.providers import Lifetime, ProviderSpec
-from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
-from diwire.scope import Scope
 
 _SEEDS = (3, 7, 13, 31, 71)
 

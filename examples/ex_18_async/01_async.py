@@ -11,8 +11,7 @@ from __future__ import annotations
 
 import asyncio
 
-from diwire import Container, Lifetime, Scope
-from diwire.exceptions import DIWireAsyncDependencyInSyncContextError
+from diwire import Container, DIWireAsyncDependencyInSyncContextError, Lifetime, Scope
 
 
 class AsyncService:

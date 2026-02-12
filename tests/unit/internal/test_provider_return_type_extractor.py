@@ -14,12 +14,12 @@ from typing import Annotated, Any, cast
 
 import pytest
 
-from diwire.exceptions import DIWireInvalidRegistrationError
-from diwire.providers import (
+from diwire._internal.providers import (
     ContextManagerProvider,
     GeneratorProvider,
     ProviderReturnTypeExtractor,
 )
+from diwire.exceptions import DIWireInvalidRegistrationError
 
 
 class Service:

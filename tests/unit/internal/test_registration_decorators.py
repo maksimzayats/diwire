@@ -6,15 +6,13 @@ from typing import Annotated
 
 import pytest
 
-from diwire import (
-    Component,
-    Container,
+from diwire import Component, Container, container_context
+from diwire._internal.registration_decorators import (
     add_concrete,
     add_context_manager,
     add_factory,
     add_generator,
 )
-from diwire.container_context import container_context
 
 
 @pytest.fixture(autouse=True)

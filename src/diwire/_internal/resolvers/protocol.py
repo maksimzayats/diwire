@@ -4,8 +4,8 @@ from collections.abc import Mapping
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, overload
 
-from diwire.providers import ProvidersRegistrations
-from diwire.scope import BaseScope
+from diwire._internal.providers import ProvidersRegistrations
+from diwire._internal.scope import BaseScope
 
 if TYPE_CHECKING:
     from typing_extensions import Self

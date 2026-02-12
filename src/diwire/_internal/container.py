@@ -19,14 +19,8 @@ from typing import (
     overload,
 )
 
-from diwire.autoregistration import ConcreteTypeAutoregistrationPolicy
-from diwire.exceptions import (
-    DIWireDependencyNotRegisteredError,
-    DIWireError,
-    DIWireInvalidRegistrationError,
-    DIWireScopeMismatchError,
-)
-from diwire.injection import (
+from diwire._internal.autoregistration import ConcreteTypeAutoregistrationPolicy
+from diwire._internal.injection import (
     INJECT_CONTEXT_KWARG,
     INJECT_RESOLVER_KWARG,
     INJECT_WRAPPER_MARKER,
@@ -34,9 +28,9 @@ from diwire.injection import (
     InjectedCallableInspector,
     InjectedParameter,
 )
-from diwire.integrations.pydantic_settings import is_pydantic_settings_subclass
-from diwire.lock_mode import LockMode
-from diwire.markers import (
+from diwire._internal.integrations.pydantic_settings import is_pydantic_settings_subclass
+from diwire._internal.lock_mode import LockMode
+from diwire._internal.markers import (
     Component,
     ProviderMarker,
     build_annotated_key,
@@ -49,8 +43,12 @@ from diwire.markers import (
     strip_maybe_annotation,
     strip_provider_annotation,
 )
-from diwire.open_generics import OpenGenericRegistry, OpenGenericResolver, canonicalize_open_key
-from diwire.providers import (
+from diwire._internal.open_generics import (
+    OpenGenericRegistry,
+    OpenGenericResolver,
+    canonicalize_open_key,
+)
+from diwire._internal.providers import (
     ContextManagerProvider,
     FactoryProvider,
     GeneratorProvider,
@@ -61,10 +59,16 @@ from diwire.providers import (
     ProviderSpec,
     ProvidersRegistrations,
 )
-from diwire.resolvers.manager import ResolversManager
-from diwire.resolvers.protocol import ResolverProtocol
-from diwire.scope import BaseScope, Scope
-from diwire.validators import DependecyRegistrationValidator
+from diwire._internal.resolvers.manager import ResolversManager
+from diwire._internal.resolvers.protocol import ResolverProtocol
+from diwire._internal.scope import BaseScope, Scope
+from diwire._internal.validators import DependecyRegistrationValidator
+from diwire.exceptions import (
+    DIWireDependencyNotRegisteredError,
+    DIWireError,
+    DIWireInvalidRegistrationError,
+    DIWireScopeMismatchError,
+)
 
 T = TypeVar("T")
 F = TypeVar("F", bound=Callable[..., Any])

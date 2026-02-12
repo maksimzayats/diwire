@@ -109,7 +109,7 @@ ignore = [
     "PLC0415", # Import outside top-level
     "SLF001", # Private member access
 ]
-"src/diwire/container.py" = [
+"src/diwire/_internal/container.py" = [
     # Complexity (DI container by design)
     "C901", # Too complex (McCabe)
     "PLR0911", # Too many return statements

@@ -11,17 +11,14 @@ from typing import Any, Generic, TypeVar, cast
 
 import pytest
 
-from diwire.container import Container
+from diwire import Container, FromContext, Injected, Lifetime, LockMode, Scope
+from diwire._internal.providers import ProviderSpec
+from diwire._internal.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
     DIWireDependencyNotRegisteredError,
     DIWireScopeMismatchError,
 )
-from diwire.lock_mode import LockMode
-from diwire.markers import FromContext, Injected
-from diwire.providers import Lifetime, ProviderSpec
-from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
-from diwire.scope import Scope
 
 
 class _SingletonService:

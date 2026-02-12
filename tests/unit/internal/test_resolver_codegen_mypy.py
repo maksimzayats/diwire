@@ -7,10 +7,9 @@ from pathlib import Path
 
 from mypy import api as mypy_api
 
-from diwire.container import Container
-from diwire.providers import Lifetime, ProviderSpec
-from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
-from diwire.scope import Scope
+from diwire import Container, Lifetime, Scope
+from diwire._internal.providers import ProviderSpec
+from diwire._internal.resolvers.templates.renderer import ResolversTemplateRenderer
 
 _PYPROJECT_PATH = Path(__file__).resolve().parents[3] / "pyproject.toml"
 

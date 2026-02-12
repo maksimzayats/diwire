@@ -6,11 +6,8 @@ from typing import Any, cast
 
 import pytest
 
-from diwire.container import Container
-from diwire.container_context import ContainerContext
+from diwire import Container, ContainerContext, Lifetime, Scope
 from diwire.exceptions import DIWireInvalidRegistrationError
-from diwire.providers import Lifetime
-from diwire.scope import Scope
 
 
 class _Service:

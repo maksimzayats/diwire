@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, Injected
-from diwire.container_context import ContainerContext
+from diwire import Container, ContainerContext, Injected
 
 
 @dataclass(slots=True)

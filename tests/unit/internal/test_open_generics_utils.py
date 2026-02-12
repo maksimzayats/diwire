@@ -4,15 +4,13 @@ from typing import Any, Generic, TypeVar, cast
 
 import pytest
 
-from diwire.exceptions import DIWireInvalidGenericTypeArgumentError
-from diwire.lock_mode import LockMode
-from diwire.open_generics import (
+from diwire import Lifetime, LockMode, Scope
+from diwire._internal.open_generics import (
     OpenGenericRegistry,
     canonicalize_open_key,
     substitute_typevars,
 )
-from diwire.providers import Lifetime
-from diwire.scope import Scope
+from diwire.exceptions import DIWireInvalidGenericTypeArgumentError
 
 T = TypeVar("T")
 U = TypeVar("U")

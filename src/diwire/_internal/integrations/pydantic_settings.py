@@ -4,7 +4,7 @@ import importlib
 import warnings
 from typing import Any
 
-from diwire.type_checks import is_runtime_class
+from diwire._internal.type_checks import is_runtime_class
 
 _PYDANTIC_V1_WARNING_PATTERN = (
     r"Core Pydantic V1 functionality isn't compatible with Python 3\.14 or greater\."

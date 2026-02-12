@@ -6,11 +6,8 @@ from typing import Annotated, Generic, TypeVar
 
 import pytest
 
-from diwire.container import Container
+from diwire import Component, Container, Lifetime, Scope
 from diwire.exceptions import DIWireInvalidRegistrationError
-from diwire.markers import Component
-from diwire.providers import Lifetime
-from diwire.scope import Scope
 
 
 class _Service:

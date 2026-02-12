@@ -7,12 +7,9 @@ from typing import Any, cast
 
 import pytest
 
-from diwire.container import Container
+from diwire import Container, Lifetime, LockMode, Scope
+from diwire._internal.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire.exceptions import DIWireAsyncDependencyInSyncContextError, DIWireScopeMismatchError
-from diwire.lock_mode import LockMode
-from diwire.providers import Lifetime
-from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
-from diwire.scope import Scope
 
 
 class _MatrixService:

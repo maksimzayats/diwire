@@ -34,7 +34,7 @@ IMPORTS_TEMPLATE = dedent(
         DIWireDependencyNotRegisteredError,
         DIWireScopeMismatchError,
     )
-    from diwire.markers import (
+    from diwire._internal.markers import (
         is_async_provider_annotation,
         is_all_annotation,
         component_base_key,
@@ -46,7 +46,7 @@ IMPORTS_TEMPLATE = dedent(
         strip_maybe_annotation,
         strip_provider_annotation,
     )
-    from diwire.providers import ProvidersRegistrations
+    from diwire._internal.providers import ProvidersRegistrations
     """,
 ).strip()
 

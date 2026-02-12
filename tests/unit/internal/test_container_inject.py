@@ -7,16 +7,13 @@ from typing import Annotated, Any, Generic, NamedTuple, TypeVar, cast
 import pytest
 from pydantic_settings import BaseSettings
 
-import diwire.injection as injection_module
-from diwire.container import Container
+import diwire._internal.injection as injection_module
+from diwire import Component, Container, FromContext, Injected, Lifetime, Scope
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
     DIWireInvalidRegistrationError,
     DIWireScopeMismatchError,
 )
-from diwire.markers import Component, FromContext, Injected
-from diwire.providers import Lifetime
-from diwire.scope import Scope
 
 
 class _InjectedSyncDependency:

@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from diwire import Container
-from diwire.exceptions import DIWireProviderDependencyInferenceError
+from diwire import Container, DIWireProviderDependencyInferenceError
 
 
 class Service:

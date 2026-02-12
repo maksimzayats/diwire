@@ -6,10 +6,9 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from diwire.exceptions import DIWireDependencyNotRegisteredError, DIWireInvalidProviderSpecError
-from diwire.injection import INJECT_WRAPPER_MARKER
-from diwire.lock_mode import LockMode
-from diwire.markers import (
+from diwire._internal.injection import INJECT_WRAPPER_MARKER
+from diwire._internal.lock_mode import LockMode
+from diwire._internal.markers import (
     component_base_key,
     is_all_annotation,
     is_async_provider_annotation,
@@ -20,14 +19,15 @@ from diwire.markers import (
     strip_maybe_annotation,
     strip_provider_annotation,
 )
-from diwire.providers import (
+from diwire._internal.providers import (
     Lifetime,
     ProviderDependency,
     ProviderSpec,
     ProvidersRegistrations,
 )
-from diwire.scope import BaseScope
-from diwire.type_checks import is_runtime_class
+from diwire._internal.scope import BaseScope
+from diwire._internal.type_checks import is_runtime_class
+from diwire.exceptions import DIWireDependencyNotRegisteredError, DIWireInvalidProviderSpecError
 
 DispatchKind = Literal["identity", "equality_map"]
 DependencyPlanKind = Literal["provider", "context", "provider_handle", "all", "literal", "omit"]

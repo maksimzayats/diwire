@@ -5,8 +5,7 @@ from typing import Any
 import rodi
 from dishka import Provider
 
-from diwire.providers import Lifetime
-from diwire.scope import Scope
+from diwire import Lifetime, Scope
 from tests.benchmarks.dishka_helpers import DishkaBenchmarkScope, make_dishka_benchmark_container
 from tests.benchmarks.helpers import make_diwire_benchmark_container, run_benchmark
 

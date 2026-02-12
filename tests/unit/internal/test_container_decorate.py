@@ -6,17 +6,14 @@ from typing import Annotated, Generic, Protocol, TypeVar
 
 import pytest
 
-from diwire.container import (
-    Container,
+from diwire import Component, Container, Lifetime, LockMode, Scope
+from diwire._internal.container import (
     _DecorationBaseMetadata,
     _DecorationChain,
     _DecorationRule,
 )
+from diwire._internal.providers import ProviderSpec
 from diwire.exceptions import DIWireInvalidRegistrationError
-from diwire.lock_mode import LockMode
-from diwire.markers import Component
-from diwire.providers import Lifetime, ProviderSpec
-from diwire.scope import Scope
 
 
 class _HttpClient(Protocol):

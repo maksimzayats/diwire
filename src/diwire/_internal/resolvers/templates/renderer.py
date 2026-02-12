@@ -8,19 +8,18 @@ from importlib.metadata import PackageNotFoundError, version
 from textwrap import indent
 from typing import Any
 
-from diwire.exceptions import DIWireInvalidProviderSpecError
-from diwire.injection import INJECT_RESOLVER_KWARG
-from diwire.lock_mode import LockMode
-from diwire.providers import Lifetime, ProviderDependency, ProvidersRegistrations
-from diwire.resolvers.templates.mini_jinja import Environment, Template
-from diwire.resolvers.templates.planner import (
+from diwire._internal.injection import INJECT_RESOLVER_KWARG
+from diwire._internal.lock_mode import LockMode
+from diwire._internal.providers import Lifetime, ProviderDependency, ProvidersRegistrations
+from diwire._internal.resolvers.templates.mini_jinja import Environment, Template
+from diwire._internal.resolvers.templates.planner import (
     ProviderDependencyPlan,
     ProviderWorkflowPlan,
     ResolverGenerationPlan,
     ResolverGenerationPlanner,
     ScopePlan,
 )
-from diwire.resolvers.templates.templates import (
+from diwire._internal.resolvers.templates.templates import (
     ASYNC_METHOD_TEMPLATE,
     BUILD_FUNCTION_TEMPLATE,
     CLASS_TEMPLATE,
@@ -39,14 +38,15 @@ from diwire.resolvers.templates.templates import (
     MODULE_TEMPLATE,
     SYNC_METHOD_TEMPLATE,
 )
-from diwire.scope import BaseScope, BaseScopes, Scope
+from diwire._internal.scope import BaseScope, BaseScopes, Scope
+from diwire.exceptions import DIWireInvalidProviderSpecError
 
 _INDENT = " " * 4
 _MIN_CONSTRUCTOR_BASE_ARGUMENTS = 4
 _MAX_INLINE_ROOT_DEPENDENCY_DEPTH = 3
 _OMIT_INLINE_ARGUMENT: Any = object()
 _GENERATOR_SOURCE = (
-    "diwire.resolvers.templates.renderer.ResolversTemplateRenderer.get_providers_code"
+    "diwire._internal.resolvers.templates.renderer.ResolversTemplateRenderer.get_providers_code"
 )
 logger = logging.getLogger(__name__)
 

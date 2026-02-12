@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from diwire import Container
-from diwire.exceptions import DIWireAsyncDependencyInSyncContextError
+from diwire import Container, DIWireAsyncDependencyInSyncContextError
 
 
 class AsyncDependency:

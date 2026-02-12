@@ -4,7 +4,7 @@ import importlib
 from types import ModuleType
 from typing import Any
 
-import diwire.integrations.pydantic_settings as pydantic_settings_integration
+import diwire._internal.integrations.pydantic_settings as pydantic_settings_integration
 
 
 def test_load_base_settings_returns_none_for_missing_module(monkeypatch: Any) -> None:

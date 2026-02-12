@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from diwire.container_context import ContainerContext
-from diwire.exceptions import DIWireContainerNotSetError
+from diwire import ContainerContext, DIWireContainerNotSetError
 
 
 class Service:

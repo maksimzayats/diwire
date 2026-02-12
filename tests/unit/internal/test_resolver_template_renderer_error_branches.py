@@ -5,15 +5,15 @@ import inspect
 import pytest
 
 from diwire import Container, Scope
-from diwire.providers import ProviderDependency
-from diwire.resolvers.templates import renderer as renderer_module
-from diwire.resolvers.templates.planner import (
+from diwire._internal.providers import ProviderDependency
+from diwire._internal.resolvers.templates import renderer as renderer_module
+from diwire._internal.resolvers.templates.planner import (
     ProviderDependencyPlan,
     ProviderWorkflowPlan,
     ResolverGenerationPlan,
     ResolverGenerationPlanner,
 )
-from diwire.resolvers.templates.renderer import (
+from diwire._internal.resolvers.templates.renderer import (
     DependencyExpressionContext,
     ResolversTemplateRenderer,
 )

@@ -3,8 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from diwire.container import Container
-from diwire.lock_mode import LockMode
+from diwire import Container, LockMode
 
 BENCHMARK_ITERATIONS = 100_000
 BENCHMARK_WARMUP_ROUNDS = 3

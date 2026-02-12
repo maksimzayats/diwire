@@ -555,8 +555,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 
-from diwire import Container, Lifetime, Scope
-from diwire.exceptions import DIWireScopeMismatchError
+from diwire import Container, DIWireScopeMismatchError, Lifetime, Scope
 
 
 class RequestScopedDependency:
@@ -709,8 +708,7 @@ Focused example: ``DIWireScopeMismatchError`` from root resolution.
 ```python
 from __future__ import annotations
 
-from diwire import Container, Scope
-from diwire.exceptions import DIWireScopeMismatchError
+from diwire import Container, DIWireScopeMismatchError, Scope
 
 
 class RequestDependency:
@@ -1410,8 +1408,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar, cast
 
-from diwire import Container, Lifetime, Scope
-from diwire.exceptions import DIWireInvalidGenericTypeArgumentError, DIWireScopeMismatchError
+from diwire import (
+    Container,
+    DIWireInvalidGenericTypeArgumentError,
+    DIWireScopeMismatchError,
+    Lifetime,
+    Scope,
+)
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -1529,8 +1532,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar, cast
 
-from diwire import Container
-from diwire.exceptions import DIWireInvalidGenericTypeArgumentError
+from diwire import Container, DIWireInvalidGenericTypeArgumentError
 
 Allowed = TypeVar("Allowed", int, str)
 
@@ -1710,8 +1712,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Generic, TypeVar
 
-from diwire import Container, Lifetime, Scope
-from diwire.exceptions import DIWireScopeMismatchError
+from diwire import Container, DIWireScopeMismatchError, Lifetime, Scope
 
 T = TypeVar("T")
 
@@ -1781,8 +1782,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from diwire import Container
-from diwire.exceptions import DIWireDependencyNotRegisteredError
+from diwire import Container, DIWireDependencyNotRegisteredError
 
 
 class AutoregLeaf:
@@ -1960,8 +1960,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container
-from diwire.exceptions import DIWireDependencyNotRegisteredError
+from diwire import Container, DIWireDependencyNotRegisteredError
 
 
 class Dependency:
@@ -1999,8 +1998,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from diwire import Container
-from diwire.exceptions import DIWireDependencyNotRegisteredError
+from diwire import Container, DIWireDependencyNotRegisteredError
 
 
 @dataclass(slots=True)
@@ -2058,9 +2056,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, Injected
-from diwire.container_context import ContainerContext
-from diwire.exceptions import DIWireContainerNotSetError
+from diwire import Container, ContainerContext, DIWireContainerNotSetError, Injected
 
 
 @dataclass(slots=True)
@@ -2122,8 +2118,7 @@ Focused example: unbound ``ContainerContext`` usage error.
 ```python
 from __future__ import annotations
 
-from diwire.container_context import ContainerContext
-from diwire.exceptions import DIWireContainerNotSetError
+from diwire import ContainerContext, DIWireContainerNotSetError
 
 
 class Service:
@@ -2155,8 +2150,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container
-from diwire.container_context import ContainerContext
+from diwire import Container, ContainerContext
 
 
 @dataclass(slots=True)
@@ -2196,8 +2190,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, Injected
-from diwire.container_context import ContainerContext
+from diwire import Container, ContainerContext, Injected
 
 
 @dataclass(slots=True)
@@ -2241,8 +2234,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container
-from diwire.container_context import ContainerContext
+from diwire import Container, ContainerContext
 
 
 @dataclass(slots=True)
@@ -2919,14 +2911,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar, cast
 
-from diwire import Container, Scope
-from diwire.exceptions import (
+from diwire import (
+    Container,
     DIWireAsyncDependencyInSyncContextError,
     DIWireDependencyNotRegisteredError,
     DIWireInvalidGenericTypeArgumentError,
     DIWireInvalidRegistrationError,
     DIWireProviderDependencyInferenceError,
     DIWireScopeMismatchError,
+    Scope,
 )
 
 
@@ -3040,8 +3033,7 @@ Focused example: ``DIWireDependencyNotRegisteredError``.
 ```python
 from __future__ import annotations
 
-from diwire import Container
-from diwire.exceptions import DIWireDependencyNotRegisteredError
+from diwire import Container, DIWireDependencyNotRegisteredError
 
 
 class MissingDependency:
@@ -3071,8 +3063,7 @@ Focused example: ``DIWireScopeMismatchError``.
 ```python
 from __future__ import annotations
 
-from diwire import Container, Scope
-from diwire.exceptions import DIWireScopeMismatchError
+from diwire import Container, DIWireScopeMismatchError, Scope
 
 
 class RequestDependency:
@@ -3107,8 +3098,7 @@ Focused example: ``DIWireAsyncDependencyInSyncContextError``.
 ```python
 from __future__ import annotations
 
-from diwire import Container
-from diwire.exceptions import DIWireAsyncDependencyInSyncContextError
+from diwire import Container, DIWireAsyncDependencyInSyncContextError
 
 
 class AsyncDependency:
@@ -3143,8 +3133,7 @@ Focused example: ``DIWireProviderDependencyInferenceError``.
 ```python
 from __future__ import annotations
 
-from diwire import Container
-from diwire.exceptions import DIWireProviderDependencyInferenceError
+from diwire import Container, DIWireProviderDependencyInferenceError
 
 
 class Service:
@@ -3182,8 +3171,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar, cast
 
-from diwire import Container
-from diwire.exceptions import DIWireInvalidGenericTypeArgumentError
+from diwire import Container, DIWireInvalidGenericTypeArgumentError
 
 
 class Model:
@@ -3229,8 +3217,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from diwire import Container
-from diwire.exceptions import DIWireInvalidRegistrationError
+from diwire import Container, DIWireInvalidRegistrationError
 
 
 def main() -> None:
@@ -3273,8 +3260,7 @@ This topic demonstrates:
 ```python
 from __future__ import annotations
 
-from diwire import Container, FromContext, Lifetime, Scope
-from diwire.exceptions import DIWireDependencyNotRegisteredError
+from diwire import Container, DIWireDependencyNotRegisteredError, FromContext, Lifetime, Scope
 
 
 class RequestValue:
@@ -3436,8 +3422,7 @@ Passing __diwire_context without opening a scope raises a clear error.
 ```python
 from __future__ import annotations
 
-from diwire import Container, FromContext
-from diwire.exceptions import DIWireInvalidRegistrationError
+from diwire import Container, DIWireInvalidRegistrationError, FromContext
 
 
 def main() -> None:
@@ -3479,8 +3464,7 @@ from __future__ import annotations
 
 import asyncio
 
-from diwire import Container, Lifetime, Scope
-from diwire.exceptions import DIWireAsyncDependencyInSyncContextError
+from diwire import Container, DIWireAsyncDependencyInSyncContextError, Lifetime, Scope
 
 
 class AsyncService:
@@ -3853,8 +3837,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated
 
-from diwire import Component, Container
-from diwire.exceptions import DIWireInvalidRegistrationError
+from diwire import Component, Container, DIWireInvalidRegistrationError
 
 
 class Repo:
@@ -4079,8 +4062,7 @@ This topic demonstrates:
 ```python
 from __future__ import annotations
 
-from diwire import Container, Maybe
-from diwire.exceptions import DIWireDependencyNotRegisteredError
+from diwire import Container, DIWireDependencyNotRegisteredError, Maybe
 
 
 class ApiClient:

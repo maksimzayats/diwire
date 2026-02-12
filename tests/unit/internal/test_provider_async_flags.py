@@ -6,8 +6,12 @@ from inspect import Parameter
 from types import TracebackType
 from typing import Any, cast
 
-from diwire.container import Container
-from diwire.providers import ContextManagerProvider, ProviderDependency, ProviderReturnTypeExtractor
+from diwire import Container
+from diwire._internal.providers import (
+    ContextManagerProvider,
+    ProviderDependency,
+    ProviderReturnTypeExtractor,
+)
 
 
 class Service:

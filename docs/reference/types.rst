@@ -16,7 +16,7 @@ LockMode
 Scope
 -----
 
-.. autoclass:: diwire.scope.BaseScope
+.. autoclass:: diwire.BaseScope
 
 .. autodata:: diwire.Scope
 

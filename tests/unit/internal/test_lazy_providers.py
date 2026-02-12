@@ -5,14 +5,11 @@ from typing import Any, Generic, TypeVar, cast
 
 import pytest
 
-from diwire.container import Container
+from diwire import AsyncProvider, Container, Injected, Lifetime, Provider, Scope
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
     DIWireInvalidProviderSpecError,
 )
-from diwire.markers import AsyncProvider, Injected, Provider
-from diwire.providers import Lifetime
-from diwire.scope import Scope
 
 
 class _CycleB:

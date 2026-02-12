@@ -13,8 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 
-from diwire import Container, Lifetime, Scope
-from diwire.exceptions import DIWireScopeMismatchError
+from diwire import Container, DIWireScopeMismatchError, Lifetime, Scope
 
 
 class RequestScopedDependency:

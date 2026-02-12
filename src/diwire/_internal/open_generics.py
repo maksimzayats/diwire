@@ -9,15 +9,9 @@ from dataclasses import dataclass
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, Literal, NoReturn, TypeVar, cast, get_args, get_origin
 
-from diwire.exceptions import (
-    DIWireAsyncDependencyInSyncContextError,
-    DIWireDependencyNotRegisteredError,
-    DIWireInvalidGenericTypeArgumentError,
-    DIWireScopeMismatchError,
-)
-from diwire.injection import INJECT_RESOLVER_KWARG, INJECT_WRAPPER_MARKER
-from diwire.lock_mode import LockMode
-from diwire.markers import (
+from diwire._internal.injection import INJECT_RESOLVER_KWARG, INJECT_WRAPPER_MARKER
+from diwire._internal.lock_mode import LockMode
+from diwire._internal.markers import (
     is_async_provider_annotation,
     is_from_context_annotation,
     is_maybe_annotation,
@@ -26,7 +20,7 @@ from diwire.markers import (
     strip_maybe_annotation,
     strip_provider_annotation,
 )
-from diwire.providers import (
+from diwire._internal.providers import (
     ContextManagerProvider,
     FactoryProvider,
     GeneratorProvider,
@@ -34,8 +28,14 @@ from diwire.providers import (
     ProviderDependency,
     UserProviderObject,
 )
-from diwire.resolvers.protocol import ResolverProtocol
-from diwire.scope import BaseScope
+from diwire._internal.resolvers.protocol import ResolverProtocol
+from diwire._internal.scope import BaseScope
+from diwire.exceptions import (
+    DIWireAsyncDependencyInSyncContextError,
+    DIWireDependencyNotRegisteredError,
+    DIWireInvalidGenericTypeArgumentError,
+    DIWireScopeMismatchError,
+)
 
 if TYPE_CHECKING:
     from typing_extensions import Self

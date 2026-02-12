@@ -13,7 +13,7 @@ class BaseScope(int):
     transitions when ``enter_scope(None)`` chooses the next non-skippable scope.
     """
 
-    def __new__(cls, *args: Any, **_kwargs: Any) -> BaseScope:  # noqa: D102, PYI034
+    def __new__(cls, *args: Any, **_kwargs: Any) -> BaseScope:  # noqa: PYI034
         return super().__new__(cls, *args)
 
     def __init__(self, level: int, *, skippable: bool = False) -> None:

@@ -1,15 +1,28 @@
-from diwire.container import Container
-from diwire.container_context import ContainerContext, container_context
-from diwire.lock_mode import LockMode
-from diwire.markers import All, AsyncProvider, Component, FromContext, Injected, Maybe, Provider
-from diwire.providers import Lifetime
-from diwire.registration_decorators import (
-    add_concrete,
-    add_context_manager,
-    add_factory,
-    add_generator,
+from diwire._internal.container import Container
+from diwire._internal.container_context import ContainerContext, container_context
+from diwire._internal.lock_mode import LockMode
+from diwire._internal.markers import (
+    All,
+    AsyncProvider,
+    Component,
+    FromContext,
+    Injected,
+    Maybe,
+    Provider,
 )
-from diwire.scope import BaseScope, Scope
+from diwire._internal.providers import Lifetime
+from diwire._internal.scope import BaseScope, Scope
+from diwire.exceptions import (
+    DIWireAsyncDependencyInSyncContextError,
+    DIWireContainerNotSetError,
+    DIWireDependencyNotRegisteredError,
+    DIWireError,
+    DIWireInvalidGenericTypeArgumentError,
+    DIWireInvalidProviderSpecError,
+    DIWireInvalidRegistrationError,
+    DIWireProviderDependencyInferenceError,
+    DIWireScopeMismatchError,
+)
 
 __all__ = [
     "All",
@@ -18,6 +31,15 @@ __all__ = [
     "Component",
     "Container",
     "ContainerContext",
+    "DIWireAsyncDependencyInSyncContextError",
+    "DIWireContainerNotSetError",
+    "DIWireDependencyNotRegisteredError",
+    "DIWireError",
+    "DIWireInvalidGenericTypeArgumentError",
+    "DIWireInvalidProviderSpecError",
+    "DIWireInvalidRegistrationError",
+    "DIWireProviderDependencyInferenceError",
+    "DIWireScopeMismatchError",
     "FromContext",
     "Injected",
     "Lifetime",
@@ -25,9 +47,5 @@ __all__ = [
     "Maybe",
     "Provider",
     "Scope",
-    "add_concrete",
-    "add_context_manager",
-    "add_factory",
-    "add_generator",
     "container_context",
 ]

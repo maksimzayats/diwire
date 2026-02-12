@@ -14,8 +14,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar, cast
 
-from diwire import Container, Lifetime, Scope
-from diwire.exceptions import DIWireInvalidGenericTypeArgumentError, DIWireScopeMismatchError
+from diwire import (
+    Container,
+    DIWireInvalidGenericTypeArgumentError,
+    DIWireScopeMismatchError,
+    Lifetime,
+    Scope,
+)
 
 T = TypeVar("T")
 U = TypeVar("U")

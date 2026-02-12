@@ -1,9 +1,9 @@
 from typing import Any, cast
 
-from diwire.providers import ProvidersRegistrations
-from diwire.resolvers.protocol import BuildRootResolverFunctionProtocol, ResolverProtocol
-from diwire.resolvers.templates.renderer import ResolversTemplateRenderer
-from diwire.scope import BaseScope
+from diwire._internal.providers import ProvidersRegistrations
+from diwire._internal.resolvers.protocol import BuildRootResolverFunctionProtocol, ResolverProtocol
+from diwire._internal.resolvers.templates.renderer import ResolversTemplateRenderer
+from diwire._internal.scope import BaseScope
 
 
 class ResolversManager:

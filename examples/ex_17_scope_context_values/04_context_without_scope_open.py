@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from diwire import Container, FromContext
-from diwire.exceptions import DIWireInvalidRegistrationError
+from diwire import Container, DIWireInvalidRegistrationError, FromContext
 
 
 def main() -> None:

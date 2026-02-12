@@ -15,8 +15,8 @@ import pydantic
 import pytest
 from pydantic import dataclasses as pydantic_dataclasses
 
+from diwire._internal.providers import ProviderDependenciesExtractor, ProviderDependency
 from diwire.exceptions import DIWireProviderDependencyInferenceError
-from diwire.providers import ProviderDependenciesExtractor, ProviderDependency
 
 
 class ServiceA:

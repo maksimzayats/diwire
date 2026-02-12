@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from diwire.resolvers.templates.mini_jinja import Environment
+from diwire._internal.resolvers.templates.mini_jinja import Environment
 
 
 def test_variable_interpolation_renders_context_value() -> None:

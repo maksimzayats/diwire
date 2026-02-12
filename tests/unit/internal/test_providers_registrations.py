@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from diwire.providers import Lifetime, ProviderSpec, ProvidersRegistrations
-from diwire.scope import BaseScope, Scope
+from diwire import BaseScope, Lifetime, Scope
+from diwire._internal.providers import ProviderSpec, ProvidersRegistrations
 
 
 def _provider_spec(*, provides: type[object], scope_level: BaseScope) -> ProviderSpec:

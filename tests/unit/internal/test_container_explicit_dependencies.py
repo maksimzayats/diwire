@@ -6,7 +6,7 @@ from contextlib import contextmanager
 
 import pytest
 
-from diwire.container import Container
+from diwire import Container
 from diwire.exceptions import DIWireInvalidProviderSpecError, DIWireProviderDependencyInferenceError
 
 

@@ -5,7 +5,7 @@ from typing import Any, cast
 
 import pytest
 
-from diwire.container import Container
+from diwire import Container
 from diwire.exceptions import DIWireInvalidRegistrationError
 
 

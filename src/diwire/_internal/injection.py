@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Annotated, Any, get_args, get_origin, get_type_hints
 
-from diwire.markers import (
+from diwire._internal.markers import (
     InjectedMarker,
     is_from_context_annotation,
     strip_from_context_annotation,

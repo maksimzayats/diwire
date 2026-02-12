@@ -9,7 +9,7 @@ Scopes give you a way to say: “for this unit of work (request/job), reuse scop
 Scope model
 -----------
 
-``Scope`` is an *ordered scope tree* implemented as a collection of :class:`diwire.scope.BaseScope` instances.
+``Scope`` is an *ordered scope tree* implemented as a collection of :class:`diwire.BaseScope` instances.
 Each scope has:
 
 - a numeric ``level`` (depth)
@@ -33,7 +33,7 @@ Scoped lifetime
 ---------------
 
 To cache a provider *within* a scope, register it as ``Lifetime.SCOPED`` and set ``scope=...`` to a
-:class:`diwire.scope.BaseScope` value:
+:class:`diwire.BaseScope` value:
 
 .. code-block:: python
 

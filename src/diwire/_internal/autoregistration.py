@@ -8,7 +8,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, TypeGuard
 
-from diwire.type_checks import is_runtime_class
+from diwire._internal.type_checks import is_runtime_class
 
 
 @dataclass(frozen=True, slots=True)

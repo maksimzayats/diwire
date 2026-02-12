@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from diwire import Container
-from diwire.exceptions import DIWireDependencyNotRegisteredError
+from diwire import Container, DIWireDependencyNotRegisteredError
 
 
 class MissingDependency:

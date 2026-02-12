@@ -6,23 +6,23 @@ from collections.abc import AsyncGenerator, Awaitable, Callable, Generator, Mapp
 from dataclasses import dataclass
 from typing import Any, Literal, TypeAlias, TypeVar, cast, overload
 
-from diwire.container import Container
-from diwire.exceptions import DIWireContainerNotSetError, DIWireInvalidRegistrationError
-from diwire.injection import (
+from diwire._internal.container import Container
+from diwire._internal.injection import (
     INJECT_CONTEXT_KWARG,
     INJECT_RESOLVER_KWARG,
     INJECT_WRAPPER_MARKER,
     InjectedCallableInspector,
 )
-from diwire.lock_mode import LockMode
-from diwire.providers import (
+from diwire._internal.lock_mode import LockMode
+from diwire._internal.providers import (
     ContextManagerProvider,
     FactoryProvider,
     GeneratorProvider,
     Lifetime,
 )
-from diwire.resolvers.protocol import ResolverProtocol
-from diwire.scope import BaseScope
+from diwire._internal.resolvers.protocol import ResolverProtocol
+from diwire._internal.scope import BaseScope
+from diwire.exceptions import DIWireContainerNotSetError, DIWireInvalidRegistrationError
 
 T = TypeVar("T")
 F = TypeVar("F", bound=Callable[..., Any])

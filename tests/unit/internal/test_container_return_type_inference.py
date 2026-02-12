@@ -7,14 +7,14 @@ from typing import Any, cast
 
 import pytest
 
-from diwire.container import (
+from diwire import Container
+from diwire._internal.container import (
     ConcreteTypeRegistrationDecorator,
-    Container,
     ContextManagerRegistrationDecorator,
     GeneratorRegistrationDecorator,
 )
+from diwire._internal.providers import ContextManagerProvider, FactoryProvider, GeneratorProvider
 from diwire.exceptions import DIWireInvalidRegistrationError
-from diwire.providers import ContextManagerProvider, FactoryProvider, GeneratorProvider
 
 
 class Service:

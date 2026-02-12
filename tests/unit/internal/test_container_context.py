@@ -8,17 +8,21 @@ from typing import Annotated, Any, Generic, TypeVar, cast
 import pytest
 
 import diwire
-from diwire.container import Container
-from diwire.container_context import ContainerContext
+from diwire import (
+    Component,
+    Container,
+    ContainerContext,
+    FromContext,
+    Injected,
+    Lifetime,
+    LockMode,
+    Scope,
+)
 from diwire.exceptions import (
     DIWireContainerNotSetError,
     DIWireInvalidRegistrationError,
     DIWireScopeMismatchError,
 )
-from diwire.lock_mode import LockMode
-from diwire.markers import Component, FromContext, Injected
-from diwire.providers import Lifetime
-from diwire.scope import Scope
 
 
 class _Service:

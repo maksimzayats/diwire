@@ -21,13 +21,13 @@ from typing import (
     get_type_hints,
 )
 
+from diwire._internal.lock_mode import LockMode
+from diwire._internal.scope import BaseScope
 from diwire.exceptions import (
     DIWireInvalidProviderSpecError,
     DIWireInvalidRegistrationError,
     DIWireProviderDependencyInferenceError,
 )
-from diwire.lock_mode import LockMode
-from diwire.scope import BaseScope
 
 T = TypeVar("T")
 _CMT_co = TypeVar("_CMT_co", covariant=True)

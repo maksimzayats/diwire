@@ -5,11 +5,8 @@ from typing import Any, Generic, TypeVar, cast
 
 import pytest
 
-from diwire.container import Container
+from diwire import Container, FromContext, Injected, Lifetime, Maybe, Provider, Scope
 from diwire.exceptions import DIWireDependencyNotRegisteredError
-from diwire.markers import FromContext, Injected, Maybe, Provider
-from diwire.providers import Lifetime
-from diwire.scope import Scope
 
 
 class _MaybeDependency:

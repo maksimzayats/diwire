@@ -14,8 +14,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from diwire import Container
-from diwire.exceptions import DIWireDependencyNotRegisteredError
+from diwire import Container, DIWireDependencyNotRegisteredError
 
 
 class AutoregLeaf:

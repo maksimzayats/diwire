@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Generator
 from contextlib import contextmanager
 
-from diwire.container import Container
+from diwire import Container
 
 
 class Service:

@@ -13,12 +13,9 @@ import pydantic
 import pytest
 from pydantic_settings import BaseSettings
 
-from diwire.autoregistration import ConcreteTypeAutoregistrationPolicy
-from diwire.container import Container
+from diwire import AsyncProvider, Container, Lifetime, Provider, Scope
+from diwire._internal.autoregistration import ConcreteTypeAutoregistrationPolicy
 from diwire.exceptions import DIWireDependencyNotRegisteredError
-from diwire.markers import AsyncProvider, Provider
-from diwire.providers import Lifetime
-from diwire.scope import Scope
 
 _PYDANTIC_V1_WARNING_PATTERN = (
     r"Core Pydantic V1 functionality isn't compatible with Python 3\.14 or greater\."

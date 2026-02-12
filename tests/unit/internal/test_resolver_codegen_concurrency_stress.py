@@ -6,10 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from diwire.container import Container
-from diwire.lock_mode import LockMode
-from diwire.providers import Lifetime
-from diwire.scope import Scope
+from diwire import Container, Lifetime, LockMode, Scope
 
 _THREAD_WORKERS = 12
 _ASYNC_TASKS = 24

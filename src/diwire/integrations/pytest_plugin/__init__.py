@@ -1,4 +1,4 @@
-from diwire.integrations.pytest_plugin.plugin import (
+from diwire._internal.integrations.pytest_plugin import (
     _diwire_state,
     diwire_container,
     pytest_pycollect_makeitem,

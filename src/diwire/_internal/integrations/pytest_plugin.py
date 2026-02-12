@@ -7,8 +7,8 @@ from typing import Any, cast
 
 import pytest
 
-from diwire.container import Container
-from diwire.injection import InjectedCallableInspector, InjectedParameter
+from diwire._internal.container import Container
+from diwire._internal.injection import InjectedCallableInspector, InjectedParameter
 
 _DIWIRE_CONTAINER_ATTR = "_diwire_container"
 _DIWIRE_INJECTED_PARAMETERS_ATTR = "__diwire_pytest_injected_parameters__"

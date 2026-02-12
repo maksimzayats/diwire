@@ -4,10 +4,10 @@ import inspect
 from collections.abc import Callable, Mapping
 from typing import Any, Literal, TypeVar, overload
 
-from diwire.container_context import container_context
-from diwire.lock_mode import LockMode
-from diwire.providers import Lifetime
-from diwire.scope import BaseScope
+from diwire._internal.container_context import container_context
+from diwire._internal.lock_mode import LockMode
+from diwire._internal.providers import Lifetime
+from diwire._internal.scope import BaseScope
 
 C = TypeVar("C", bound=type[Any])
 FactoryF = TypeVar("FactoryF", bound=Callable[..., Any])
