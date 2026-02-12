@@ -164,6 +164,7 @@ print(handler())  # => ok
 ## Named components
 
 Use `Annotated[T, Component("name")]` when you need multiple registrations for the same base type.
+For registration ergonomics, you can also pass `component="name"` to `add_*` methods.
 
 ```python
 from typing import Annotated, TypeAlias
@@ -181,12 +182,14 @@ FallbackCache: TypeAlias = Annotated[Cache, Component("fallback")]
 
 
 container = Container(autoregister_concrete_types=False)
-container.add_instance(Cache(label="redis"), provides=PrimaryCache)
-container.add_instance(Cache(label="memory"), provides=FallbackCache)
+container.add_instance(Cache(label="redis"), provides=Cache, component="primary")
+container.add_instance(Cache(label="memory"), provides=Cache, component="fallback")
 
 print(container.resolve(PrimaryCache).label)  # => redis
 print(container.resolve(FallbackCache).label)  # => memory
 ```
+
+Resolution/injection keys are still `Annotated[..., Component(...)]` at runtime.
 
 ## container_context (optional)
 

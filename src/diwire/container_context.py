@@ -138,12 +138,14 @@ class ContainerContext:
         instance: T,
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
     ) -> None:
         """Record and apply an instance registration on the current container.
 
         Args:
             instance: Instance value to register.
             provides: Dependency key to bind. ``"infer"`` uses ``type(instance)``.
+            component: Optional component marker value forwarded to the container.
 
         Raises:
             DIWireInvalidRegistrationError: If ``provides`` is ``None``.
@@ -167,6 +169,7 @@ class ContainerContext:
             registration_kwargs={
                 "provides": resolved_provides,
                 "instance": instance,
+                "component": component,
             },
         )
 
@@ -176,6 +179,7 @@ class ContainerContext:
         concrete_type: type[Any],
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -189,6 +193,7 @@ class ContainerContext:
         concrete_type: Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -201,6 +206,7 @@ class ContainerContext:
         concrete_type: type[Any] | Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -212,6 +218,7 @@ class ContainerContext:
         Args:
             concrete_type: Concrete class to register, or ``"from_decorator"``.
             provides: Dependency key produced by the provider.
+            component: Optional component marker value forwarded to the container.
             scope: Provider scope or ``"from_container"``.
             lifetime: Provider lifetime or ``"from_container"``.
             dependencies: Explicit dependency list or ``"infer"``.
@@ -234,6 +241,7 @@ class ContainerContext:
             self.add_concrete(
                 decorated_concrete,
                 provides=provides,
+                component=component,
                 scope=scope,
                 lifetime=lifetime,
                 dependencies=dependencies,
@@ -275,6 +283,7 @@ class ContainerContext:
             registration_kwargs={
                 "provides": normalized_provides,
                 "concrete_type": normalized_concrete,
+                "component": component,
                 "scope": scope,
                 "lifetime": lifetime,
                 "dependencies": dependencies,
@@ -290,6 +299,7 @@ class ContainerContext:
         factory: Callable[..., Any] | Callable[..., Awaitable[Any]],
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -303,6 +313,7 @@ class ContainerContext:
         factory: Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -317,6 +328,7 @@ class ContainerContext:
         ) = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -328,6 +340,7 @@ class ContainerContext:
         Args:
             factory: Factory callable to register, or ``"from_decorator"``.
             provides: Dependency key produced by the provider.
+            component: Optional component marker value forwarded to the container.
             scope: Provider scope or ``"from_container"``.
             lifetime: Provider lifetime or ``"from_container"``.
             dependencies: Explicit dependency list or ``"infer"``.
@@ -346,6 +359,7 @@ class ContainerContext:
             self.add_factory(
                 decorated_factory,
                 provides=provides,
+                component=component,
                 scope=scope,
                 lifetime=lifetime,
                 dependencies=dependencies,
@@ -379,6 +393,7 @@ class ContainerContext:
             registration_kwargs={
                 "provides": provides,
                 "factory": cast("FactoryProvider[Any]", factory_value),
+                "component": component,
                 "scope": scope,
                 "lifetime": lifetime,
                 "dependencies": dependencies,
@@ -396,6 +411,7 @@ class ContainerContext:
         ),
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -409,6 +425,7 @@ class ContainerContext:
         generator: Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -425,6 +442,7 @@ class ContainerContext:
         ) = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -436,6 +454,7 @@ class ContainerContext:
         Args:
             generator: Generator provider, or ``"from_decorator"``.
             provides: Dependency key produced by the provider.
+            component: Optional component marker value forwarded to the container.
             scope: Provider scope or ``"from_container"``.
             lifetime: Provider lifetime or ``"from_container"``.
             dependencies: Explicit dependency list or ``"infer"``.
@@ -454,6 +473,7 @@ class ContainerContext:
             self.add_generator(
                 decorated_generator,
                 provides=provides,
+                component=component,
                 scope=scope,
                 lifetime=lifetime,
                 dependencies=dependencies,
@@ -487,6 +507,7 @@ class ContainerContext:
             registration_kwargs={
                 "provides": provides,
                 "generator": cast("GeneratorProvider[Any]", generator_value),
+                "component": component,
                 "scope": scope,
                 "lifetime": lifetime,
                 "dependencies": dependencies,
@@ -502,6 +523,7 @@ class ContainerContext:
         context_manager: ContextManagerProvider[Any],
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -515,6 +537,7 @@ class ContainerContext:
         context_manager: Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -527,6 +550,7 @@ class ContainerContext:
         context_manager: ContextManagerProvider[Any] | Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -538,6 +562,7 @@ class ContainerContext:
         Args:
             context_manager: Context-manager provider, or ``"from_decorator"``.
             provides: Dependency key produced by the provider.
+            component: Optional component marker value forwarded to the container.
             scope: Provider scope or ``"from_container"``.
             lifetime: Provider lifetime or ``"from_container"``.
             dependencies: Explicit dependency list or ``"infer"``.
@@ -556,6 +581,7 @@ class ContainerContext:
             self.add_context_manager(
                 decorated_context_manager,
                 provides=provides,
+                component=component,
                 scope=scope,
                 lifetime=lifetime,
                 dependencies=dependencies,
@@ -598,6 +624,7 @@ class ContainerContext:
             registration_kwargs={
                 "provides": provides,
                 "context_manager": cast("ContextManagerProvider[Any]", context_manager_value),
+                "component": component,
                 "scope": scope,
                 "lifetime": lifetime,
                 "dependencies": dependencies,
@@ -611,6 +638,7 @@ class ContainerContext:
         self,
         *,
         provides: Any,
+        component: object | None = None,
         decorator: Callable[..., Any],
         inner_parameter: str | None = None,
     ) -> None:
@@ -618,6 +646,7 @@ class ContainerContext:
 
         Args:
             provides: Dependency key to decorate.
+            component: Optional component marker value forwarded to the container.
             decorator: Factory-style callable wrapping the inner dependency.
             inner_parameter: Optional decorator parameter name receiving inner.
 
@@ -644,6 +673,7 @@ class ContainerContext:
             method_name="decorate",
             registration_kwargs={
                 "provides": provides,
+                "component": component,
                 "decorator": cast("Callable[..., Any]", decorator_value),
                 "inner_parameter": inner_parameter,
             },

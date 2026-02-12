@@ -19,6 +19,7 @@ def add_concrete(
     concrete_type: C,
     *,
     provides: Any | Literal["infer"] = "infer",
+    component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
     dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -32,6 +33,7 @@ def add_concrete(
     concrete_type: Literal["from_decorator"] = "from_decorator",
     *,
     provides: Any | Literal["infer"] = "infer",
+    component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
     dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -44,6 +46,7 @@ def add_concrete(  # noqa: PLR0913
     concrete_type: C | Literal["from_decorator"] = "from_decorator",
     *,
     provides: Any | Literal["infer"] = "infer",
+    component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
     dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -60,6 +63,7 @@ def add_concrete(  # noqa: PLR0913
         concrete_type: Concrete class to register, or ``"from_decorator"`` to
             use decorator form.
         provides: Dependency key exposed by the registration.
+        component: Optional component marker value forwarded to the container.
         scope: Registration scope or ``"from_container"``.
         lifetime: Provider lifetime or ``"from_container"``.
         dependencies: Explicit dependencies list or ``"infer"``.
@@ -86,6 +90,7 @@ def add_concrete(  # noqa: PLR0913
             container_context.add_concrete(
                 decorated_concrete,
                 provides=provides,
+                component=component,
                 scope=scope,
                 lifetime=lifetime,
                 dependencies=dependencies,
@@ -99,6 +104,7 @@ def add_concrete(  # noqa: PLR0913
     container_context.add_concrete(
         concrete_type,
         provides=provides,
+        component=component,
         scope=scope,
         lifetime=lifetime,
         dependencies=dependencies,
@@ -113,6 +119,7 @@ def add_factory(
     factory: FactoryF,
     *,
     provides: Any | Literal["infer"] = "infer",
+    component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
     dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -126,6 +133,7 @@ def add_factory(
     factory: Literal["from_decorator"] = "from_decorator",
     *,
     provides: Any | Literal["infer"] = "infer",
+    component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
     dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -138,6 +146,7 @@ def add_factory(  # noqa: PLR0913
     factory: FactoryF | Literal["from_decorator"] = "from_decorator",
     *,
     provides: Any | Literal["infer"] = "infer",
+    component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
     dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -153,6 +162,7 @@ def add_factory(  # noqa: PLR0913
     Args:
         factory: Factory callable to register, or ``"from_decorator"``.
         provides: Dependency key exposed by the registration.
+        component: Optional component marker value forwarded to the container.
         scope: Registration scope or ``"from_container"``.
         lifetime: Provider lifetime or ``"from_container"``.
         dependencies: Explicit dependencies list or ``"infer"``.
@@ -179,6 +189,7 @@ def add_factory(  # noqa: PLR0913
             container_context.add_factory(
                 decorated_factory,
                 provides=provides,
+                component=component,
                 scope=scope,
                 lifetime=lifetime,
                 dependencies=dependencies,
@@ -192,6 +203,7 @@ def add_factory(  # noqa: PLR0913
     container_context.add_factory(
         factory,
         provides=provides,
+        component=component,
         scope=scope,
         lifetime=lifetime,
         dependencies=dependencies,
@@ -206,6 +218,7 @@ def add_generator(
     generator: GeneratorF,
     *,
     provides: Any | Literal["infer"] = "infer",
+    component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
     dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -219,6 +232,7 @@ def add_generator(
     generator: Literal["from_decorator"] = "from_decorator",
     *,
     provides: Any | Literal["infer"] = "infer",
+    component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
     dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -231,6 +245,7 @@ def add_generator(  # noqa: PLR0913
     generator: GeneratorF | Literal["from_decorator"] = "from_decorator",
     *,
     provides: Any | Literal["infer"] = "infer",
+    component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
     dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -246,6 +261,7 @@ def add_generator(  # noqa: PLR0913
     Args:
         generator: Generator/async-generator provider, or ``"from_decorator"``.
         provides: Dependency key exposed by the registration.
+        component: Optional component marker value forwarded to the container.
         scope: Registration scope or ``"from_container"``.
         lifetime: Provider lifetime or ``"from_container"``.
         dependencies: Explicit dependencies list or ``"infer"``.
@@ -273,6 +289,7 @@ def add_generator(  # noqa: PLR0913
             container_context.add_generator(
                 decorated_generator,
                 provides=provides,
+                component=component,
                 scope=scope,
                 lifetime=lifetime,
                 dependencies=dependencies,
@@ -286,6 +303,7 @@ def add_generator(  # noqa: PLR0913
     container_context.add_generator(
         generator,
         provides=provides,
+        component=component,
         scope=scope,
         lifetime=lifetime,
         dependencies=dependencies,
@@ -300,6 +318,7 @@ def add_context_manager(
     context_manager: ContextManagerF,
     *,
     provides: Any | Literal["infer"] = "infer",
+    component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
     dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -313,6 +332,7 @@ def add_context_manager(
     context_manager: Literal["from_decorator"] = "from_decorator",
     *,
     provides: Any | Literal["infer"] = "infer",
+    component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
     dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -325,6 +345,7 @@ def add_context_manager(  # noqa: PLR0913
     context_manager: ContextManagerF | Literal["from_decorator"] = "from_decorator",
     *,
     provides: Any | Literal["infer"] = "infer",
+    component: object | None = None,
     scope: BaseScope | Literal["from_container"] = "from_container",
     lifetime: Lifetime | Literal["from_container"] = "from_container",
     dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -341,6 +362,7 @@ def add_context_manager(  # noqa: PLR0913
         context_manager: Context-manager provider callable, or
             ``"from_decorator"``.
         provides: Dependency key exposed by the registration.
+        component: Optional component marker value forwarded to the container.
         scope: Registration scope or ``"from_container"``.
         lifetime: Provider lifetime or ``"from_container"``.
         dependencies: Explicit dependencies list or ``"infer"``.
@@ -367,6 +389,7 @@ def add_context_manager(  # noqa: PLR0913
             container_context.add_context_manager(
                 decorated_context_manager,
                 provides=provides,
+                component=component,
                 scope=scope,
                 lifetime=lifetime,
                 dependencies=dependencies,
@@ -380,6 +403,7 @@ def add_context_manager(  # noqa: PLR0913
     container_context.add_context_manager(
         context_manager,
         provides=provides,
+        component=component,
         scope=scope,
         lifetime=lifetime,
         dependencies=dependencies,

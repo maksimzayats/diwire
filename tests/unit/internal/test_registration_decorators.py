@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from contextlib import contextmanager
+from typing import Annotated
 
 import pytest
 
 from diwire import (
+    Component,
     Container,
     add_concrete,
     add_context_manager,
@@ -135,3 +137,62 @@ def test_add_context_manager_wrapper_direct_and_decorator_forms() -> None:
     assert build_alias is not None
     with container.enter_scope() as resolver:
         assert isinstance(resolver.resolve(ContextManagerAliasService), ContextManagerAliasService)
+
+
+def test_wrappers_support_component_qualified_registration_keys() -> None:
+    class _ConcreteService:
+        pass
+
+    class _FactoryService:
+        pass
+
+    class _GeneratorService:
+        pass
+
+    class _ContextManagerService:
+        pass
+
+    container = Container(autoregister_concrete_types=False)
+    container_context.set_current(container)
+
+    add_concrete(_ConcreteService, provides=_ConcreteService, component="concrete")
+
+    def _build_factory() -> _FactoryService:
+        return _FactoryService()
+
+    add_factory(_build_factory, provides=_FactoryService, component="factory")
+
+    def _build_generator() -> Generator[_GeneratorService, None, None]:
+        yield _GeneratorService()
+
+    add_generator(_build_generator, provides=_GeneratorService, component="generator")
+
+    @contextmanager
+    def _build_context_manager() -> Generator[_ContextManagerService, None, None]:
+        yield _ContextManagerService()
+
+    add_context_manager(
+        _build_context_manager,
+        provides=_ContextManagerService,
+        component="context-manager",
+    )
+
+    assert isinstance(
+        container.resolve(Annotated[_ConcreteService, Component("concrete")]),
+        _ConcreteService,
+    )
+    assert isinstance(
+        container.resolve(Annotated[_FactoryService, Component("factory")]),
+        _FactoryService,
+    )
+    with container.enter_scope() as resolver:
+        assert isinstance(
+            resolver.resolve(Annotated[_GeneratorService, Component("generator")]),
+            _GeneratorService,
+        )
+        assert isinstance(
+            resolver.resolve(
+                Annotated[_ContextManagerService, Component("context-manager")],
+            ),
+            _ContextManagerService,
+        )

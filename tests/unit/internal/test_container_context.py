@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import AsyncGenerator, Generator
 from contextlib import contextmanager
-from typing import Any, Generic, TypeVar, cast
+from typing import Annotated, Any, Generic, TypeVar, cast
 
 import pytest
 
@@ -16,7 +16,7 @@ from diwire.exceptions import (
     DIWireScopeMismatchError,
 )
 from diwire.lock_mode import LockMode
-from diwire.markers import FromContext, Injected
+from diwire.markers import Component, FromContext, Injected
 from diwire.providers import Lifetime, ProviderDependency
 from diwire.scope import Scope
 
@@ -141,6 +141,24 @@ def test_decorate_before_bind_replays_on_set_current() -> None:
     assert resolved.inner.value == "base"
 
 
+def test_component_decorate_before_bind_replays_on_set_current() -> None:
+    context = ContainerContext()
+    context.decorate(
+        provides=_Service,
+        component="primary",
+        decorator=_DecoratedService,
+        inner_parameter="inner",
+    )
+    context.add_factory(lambda: _Service("base"), provides=_Service, component="primary")
+
+    container = Container()
+    context.set_current(container)
+
+    resolved = container.resolve(Annotated[_Service, Component("primary")])
+    assert isinstance(resolved, _DecoratedService)
+    assert resolved.inner.value == "base"
+
+
 def test_replay_preserves_canonical_open_key_override_order() -> None:
     context = ContainerContext()
     context.add_concrete(_OpenBoxA, provides=_OpenBox)
@@ -214,6 +232,17 @@ def test_set_current_replays_operations_for_each_bound_container() -> None:
 
     assert first.resolve(_Service).value == "registered"
     assert second.resolve(_Service).value == "registered"
+
+
+def test_add_instance_with_component_replays_on_set_current() -> None:
+    context = ContainerContext()
+    context.add_instance(_Service("registered"), component="primary")
+
+    container = Container()
+    context.set_current(container)
+
+    resolved = container.resolve(Annotated[_Service, Component("primary")])
+    assert resolved.value == "registered"
 
 
 def test_register_while_bound_applies_to_current_container_immediately() -> None:

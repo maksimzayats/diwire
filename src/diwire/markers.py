@@ -364,9 +364,13 @@ def _build_provider_annotation(*, item: T, is_async: bool) -> Annotated[T, Provi
     return _build_annotated((item, provider_marker))
 
 
-def _build_annotated(params: tuple[object, ...]) -> Any:
+def build_annotated_key(params: tuple[object, ...]) -> Any:
     """Return Annotated[...] with a pre-built params tuple (Py 3.10+ compatible)."""
     try:
         return Annotated.__class_getitem__(params)  # type: ignore[attr-defined]
     except AttributeError:
         return Annotated.__getitem__(params)  # type: ignore[attr-defined]
+
+
+def _build_annotated(params: tuple[object, ...]) -> Any:
+    return build_annotated_key(params)

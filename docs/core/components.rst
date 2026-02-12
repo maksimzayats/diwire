@@ -24,6 +24,29 @@ You register and resolve using the same ``Annotated[...]`` key.
 Runnable example: :doc:`/howto/examples/named-components`.
 
 
+Registration shortcut
+---------------------
+
+You can register component-qualified bindings without creating a ``TypeAlias``
+first by passing ``component=...``:
+
+.. code-block:: python
+
+   from diwire import Component, Container
+   from typing import Annotated
+
+   class Cache: ...
+
+   container = Container()
+   container.add_instance(Cache(), provides=Cache, component="primary")
+
+   # Runtime key is still Annotated[..., Component(...)]
+   primary_cache = container.resolve(Annotated[Cache, Component("primary")])
+
+The same shortcut is available on ``add_concrete``, ``add_factory``,
+``add_generator``, ``add_context_manager``, and ``decorate``.
+
+
 Resolve all components
 ----------------------
 

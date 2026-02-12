@@ -5,7 +5,7 @@ import typing
 from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar, cast
+from typing import Annotated, Any, Generic, TypeVar, cast
 
 import pytest
 
@@ -17,7 +17,7 @@ from diwire.exceptions import (
     DIWireInvalidGenericTypeArgumentError,
     DIWireScopeMismatchError,
 )
-from diwire.markers import Injected
+from diwire.markers import Component, Injected
 from diwire.providers import Lifetime, ProviderDependency
 from diwire.scope import Scope
 
@@ -360,6 +360,9 @@ def test_closed_generic_injection_helpers_cover_non_injected_dependency_paths() 
     assert injected == {}
     assert remaining == [dependency]
     assert container._closed_generic_typevar_map(provides=typing.Sequence) == {}
+    assert container._closed_generic_typevar_map(
+        provides=Annotated[_IBox[int], Component("primary")],
+    ) == {T: int}
     assert container._closed_generic_typevar_map(provides=tuple[int]) == {}
     assert container._closed_generic_typevar_map(provides=inspect.Signature) == {}
     assert (

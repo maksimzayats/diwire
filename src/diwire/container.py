@@ -37,7 +37,9 @@ from diwire.injection import (
 from diwire.integrations.pydantic_settings import is_pydantic_settings_subclass
 from diwire.lock_mode import LockMode
 from diwire.markers import (
+    Component,
     ProviderMarker,
+    build_annotated_key,
     component_base_key,
     is_all_annotation,
     is_from_context_annotation,
@@ -179,6 +181,7 @@ class Container:
         instance: T,
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
     ) -> None:
         """Register a pre-built instance as a provider.
 
@@ -190,6 +193,8 @@ class Container:
             instance: Instance value to return on resolution.
             provides: Dependency key to bind. Use ``"infer"`` to bind by
                 ``type(instance)``.
+            component: Optional component marker value used to register under
+                ``Annotated[provides, Component(...)]``.
 
         Raises:
             DIWireInvalidRegistrationError: If ``provides`` is ``None``.
@@ -216,8 +221,13 @@ class Container:
             msg = "add_instance() parameter 'provides' must not be None; use 'infer'."
             raise DIWireInvalidRegistrationError(msg)
 
+        resolved_provides_with_component = self._resolve_registration_component_provides(
+            provides=resolved_provides,
+            component=component,
+            method_name="add_instance",
+        )
         registration_provides, has_decoration_chain = self._resolve_registration_target_provides(
-            resolved_provides,
+            resolved_provides_with_component,
         )
 
         with self._registration_mutation():
@@ -234,7 +244,7 @@ class Container:
                 ),
             )
             self._finalize_registration_after_binding(
-                original_provides=resolved_provides,
+                original_provides=resolved_provides_with_component,
                 has_decoration_chain=has_decoration_chain,
             )
 
@@ -244,6 +254,7 @@ class Container:
         concrete_type: type[Any],
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -257,6 +268,7 @@ class Container:
         concrete_type: Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -269,6 +281,7 @@ class Container:
         concrete_type: type[Any] | Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -287,6 +300,8 @@ class Container:
                 to return a decorator.
             provides: Dependency key produced by this provider. ``"infer"`` uses
                 ``concrete_type`` directly.
+            component: Optional component marker value used to register under
+                ``Annotated[provides, Component(...)]``.
             scope: Provider scope, or ``"from_container"`` to inherit root scope.
             lifetime: Provider lifetime, or ``"from_container"`` to inherit
                 container default.
@@ -328,6 +343,7 @@ class Container:
             scope=scope,
             lifetime=lifetime,
             provides=provides,
+            component=component,
             dependencies=dependencies,
             lock_mode=lock_mode,
             autoregister_dependencies=autoregister_dependencies,
@@ -339,6 +355,11 @@ class Container:
         resolved_provides, resolved_concrete_type = self._resolve_concrete_registration_types(
             provides=provides,
             concrete_type=concrete_type,
+        )
+        resolved_provides_with_component = self._resolve_registration_component_provides(
+            provides=resolved_provides,
+            component=component,
+            method_name="add_concrete",
         )
         resolved_scope = self._resolve_registration_scope(
             scope=scope,
@@ -371,7 +392,7 @@ class Container:
 
         resolved_lock_mode = self._resolve_provider_lock_mode(lock_mode)
         registration_provides, has_decoration_chain = self._resolve_registration_target_provides(
-            resolved_provides,
+            resolved_provides_with_component,
         )
 
         with self._registration_mutation():
@@ -399,7 +420,7 @@ class Container:
                     ),
                 )
                 self._finalize_registration_after_binding(
-                    original_provides=resolved_provides,
+                    original_provides=resolved_provides_with_component,
                     has_decoration_chain=has_decoration_chain,
                 )
                 return None
@@ -408,7 +429,7 @@ class Container:
                 closed_generic_injections,
                 dependencies_for_provider,
             ) = self._resolve_closed_concrete_generic_injections(
-                provides=resolved_provides,
+                provides=resolved_provides_with_component,
                 dependencies=dependencies_for_provider,
             )
             is_any_dependency_async = self._provider_return_type_extractor.is_any_dependency_async(
@@ -441,7 +462,7 @@ class Container:
                     ),
                 )
                 self._finalize_registration_after_binding(
-                    original_provides=resolved_provides,
+                    original_provides=resolved_provides_with_component,
                     has_decoration_chain=has_decoration_chain,
                 )
                 return None
@@ -468,7 +489,7 @@ class Container:
                 ),
             )
             self._finalize_registration_after_binding(
-                original_provides=resolved_provides,
+                original_provides=resolved_provides_with_component,
                 has_decoration_chain=has_decoration_chain,
             )
 
@@ -480,6 +501,7 @@ class Container:
         factory: Callable[..., Any] | Callable[..., Awaitable[Any]],
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -493,6 +515,7 @@ class Container:
         factory: Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -507,6 +530,7 @@ class Container:
         ) = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -523,6 +547,8 @@ class Container:
             factory: Provider function/callable, or ``"from_decorator"``.
             provides: Dependency key produced by the factory. ``"infer"`` uses
                 the return annotation.
+            component: Optional component marker value used to register under
+                ``Annotated[provides, Component(...)]``.
             scope: Provider scope, or ``"from_container"``.
             lifetime: Provider lifetime, or ``"from_container"``.
             dependencies: Explicit dependencies, or ``"infer"``.
@@ -562,6 +588,7 @@ class Container:
             scope=scope,
             lifetime=lifetime,
             provides=provides,
+            component=component,
             dependencies=dependencies,
             lock_mode=lock_mode,
             autoregister_dependencies=autoregister_dependencies,
@@ -582,6 +609,11 @@ class Container:
             infer_from=lambda: self._provider_return_type_extractor.extract_from_factory(
                 factory=factory_provider,
             ),
+        )
+        resolved_provides_with_component = self._resolve_registration_component_provides(
+            provides=resolved_provides,
+            component=component,
+            method_name="add_factory",
         )
         resolved_scope = self._resolve_registration_scope(
             scope=scope,
@@ -612,7 +644,7 @@ class Container:
         resolved_lock_mode = self._resolve_provider_lock_mode(lock_mode)
 
         self._register_non_concrete_provider(
-            provides=resolved_provides,
+            provides=resolved_provides_with_component,
             provider_kind="factory",
             provider=factory_provider,
             provider_field="factory",
@@ -635,6 +667,7 @@ class Container:
         ),
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -648,6 +681,7 @@ class Container:
         generator: Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -664,6 +698,7 @@ class Container:
         ) = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -678,6 +713,8 @@ class Container:
         Args:
             generator: Generator provider, or ``"from_decorator"``.
             provides: Dependency key produced by the yield value.
+            component: Optional component marker value used to register under
+                ``Annotated[provides, Component(...)]``.
             scope: Provider scope, or ``"from_container"``.
             lifetime: Provider lifetime, or ``"from_container"``.
             dependencies: Explicit dependencies, or ``"infer"``.
@@ -710,6 +747,7 @@ class Container:
             scope=scope,
             lifetime=lifetime,
             provides=provides,
+            component=component,
             dependencies=dependencies,
             lock_mode=lock_mode,
             autoregister_dependencies=autoregister_dependencies,
@@ -730,6 +768,11 @@ class Container:
             infer_from=lambda: self._provider_return_type_extractor.extract_from_generator(
                 generator=generator_provider,
             ),
+        )
+        resolved_provides_with_component = self._resolve_registration_component_provides(
+            provides=resolved_provides,
+            component=component,
+            method_name="add_generator",
         )
         resolved_scope = self._resolve_registration_scope(
             scope=scope,
@@ -760,7 +803,7 @@ class Container:
         resolved_lock_mode = self._resolve_provider_lock_mode(lock_mode)
 
         self._register_non_concrete_provider(
-            provides=resolved_provides,
+            provides=resolved_provides_with_component,
             provider_kind="generator",
             provider=generator_provider,
             provider_field="generator",
@@ -781,6 +824,7 @@ class Container:
         context_manager: ContextManagerProvider[Any],
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -794,6 +838,7 @@ class Container:
         context_manager: Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -806,6 +851,7 @@ class Container:
         context_manager: ContextManagerProvider[Any] | Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
+        component: object | None = None,
         scope: BaseScope | Literal["from_container"] = "from_container",
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: list[ProviderDependency] | Literal["infer"] = "infer",
@@ -820,6 +866,8 @@ class Container:
         Args:
             context_manager: Context-manager provider, or ``"from_decorator"``.
             provides: Dependency key produced by the entered value.
+            component: Optional component marker value used to register under
+                ``Annotated[provides, Component(...)]``.
             scope: Provider scope, or ``"from_container"``.
             lifetime: Provider lifetime, or ``"from_container"``.
             dependencies: Explicit dependencies, or ``"infer"``.
@@ -851,6 +899,7 @@ class Container:
             scope=scope,
             lifetime=lifetime,
             provides=provides,
+            component=component,
             dependencies=dependencies,
             lock_mode=lock_mode,
             autoregister_dependencies=autoregister_dependencies,
@@ -874,6 +923,11 @@ class Container:
             infer_from=lambda: self._provider_return_type_extractor.extract_from_context_manager(
                 context_manager=context_manager_provider,
             ),
+        )
+        resolved_provides_with_component = self._resolve_registration_component_provides(
+            provides=resolved_provides,
+            component=component,
+            method_name="add_context_manager",
         )
         resolved_scope = self._resolve_registration_scope(
             scope=scope,
@@ -906,7 +960,7 @@ class Container:
         resolved_lock_mode = self._resolve_provider_lock_mode(lock_mode)
 
         self._register_non_concrete_provider(
-            provides=resolved_provides,
+            provides=resolved_provides_with_component,
             provider_kind="context_manager",
             provider=context_manager_provider,
             provider_field="context_manager",
@@ -925,6 +979,7 @@ class Container:
         self,
         *,
         provides: Any,
+        component: object | None = None,
         decorator: Callable[..., Any],
         inner_parameter: str | None = None,
     ) -> None:
@@ -937,7 +992,12 @@ class Container:
         if provides is None:
             msg = "decorate() parameter 'provides' must not be None."
             raise DIWireInvalidRegistrationError(msg)
-        normalized_provides = self._normalize_decoration_provides_key(provides)
+        resolved_provides = self._resolve_registration_component_provides(
+            provides=provides,
+            component=component,
+            method_name="decorate",
+        )
+        normalized_provides = self._normalize_decoration_provides_key(resolved_provides)
 
         with self._registration_mutation():
             self._register_decoration_rule(
@@ -1418,6 +1478,37 @@ class Container:
         msg = f"{method_name}() parameter 'provides' must not be None; use 'infer'."
         raise DIWireInvalidRegistrationError(msg)
 
+    def _resolve_registration_component_provides(
+        self,
+        *,
+        provides: Any,
+        component: object | None,
+        method_name: str,
+    ) -> Any:
+        if component is None:
+            return provides
+        if component_base_key(provides) is not None:
+            msg = (
+                f"{method_name}() received both a component-qualified 'provides' key "
+                f"({provides!r}) and 'component'. Omit component=... or pass the non-component "
+                "base key in provides=... and keep component=...."
+            )
+            raise DIWireInvalidRegistrationError(msg)
+
+        component_marker = self._normalize_registration_component(component=component)
+        if get_origin(provides) is not Annotated:
+            return build_annotated_key((provides, component_marker))
+
+        annotation_args = get_args(provides)
+        provides_inner = annotation_args[0]
+        metadata = annotation_args[1:]
+        return build_annotated_key((provides_inner, *metadata, component_marker))
+
+    def _normalize_registration_component(self, *, component: object) -> Component:
+        if isinstance(component, Component):
+            return component
+        return Component(component)
+
     def _resolve_registration_scope(
         self,
         *,
@@ -1623,11 +1714,15 @@ class Container:
         return injected_arguments, remaining_dependencies
 
     def _closed_generic_typevar_map(self, *, provides: Any) -> dict[TypeVar, Any]:
-        origin = get_origin(provides)
+        normalized_provides = provides
+        if get_origin(normalized_provides) is Annotated:
+            normalized_provides = get_args(normalized_provides)[0]
+
+        origin = get_origin(normalized_provides)
         if origin is None:
             return {}
 
-        arguments = get_args(provides)
+        arguments = get_args(normalized_provides)
         if not arguments:
             return {}
 
@@ -2832,6 +2927,7 @@ class ConcreteTypeRegistrationDecorator(Generic[T]):
     scope: BaseScope | Literal["from_container"] = "from_container"
     lifetime: Lifetime | Literal["from_container"] = "from_container"
     provides: Any | Literal["infer"] = "infer"
+    component: object | None = None
     dependencies: list[ProviderDependency] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
     autoregister_dependencies: bool | Literal["from_container"] = "from_container"
@@ -2841,6 +2937,7 @@ class ConcreteTypeRegistrationDecorator(Generic[T]):
         self.container.add_concrete(
             concrete_type,
             provides=self.provides,
+            component=self.component,
             scope=self.scope,
             lifetime=self.lifetime,
             dependencies=self.dependencies,
@@ -2859,6 +2956,7 @@ class FactoryRegistrationDecorator(Generic[T]):
     scope: BaseScope | Literal["from_container"] = "from_container"
     lifetime: Lifetime | Literal["from_container"] = "from_container"
     provides: Any | Literal["infer"] = "infer"
+    component: object | None = None
     dependencies: list[ProviderDependency] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
     autoregister_dependencies: bool | Literal["from_container"] = "from_container"
@@ -2868,6 +2966,7 @@ class FactoryRegistrationDecorator(Generic[T]):
         self.container.add_factory(
             factory,
             provides=self.provides,
+            component=self.component,
             scope=self.scope,
             lifetime=self.lifetime,
             dependencies=self.dependencies,
@@ -2886,6 +2985,7 @@ class GeneratorRegistrationDecorator(Generic[T]):
     scope: BaseScope | Literal["from_container"] = "from_container"
     lifetime: Lifetime | Literal["from_container"] = "from_container"
     provides: Any | Literal["infer"] = "infer"
+    component: object | None = None
     dependencies: list[ProviderDependency] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
     autoregister_dependencies: bool | Literal["from_container"] = "from_container"
@@ -2895,6 +2995,7 @@ class GeneratorRegistrationDecorator(Generic[T]):
         self.container.add_generator(
             generator,
             provides=self.provides,
+            component=self.component,
             scope=self.scope,
             lifetime=self.lifetime,
             dependencies=self.dependencies,
@@ -2913,6 +3014,7 @@ class ContextManagerRegistrationDecorator(Generic[T]):
     scope: BaseScope | Literal["from_container"] = "from_container"
     lifetime: Lifetime | Literal["from_container"] = "from_container"
     provides: Any | Literal["infer"] = "infer"
+    component: object | None = None
     dependencies: list[ProviderDependency] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
     autoregister_dependencies: bool | Literal["from_container"] = "from_container"
@@ -2922,6 +3024,7 @@ class ContextManagerRegistrationDecorator(Generic[T]):
         self.container.add_context_manager(
             context_manager,
             provides=self.provides,
+            component=self.component,
             scope=self.scope,
             lifetime=self.lifetime,
             dependencies=self.dependencies,

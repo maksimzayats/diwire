@@ -1287,6 +1287,7 @@ if __name__ == "__main__":
 
 Files:
 - [01_named_components.py](#ex-07-named-components--01-named-components-py)
+- [02_component_registration_shortcut.py](#ex-07-named-components--02-component-registration-shortcut-py)
 
 <a id="ex-07-named-components--01-named-components-py"></a>
 ### 01_named_components.py ([ex_07_named_components/01_named_components.py](ex_07_named_components/01_named_components.py))
@@ -1333,6 +1334,54 @@ def main() -> None:
     primary_user, fallback_user = load_users()
     print(f"primary={primary_user}")  # => primary=redis:user:1
     print(f"fallback={fallback_user}")  # => fallback=memory:user:1
+
+
+if __name__ == "__main__":
+    main()
+```
+
+<a id="ex-07-named-components--02-component-registration-shortcut-py"></a>
+### 02_component_registration_shortcut.py ([ex_07_named_components/02_component_registration_shortcut.py](ex_07_named_components/02_component_registration_shortcut.py))
+
+Register components ergonomically with ``component=...``.
+
+This example shows that registration can use ``component=...`` while runtime
+resolution and injection keys remain ``Annotated[..., Component(...)]``.
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Annotated
+
+from diwire import Component, Container, Injected
+
+
+@dataclass(slots=True)
+class Cache:
+    backend: str
+
+
+PrimaryCache = Annotated[Cache, Component("primary")]
+FallbackCache = Annotated[Cache, Component("fallback")]
+
+
+def main() -> None:
+    container = Container(autoregister_concrete_types=False)
+    container.add_instance(Cache(backend="redis"), provides=Cache, component="primary")
+    container.add_instance(Cache(backend="memory"), provides=Cache, component=Component("fallback"))
+
+    @container.inject
+    def load(
+        primary: Injected[PrimaryCache],
+        fallback: Injected[FallbackCache],
+    ) -> tuple[str, str]:
+        return primary.backend, fallback.backend
+
+    primary_backend, fallback_backend = load()
+    print(f"primary={primary_backend}")  # => primary=redis
+    print(f"fallback={fallback_backend}")  # => fallback=memory
+    print(f"resolved={container.resolve(PrimaryCache).backend}")  # => resolved=redis
 
 
 if __name__ == "__main__":
