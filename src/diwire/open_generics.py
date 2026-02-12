@@ -17,6 +17,11 @@ from diwire.exceptions import (
 )
 from diwire.injection import INJECT_RESOLVER_KWARG, INJECT_WRAPPER_MARKER
 from diwire.lock_mode import LockMode
+from diwire.markers import (
+    is_async_provider_annotation,
+    is_provider_annotation,
+    strip_provider_annotation,
+)
 from diwire.providers import (
     ContextManagerProvider,
     FactoryProvider,
@@ -335,6 +340,11 @@ class _OpenGenericResolver:  # pragma: no cover
         self._owned_scope_wrappers: tuple[_OpenGenericResolver, ...] = ()
 
     def resolve(self, dependency: Any) -> Any:
+        if is_provider_annotation(dependency):
+            inner_dependency = strip_provider_annotation(dependency)
+            if is_async_provider_annotation(dependency):
+                return lambda: self.aresolve(inner_dependency)
+            return lambda: self.resolve(inner_dependency)
         try:
             return self._base_resolver.resolve(dependency)
         except DIWireDependencyNotRegisteredError:
@@ -347,6 +357,11 @@ class _OpenGenericResolver:  # pragma: no cover
             )
 
     async def aresolve(self, dependency: Any) -> Any:
+        if is_provider_annotation(dependency):
+            inner_dependency = strip_provider_annotation(dependency)
+            if is_async_provider_annotation(dependency):
+                return lambda: self.aresolve(inner_dependency)
+            return lambda: self.resolve(inner_dependency)
         try:
             return await self._base_resolver.aresolve(dependency)
         except DIWireDependencyNotRegisteredError:

@@ -9,7 +9,12 @@ from typing import Any, Literal
 from diwire.exceptions import DIWireDependencyNotRegisteredError, DIWireInvalidProviderSpecError
 from diwire.injection import INJECT_WRAPPER_MARKER
 from diwire.lock_mode import LockMode
-from diwire.markers import is_from_context_annotation
+from diwire.markers import (
+    is_async_provider_annotation,
+    is_from_context_annotation,
+    is_provider_annotation,
+    strip_provider_annotation,
+)
 from diwire.providers import (
     Lifetime,
     ProviderDependency,
@@ -20,7 +25,7 @@ from diwire.scope import BaseScope
 from diwire.type_checks import is_runtime_class
 
 DispatchKind = Literal["identity", "equality_map"]
-DependencyPlanKind = Literal["provider", "context"]
+DependencyPlanKind = Literal["provider", "context", "provider_handle"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +51,8 @@ class ProviderDependencyPlan:
     dependency_slot: int | None = None
     dependency_requires_async: bool = False
     ctx_key_global_name: str | None = None
+    provider_inner_slot: int | None = None
+    provider_is_async: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -253,6 +260,62 @@ class ResolverGenerationPlanner:
                     ),
                 )
                 continue
+            if is_provider_annotation(dependency.provides):
+                parameter_kind = dependency.parameter.kind
+                if parameter_kind in {
+                    inspect.Parameter.VAR_POSITIONAL,
+                    inspect.Parameter.VAR_KEYWORD,
+                }:
+                    msg = (
+                        "Provider and AsyncProvider dependencies are not supported for "
+                        f"star parameters (*args/**kwargs): {dependency.parameter.name!r}."
+                    )
+                    raise DIWireInvalidProviderSpecError(msg)
+                provider_inner_key = strip_provider_annotation(dependency.provides)
+                provider_inner_spec = self._dependency_spec_or_error(
+                    dependency_provides=provider_inner_key,
+                    requiring_provider=spec.provides,
+                )
+                if provider_inner_spec.scope.level > spec.scope.level:
+                    msg = (
+                        "Provider dependency scope mismatch: "
+                        f"{dependency.provides!r} in provider {spec.provides!r} (scope "
+                        f"level {spec.scope.level}) cannot bind deeper dependency "
+                        f"{provider_inner_key!r} (scope level {provider_inner_spec.scope.level})."
+                    )
+                    raise DIWireInvalidProviderSpecError(msg)
+                provider_is_async = is_async_provider_annotation(dependency.provides)
+                provider_expression = (
+                    f"lambda: self.aresolve_{provider_inner_spec.slot}()"
+                    if provider_is_async
+                    else f"lambda: self.resolve_{provider_inner_spec.slot}()"
+                )
+                dependency_plans.append(
+                    ProviderDependencyPlan(
+                        kind="provider_handle",
+                        dependency=dependency,
+                        dependency_index=dependency_index,
+                        dependency_slot=None,
+                        dependency_requires_async=False,
+                        provider_inner_slot=provider_inner_spec.slot,
+                        provider_is_async=provider_is_async,
+                    ),
+                )
+                dependency_slots.append(None)
+                dependency_requires_async.append(False)
+                sync_arguments.append(
+                    self._format_dependency_argument_for_expression(
+                        dependency=dependency,
+                        expression=provider_expression,
+                    ),
+                )
+                async_arguments.append(
+                    self._format_dependency_argument_for_expression(
+                        dependency=dependency,
+                        expression=provider_expression,
+                    ),
+                )
+                continue
 
             dependency_spec = self._dependency_spec_or_error(
                 dependency_provides=dependency.provides,
@@ -426,7 +489,9 @@ class ResolverGenerationPlanner:
         requires_async = spec.is_async
         if not requires_async:
             for dependency in spec.dependencies:
-                if is_from_context_annotation(dependency.provides):
+                if is_from_context_annotation(dependency.provides) or is_provider_annotation(
+                    dependency.provides,
+                ):
                     continue
                 dependency_spec = self._dependency_spec_or_error(
                     dependency_provides=dependency.provides,
@@ -565,7 +630,9 @@ class ResolverGenerationPlanner:
         max_scope_level = spec.scope.level
 
         for dependency in spec.dependencies:
-            if is_from_context_annotation(dependency.provides):
+            if is_from_context_annotation(dependency.provides) or is_provider_annotation(
+                dependency.provides,
+            ):
                 continue
             dependency_spec = self._dependency_spec_or_error(
                 dependency_provides=dependency.provides,

@@ -29,6 +29,6 @@ Each page below includes a single, self-contained script sourced *verbatim* from
    pydantic-settings
    pytest-plugin
    fastapi
+   providers
    errors
    scope-context-values
-

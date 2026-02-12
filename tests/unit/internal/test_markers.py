@@ -8,13 +8,19 @@ import pytest
 import diwire.markers as markers_module
 from diwire.container import Container
 from diwire.markers import (
+    AsyncProvider,
     Component,
     FromContext,
     FromContextMarker,
     Injected,
     InjectedMarker,
+    Provider,
+    ProviderMarker,
+    is_async_provider_annotation,
     is_from_context_annotation,
+    is_provider_annotation,
     strip_from_context_annotation,
+    strip_provider_annotation,
 )
 from diwire.providers import ProviderDependenciesExtractor
 
@@ -115,6 +121,65 @@ def test_from_context_helpers_detect_and_strip_marker() -> None:
     assert strip_from_context_annotation(int) is int
 
 
+def test_provider_wraps_dependency_with_provider_marker() -> None:
+    dependency = Provider[Database]
+
+    assert get_origin(dependency) is Annotated
+    annotation_args = get_args(dependency)
+    assert annotation_args[0] is Database
+    assert isinstance(annotation_args[1], ProviderMarker)
+    assert annotation_args[1].dependency_key is Database
+    assert annotation_args[1].is_async is False
+
+
+def test_async_provider_wraps_dependency_with_async_provider_marker() -> None:
+    dependency = AsyncProvider[Database]
+
+    assert get_origin(dependency) is Annotated
+    annotation_args = get_args(dependency)
+    assert annotation_args[0] is Database
+    assert isinstance(annotation_args[1], ProviderMarker)
+    assert annotation_args[1].dependency_key is Database
+    assert annotation_args[1].is_async is True
+
+
+def test_provider_preserves_component_marker_metadata_when_nested() -> None:
+    dependency = Provider[PrimaryDatabaseComponent]
+
+    assert get_origin(dependency) is Annotated
+    annotation_args = get_args(dependency)
+    assert annotation_args[0] is Database
+    assert annotation_args[1] == Component("primary")
+    assert isinstance(annotation_args[2], ProviderMarker)
+    assert annotation_args[2].dependency_key == PrimaryDatabaseComponent
+
+
+def test_provider_helpers_detect_strip_and_check_async_flags() -> None:
+    sync_dependency = Provider[PrimaryDatabaseComponent]
+    async_dependency = AsyncProvider[PrimaryDatabaseComponent]
+
+    assert is_provider_annotation(sync_dependency) is True
+    assert is_provider_annotation(async_dependency) is True
+    assert strip_provider_annotation(sync_dependency) == PrimaryDatabaseComponent
+    assert strip_provider_annotation(async_dependency) == PrimaryDatabaseComponent
+    assert strip_provider_annotation(int) is int
+    assert is_async_provider_annotation(sync_dependency) is False
+    assert is_async_provider_annotation(async_dependency) is True
+    assert is_async_provider_annotation(int) is False
+
+
+def test_injected_provider_preserves_provider_metadata() -> None:
+    dependency = Injected[Provider[PrimaryDatabaseComponent]]
+
+    assert get_origin(dependency) is Annotated
+    annotation_args = get_args(dependency)
+    assert annotation_args[0] is Database
+    assert annotation_args[1] == Component("primary")
+    assert isinstance(annotation_args[2], ProviderMarker)
+    assert annotation_args[2].dependency_key == PrimaryDatabaseComponent
+    assert isinstance(annotation_args[3], InjectedMarker)
+
+
 def test_is_from_context_annotation_handles_invalid_annotated_shape(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -122,6 +187,7 @@ def test_is_from_context_annotation_handles_invalid_annotated_shape(
     monkeypatch.setattr(markers_module, "get_args", lambda _annotation: (int,))
 
     assert markers_module.is_from_context_annotation(object()) is False
+    assert markers_module.is_provider_annotation(object()) is False
 
 
 def test_provider_dependencies_extractor_preserves_injected_component_dependency() -> None:

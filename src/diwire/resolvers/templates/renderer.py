@@ -955,6 +955,11 @@ class ResolversTemplateRenderer:
             )
         body_lines.extend(
             [
+                "if is_provider_annotation(dependency):",
+                "    inner = strip_provider_annotation(dependency)",
+                "    if is_async_provider_annotation(dependency):",
+                "        return lambda: self.aresolve(inner)",
+                "    return lambda: self.resolve(inner)",
                 "if is_from_context_annotation(dependency):",
                 "    key = strip_from_context_annotation(dependency)",
                 "    return self._resolve_from_context(key)",
@@ -1023,6 +1028,11 @@ class ResolversTemplateRenderer:
             )
         body_lines.extend(
             [
+                "if is_provider_annotation(dependency):",
+                "    inner = strip_provider_annotation(dependency)",
+                "    if is_async_provider_annotation(dependency):",
+                "        return lambda: self.aresolve(inner)",
+                "    return lambda: self.resolve(inner)",
                 "if is_from_context_annotation(dependency):",
                 "    key = strip_from_context_annotation(dependency)",
                 "    return self._resolve_from_context(key)",
@@ -1654,7 +1664,20 @@ class ResolversTemplateRenderer:
         for dependency_plan in self._dependency_plans_for_workflow(workflow=workflow):
             dependency = dependency_plan.dependency
             expression: str | None
-            if dependency_plan.kind == "context":
+            if dependency_plan.kind == "provider_handle":
+                provider_inner_slot = dependency_plan.provider_inner_slot
+                if provider_inner_slot is None:
+                    msg = (
+                        f"Provider-handle dependency plan for slot {workflow.slot} "
+                        f"dependency index {dependency_plan.dependency_index} "
+                        "is missing provider inner slot."
+                    )
+                    raise ValueError(msg)
+                if dependency_plan.provider_is_async:
+                    expression = f"lambda: self.aresolve_{provider_inner_slot}()"
+                else:
+                    expression = f"lambda: self.resolve_{provider_inner_slot}()"
+            elif dependency_plan.kind == "context":
                 if dependency_plan.ctx_key_global_name is None:
                     msg = (
                         f"Missing context key binding global for provider slot {workflow.slot} "
@@ -1824,7 +1847,19 @@ class ResolversTemplateRenderer:
         for dependency_plan in self._dependency_plans_for_workflow(workflow=dependency_workflow):
             dependency = dependency_plan.dependency
             nested_expression: str | None
-            if dependency_plan.kind == "context":
+            if dependency_plan.kind == "provider_handle":
+                provider_inner_slot = dependency_plan.provider_inner_slot
+                if provider_inner_slot is None:
+                    return None
+                if dependency_plan.provider_is_async:
+                    nested_expression = (
+                        f"lambda: {context.root_resolver_expr}.aresolve_{provider_inner_slot}()"
+                    )
+                else:
+                    nested_expression = (
+                        f"lambda: {context.root_resolver_expr}.resolve_{provider_inner_slot}()"
+                    )
+            elif dependency_plan.kind == "context":
                 if dependency_plan.ctx_key_global_name is None:
                     return None
                 nested_expression = (
@@ -2378,6 +2413,15 @@ class ResolversTemplateRenderer:
                 parts.append(
                     (
                         f"{dependency.parameter.name} ({kind_name}) -> context "
+                        f"[{self._format_symbol(dependency.provides)}]"
+                    ),
+                )
+            elif dependency_plan.kind == "provider_handle":
+                provider_inner_slot = dependency_plan.provider_inner_slot
+                parts.append(
+                    (
+                        f"{dependency.parameter.name} ({kind_name}) -> provider "
+                        f"(slot {provider_inner_slot}) "
                         f"[{self._format_symbol(dependency.provides)}]"
                     ),
                 )

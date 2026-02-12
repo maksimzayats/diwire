@@ -34,3 +34,13 @@ FromContext
 -----------
 
 .. autoclass:: diwire.FromContext
+
+Provider
+--------
+
+.. autoclass:: diwire.Provider
+
+AsyncProvider
+-------------
+
+.. autoclass:: diwire.AsyncProvider

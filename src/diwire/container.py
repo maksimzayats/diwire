@@ -30,6 +30,7 @@ from diwire.injection import (
 )
 from diwire.integrations.pydantic_settings import is_pydantic_settings_subclass
 from diwire.lock_mode import LockMode
+from diwire.markers import is_provider_annotation, strip_provider_annotation
 from diwire.open_generics import OpenGenericRegistry, OpenGenericResolver
 from diwire.providers import (
     ContextManagerProvider,
@@ -1244,11 +1245,12 @@ class Container:
             return
 
         for dependency in dependencies:
-            if self._providers_registrations.find_by_type(dependency.provides):
+            dependency_key = self._unwrap_provider_dependency_key(dependency.provides)
+            if self._providers_registrations.find_by_type(dependency_key):
                 continue
             with suppress(DIWireError):
                 self._autoregister_dependency(
-                    dependency=dependency.provides,
+                    dependency=dependency_key,
                     scope=scope,
                     lifetime=lifetime,
                     autoregister_dependencies=True,
@@ -1287,14 +1289,15 @@ class Container:
     def _ensure_autoregistration(self, dependency: Any) -> None:
         if not self._autoregister_concrete_types:
             return
+        dependency_key = self._unwrap_provider_dependency_key(dependency)
 
-        if self._providers_registrations.find_by_type(dependency):
+        if self._providers_registrations.find_by_type(dependency_key):
             return
-        if self._open_generic_registry.has_match_for_dependency(dependency):
+        if self._open_generic_registry.has_match_for_dependency(dependency_key):
             return
 
         self._autoregister_dependency(
-            dependency=dependency,
+            dependency=dependency_key,
             scope=self._root_scope,
             lifetime=self._default_lifetime,
             autoregister_dependencies=True,
@@ -1561,11 +1564,12 @@ class Container:
     ) -> None:
         registration_scope = scope or self._root_scope
         for injected_parameter in injected_parameters:
-            if self._providers_registrations.find_by_type(injected_parameter.dependency):
+            dependency_key = self._unwrap_provider_dependency_key(injected_parameter.dependency)
+            if self._providers_registrations.find_by_type(dependency_key):
                 continue
             with suppress(DIWireError):
                 self._autoregister_dependency(
-                    dependency=injected_parameter.dependency,
+                    dependency=dependency_key,
                     scope=registration_scope,
                     lifetime=self._default_lifetime,
                     autoregister_dependencies=True,
@@ -1599,6 +1603,15 @@ class Container:
         known_level = cache.get(dependency)
         if known_level is not None:
             return known_level
+        if is_provider_annotation(dependency):
+            provider_inner_dependency = strip_provider_annotation(dependency)
+            inferred_level = self._infer_dependency_scope_level(
+                dependency=provider_inner_dependency,
+                cache=cache,
+                in_progress=in_progress,
+            )
+            cache[dependency] = inferred_level
+            return inferred_level
 
         spec = self._providers_registrations.find_by_type(dependency)
         if spec is None:
@@ -1623,6 +1636,11 @@ class Container:
         in_progress.remove(dependency)
         cache[dependency] = max_scope_level
         return max_scope_level
+
+    def _unwrap_provider_dependency_key(self, dependency: Any) -> Any:
+        if not is_provider_annotation(dependency):
+            return dependency
+        return strip_provider_annotation(dependency)
 
     def _resolve_sync_injected_arguments(
         self,

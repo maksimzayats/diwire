@@ -34,6 +34,11 @@ Invalid provider spec / circular dependencies
 resolver for the provider graph. Circular dependencies are detected during planning and surface as
 ``DIWireInvalidProviderSpecError``.
 
+When a graph is circular, prefer refactoring one edge to ``Provider[T]`` or ``AsyncProvider[T]`` so construction is
+deferred and resolved later in the same scope. This breaks compile-time cycles while keeping strict registration
+validation. Calling the provider from ``__init__`` can still recurse at runtime, so defer the call until after object
+construction.
+
 Dependency inference failures
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
