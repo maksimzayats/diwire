@@ -9,6 +9,7 @@ from contextlib import (
     asynccontextmanager,
     contextmanager,
 )
+from types import TracebackType
 from typing import Annotated, Any, cast
 
 import pytest
@@ -171,6 +172,48 @@ def test_context_manager_with_invalid_return_type_raises_error() -> None:
 
     extractor = ProviderReturnTypeExtractor()
     bad_context_manager = cast("ContextManagerProvider[Any]", build_service)
+
+    with pytest.raises(DIWireInvalidRegistrationError, match="context manager provider"):
+        extractor.extract_from_context_manager(bad_context_manager)
+
+
+def test_context_manager_class_with_missing_enter_annotation_raises_error() -> None:
+    class MissingEnterAnnotationContextManager:
+        def __enter__(self) -> Any:
+            return self
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> bool | None:
+            return None
+
+    MissingEnterAnnotationContextManager.__enter__.__annotations__.pop("return")
+    extractor = ProviderReturnTypeExtractor()
+    bad_context_manager = cast("ContextManagerProvider[Any]", MissingEnterAnnotationContextManager)
+
+    with pytest.raises(DIWireInvalidRegistrationError, match="context manager provider"):
+        extractor.extract_from_context_manager(bad_context_manager)
+
+
+def test_context_manager_class_with_invalid_async_enter_annotation_raises_error() -> None:
+    class InvalidAsyncContextManager:
+        def __aenter__(self) -> Any:
+            raise NotImplementedError
+
+        async def __aexit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            return None
+
+    InvalidAsyncContextManager.__aenter__.__annotations__["return"] = typing.Awaitable
+    extractor = ProviderReturnTypeExtractor()
+    bad_context_manager = cast("ContextManagerProvider[Any]", InvalidAsyncContextManager)
 
     with pytest.raises(DIWireInvalidRegistrationError, match="context manager provider"):
         extractor.extract_from_context_manager(bad_context_manager)

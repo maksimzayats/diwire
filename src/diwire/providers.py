@@ -6,13 +6,16 @@ from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from inspect import Parameter
+from types import TracebackType
 from typing import (
     Annotated,
     Any,
     ClassVar,
     Literal,
+    Protocol,
     TypeAlias,
     TypeVar,
+    cast,
     get_args,
     get_origin,
     get_type_hints,
@@ -27,6 +30,7 @@ from diwire.lock_mode import LockMode
 from diwire.scope import BaseScope
 
 T = TypeVar("T")
+_CMT_co = TypeVar("_CMT_co", covariant=True)
 
 UserDependency: TypeAlias = Any
 """A dependency that been registered or trying to be resolved from the user's code."""
@@ -48,8 +52,31 @@ GeneratorProvider: TypeAlias = (
 )
 """A generator function or asynchronous generator function that yields a dependency."""
 
+
+class _ContextManagerLike(Protocol[_CMT_co]):
+    def __enter__(self) -> _CMT_co: ...
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> bool | None: ...
+
+
+class _AsyncContextManagerLike(Protocol[_CMT_co]):
+    def __aenter__(self) -> Awaitable[_CMT_co]: ...
+
+    def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> Awaitable[bool | None]: ...
+
+
 ContextManagerProvider: TypeAlias = (
-    Callable[..., AbstractContextManager[T]] | Callable[..., AbstractAsyncContextManager[T]]
+    Callable[..., _ContextManagerLike[T]] | Callable[..., _AsyncContextManagerLike[T]]
 )
 
 _MISSING_ANNOTATION: Any = object()
@@ -533,10 +560,24 @@ class ProviderReturnTypeExtractor:
             return True
         if inspect.iscoroutinefunction(unwrapped_context_manager):
             return True
-        return self.return_annotation_matches_origins(
+        if self.return_annotation_matches_origins(
             provider=unwrapped_context_manager,
             expected_origins=(AbstractAsyncContextManager, AsyncGenerator),
+        ):
+            return True
+
+        if isinstance(unwrapped_context_manager, type) and (
+            self._context_manager_mode(unwrapped_context_manager) == "async"
+        ):
+            return True
+
+        return_annotation, _annotation_error = self._resolved_return_annotation(
+            unwrapped_context_manager,
         )
+        unwrapped_return_annotation = self.unwrap_annotated(return_annotation)
+        if isinstance(unwrapped_return_annotation, type):
+            return self._context_manager_mode(unwrapped_return_annotation) == "async"
+        return False
 
     def is_any_dependency_async(
         self,
@@ -611,34 +652,39 @@ class ProviderReturnTypeExtractor:
         """Extract a return type from a context manager-based provider."""
         return_annotation, annotation_error = self._resolved_return_annotation(context_manager)
         provider_name = self._provider_name(context_manager)
-        if return_annotation is _MISSING_ANNOTATION:
-            self._raise_missing_return_annotation_error(
-                provider_kind="context manager",
-                provider_name=provider_name,
-                annotation_error=annotation_error,
-            )
-
-        yielded_type = self._extract_yielded_or_managed_type(
-            return_annotation=return_annotation,
-            expected_origins=(
-                AbstractContextManager,
-                AbstractAsyncContextManager,
-                Generator,
-                AsyncGenerator,
-            ),
-        )
-        if yielded_type is _MISSING_ANNOTATION:
-            self._raise_invalid_return_annotation_error(
-                provider_kind="context manager",
-                provider_name=provider_name,
-                expected_annotations=(
-                    "`AbstractContextManager[T]`, `AbstractAsyncContextManager[T]`, "
-                    "`Generator[T, None, None]`, or `AsyncGenerator[T, None]`"
+        if return_annotation is not _MISSING_ANNOTATION:
+            yielded_type = self._extract_yielded_or_managed_type(
+                return_annotation=return_annotation,
+                expected_origins=(
+                    AbstractContextManager,
+                    AbstractAsyncContextManager,
+                    Generator,
+                    AsyncGenerator,
                 ),
-                annotation_error=annotation_error,
             )
+            if yielded_type is not _MISSING_ANNOTATION:
+                return yielded_type
 
-        return yielded_type
+        if isinstance(context_manager, type):
+            managed_type = self._infer_managed_type_from_cm_type(context_manager)
+            if managed_type is not _MISSING_ANNOTATION:
+                return managed_type
+
+        unwrapped_return_annotation = self.unwrap_annotated(return_annotation)
+        if isinstance(unwrapped_return_annotation, type):
+            managed_type = self._infer_managed_type_from_cm_type(unwrapped_return_annotation)
+            if managed_type is not _MISSING_ANNOTATION:
+                return managed_type
+
+        msg = (
+            f"Unable to infer return type for context manager provider '{provider_name}'. "
+            "Add a provider return annotation (`AbstractContextManager[T]`, "
+            "`AbstractAsyncContextManager[T]`, `Generator[T, None, None]`, or "
+            "`AsyncGenerator[T, None]`), annotate `__enter__` or `__aenter__` on the "
+            "context manager class, or pass provides= explicitly."
+        )
+        self._raise_invalid_registration_error(msg=msg, annotation_error=annotation_error)
+        return _MISSING_ANNOTATION  # pragma: no cover
 
     def return_annotation_matches_origins(
         self,
@@ -681,6 +727,63 @@ class ProviderReturnTypeExtractor:
         ):  # pragma: no cover - typing.Annotated always wraps at least one type
             return annotation
         return self.unwrap_annotated(annotation_args[0])
+
+    def _is_self_annotation(
+        self,
+        annotation: Any,
+    ) -> bool:
+        unwrapped_annotation = self.unwrap_annotated(annotation)
+        annotation_module = getattr(unwrapped_annotation, "__module__", None)
+        if annotation_module not in {"typing", "typing_extensions"}:
+            return False
+
+        annotation_name = getattr(
+            unwrapped_annotation,
+            "__qualname__",
+            getattr(unwrapped_annotation, "__name__", None),
+        )
+        return annotation_name == "Self"
+
+    def _infer_managed_type_from_cm_type(
+        self,
+        cm_type: type[Any],
+    ) -> Any:
+        context_manager_mode = self._context_manager_mode(cm_type)
+        if context_manager_mode == "none":
+            return _MISSING_ANNOTATION
+
+        enter_method_name = "__aenter__" if context_manager_mode == "async" else "__enter__"
+        enter_method = cast("Callable[..., Any]", getattr(cm_type, enter_method_name))
+        return_annotation, _annotation_error = self._resolved_return_annotation(enter_method)
+        if return_annotation is _MISSING_ANNOTATION:
+            return _MISSING_ANNOTATION
+
+        managed_type = return_annotation
+        if context_manager_mode == "async":
+            managed_type = self._unwrap_factory_return_type(managed_type)
+            if managed_type is _MISSING_ANNOTATION:
+                return _MISSING_ANNOTATION
+
+        if self._is_self_annotation(managed_type):
+            return cm_type
+        return managed_type
+
+    def _context_manager_mode(
+        self,
+        cm_type: type[Any],
+    ) -> Literal["sync", "async", "none"]:
+        has_sync_methods = callable(getattr(cm_type, "__enter__", None)) and callable(
+            getattr(cm_type, "__exit__", None),
+        )
+        has_async_methods = callable(getattr(cm_type, "__aenter__", None)) and callable(
+            getattr(cm_type, "__aexit__", None),
+        )
+
+        if has_async_methods and not has_sync_methods:
+            return "async"
+        if has_sync_methods:
+            return "sync"
+        return "none"
 
     def _resolved_return_annotation(
         self,

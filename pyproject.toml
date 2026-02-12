@@ -63,6 +63,7 @@ dev = [
     "prek>=0.3.1",
     "ty>=0.0.15",
     "pyrefly>=0.51.2",
+    "typing-extensions>=4.15.0",
 ]
 
 docs = [

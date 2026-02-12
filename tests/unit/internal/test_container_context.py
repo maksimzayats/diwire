@@ -167,6 +167,23 @@ def test_register_concrete_supports_decorator_form() -> None:
     assert isinstance(container.resolve(_DecoratedService), _DecoratedService)
 
 
+def test_register_context_manager_supports_decorator_form() -> None:
+    context = ContainerContext()
+
+    @contextmanager
+    def provide_request_dependency() -> Generator[_RequestDependency, None, None]:
+        yield _RequestDependency()
+
+    register_decorator = cast("Any", context.add_context_manager())
+    returned_context_manager = register_decorator(provide_request_dependency)
+
+    container = Container()
+    context.set_current(container)
+
+    assert returned_context_manager is provide_request_dependency
+    assert isinstance(container.resolve(_RequestDependency), _RequestDependency)
+
+
 def test_set_current_replays_operations_for_each_bound_container() -> None:
     context = ContainerContext()
     context.add_instance(_Service("registered"))

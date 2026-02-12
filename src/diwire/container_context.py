@@ -3,7 +3,6 @@ from __future__ import annotations
 import functools
 import inspect
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator, Mapping
-from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass
 from typing import Any, Literal, TypeAlias, TypeVar, cast, overload
 
@@ -420,10 +419,7 @@ class ContainerContext:
     @overload
     def add_context_manager(
         self,
-        context_manager: (
-            Callable[..., AbstractContextManager[Any]]
-            | Callable[..., AbstractAsyncContextManager[Any]]
-        ),
+        context_manager: ContextManagerProvider[Any],
         *,
         provides: Any | Literal["infer"] = "infer",
         scope: BaseScope | Literal["from_container"] = "from_container",
@@ -448,11 +444,7 @@ class ContainerContext:
 
     def add_context_manager(  # noqa: PLR0913
         self,
-        context_manager: (
-            Callable[..., AbstractContextManager[Any]]
-            | Callable[..., AbstractAsyncContextManager[Any]]
-            | Literal["from_decorator"]
-        ) = "from_decorator",
+        context_manager: ContextManagerProvider[Any] | Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
         scope: BaseScope | Literal["from_container"] = "from_container",

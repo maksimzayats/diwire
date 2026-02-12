@@ -4,7 +4,7 @@ import functools
 import inspect
 import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator, Mapping
-from contextlib import AbstractAsyncContextManager, AbstractContextManager, contextmanager, suppress
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from types import TracebackType
 from typing import (
@@ -559,10 +559,7 @@ class Container:
     @overload
     def add_context_manager(
         self,
-        context_manager: (
-            Callable[..., AbstractContextManager[Any]]
-            | Callable[..., AbstractAsyncContextManager[Any]]
-        ),
+        context_manager: ContextManagerProvider[Any],
         *,
         provides: Any | Literal["infer"] = "infer",
         scope: BaseScope | Literal["from_container"] = "from_container",
@@ -587,11 +584,7 @@ class Container:
 
     def add_context_manager(
         self,
-        context_manager: (
-            Callable[..., AbstractContextManager[Any]]
-            | Callable[..., AbstractAsyncContextManager[Any]]
-            | Literal["from_decorator"]
-        ) = "from_decorator",
+        context_manager: ContextManagerProvider[Any] | Literal["from_decorator"] = "from_decorator",
         *,
         provides: Any | Literal["infer"] = "infer",
         scope: BaseScope | Literal["from_container"] = "from_container",

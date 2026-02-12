@@ -32,6 +32,7 @@ Each topic lives in a grouped folder named `ex_XX_<topic>/`.
   - focused: `02_missing_dependency_error.py` ... `07_invalid_registration_error.py`
 - `ex_17_scope_context_values`: `FromContext[T]`, scope context inheritance/override, direct resolver access
   - focused: `02_injected_callable_context.py` ... `04_context_without_scope_open.py`
+- `ex_19_class_context_managers`: class-based context manager registration and `__enter__` return-type inference
 
 Run one example:
 

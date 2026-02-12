@@ -361,6 +361,7 @@ dev = [
     { name = "ruff" },
     { name = "sqlalchemy" },
     { name = "ty" },
+    { name = "typing-extensions" },
     { name = "uvicorn" },
 ]
 docs = [
@@ -396,6 +397,7 @@ dev = [
     { name = "ruff", specifier = ">=0.14.13" },
     { name = "sqlalchemy", specifier = ">=2.0.46" },
     { name = "ty", specifier = ">=0.0.15" },
+    { name = "typing-extensions", specifier = ">=4.15.0" },
     { name = "uvicorn", specifier = ">=0.40.0" },
 ]
 docs = [
