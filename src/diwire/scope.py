@@ -6,7 +6,12 @@ from typing import Any
 
 
 class BaseScope(int):
-    """Base class for scopes."""
+    """Represent a numeric DI scope level with transition metadata.
+
+    A scope behaves like an ``int`` so comparisons and ordering are based on
+    ``level``. ``skippable`` marks helper scopes that can be skipped by default
+    transitions when ``enter_scope(None)`` chooses the next non-skippable scope.
+    """
 
     def __new__(cls, *args: Any, **_kwargs: Any) -> BaseScope:  # noqa: D102, PYI034
         return super().__new__(cls, *args)
@@ -29,7 +34,11 @@ class BaseScope(int):
 
 @dataclass(frozen=True, kw_only=True)
 class BaseScopes:
-    """Base class for scopes collection."""
+    """Collect scope constants and derive helper subsets.
+
+    The ``skippable`` tuple is populated automatically from declared scope
+    members and is used by resolver transition logic.
+    """
 
     skippable: tuple[BaseScope, ...] = field(init=False)
 
@@ -48,7 +57,24 @@ class BaseScopes:
 
 @dataclass(frozen=True)
 class Scopes(BaseScopes):
-    """Enum like class for scopes."""
+    """Define the built-in DI scope ladder ordered by ``level``.
+
+    Levels increase with nesting depth. Calling ``enter_scope()`` with no
+    explicit target transitions to the next deeper non-skippable scope.
+
+    Examples:
+        .. code-block:: python
+
+            with container.enter_scope(Scope.REQUEST):
+                service = container.resolve(Service)
+
+            with container.enter_scope(
+                Scope.REQUEST,
+                context={int: 42},
+            ) as request_resolver:
+                value = request_resolver.resolve(FromContext[int])
+
+    """
 
     RUNTIME: BaseScope = field(default=BaseScope(0, skippable=True))
     APP: BaseScope = field(default=BaseScope(1))
@@ -59,4 +85,11 @@ class Scopes(BaseScopes):
 
 
 Scope = Scopes()
-"""Enum like instance for scopes."""
+"""Provide the default scope constants used by container APIs.
+
+Examples:
+    .. code-block:: python
+
+        with container.enter_scope(Scope.REQUEST, context={str: "tenant-a"}):
+            handler = container.resolve(Handler)
+"""

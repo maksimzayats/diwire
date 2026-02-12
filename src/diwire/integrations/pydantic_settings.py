@@ -59,7 +59,24 @@ SETTINGS_BASES: tuple[type[Any], ...] = _build_settings_bases()
 
 
 def is_pydantic_settings_subclass(candidate: object) -> bool:
-    """Return true when candidate subclasses a supported Pydantic settings base."""
+    """Return whether a class is a supported Pydantic settings model.
+
+    DIWire checks both ``pydantic_settings.BaseSettings`` and legacy
+    ``pydantic.v1.BaseSettings``/``pydantic.BaseSettings`` when available.
+    If Pydantic is not installed, this function returns ``False`` for every
+    candidate.
+
+    DIWire uses this integration for safe autoregistration: settings subclasses
+    are registered through a zero-argument factory and cached at the root scope.
+
+    Args:
+        candidate: Object to test.
+
+    Returns:
+        ``True`` when ``candidate`` is a runtime class and subclasses any
+        discovered settings base; otherwise ``False``.
+
+    """
     if not is_runtime_class(candidate):
         return False
     try:

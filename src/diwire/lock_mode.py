@@ -4,13 +4,22 @@ from enum import Enum
 
 
 class LockMode(Enum):
-    """Locking strategy used by cached provider resolution."""
+    """Select locking behavior for cached provider resolution.
+
+    Use these values for provider-level ``lock_mode`` or container-level
+    defaults. Container methods also accept ``"auto"`` at configuration time:
+    DIWire maps ``"auto"`` to async locks when a graph requires async resolution
+    and to thread locks for sync-only graphs.
+
+    In mixed workloads, prefer forcing ``THREAD`` for high-throughput sync cached
+    paths when you do not want auto mode to pick async locks.
+    """
 
     THREAD = "thread"
-    """Use thread locks for sync cached resolution paths."""
+    """Guard cached values with ``threading.Lock`` in synchronous paths."""
 
     ASYNC = "async"
-    """Use async locks for async-required cached resolution paths."""
+    """Guard cached values with ``asyncio.Lock`` for async resolution paths."""
 
     NONE = "none"
-    """Disable lock usage for cached resolution paths."""
+    """Disable locking around cache reads/writes for this provider."""

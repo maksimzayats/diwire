@@ -73,6 +73,20 @@ class _OpenGenericMatch:
 
 
 def canonicalize_open_key(dependency: Any) -> Any | None:
+    """Normalize a dependency key into an open-generic registration key.
+
+    Use this helper when registering providers for open generics. It returns a
+    canonical representation that preserves TypeVar structure so matching can be
+    performed against closed generic resolution requests.
+
+    Args:
+        dependency: Candidate registration key.
+
+    Returns:
+        A normalized open-generic key when ``dependency`` contains TypeVars, or
+        ``None`` when the key is not open-generic.
+
+    """
     origin = get_origin(dependency)
     if origin is None:
         parameters = tuple(
@@ -95,6 +109,15 @@ def canonicalize_open_key(dependency: Any) -> Any | None:
 
 
 def contains_typevar(value: Any) -> bool:
+    """Return whether a type expression still contains a ``TypeVar``.
+
+    Args:
+        value: Type expression or object to inspect.
+
+    Returns:
+        ``True`` when any nested node contains a TypeVar, else ``False``.
+
+    """
     if isinstance(value, TypeVar):
         return True
 
@@ -107,6 +130,19 @@ def contains_typevar(value: Any) -> bool:
 
 
 def substitute_typevars(value: Any, *, mapping: Mapping[TypeVar, Any]) -> Any:
+    """Substitute TypeVars in a type expression using a resolved mapping.
+
+    This is used during open-generic resolution to derive closed dependency keys
+    from templates declared in provider dependencies.
+
+    Args:
+        value: Type expression template that may contain TypeVars.
+        mapping: Mapping from template TypeVars to concrete type arguments.
+
+    Returns:
+        The substituted type expression with available TypeVars replaced.
+
+    """
     if isinstance(value, TypeVar):
         return mapping.get(value, value)
 
@@ -125,6 +161,16 @@ def substitute_typevars(value: Any, *, mapping: Mapping[TypeVar, Any]) -> Any:
 
 
 def validate_typevar_arguments(typevar_map: Mapping[TypeVar, Any]) -> None:
+    """Validate closed generic arguments against TypeVar constraints and bounds.
+
+    Args:
+        typevar_map: Mapping from open TypeVars to candidate concrete arguments.
+
+    Raises:
+        DIWireInvalidGenericTypeArgumentError: If any argument violates TypeVar
+            constraints or bound requirements.
+
+    """
     for typevar, argument in typevar_map.items():
         if not _is_type_argument_valid(typevar=typevar, argument=argument):
             constraints = getattr(typevar, "__constraints__", ())
@@ -840,6 +886,18 @@ def _append_call_argument(
 
 
 def cast_iterable(value: Any) -> Iterable[Any]:
+    """Validate and return an iterable variadic argument payload.
+
+    Args:
+        value: Value bound for a ``*args`` provider dependency.
+
+    Returns:
+        The input value cast as ``Iterable[Any]``.
+
+    Raises:
+        TypeError: If ``value`` is not iterable.
+
+    """
     if isinstance(value, Iterable):
         return value
     msg = f"Expected iterable value for variadic positional dependency, got {value!r}."
@@ -847,6 +905,18 @@ def cast_iterable(value: Any) -> Iterable[Any]:
 
 
 def cast_mapping(value: Any) -> Mapping[str, Any]:
+    """Validate and return a mapping variadic keyword payload.
+
+    Args:
+        value: Value bound for a ``**kwargs`` provider dependency.
+
+    Returns:
+        The input value cast as ``Mapping[str, Any]``.
+
+    Raises:
+        TypeError: If ``value`` is not a mapping.
+
+    """
     if isinstance(value, Mapping):
         return value
     msg = f"Expected mapping value for variadic keyword dependency, got {value!r}."

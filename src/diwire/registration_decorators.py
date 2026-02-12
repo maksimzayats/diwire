@@ -50,6 +50,36 @@ def add_concrete(  # noqa: PLR0913
     lock_mode: LockMode | Literal["from_container"] = "from_container",
     autoregister_dependencies: bool | Literal["from_container"] = "from_container",
 ) -> C | Callable[[C], C]:
+    """Register a concrete provider through the global ``container_context``.
+
+    This helper proxies to ``container_context.add_concrete``. It is safe in
+    applications that bind ``container_context`` during startup; when unbound it
+    records the registration for replay once a container is bound.
+
+    Args:
+        concrete_type: Concrete class to register, or ``"from_decorator"`` to
+            use decorator form.
+        provides: Dependency key exposed by the registration.
+        scope: Registration scope or ``"from_container"``.
+        lifetime: Provider lifetime or ``"from_container"``.
+        dependencies: Explicit dependencies list or ``"infer"``.
+        lock_mode: Locking mode or ``"from_container"``.
+        autoregister_dependencies: Override dependency autoregistration behavior.
+
+    Returns:
+        The decorated class in direct form, or a decorator callable in decorator
+        form.
+
+    Raises:
+        DIWireInvalidRegistrationError: If registration arguments are invalid.
+
+    Examples:
+        .. code-block:: python
+
+            @add_concrete()
+            class SqlUserRepository(UserRepository): ...
+
+    """
     if concrete_type == "from_decorator":
 
         def decorator(decorated_concrete: C) -> C:
@@ -114,6 +144,35 @@ def add_factory(  # noqa: PLR0913
     lock_mode: LockMode | Literal["from_container"] = "from_container",
     autoregister_dependencies: bool | Literal["from_container"] = "from_container",
 ) -> FactoryF | Callable[[FactoryF], FactoryF]:
+    """Register a factory provider through the global ``container_context``.
+
+    This helper proxies to ``container_context.add_factory``. It is safe when
+    the application binds ``container_context`` during startup; before binding,
+    registrations are queued and replayed once bound.
+
+    Args:
+        factory: Factory callable to register, or ``"from_decorator"``.
+        provides: Dependency key exposed by the registration.
+        scope: Registration scope or ``"from_container"``.
+        lifetime: Provider lifetime or ``"from_container"``.
+        dependencies: Explicit dependencies list or ``"infer"``.
+        lock_mode: Locking mode or ``"from_container"``.
+        autoregister_dependencies: Override dependency autoregistration behavior.
+
+    Returns:
+        The factory in direct form, or a decorator callable in decorator form.
+
+    Raises:
+        DIWireInvalidRegistrationError: If registration arguments are invalid.
+
+    Examples:
+        .. code-block:: python
+
+            @add_factory()
+            def make_service(repo: UserRepository) -> Service:
+                return Service(repo)
+
+    """
     if factory == "from_decorator":
 
         def decorator(decorated_factory: FactoryF) -> FactoryF:
@@ -178,6 +237,36 @@ def add_generator(  # noqa: PLR0913
     lock_mode: LockMode | Literal["from_container"] = "from_container",
     autoregister_dependencies: bool | Literal["from_container"] = "from_container",
 ) -> GeneratorF | Callable[[GeneratorF], GeneratorF]:
+    """Register a generator provider through the global ``container_context``.
+
+    This helper proxies to ``container_context.add_generator``. It is intended
+    for applications that bind ``container_context`` once at startup; if unbound,
+    registrations are deferred and replayed later.
+
+    Args:
+        generator: Generator/async-generator provider, or ``"from_decorator"``.
+        provides: Dependency key exposed by the registration.
+        scope: Registration scope or ``"from_container"``.
+        lifetime: Provider lifetime or ``"from_container"``.
+        dependencies: Explicit dependencies list or ``"infer"``.
+        lock_mode: Locking mode or ``"from_container"``.
+        autoregister_dependencies: Override dependency autoregistration behavior.
+
+    Returns:
+        The generator in direct form, or a decorator callable in decorator form.
+
+    Raises:
+        DIWireInvalidRegistrationError: If registration arguments are invalid.
+
+    Examples:
+        .. code-block:: python
+
+            @add_generator(scope=Scope.REQUEST)
+            def make_session(engine: Engine) -> Generator[Session, None, None]:
+                with Session(engine) as session:
+                    yield session
+
+    """
     if generator == "from_decorator":
 
         def decorator(decorated_generator: GeneratorF) -> GeneratorF:
@@ -242,6 +331,36 @@ def add_context_manager(  # noqa: PLR0913
     lock_mode: LockMode | Literal["from_container"] = "from_container",
     autoregister_dependencies: bool | Literal["from_container"] = "from_container",
 ) -> ContextManagerF | Callable[[ContextManagerF], ContextManagerF]:
+    """Register a context manager provider through ``container_context``.
+
+    This helper proxies to ``container_context.add_context_manager``. It is
+    typically used in applications that bind ``container_context`` during
+    startup; when unbound, registrations are recorded for later replay.
+
+    Args:
+        context_manager: Context-manager provider callable, or
+            ``"from_decorator"``.
+        provides: Dependency key exposed by the registration.
+        scope: Registration scope or ``"from_container"``.
+        lifetime: Provider lifetime or ``"from_container"``.
+        dependencies: Explicit dependencies list or ``"infer"``.
+        lock_mode: Locking mode or ``"from_container"``.
+        autoregister_dependencies: Override dependency autoregistration behavior.
+
+    Returns:
+        The provider in direct form, or a decorator callable in decorator form.
+
+    Raises:
+        DIWireInvalidRegistrationError: If registration arguments are invalid.
+
+    Examples:
+        .. code-block:: python
+
+            @add_context_manager(scope=Scope.REQUEST)
+            def session(engine: Engine) -> ContextManager[Session]:
+                return Session(engine)
+
+    """
     if context_manager == "from_decorator":
 
         def decorator(decorated_context_manager: ContextManagerF) -> ContextManagerF:

@@ -57,7 +57,23 @@ _MISSING_CLOSED_GENERIC_INJECTION = object()
 
 
 class Container:
-    """A dependency injection container."""
+    """Manage dependency registration, resolution, scoping, and cleanup.
+
+    Dependency keys are usually concrete types, protocols, or
+    ``typing.Annotated`` tokens (for example ``Annotated[Db, Component("ro")]``).
+    Closed generic keys are also supported when matching open-generic
+    registrations.
+
+    Use registrations for explicit control, or keep autoregistration enabled to
+    auto-wire eligible concrete classes and their dependencies. Disable
+    autoregistration for strict mode where every dependency must be registered
+    explicitly.
+
+    Resolution happens through a compiled resolver graph. ``resolve`` runs sync
+    graphs, ``aresolve`` runs async graphs, and ``enter_scope`` creates nested
+    resolvers that own scoped caches and cleanup callbacks. Registration
+    mutations invalidate compilation automatically.
+    """
 
     # Hot-path methods rebound to the compiled root resolver to keep steady-state
     # resolution/scope calls on generated fast paths.
@@ -76,14 +92,40 @@ class Container:
         autoregister_concrete_types: bool = True,
         autoregister_dependencies: bool = True,
     ) -> None:
-        """Initialize the container with an optional configuration.
+        """Initialize a container and configure default registration behavior.
+
+        Choose strict mode by setting ``autoregister_concrete_types=False``.
+        Keep defaults for auto-wiring behavior. ``lock_mode="auto"`` selects
+        thread locks for sync-only cached paths and async locks when async
+        resolution paths are present.
 
         Args:
-            root_scope: The initial root scope for the container. Root-scoped (singleton) cached providers are tied to this scope. Defaults to Scope.APP.
-            default_lifetime: The lifetime that will be used for providers if not specified. Defaults to Lifetime.SCOPED.
-            lock_mode: Default lock strategy for non-instance registrations. Accepts LockMode or "auto". When set to "auto", sync-only graphs use thread locks and graphs containing async specs use async locks. In mixed graphs this means auto-mode sync cached paths are not thread-locked unless you override to LockMode.THREAD. Defaults to "auto".
-            autoregister_concrete_types: Whether to automatically register concrete types when they are resolved if not already registered. Defaults to True.
-            autoregister_dependencies: Whether to automatically register provider dependencies as concrete types during registration. It will respect `autoregister_concrete_types` flag. Defaults to True.
+            root_scope: Root scope for resolver ownership and root-scoped caches.
+            default_lifetime: Default lifetime used by registrations that omit
+                ``lifetime``.
+            lock_mode: Container default lock strategy for non-instance
+                registrations. Accepts ``LockMode`` or ``"auto"``.
+            autoregister_concrete_types: Enable on-demand concrete type
+                autoregistration during resolution.
+            autoregister_dependencies: Enable autoregistration of provider
+                dependencies discovered at registration time.
+
+        Notes:
+            Common presets are: default mode (both autoregistration flags
+            enabled), strict mode (both disabled), and mixed mode (concrete
+            autoregistration enabled with dependency autoregistration disabled).
+
+        Examples:
+            .. code-block:: python
+
+                container = Container()
+
+                strict_container = Container(
+                    autoregister_concrete_types=False,
+                    autoregister_dependencies=False,
+                )
+
+                threaded_container = Container(lock_mode=LockMode.THREAD)
 
         """
         self._root_scope = root_scope
@@ -118,9 +160,32 @@ class Container:
         *,
         provides: Any | Literal["infer"] = "infer",
     ) -> None:
-        """Register an instance provider in the container.
+        """Register a pre-built instance as a provider.
 
-        Instance providers always use ``LockMode.NONE``.
+        This is the simplest way to bind configuration objects or singleton
+        clients. Re-registering the same dependency key overrides the previous
+        spec.
+
+        Args:
+            instance: Instance value to return on resolution.
+            provides: Dependency key to bind. Use ``"infer"`` to bind by
+                ``type(instance)``.
+
+        Raises:
+            DIWireInvalidRegistrationError: If ``provides`` is ``None``.
+
+        Notes:
+            Instance specs always use ``LockMode.NONE`` because value creation is
+            not deferred.
+
+        Examples:
+            .. code-block:: python
+
+                settings = Settings(api_url="https://api.example.com")
+                container.add_instance(settings)
+
+                resolved = container.resolve(Settings)
+
         """
         provides_value = cast("Any", provides)
         if provides_value == "infer":
@@ -183,9 +248,53 @@ class Container:
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> None | ConcreteTypeRegistrationDecorator[Any]:
-        """Register a concrete type provider in the container.
+        """Register a concrete type provider.
 
-        ``lock_mode="from_container"`` inherits the container-level mode.
+        Supports direct calls and decorator form. ``provides`` may be a protocol,
+        concrete type, annotated token, or open generic key. Dependencies are
+        inferred from constructor annotations unless explicit dependencies are
+        passed.
+
+        Args:
+            concrete_type: Concrete class to instantiate, or ``"from_decorator"``
+                to return a decorator.
+            provides: Dependency key produced by this provider. ``"infer"`` uses
+                ``concrete_type`` directly.
+            scope: Provider scope, or ``"from_container"`` to inherit root scope.
+            lifetime: Provider lifetime, or ``"from_container"`` to inherit
+                container default.
+            dependencies: Explicit dependencies, or ``"infer"`` for annotation
+                inference.
+            lock_mode: Lock strategy, or ``"from_container"`` to inherit the
+                container lock mode.
+            autoregister_dependencies: Override dependency autoregistration for
+                this registration.
+
+        Returns:
+            ``None`` in direct mode or a decorator in decorator mode.
+
+        Raises:
+            DIWireInvalidRegistrationError: If parameters are invalid or scope
+                contracts cannot be satisfied.
+            DIWireInvalidProviderSpecError: If explicit dependencies do not match
+                provider signature.
+            DIWireProviderDependencyInferenceError: If dependencies cannot be
+                inferred from annotations.
+
+        Notes:
+            ``lock_mode="from_container"`` inherits the container-level mode.
+            Open generic registration is enabled when ``provides`` contains
+            TypeVars.
+
+        Examples:
+            .. code-block:: python
+
+                container.add_concrete(SqlRepo, provides=Repo)
+
+
+                @container.add_concrete(provides=Repo)
+                class CachedRepo(SqlRepo): ...
+
         """
         decorator: ConcreteTypeRegistrationDecorator[Any] = ConcreteTypeRegistrationDecorator(
             container=self,
@@ -365,9 +474,49 @@ class Container:
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> None | FactoryRegistrationDecorator[Any]:
-        """Register a factory provider in the container.
+        """Register a factory provider.
 
-        ``lock_mode="from_container"`` inherits the container-level mode.
+        Supports direct calls and decorator form. ``provides`` may be a protocol,
+        concrete type, annotated token, or open generic key. Dependencies are
+        inferred from factory parameters unless explicit dependencies are passed.
+
+        Args:
+            factory: Provider function/callable, or ``"from_decorator"``.
+            provides: Dependency key produced by the factory. ``"infer"`` uses
+                the return annotation.
+            scope: Provider scope, or ``"from_container"``.
+            lifetime: Provider lifetime, or ``"from_container"``.
+            dependencies: Explicit dependencies, or ``"infer"``.
+            lock_mode: Lock strategy, or ``"from_container"``.
+            autoregister_dependencies: Override dependency autoregistration for
+                this registration.
+
+        Returns:
+            ``None`` in direct mode or a decorator in decorator mode.
+
+        Raises:
+            DIWireInvalidRegistrationError: If configuration or annotations are
+                invalid.
+            DIWireInvalidProviderSpecError: If explicit dependencies do not match
+                factory parameters.
+            DIWireProviderDependencyInferenceError: If required dependencies
+                cannot be inferred.
+
+        Notes:
+            ``lock_mode="from_container"`` inherits the container-level mode.
+            Open-generic factories can inject type arguments by accepting
+            ``type[T]`` or ``T`` parameters in dependencies.
+
+        Examples:
+            .. code-block:: python
+
+                container.add_factory(lambda settings: Client(settings), provides=Client)
+
+
+                @container.add_factory(provides=Box[T])
+                def build_box(value_type: type[T]) -> Box[T]:
+                    return Box(value_type)
+
         """
         decorator: FactoryRegistrationDecorator[Any] = FactoryRegistrationDecorator(
             container=self,
@@ -482,9 +631,40 @@ class Container:
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> None | GeneratorRegistrationDecorator[Any]:
-        """Register a generator provider in the container.
+        """Register a generator or async-generator provider with cleanup.
 
-        ``lock_mode="from_container"`` inherits the container-level mode.
+        The yielded value is resolved as the dependency, and teardown runs when
+        the owning resolver scope exits (or container closes for root scope).
+
+        Args:
+            generator: Generator provider, or ``"from_decorator"``.
+            provides: Dependency key produced by the yield value.
+            scope: Provider scope, or ``"from_container"``.
+            lifetime: Provider lifetime, or ``"from_container"``.
+            dependencies: Explicit dependencies, or ``"infer"``.
+            lock_mode: Lock strategy, or ``"from_container"``.
+            autoregister_dependencies: Override dependency autoregistration.
+
+        Returns:
+            ``None`` in direct mode or a decorator in decorator mode.
+
+        Raises:
+            DIWireInvalidRegistrationError: If registration arguments are invalid.
+            DIWireInvalidProviderSpecError: If explicit dependencies are invalid.
+            DIWireProviderDependencyInferenceError: If dependency inference fails.
+
+        Notes:
+            Cleanup is deterministic only when the owning resolver is closed
+            (`with`/`async with` or explicit close/aclose).
+
+        Examples:
+            .. code-block:: python
+
+                @container.add_generator(scope=Scope.REQUEST, provides=Session)
+                def open_session(engine: Engine) -> Generator[Session, None, None]:
+                    with Session(engine) as session:
+                        yield session
+
         """
         decorator: GeneratorRegistrationDecorator[Any] = GeneratorRegistrationDecorator(
             container=self,
@@ -593,9 +773,39 @@ class Container:
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> None | ContextManagerRegistrationDecorator[Any]:
-        """Register a context manager provider in the container.
+        """Register a context-manager or async-context-manager provider.
 
-        ``lock_mode="from_container"`` inherits the container-level mode.
+        The entered value is resolved as the dependency, and ``__exit__`` /
+        ``__aexit__`` runs when the owning resolver scope exits.
+
+        Args:
+            context_manager: Context-manager provider, or ``"from_decorator"``.
+            provides: Dependency key produced by the entered value.
+            scope: Provider scope, or ``"from_container"``.
+            lifetime: Provider lifetime, or ``"from_container"``.
+            dependencies: Explicit dependencies, or ``"infer"``.
+            lock_mode: Lock strategy, or ``"from_container"``.
+            autoregister_dependencies: Override dependency autoregistration.
+
+        Returns:
+            ``None`` in direct mode or a decorator in decorator mode.
+
+        Raises:
+            DIWireInvalidRegistrationError: If registration arguments are invalid.
+            DIWireInvalidProviderSpecError: If explicit dependencies are invalid.
+            DIWireProviderDependencyInferenceError: If dependency inference fails.
+
+        Notes:
+            Cleanup runs at scope/container exit. For request resources, register
+            under ``Scope.REQUEST`` and resolve inside a request scope.
+
+        Examples:
+            .. code-block:: python
+
+                @container.add_context_manager(scope=Scope.REQUEST, provides=Session)
+                def session(engine: Engine) -> ContextManager[Session]:
+                    return Session(engine)
+
         """
         decorator: ContextManagerRegistrationDecorator[Any] = ContextManagerRegistrationDecorator(
             container=self,
@@ -1114,7 +1324,46 @@ class Container:
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
         auto_open_scope: bool = True,
     ) -> InjectableF | Callable[[InjectableF], InjectableF]:
-        """Decorate a callable to auto-inject parameters marked with Injected[T]."""
+        """Decorate a callable to resolve ``Injected`` and ``FromContext`` parameters.
+
+        The wrapper hides injected/context parameters from the public signature.
+        Callers may still override any injected argument explicitly.
+
+        Args:
+            func: Callable to wrap, or ``"from_decorator"`` for decorator form.
+            scope: Explicit scope to open for each call, or ``"infer"`` to infer
+                required depth from injected dependency scopes.
+            autoregister_dependencies: Override dependency autoregistration for
+                injected keys.
+            auto_open_scope: Open inferred/explicit scope automatically.
+
+        Returns:
+            Wrapped callable, or a decorator when ``func="from_decorator"``.
+
+        Raises:
+            DIWireInvalidRegistrationError: If arguments are invalid, reserved
+                parameter names are declared, or context usage is inconsistent.
+
+        Notes:
+            Reserved kwargs consumed by wrappers:
+            ``__diwire_context`` and ``__diwire_resolver``.
+            Wrapped callables cannot declare parameters with those names.
+
+        Examples:
+            .. code-block:: python
+
+                @container.inject(scope=Scope.REQUEST)
+                def handle(
+                    service: Injected[Service],
+                    tenant_id: FromContext[int],
+                    value: int,
+                ) -> str:
+                    return service.process(value, tenant_id)
+
+
+                result = handle(10, __diwire_context={int: 7})
+
+        """
         scope_value = cast("Any", scope)
         resolved_scope: BaseScope | None
         if scope_value == "infer":
@@ -1555,10 +1804,25 @@ class Container:
     def compile(self) -> ResolverProtocol:
         """Compile and cache the root resolver for current registrations.
 
-        After compilation, entrypoints are rebounded to the root resolver instance, so
-        steady-state resolution/scope operations skip container-level indirection.
-        When autoregistration is enabled, methods stay container-bound, so each call
-        can still register missing dependencies before resolution.
+        Compilation is lazy and invalidated by any registration mutation. In
+        strict mode (autoregistration disabled), hot-path entrypoints are
+        rebound to the compiled resolver for lower call overhead.
+
+        Returns:
+            The compiled root resolver.
+
+        Notes:
+            Call this once after startup registrations when you want stable
+            strict-mode hot-path behavior. Any registration mutation invalidates
+            the compiled graph automatically.
+
+        Examples:
+            .. code-block:: python
+
+                container.add_concrete(Service)
+                container.compile()
+                service = container.resolve(Service)
+
         """
         if self._root_resolver is None:
             root_resolver = self._resolvers_manager.build_root_resolver(
@@ -1660,9 +1924,37 @@ class Container:
     def resolve(self, dependency: Any) -> Any: ...
 
     def resolve(self, dependency: Any) -> Any:
-        """Resolve the given dependency and return its instance.
+        """Resolve a dependency synchronously.
 
-        If autoregistration is enabled, it will automatically register the dependency if not already registered.
+        Args:
+            dependency: Dependency key to resolve.
+
+        Returns:
+            Resolved dependency value.
+
+        Raises:
+            DIWireDependencyNotRegisteredError: If dependency is missing in
+                strict mode and no open-generic match exists.
+            DIWireScopeMismatchError: If dependency requires a deeper scope than
+                the current resolver.
+            DIWireAsyncDependencyInSyncContextError: If the selected graph
+                requires async resolution or cleanup.
+            DIWireInvalidGenericTypeArgumentError: If closed generic arguments
+                violate TypeVar constraints.
+
+        Notes:
+            Typical fixes:
+            1. Register missing dependencies (or enable autoregistration).
+            2. Enter required scope before resolving scoped dependencies.
+            3. Switch to ``aresolve`` for async dependency chains.
+            4. Use compatible generic arguments for constrained TypeVars.
+
+        Examples:
+            .. code-block:: python
+
+                container.add_concrete(Service)
+                service = container.resolve(Service)
+
         """
         self._ensure_autoregistration(dependency)
         resolver = self.compile()
@@ -1676,9 +1968,32 @@ class Container:
     async def aresolve(self, dependency: Any) -> Any: ...
 
     async def aresolve(self, dependency: Any) -> Any:
-        """Resolve the given dependency asynchronously and return its instance.
+        """Resolve a dependency asynchronously.
 
-        If autoregistration is enabled, it will automatically register the dependency if not already registered.
+        Args:
+            dependency: Dependency key to resolve.
+
+        Returns:
+            Resolved dependency value.
+
+        Raises:
+            DIWireDependencyNotRegisteredError: If dependency is missing in
+                strict mode and no open-generic match exists.
+            DIWireScopeMismatchError: If dependency requires a deeper scope than
+                the current resolver.
+            DIWireInvalidGenericTypeArgumentError: If closed generic arguments
+                violate TypeVar constraints.
+
+        Notes:
+            Use this API whenever any part of the selected provider chain is
+            async.
+
+        Examples:
+            .. code-block:: python
+
+                container.add_factory(async_make_client, provides=Client)
+                client = await container.aresolve(Client)
+
         """
         self._ensure_autoregistration(dependency)
         resolver = self.compile()
@@ -1691,7 +2006,33 @@ class Container:
         *,
         context: Mapping[Any, Any] | None = None,
     ) -> ResolverProtocol:
-        """Enter a new scope and return a new resolver for that scope."""
+        """Enter a deeper scope and return a scoped resolver.
+
+        When ``scope`` is ``None``, DIWire transitions to the next deeper
+        non-skippable scope. Context keys are used by ``FromContext[...]``
+        lookups and inherited by deeper nested scopes unless overridden.
+
+        Args:
+            scope: Explicit target scope, or ``None`` for default next scope.
+            context: Optional mapping for ``FromContext[...]`` dependencies.
+
+        Returns:
+            Resolver bound to the target scope.
+
+        Raises:
+            DIWireScopeMismatchError: If transition is invalid for the current
+                scope level.
+
+        Examples:
+            .. code-block:: python
+
+                with container.enter_scope(
+                    Scope.REQUEST,
+                    context={int: 1001},
+                ) as request_resolver:
+                    user_id = request_resolver.resolve(FromContext[int])
+
+        """
         resolver = self.compile()
         return resolver.enter_scope(scope, context=context)
 
@@ -1745,10 +2086,21 @@ class Container:
         exc_value: BaseException | None = None,
         traceback: TracebackType | None = None,
     ) -> None:
-        """Close the container and perform any necessary cleanup.
+        """Close the root resolver and run pending cleanup callbacks.
 
-        Cleanup will happen ONLY if the resolver created resources that need to be cleaned up.
-        Like context managers or generators.
+        Args:
+            exc_type: Optional exception type propagated to cleanup callbacks.
+            exc_value: Optional exception instance propagated to callbacks.
+            traceback: Optional traceback propagated to callbacks.
+
+        Raises:
+            RuntimeError: If called before entering/compiling a resolver context.
+
+        Notes:
+            Cleanup runs only for graphs that created cleanup-enabled resources.
+            Prefer ``with container.enter_scope(...)`` for deterministic request
+            cleanup.
+
         """
         return self.__exit__(exc_type, exc_value, traceback)
 
@@ -1758,10 +2110,20 @@ class Container:
         exc_value: BaseException | None = None,
         traceback: TracebackType | None = None,
     ) -> None:
-        """Asynchronously close the container and perform any necessary cleanup.
+        """Asynchronously close the root resolver and run cleanup callbacks.
 
-        Cleanup will happen ONLY if the resolver created resources that need to be cleaned up.
-        Like context managers or generators.
+        Args:
+            exc_type: Optional exception type propagated to cleanup callbacks.
+            exc_value: Optional exception instance propagated to callbacks.
+            traceback: Optional traceback propagated to callbacks.
+
+        Raises:
+            RuntimeError: If called before entering/compiling a resolver context.
+
+        Notes:
+            Prefer ``async with`` for scoped async workloads; use this when
+            owning a long-lived root resolver lifecycle explicitly.
+
         """
         return await self.__aexit__(exc_type, exc_value, traceback)
 

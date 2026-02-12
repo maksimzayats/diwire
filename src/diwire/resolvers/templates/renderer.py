@@ -2541,6 +2541,12 @@ class ResolversTemplateRenderer:
 
 
 def main() -> None:
+    """Render and print generated resolver code for development inspection.
+
+    This entrypoint instantiates the template renderer with an empty
+    registration set and prints the generated resolver module to stdout. It is
+    intended for local tooling, debugging, and template iteration.
+    """
     renderer = ResolversTemplateRenderer()
     rendered_code = renderer.get_providers_code(
         root_scope=Scope.APP,

@@ -93,7 +93,14 @@ _ASYNC_RESOLVER_ORIGINS: tuple[type[Any], ...] = (
 
 @dataclass(kw_only=True)
 class ProviderSpec:
-    """A specification of a provider in the dependency injection system."""
+    """Describe how a single dependency key is produced and cached.
+
+    A spec is the normalized registration model used by resolver generation.
+    Exactly one provider source is expected in user-facing registrations
+    (instance, concrete type, factory, generator, or context manager), plus
+    metadata describing scope, lifetime, async requirements, cleanup behavior,
+    and locking.
+    """
 
     SLOT_COUNTER: ClassVar[ProviderSlot] = 0
 
@@ -135,17 +142,27 @@ class ProviderSpec:
 
 
 class Lifetime(Enum):
-    """Defines the lifetime of a service in the container."""
+    """Define cache behavior for provider results."""
 
     TRANSIENT = auto()
-    """No caching; a new instance is created every time the service is requested."""
+    """Disable caching and build a new value for every resolution call."""
 
     SCOPED = auto()
-    """Cached within the declared scope; root-scoped values behave like singletons."""
+    """Cache per declared scope owner until that scope exits.
+
+    For registrations declared on the container root scope, this behaves like a
+    singleton for the container lifetime. Cleanup-enabled providers are released
+    when the owning scope/resolver is closed.
+    """
 
 
 class ProvidersRegistrations:
-    """Holds all provider specifications registered in the container."""
+    """Store provider specs indexed by dependency key and slot.
+
+    Registration keys are unique: adding a spec for an existing dependency key
+    replaces the previous spec. Slot indexing is maintained for resolver
+    planning, and cleanup flags are recomputed after each mutation.
+    """
 
     def __init__(self) -> None:
         self._registrations_by_type: dict[UserDependency, ProviderSpec] = {}
@@ -153,7 +170,7 @@ class ProvidersRegistrations:
 
     @dataclass(frozen=True, slots=True)
     class Snapshot:
-        """A rollback snapshot for provider registrations."""
+        """Capture provider registration state for transactional rollback."""
 
         registrations_by_type: dict[UserDependency, ProviderSpec]
         registrations_by_slot: dict[int, ProviderSpec]
@@ -520,7 +537,7 @@ class ProviderDependenciesExtractor:
 
 @dataclass(slots=True)
 class ProviderDependency:
-    """Represents a dependency required by a provider."""
+    """Represent a resolved dependency key bound to a provider parameter."""
 
     provides: UserDependency
     parameter: Parameter

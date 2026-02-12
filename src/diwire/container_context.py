@@ -56,10 +56,15 @@ class _RegistrationOperation:
 
 
 class ContainerContext:
-    """Deferred-registration container context with one shared active container.
+    """Proxy registrations and resolution through a process-global container.
 
-    The active container binding is process-global for this ``ContainerContext`` instance.
-    It is not task-local or thread-local.
+    ``ContainerContext`` supports a deferred-registration workflow: registrations
+    called before binding are recorded and replayed when ``set_current`` binds an
+    actual container. Resolution APIs still require a bound container.
+
+    The binding is process-global for this instance (not task-local/thread-local),
+    which is convenient for application startup but important for tests that run
+    in parallel.
     """
 
     def __init__(self) -> None:
@@ -68,15 +73,30 @@ class ContainerContext:
         self._injected_callable_inspector = InjectedCallableInspector()
 
     def set_current(self, container: Container) -> None:
-        """Set the shared active container and replay deferred registrations.
+        """Bind the active container and replay all deferred registrations.
 
-        This method is expected to be called once during container creation/bootstrap.
+        Args:
+            container: Container to bind as the active target.
+
+        Notes:
+            Existing recorded operations are replayed immediately in original
+            order. Future registration calls are recorded and also applied
+            eagerly to the bound container.
+
         """
         self._container = container
         self._populate(container)
 
     def get_current(self) -> Container:
-        """Return the shared active container or raise when not bound."""
+        """Return the bound container.
+
+        Returns:
+            The currently bound container.
+
+        Raises:
+            DIWireContainerNotSetError: If no container has been bound yet.
+
+        """
         if self._container is None:
             msg = (
                 "Container is not set for container_context. "
@@ -118,7 +138,20 @@ class ContainerContext:
         *,
         provides: Any | Literal["infer"] = "infer",
     ) -> None:
-        """Register an instance provider for replay and immediate binding when available."""
+        """Record and apply an instance registration on the current container.
+
+        Args:
+            instance: Instance value to register.
+            provides: Dependency key to bind. ``"infer"`` uses ``type(instance)``.
+
+        Raises:
+            DIWireInvalidRegistrationError: If ``provides`` is ``None``.
+
+        Notes:
+            If unbound, this registration is queued and replayed by
+            ``set_current``. If bound, it is also applied immediately.
+
+        """
         provides_value = cast("Any", provides)
         if provides_value == "infer":
             resolved_provides: Any = type(instance)
@@ -173,9 +206,27 @@ class ContainerContext:
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> None | Callable[[C], C]:
-        """Register a concrete provider with direct and decorator forms.
+        """Record and apply a concrete registration with direct/decorator forms.
 
-        ``lock_mode="from_container"`` is persisted and replayed unchanged.
+        Args:
+            concrete_type: Concrete class to register, or ``"from_decorator"``.
+            provides: Dependency key produced by the provider.
+            scope: Provider scope or ``"from_container"``.
+            lifetime: Provider lifetime or ``"from_container"``.
+            dependencies: Explicit dependency list or ``"infer"``.
+            lock_mode: Lock strategy or ``"from_container"``.
+            autoregister_dependencies: Override dependency autoregistration.
+
+        Returns:
+            ``None`` in direct mode or decorator callable in decorator mode.
+
+        Raises:
+            DIWireInvalidRegistrationError: If registration arguments are invalid.
+
+        Notes:
+            ``lock_mode="from_container"`` is stored verbatim and resolved by the
+            bound container during replay/application.
+
         """
 
         def decorator(decorated_concrete: C) -> C:
@@ -271,9 +322,23 @@ class ContainerContext:
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> None | Callable[[F], F]:
-        """Register a factory provider with direct and decorator forms.
+        """Record and apply a factory registration with direct/decorator forms.
 
-        ``lock_mode="from_container"`` is persisted and replayed unchanged.
+        Args:
+            factory: Factory callable to register, or ``"from_decorator"``.
+            provides: Dependency key produced by the provider.
+            scope: Provider scope or ``"from_container"``.
+            lifetime: Provider lifetime or ``"from_container"``.
+            dependencies: Explicit dependency list or ``"infer"``.
+            lock_mode: Lock strategy or ``"from_container"``.
+            autoregister_dependencies: Override dependency autoregistration.
+
+        Returns:
+            ``None`` in direct mode or decorator callable in decorator mode.
+
+        Raises:
+            DIWireInvalidRegistrationError: If registration arguments are invalid.
+
         """
 
         def decorator(decorated_factory: F) -> F:
@@ -365,9 +430,23 @@ class ContainerContext:
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> None | Callable[[F], F]:
-        """Register a generator provider with direct and decorator forms.
+        """Record and apply a generator registration with direct/decorator forms.
 
-        ``lock_mode="from_container"`` is persisted and replayed unchanged.
+        Args:
+            generator: Generator provider, or ``"from_decorator"``.
+            provides: Dependency key produced by the provider.
+            scope: Provider scope or ``"from_container"``.
+            lifetime: Provider lifetime or ``"from_container"``.
+            dependencies: Explicit dependency list or ``"infer"``.
+            lock_mode: Lock strategy or ``"from_container"``.
+            autoregister_dependencies: Override dependency autoregistration.
+
+        Returns:
+            ``None`` in direct mode or decorator callable in decorator mode.
+
+        Raises:
+            DIWireInvalidRegistrationError: If registration arguments are invalid.
+
         """
 
         def decorator(decorated_generator: F) -> F:
@@ -453,9 +532,23 @@ class ContainerContext:
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
     ) -> None | Callable[[F], F]:
-        """Register a context manager provider with direct and decorator forms.
+        """Record and apply a context-manager registration.
 
-        ``lock_mode="from_container"`` is persisted and replayed unchanged.
+        Args:
+            context_manager: Context-manager provider, or ``"from_decorator"``.
+            provides: Dependency key produced by the provider.
+            scope: Provider scope or ``"from_container"``.
+            lifetime: Provider lifetime or ``"from_container"``.
+            dependencies: Explicit dependency list or ``"infer"``.
+            lock_mode: Lock strategy or ``"from_container"``.
+            autoregister_dependencies: Override dependency autoregistration.
+
+        Returns:
+            ``None`` in direct mode or decorator callable in decorator mode.
+
+        Raises:
+            DIWireInvalidRegistrationError: If registration arguments are invalid.
+
         """
 
         def decorator(decorated_context_manager: F) -> F:
@@ -618,7 +711,26 @@ class ContainerContext:
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
         auto_open_scope: bool = True,
     ) -> InjectableF | Callable[[InjectableF], InjectableF]:
-        """Decorate a callable with lazy injection delegated to the current container."""
+        """Decorate a callable and delegate injection to the bound container.
+
+        Args:
+            func: Callable to wrap, or ``"from_decorator"``.
+            scope: Scope passed through to ``Container.inject``.
+            autoregister_dependencies: Setting passed through to
+                ``Container.inject``.
+            auto_open_scope: Scope behavior passed through to ``Container.inject``.
+
+        Returns:
+            Wrapped callable, or a decorator when ``func="from_decorator"``.
+
+        Raises:
+            DIWireInvalidRegistrationError: If wrapper arguments are invalid.
+            DIWireContainerNotSetError: At call time when no container is bound.
+
+        Notes:
+            The wrapper resolves the current container lazily on each invocation.
+
+        """
         scope_value = cast("Any", scope)
         if scope_value != "infer" and not isinstance(scope_value, BaseScope):
             msg = "inject() parameter 'scope' must be BaseScope or 'infer'."
@@ -727,7 +839,25 @@ class ContainerContext:
     def resolve(self, dependency: Any) -> Any: ...
 
     def resolve(self, dependency: Any) -> Any:
-        """Resolve dependency via the current bound container."""
+        """Resolve a dependency via the currently bound container.
+
+        Args:
+            dependency: Dependency key to resolve.
+
+        Returns:
+            Resolved dependency value.
+
+        Raises:
+            DIWireContainerNotSetError: If no container is currently bound.
+            DIWireDependencyNotRegisteredError: If the dependency is not
+                registered in strict mode.
+            DIWireScopeMismatchError: If a deeper scope is required.
+            DIWireAsyncDependencyInSyncContextError: If the selected chain is
+                async-only.
+            DIWireInvalidGenericTypeArgumentError: If generic arguments violate
+                TypeVar constraints.
+
+        """
         return self.get_current().resolve(dependency)
 
     @overload
@@ -737,7 +867,23 @@ class ContainerContext:
     async def aresolve(self, dependency: Any) -> Any: ...
 
     async def aresolve(self, dependency: Any) -> Any:
-        """Resolve dependency asynchronously via the current bound container."""
+        """Resolve a dependency asynchronously via the bound container.
+
+        Args:
+            dependency: Dependency key to resolve.
+
+        Returns:
+            Resolved dependency value.
+
+        Raises:
+            DIWireContainerNotSetError: If no container is currently bound.
+            DIWireDependencyNotRegisteredError: If the dependency is not
+                registered in strict mode.
+            DIWireScopeMismatchError: If a deeper scope is required.
+            DIWireInvalidGenericTypeArgumentError: If generic arguments violate
+                TypeVar constraints.
+
+        """
         return await self.get_current().aresolve(dependency)
 
     def enter_scope(
@@ -746,7 +892,20 @@ class ContainerContext:
         *,
         context: Mapping[Any, Any] | None = None,
     ) -> ResolverProtocol:
-        """Enter a scope on the current bound container."""
+        """Enter scope on the currently bound container.
+
+        Args:
+            scope: Target scope, or ``None`` for default next transition.
+            context: Optional context mapping for ``FromContext[...]`` lookups.
+
+        Returns:
+            Scoped resolver produced by the bound container.
+
+        Raises:
+            DIWireContainerNotSetError: If no container is currently bound.
+            DIWireScopeMismatchError: If the requested transition is invalid.
+
+        """
         return self.get_current().enter_scope(scope, context=context)
 
     def _callable_name(self, callable_obj: Callable[..., Any]) -> str:
@@ -754,3 +913,14 @@ class ContainerContext:
 
 
 container_context = ContainerContext()
+"""Process-global container proxy used by module-level registration decorators.
+
+Bind once during application startup, then use decorators from
+``diwire.registration_decorators`` safely across modules.
+
+Examples:
+    .. code-block:: python
+
+        container = Container()
+        container_context.set_current(container)
+"""

@@ -18,7 +18,16 @@ _INJECTED_CALLABLE_INSPECTOR = InjectedCallableInspector()
 
 @pytest.fixture()
 def diwire_container() -> Container:
-    """Return the container used for ``Injected[...]`` resolution in tests."""
+    """Create a per-test DI container used by the plugin.
+
+    Tests that use ``Injected[...]`` parameters resolve them from this container.
+    The fixture is function-scoped, so registrations are isolated between tests
+    unless users override fixture scope explicitly.
+
+    Returns:
+        A new ``Container`` instance.
+
+    """
     return Container()
 
 
@@ -37,7 +46,21 @@ def pytest_pycollect_makeitem(
     name: str,
     obj: object,
 ) -> Any | None:
-    """Hide injected parameters from pytest fixture discovery."""
+    """Hide ``Injected[...]`` parameters from pytest fixture name matching.
+
+    Pytest treats test function parameters as fixture names. This hook rewrites
+    signatures for callables that use DIWire injection metadata so injected
+    parameters are not interpreted as missing fixtures.
+
+    Args:
+        collector: Pytest collector instance.
+        name: Collected object name.
+        obj: Candidate object.
+
+    Returns:
+        ``None`` to continue default collection flow.
+
+    """
     if not callable(obj):
         return None
     if not collector.istestfunction(obj, name):
@@ -57,7 +80,23 @@ def pytest_pycollect_makeitem(
 
 @pytest.hookimpl(hookwrapper=True, tryfirst=True)
 def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> Iterator[None]:
-    """Wrap test callables so Injected parameters are resolved from the root container."""
+    """Wrap test function execution to resolve ``Injected[...]`` parameters.
+
+    The wrapper swaps the callable with ``container.inject(original_callable)``
+    for the duration of the test call. If no container state is attached to the
+    node, this hook is a no-op.
+
+    Limitations:
+        Injection requires a callable test object and plugin-managed state on the
+        test item. Non-function collection paths are ignored.
+
+    Args:
+        pyfuncitem: Collected pytest function item.
+
+    Yields:
+        Control back to pytest around test execution.
+
+    """
     original_callable = cast("Callable[..., Any]", pyfuncitem.obj)
     original_callable_as_any = cast("Any", original_callable)
     injected_parameters = cast(
