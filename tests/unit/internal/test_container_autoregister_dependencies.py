@@ -36,6 +36,30 @@ def _load_pydantic_v1() -> ModuleType | None:
 pydantic_v1 = _load_pydantic_v1()
 
 
+def _load_pydantic_settings_base() -> type[Any] | None:
+    try:
+        module = importlib.import_module("pydantic_settings")
+    except ImportError:
+        return None
+    base_settings = getattr(module, "BaseSettings", None)
+    if isinstance(base_settings, type):
+        return cast("type[Any]", base_settings)
+    return None
+
+
+pydantic_settings_base = _load_pydantic_settings_base()
+
+_PydanticSettingsBase: type[Any]
+if pydantic_settings_base is None:
+
+    class _MissingPydanticSettingsBase:
+        pass
+
+    _PydanticSettingsBase = _MissingPydanticSettingsBase
+else:
+    _PydanticSettingsBase = pydantic_settings_base
+
+
 class DirectDependency:
     pass
 
@@ -125,6 +149,15 @@ class MsgspecFrameworkDependency:
 
 class PydanticFrameworkDependency:
     pass
+
+
+class PydanticSettingsDependency(_PydanticSettingsBase):
+    value: str = "settings"
+
+
+class RootWithPydanticSettingsDependency:
+    def __init__(self, dependency: PydanticSettingsDependency) -> None:
+        self.dependency = dependency
 
 
 class RootWithBuiltinDep:
@@ -430,11 +463,8 @@ def test_resolve_autoregisters_settings_like_dependency_as_root_singleton(monkey
 
 
 def test_resolve_autoregisters_pydantic_settings_as_singleton_factory() -> None:
-    pydantic_settings_module = pytest.importorskip("pydantic_settings")
-    base_settings_type = cast("type[Any]", pydantic_settings_module.BaseSettings)
-
-    class PydanticSettingsDependency(base_settings_type):
-        value: str = "settings"
+    if pydantic_settings_base is None:
+        pytest.skip("pydantic_settings is unavailable")
 
     container = Container()
 
@@ -450,15 +480,8 @@ def test_resolve_autoregisters_pydantic_settings_as_singleton_factory() -> None:
 
 
 def test_dependency_autoregistration_registers_pydantic_settings_as_root_singleton() -> None:
-    pydantic_settings_module = pytest.importorskip("pydantic_settings")
-    base_settings_type = cast("type[Any]", pydantic_settings_module.BaseSettings)
-
-    class PydanticSettingsDependency(base_settings_type):
-        value: str = "settings"
-
-    class RootWithPydanticSettingsDependency:
-        def __init__(self, dependency: PydanticSettingsDependency) -> None:
-            self.dependency = dependency
+    if pydantic_settings_base is None:
+        pytest.skip("pydantic_settings is unavailable")
 
     container = Container()
 

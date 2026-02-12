@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import inspect
 from collections.abc import Generator
 from typing import Annotated, Any, Generic, NamedTuple, TypeVar, cast
@@ -50,6 +51,33 @@ class _AutoBranch:
 class _AutoRoot:
     def __init__(self, branch: _AutoBranch) -> None:
         self.branch = branch
+
+
+def _load_pydantic_settings_base() -> type[Any] | None:
+    try:
+        module = importlib.import_module("pydantic_settings")
+    except ImportError:
+        return None
+    base_settings = getattr(module, "BaseSettings", None)
+    if isinstance(base_settings, type):
+        return cast("type[Any]", base_settings)
+    return None
+
+
+_pydantic_settings_base = _load_pydantic_settings_base()
+_InjectedSettingsBase: type[Any]
+if _pydantic_settings_base is None:
+
+    class _MissingInjectedSettingsBase:
+        pass
+
+    _InjectedSettingsBase = _MissingInjectedSettingsBase
+else:
+    _InjectedSettingsBase = _pydantic_settings_base
+
+
+class _InjectedSettings(_InjectedSettingsBase):
+    value: str = "settings"
 
 
 class _ResolverStub:
@@ -738,11 +766,8 @@ def test_inject_autoregister_true_registers_missing_dependency_chain() -> None:
 
 
 def test_inject_autoregister_registers_pydantic_settings_as_singleton_factory() -> None:
-    pydantic_settings_module = pytest.importorskip("pydantic_settings")
-    base_settings_type = cast("type[Any]", pydantic_settings_module.BaseSettings)
-
-    class _InjectedSettings(base_settings_type):
-        value: str = "settings"
+    if _pydantic_settings_base is None:
+        pytest.skip("pydantic_settings is unavailable")
 
     container = Container()
 
