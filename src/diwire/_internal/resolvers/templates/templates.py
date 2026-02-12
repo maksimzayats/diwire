@@ -93,9 +93,13 @@ CLASS_TEMPLATE = dedent(
 
     {{ exit_method_block }}
 
+    {{ close_method_block }}
+
     {{ aenter_method_block }}
 
     {{ aexit_method_block }}
+
+    {{ aclose_method_block }}
     {% if resolver_methods_block %}
 
     {{ resolver_methods_block }}
@@ -162,6 +166,30 @@ CONTEXT_AENTER_METHOD_TEMPLATE = dedent(
     """
     async def __aenter__(self) -> {{ return_annotation }}:
         return self
+    """,
+).strip()
+
+CONTEXT_CLOSE_METHOD_TEMPLATE = dedent(
+    """
+    def close(
+        self,
+        exc_type: type[BaseException] | None = None,
+        exc_value: BaseException | None = None,
+        traceback: TracebackType | None = None,
+    ) -> None:
+        return self.__exit__(exc_type, exc_value, traceback)
+    """,
+).strip()
+
+CONTEXT_ACLOSE_METHOD_TEMPLATE = dedent(
+    """
+    async def aclose(
+        self,
+        exc_type: type[BaseException] | None = None,
+        exc_value: BaseException | None = None,
+        traceback: TracebackType | None = None,
+    ) -> None:
+        return await self.__aexit__(exc_type, exc_value, traceback)
     """,
 ).strip()
 

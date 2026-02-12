@@ -1497,6 +1497,71 @@ def test_cleanup_callbacks_execute_in_lifo_order() -> None:
     assert events == ["first-enter", "second-enter", "second-exit", "first-exit"]
 
 
+def test_resolver_close_matches_with_cleanup_order_for_generator_and_context_manager() -> None:
+    events: list[str] = []
+
+    def provide_generator() -> Generator[_Resource, None, None]:
+        events.append("generator-enter")
+        try:
+            yield _Resource()
+        finally:
+            events.append("generator-exit")
+
+    class _TrackedContext:
+        def __enter__(self) -> _SingletonService:
+            events.append("context-enter")
+            return _SingletonService()
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            events.append("context-exit")
+
+    def provide_context() -> _TrackedContext:
+        return _TrackedContext()
+
+    class _Both:
+        def __init__(self, first: _Resource, second: _SingletonService) -> None:
+            self.first = first
+            self.second = second
+
+    container = Container()
+    container.add_generator(
+        provide_generator,
+        provides=_Resource,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.add_context_manager(
+        provide_context,
+        provides=_SingletonService,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.add_concrete(
+        _Both,
+        provides=_Both,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with container.enter_scope() as request_scope:
+        request_scope.resolve(_Both)
+
+    with_events = list(events)
+    events.clear()
+
+    request_scope = container.enter_scope()
+    request_scope.resolve(_Both)
+    request_scope.close()
+
+    assert events == with_events
+    assert events == ["generator-enter", "context-enter", "context-exit", "generator-exit"]
+
+
 def test_cleanup_keeps_first_cleanup_error_when_multiple_callbacks_fail() -> None:
     class _FirstContext:
         def __enter__(self) -> _Resource:
@@ -1656,6 +1721,64 @@ async def test_async_cleanup_callbacks_execute_in_lifo_order_and_drain_stack() -
 
     assert events == ["sync-enter", "async-enter", "async-exit", "sync-exit"]
     assert request_scope._cleanup_callbacks == []
+
+
+@pytest.mark.asyncio
+async def test_resolver_aclose_matches_async_with_cleanup_order_for_async_providers() -> None:
+    events: list[str] = []
+
+    async def provide_generator() -> AsyncGenerator[_Resource, None]:
+        events.append("generator-enter")
+        try:
+            yield _Resource()
+        finally:
+            events.append("generator-exit")
+
+    @asynccontextmanager
+    async def provide_context() -> AsyncGenerator[_SingletonService, None]:
+        events.append("context-enter")
+        try:
+            yield _SingletonService()
+        finally:
+            events.append("context-exit")
+
+    class _Both:
+        def __init__(self, first: _Resource, second: _SingletonService) -> None:
+            self.first = first
+            self.second = second
+
+    container = Container()
+    container.add_generator(
+        provide_generator,
+        provides=_Resource,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.add_context_manager(
+        provide_context,
+        provides=_SingletonService,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.add_concrete(
+        _Both,
+        provides=_Both,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    async with container.enter_scope() as request_scope:
+        await request_scope.aresolve(_Both)
+
+    async_with_events = list(events)
+    events.clear()
+
+    request_scope = container.enter_scope()
+    await request_scope.aresolve(_Both)
+    await request_scope.aclose()
+
+    assert events == async_with_events
+    assert events == ["generator-enter", "context-enter", "context-exit", "generator-exit"]
 
 
 @pytest.mark.asyncio

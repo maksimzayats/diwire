@@ -157,6 +157,35 @@ def test_open_context_manager_registration_works_inside_container_context() -> N
         assert resolved.type is float
 
 
+def test_open_generic_scope_resolver_close_runs_cleanup_via_wrapper_delegate() -> None:
+    events: list[str] = []
+
+    def _tracked_open_generator(type_arg: type[T]) -> Generator[_IBox[T], None, None]:
+        events.append(f"enter-{type_arg.__name__}")
+        try:
+            yield _Box(type=type_arg)
+        finally:
+            events.append(f"exit-{type_arg.__name__}")
+
+    container = Container()
+    container.add_generator(
+        _tracked_open_generator,
+        provides=_IBox,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    request_scope = container.enter_scope()
+    assert type(request_scope).__name__.endswith("OpenGenericResolver")
+
+    resolved = request_scope.resolve(_IBox[int])
+    assert isinstance(resolved, _Box)
+    assert resolved.type is int
+
+    request_scope.close()
+    assert events == ["enter-int", "exit-int"]
+
+
 @pytest.mark.asyncio
 async def test_open_async_context_manager_registration_works_in_async_path() -> None:
     container = Container()
@@ -166,6 +195,37 @@ async def test_open_async_context_manager_registration_works_in_async_path() -> 
         resolved = await resolver.aresolve(_IBox[float])
         assert isinstance(resolved, _Box)
         assert resolved.type is float
+
+
+@pytest.mark.asyncio
+async def test_open_generic_scope_resolver_aclose_runs_cleanup_via_wrapper_delegate() -> None:
+    events: list[str] = []
+
+    @asynccontextmanager
+    async def _tracked_open_async_context(type_arg: type[T]) -> AsyncGenerator[_IBox[T], None]:
+        events.append(f"enter-{type_arg.__name__}")
+        try:
+            yield _Box(type=type_arg)
+        finally:
+            events.append(f"exit-{type_arg.__name__}")
+
+    container = Container()
+    container.add_context_manager(
+        _tracked_open_async_context,
+        provides=_IBox,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    request_scope = container.enter_scope()
+    assert type(request_scope).__name__.endswith("OpenGenericResolver")
+
+    resolved = await request_scope.aresolve(_IBox[int])
+    assert isinstance(resolved, _Box)
+    assert resolved.type is int
+
+    await request_scope.aclose()
+    assert events == ["enter-int", "exit-int"]
 
 
 def test_open_async_factory_raises_in_sync_resolution() -> None:

@@ -23,9 +23,11 @@ from diwire._internal.resolvers.templates.templates import (
     ASYNC_METHOD_TEMPLATE,
     BUILD_FUNCTION_TEMPLATE,
     CLASS_TEMPLATE,
+    CONTEXT_ACLOSE_METHOD_TEMPLATE,
     CONTEXT_AENTER_METHOD_TEMPLATE,
     CONTEXT_AEXIT_NO_CLEANUP_TEMPLATE,
     CONTEXT_AEXIT_WITH_CLEANUP_TEMPLATE,
+    CONTEXT_CLOSE_METHOD_TEMPLATE,
     CONTEXT_ENTER_METHOD_TEMPLATE,
     CONTEXT_EXIT_NO_CLEANUP_TEMPLATE,
     CONTEXT_EXIT_WITH_CLEANUP_TEMPLATE,
@@ -90,6 +92,8 @@ class ResolversTemplateRenderer:
         self._enter_scope_method_template = self._template(ENTER_SCOPE_METHOD_TEMPLATE)
         self._context_enter_method_template = self._template(CONTEXT_ENTER_METHOD_TEMPLATE)
         self._context_aenter_method_template = self._template(CONTEXT_AENTER_METHOD_TEMPLATE)
+        self._context_close_method_template = self._template(CONTEXT_CLOSE_METHOD_TEMPLATE)
+        self._context_aclose_method_template = self._template(CONTEXT_ACLOSE_METHOD_TEMPLATE)
         self._resolve_dispatch_template = self._template(DISPATCH_RESOLVE_METHOD_TEMPLATE)
         self._aresolve_dispatch_template = self._template(DISPATCH_ARESOLVE_METHOD_TEMPLATE)
         self._sync_method_template = self._template(SYNC_METHOD_TEMPLATE)
@@ -311,6 +315,8 @@ class ResolversTemplateRenderer:
         aenter_method_block = self._context_aenter_method_template.render(
             return_annotation=class_plan.class_name,
         ).strip()
+        close_method_block = self._context_close_method_template.render().strip()
+        aclose_method_block = self._context_aclose_method_template.render().strip()
         return self._class_template.render(
             class_name=class_plan.class_name,
             class_docstring_block=class_docstring_block,
@@ -323,8 +329,10 @@ class ResolversTemplateRenderer:
             is_registered_dependency_method_block=is_registered_dependency_method_block,
             enter_method_block=self._indent_block(enter_method_block),
             exit_method_block=exit_method_block,
+            close_method_block=self._indent_block(close_method_block),
             aenter_method_block=self._indent_block(aenter_method_block),
             aexit_method_block=aexit_method_block,
+            aclose_method_block=self._indent_block(aclose_method_block),
             resolver_methods_block=resolver_methods_block,
         ).strip()
 

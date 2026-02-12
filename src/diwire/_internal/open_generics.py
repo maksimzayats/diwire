@@ -527,6 +527,14 @@ class _OpenGenericResolver:  # pragma: no cover
             traceback=traceback,
         )
 
+    def close(
+        self,
+        exc_type: type[BaseException] | None = None,
+        exc_value: BaseException | None = None,
+        traceback: TracebackType | None = None,
+    ) -> None:
+        return self.__exit__(exc_type, exc_value, traceback)
+
     async def __aenter__(self) -> Self:
         enter_result = self._base_resolver.__aenter__()
         if inspect.isawaitable(enter_result):
@@ -576,6 +584,14 @@ class _OpenGenericResolver:  # pragma: no cover
             exc_value=exc_value,
             traceback=traceback,
         )
+
+    async def aclose(
+        self,
+        exc_type: type[BaseException] | None = None,
+        exc_value: BaseException | None = None,
+        traceback: TracebackType | None = None,
+    ) -> None:
+        return await self.__aexit__(exc_type, exc_value, traceback)
 
     def _resolve_open_match_sync(
         self,

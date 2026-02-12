@@ -72,6 +72,22 @@ class ResolverProtocol(Protocol):
         Like context managers or generators.
         """
 
+    def close(
+        self,
+        exc_type: type[BaseException] | None = None,
+        exc_value: BaseException | None = None,
+        traceback: TracebackType | None = None,
+    ) -> None:
+        """Close the resolver by forwarding to ``__exit__`` with the given exception context."""
+
+    async def aclose(
+        self,
+        exc_type: type[BaseException] | None = None,
+        exc_value: BaseException | None = None,
+        traceback: TracebackType | None = None,
+    ) -> None:
+        """Asynchronously close the resolver by forwarding to ``__aexit__``."""
+
 
 class BuildRootResolverFunctionProtocol(Protocol):
     """Protocol for a function that gets the root resolver for the given registrations."""
