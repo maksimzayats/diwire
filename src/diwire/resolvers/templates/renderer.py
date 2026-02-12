@@ -963,6 +963,8 @@ class ResolversTemplateRenderer:
                 "if is_from_context_annotation(dependency):",
                 "    key = strip_from_context_annotation(dependency)",
                 "    return self._resolve_from_context(key)",
+                "if is_all_annotation(dependency):",
+                *self._dispatch_all_collection_lines(plan=plan, is_async=False),
                 "# Any dependency not pre-bound in build_root_resolver is unknown here.",
                 'msg = f"Dependency {dependency!r} is not registered."',
                 "raise DIWireDependencyNotRegisteredError(msg)",
@@ -1036,6 +1038,8 @@ class ResolversTemplateRenderer:
                 "if is_from_context_annotation(dependency):",
                 "    key = strip_from_context_annotation(dependency)",
                 "    return self._resolve_from_context(key)",
+                "if is_all_annotation(dependency):",
+                *self._dispatch_all_collection_lines(plan=plan, is_async=True),
                 "# Any dependency not pre-bound in build_root_resolver is unknown here.",
                 'msg = f"Dependency {dependency!r} is not registered."',
                 "raise DIWireDependencyNotRegisteredError(msg)",
@@ -1133,6 +1137,46 @@ class ResolversTemplateRenderer:
                     f"    {return_line}",
                 ],
             )
+        return lines
+
+    def _dispatch_all_collection_lines(
+        self,
+        *,
+        plan: ResolverGenerationPlan,
+        is_async: bool,
+    ) -> list[str]:
+        if is_async:
+            call_prefix = "await "
+            call_name = "aresolve"
+        else:
+            call_prefix = ""
+            call_name = "resolve"
+
+        lines = [
+            "    inner = strip_all_annotation(dependency)",
+            "    slots = _all_slots_by_key.get(inner, ())",
+            "    if not slots:",
+            "        return ()",
+            "    results: list[Any] = []",
+            "    for slot in slots:",
+        ]
+        for workflow in plan.workflows:
+            lines.extend(
+                [
+                    f"        if slot == {workflow.slot}:",
+                    (
+                        f"            results.append({call_prefix}self.{call_name}_{workflow.slot}())"
+                    ),
+                    "            continue",
+                ],
+            )
+        lines.extend(
+            [
+                '        msg = f"Dependency {dependency!r} is not registered."',
+                "        raise DIWireDependencyNotRegisteredError(msg)",
+                "    return tuple(results)",
+            ],
+        )
         return lines
 
     def _render_sync_method(
@@ -1663,51 +1707,13 @@ class ResolversTemplateRenderer:
 
         for dependency_plan in self._dependency_plans_for_workflow(workflow=workflow):
             dependency = dependency_plan.dependency
-            expression: str | None
-            if dependency_plan.kind == "provider_handle":
-                provider_inner_slot = dependency_plan.provider_inner_slot
-                if provider_inner_slot is None:
-                    msg = (
-                        f"Provider-handle dependency plan for slot {workflow.slot} "
-                        f"dependency index {dependency_plan.dependency_index} "
-                        "is missing provider inner slot."
-                    )
-                    raise ValueError(msg)
-                if dependency_plan.provider_is_async:
-                    expression = f"lambda: self.aresolve_{provider_inner_slot}()"
-                else:
-                    expression = f"lambda: self.resolve_{provider_inner_slot}()"
-            elif dependency_plan.kind == "context":
-                if dependency_plan.ctx_key_global_name is None:
-                    msg = (
-                        f"Missing context key binding global for provider slot {workflow.slot} "
-                        f"dependency index {dependency_plan.dependency_index}."
-                    )
-                    raise ValueError(msg)
-                expression = f"self._resolve_from_context({dependency_plan.ctx_key_global_name})"
-            else:
-                dependency_slot = dependency_plan.dependency_slot
-                if dependency_slot is None:
-                    msg = (
-                        f"Provider dependency plan for slot {workflow.slot} "
-                        f"dependency index {dependency_plan.dependency_index} "
-                        "is missing dependency slot."
-                    )
-                    raise ValueError(msg)
-                dependency_workflow = workflow_by_slot[dependency_slot]
-                expression = self._inline_root_sync_dependency_expression(
-                    dependency_workflow=dependency_workflow,
-                    dependency_requires_async=dependency_plan.dependency_requires_async,
-                    context=expression_context,
-                    depth=0,
-                )
-                if expression is None:
-                    expression = self._dependency_expression_for_class(
-                        dependency_workflow=dependency_workflow,
-                        dependency_requires_async=dependency_plan.dependency_requires_async,
-                        is_async_call=is_async_call,
-                        context=expression_context,
-                    )
+            expression = self._dependency_expression_for_plan(
+                workflow=workflow,
+                dependency_plan=dependency_plan,
+                is_async_call=is_async_call,
+                context=expression_context,
+                workflow_by_slot=workflow_by_slot,
+            )
             arguments.append(
                 self._format_dependency_argument(
                     dependency=dependency,
@@ -1723,6 +1729,134 @@ class ResolversTemplateRenderer:
             )
 
         return tuple(arguments)
+
+    def _dependency_expression_for_plan(
+        self,
+        *,
+        workflow: ProviderWorkflowPlan,
+        dependency_plan: ProviderDependencyPlan,
+        is_async_call: bool,
+        context: DependencyExpressionContext,
+        workflow_by_slot: dict[int, ProviderWorkflowPlan],
+    ) -> str:
+        if dependency_plan.kind == "provider_handle":
+            return self._provider_handle_dependency_expression(
+                workflow=workflow,
+                dependency_plan=dependency_plan,
+            )
+        if dependency_plan.kind == "context":
+            return self._context_dependency_expression(
+                workflow=workflow,
+                dependency_plan=dependency_plan,
+            )
+        if dependency_plan.kind == "all":
+            return self._all_dependency_expression(
+                dependency_plan=dependency_plan,
+                is_async_call=is_async_call,
+                context=context,
+                workflow_by_slot=workflow_by_slot,
+            )
+        return self._provider_dependency_expression(
+            workflow=workflow,
+            dependency_plan=dependency_plan,
+            is_async_call=is_async_call,
+            context=context,
+            workflow_by_slot=workflow_by_slot,
+        )
+
+    def _provider_handle_dependency_expression(
+        self,
+        *,
+        workflow: ProviderWorkflowPlan,
+        dependency_plan: ProviderDependencyPlan,
+    ) -> str:
+        provider_inner_slot = dependency_plan.provider_inner_slot
+        if provider_inner_slot is None:
+            msg = (
+                f"Provider-handle dependency plan for slot {workflow.slot} "
+                f"dependency index {dependency_plan.dependency_index} is missing provider inner slot."
+            )
+            raise ValueError(msg)
+        if dependency_plan.provider_is_async:
+            return f"lambda: self.aresolve_{provider_inner_slot}()"
+        return f"lambda: self.resolve_{provider_inner_slot}()"
+
+    def _context_dependency_expression(
+        self,
+        *,
+        workflow: ProviderWorkflowPlan,
+        dependency_plan: ProviderDependencyPlan,
+    ) -> str:
+        if dependency_plan.ctx_key_global_name is None:
+            msg = (
+                f"Missing context key binding global for provider slot {workflow.slot} "
+                f"dependency index {dependency_plan.dependency_index}."
+            )
+            raise ValueError(msg)
+        return f"self._resolve_from_context({dependency_plan.ctx_key_global_name})"
+
+    def _all_dependency_expression(
+        self,
+        *,
+        dependency_plan: ProviderDependencyPlan,
+        is_async_call: bool,
+        context: DependencyExpressionContext,
+        workflow_by_slot: dict[int, ProviderWorkflowPlan],
+    ) -> str:
+        if not dependency_plan.all_slots:
+            return "()"
+        all_expressions: list[str] = []
+        for all_slot in dependency_plan.all_slots:
+            dependency_workflow = workflow_by_slot[all_slot]
+            nested_expression: str | None = None
+            if not is_async_call:
+                nested_expression = self._inline_root_sync_dependency_expression(
+                    dependency_workflow=dependency_workflow,
+                    dependency_requires_async=dependency_workflow.requires_async,
+                    context=context,
+                    depth=0,
+                )
+            if nested_expression is None:
+                nested_expression = self._dependency_expression_for_class(
+                    dependency_workflow=dependency_workflow,
+                    dependency_requires_async=dependency_workflow.requires_async,
+                    is_async_call=is_async_call,
+                    context=context,
+                )
+            all_expressions.append(nested_expression)
+        return f"({', '.join(all_expressions)},)"
+
+    def _provider_dependency_expression(
+        self,
+        *,
+        workflow: ProviderWorkflowPlan,
+        dependency_plan: ProviderDependencyPlan,
+        is_async_call: bool,
+        context: DependencyExpressionContext,
+        workflow_by_slot: dict[int, ProviderWorkflowPlan],
+    ) -> str:
+        dependency_slot = dependency_plan.dependency_slot
+        if dependency_slot is None:
+            msg = (
+                f"Provider dependency plan for slot {workflow.slot} "
+                f"dependency index {dependency_plan.dependency_index} is missing dependency slot."
+            )
+            raise ValueError(msg)
+        dependency_workflow = workflow_by_slot[dependency_slot]
+        expression = self._inline_root_sync_dependency_expression(
+            dependency_workflow=dependency_workflow,
+            dependency_requires_async=dependency_plan.dependency_requires_async,
+            context=context,
+            depth=0,
+        )
+        if expression is not None:
+            return expression
+        return self._dependency_expression_for_class(
+            dependency_workflow=dependency_workflow,
+            dependency_requires_async=dependency_plan.dependency_requires_async,
+            is_async_call=is_async_call,
+            context=context,
+        )
 
     def _dependency_expression_for_class(
         self,
@@ -2156,6 +2290,16 @@ class ResolversTemplateRenderer:
             "# Bind module-level globals to this container registration snapshot.",
             "# This keeps hot paths in resolver methods free from dictionary lookups.",
         ]
+        body_lines.extend(
+            [
+                "global _all_slots_by_key",
+                "",
+                "# Rebuild All[...] indexes for collect-all dependency dispatch.",
+                "_all_slots_by_key = {}",
+                "all_slots_by_key: dict[Any, list[int]] = {}",
+                "",
+            ],
+        )
         if plan.workflows:
             body_lines.extend(
                 f"global _dep_{workflow.slot}_type, _provider_{workflow.slot}"
@@ -2193,6 +2337,19 @@ class ResolversTemplateRenderer:
                         f"_provider_{workflow.slot} = "
                         f"registration_{workflow.slot}.{workflow.provider_attribute}"
                     ),
+                    "# Index provider slot for All[...] dependency dispatch.",
+                    f"component_base_{workflow.slot} = component_base_key(_dep_{workflow.slot}_type)",
+                    f"base_key_{workflow.slot} = component_base_{workflow.slot}",
+                    (
+                        f"if base_key_{workflow.slot} is None and "
+                        f"not hasattr(_dep_{workflow.slot}_type, '__metadata__'):"
+                    ),
+                    f"    base_key_{workflow.slot} = _dep_{workflow.slot}_type",
+                    f"if base_key_{workflow.slot} is not None:",
+                    (
+                        f"    all_slots_by_key.setdefault(base_key_{workflow.slot}, [])"
+                        f".append({workflow.slot})"
+                    ),
                 ],
             )
             if workflow.dispatch_kind == "equality_map":
@@ -2223,6 +2380,15 @@ class ResolversTemplateRenderer:
                 )
             body_lines.append("")
 
+        body_lines.extend(
+            [
+                "# Freeze All[...] indexes for stable repr and to discourage mutation.",
+                "_all_slots_by_key = {",
+                "    key: tuple(slots) for key, slots in all_slots_by_key.items()",
+                "}",
+                "",
+            ],
+        )
         body_lines.extend(
             [
                 "# Construct a fresh root resolver configured with optional cleanup callbacks.",
@@ -2414,6 +2580,18 @@ class ResolversTemplateRenderer:
                     (
                         f"{dependency.parameter.name} ({kind_name}) -> context "
                         f"[{self._format_symbol(dependency.provides)}]"
+                    ),
+                )
+            elif dependency_plan.kind == "all":
+                slots_label = (
+                    ", ".join(str(slot) for slot in dependency_plan.all_slots)
+                    if dependency_plan.all_slots
+                    else "none"
+                )
+                parts.append(
+                    (
+                        f"{dependency.parameter.name} ({kind_name}) -> all slots "
+                        f"{slots_label} [{self._format_symbol(dependency.provides)}]"
                     ),
                 )
             elif dependency_plan.kind == "provider_handle":

@@ -47,6 +47,12 @@ class ProviderMarker(NamedTuple):
     is_async: bool
 
 
+class AllMarker(NamedTuple):
+    """Marker for collecting all implementations registered for a base dependency key."""
+
+    dependency_key: Any
+
+
 if TYPE_CHECKING:
     Injected = Union[T, T]  # noqa: UP007,PYI016
     """Mark a parameter for container-driven injection.
@@ -99,6 +105,13 @@ if TYPE_CHECKING:
 
     At runtime ``AsyncProvider[T]`` becomes ``Annotated[T, ProviderMarker(...)]`` and resolves
     to ``Callable[[], Awaitable[T]]`` bound to the injection-time resolver.
+    """
+
+    All = tuple[T, ...]
+    """Resolve all implementations registered for a base dependency key.
+
+    ``All[T]`` type-checks as ``tuple[T, ...]`` and always resolves to a tuple.
+    It returns an empty tuple when no matching registrations exist.
     """
 
 else:
@@ -172,6 +185,27 @@ else:
         def __class_getitem__(cls, item: T) -> Annotated[T, ProviderMarker]:
             return _build_provider_annotation(item=item, is_async=True)
 
+    class All:
+        """Resolve all implementations registered for a base dependency key.
+
+        At runtime ``All[T]`` resolves to ``Annotated[T, AllMarker(dependency_key=T)]`` and is
+        detected by the resolver dispatch to collect the plain registration for ``T`` (if any)
+        plus all component-qualified registrations keyed as ``Annotated[T, Component(...)]``.
+
+        Notes:
+            If you pass an ``Annotated[...]`` token (for example
+            ``All[Annotated[T, Component('x')]]``), DIWire strips it to the base type ``T`` and
+            produces the same token as ``All[T]``. Prefer using ``All[BaseType]``.
+
+        """
+
+        def __class_getitem__(cls, item: Any) -> Any:
+            base_key = item
+            if get_origin(item) is Annotated:
+                args = get_args(item)
+                base_key = args[0]
+            return _build_annotated((base_key, AllMarker(dependency_key=base_key)))
+
 
 def is_from_context_annotation(annotation: Any) -> bool:
     """Return True when annotation is Annotated[..., FromContextMarker()]."""
@@ -203,9 +237,22 @@ def is_provider_annotation(annotation: Any) -> bool:
     return _extract_provider_marker(annotation) is not None
 
 
+def is_all_annotation(annotation: Any) -> bool:
+    """Return True when annotation is Annotated[..., AllMarker(...)]."""
+    return _extract_all_marker(annotation) is not None
+
+
 def strip_provider_annotation(annotation: Any) -> Any:
     """Return inner dependency key for Provider/AsyncProvider annotations."""
     marker = _extract_provider_marker(annotation)
+    if marker is None:
+        return annotation
+    return marker.dependency_key
+
+
+def strip_all_annotation(annotation: Any) -> Any:
+    """Return inner dependency key for All[...] annotations."""
+    marker = _extract_all_marker(annotation)
     if marker is None:
         return annotation
     return marker.dependency_key
@@ -219,6 +266,19 @@ def is_async_provider_annotation(annotation: Any) -> bool:
     return marker.is_async
 
 
+def component_base_key(annotation: Any) -> Any | None:
+    """Return base dependency key for ``Annotated[Base, Component(...)]`` registrations."""
+    if get_origin(annotation) is not Annotated:
+        return None
+    annotation_args = get_args(annotation)
+    if len(annotation_args) < _ANNOTATED_MARKER_MIN_ARGS:
+        return None
+    metadata = annotation_args[1:]
+    if not any(isinstance(item, Component) for item in metadata):
+        return None
+    return annotation_args[0]
+
+
 def _extract_provider_marker(annotation: Any) -> ProviderMarker | None:
     if get_origin(annotation) is not Annotated:
         return None
@@ -228,6 +288,19 @@ def _extract_provider_marker(annotation: Any) -> ProviderMarker | None:
     metadata = annotation_args[1:]
     return next(
         (item for item in metadata if isinstance(item, ProviderMarker)),
+        None,
+    )
+
+
+def _extract_all_marker(annotation: Any) -> AllMarker | None:
+    if get_origin(annotation) is not Annotated:
+        return None
+    annotation_args = get_args(annotation)
+    if len(annotation_args) < _ANNOTATED_MARKER_MIN_ARGS:
+        return None
+    metadata = annotation_args[1:]
+    return next(
+        (item for item in metadata if isinstance(item, AllMarker)),
         None,
     )
 

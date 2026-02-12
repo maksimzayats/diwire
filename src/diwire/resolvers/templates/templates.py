@@ -36,8 +36,11 @@ IMPORTS_TEMPLATE = dedent(
     )
     from diwire.markers import (
         is_async_provider_annotation,
+        is_all_annotation,
+        component_base_key,
         is_from_context_annotation,
         is_provider_annotation,
+        strip_all_annotation,
         strip_from_context_annotation,
         strip_provider_annotation,
     )
@@ -50,6 +53,7 @@ GLOBALS_TEMPLATE = dedent(
     _MISSING_RESOLVER: Any = object()
     _MISSING_CACHE: Any = object()
     _MISSING_PROVIDER: Any = object()
+    _all_slots_by_key: dict[Any, tuple[int, ...]] = {}
 
     {{ provider_globals_block }}
     {% if lock_globals_block %}

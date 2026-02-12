@@ -39,6 +39,7 @@ make examples-readme
 - [19. Class Context Managers](#ex-19-class-context-managers)
 - [20. Providers](#ex-20-providers)
 - [21. Decorators](#ex-21-decorators)
+- [22. All Components](#ex-22-all-components)
 
 <a id="ex-01-quickstart"></a>
 ## 01. Quickstart
@@ -3934,6 +3935,80 @@ def main() -> None:
     print(f"str_inner_type={type(str_repo.inner).__name__}")
     print(f"int_model_ok={int_repo.inner.model is int}")
     print(f"str_model_ok={str_repo.inner.model is str}")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+<a id="ex-22-all-components"></a>
+## 22. All Components
+
+Files:
+- [01_all_components.py](#ex-22-all-components--01-all-components-py)
+
+<a id="ex-22-all-components--01-all-components-py"></a>
+### 01_all_components.py ([ex_22_all_components/01_all_components.py](ex_22_all_components/01_all_components.py))
+
+Resolve all implementations with ``All[T]`` (base + components).
+
+This module demonstrates how to collect a plugin stack by combining:
+
+- the plain registration for a base type ``T`` (if present), and
+- all component registrations keyed as ``Annotated[T, Component(...)]``.
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Annotated, Protocol, TypeAlias
+
+from diwire import All, Component, Container, Injected
+
+
+class EventHandler(Protocol):
+    def handle(self, event: str) -> str: ...
+
+
+@dataclass(frozen=True, slots=True)
+class BaseHandler:
+    def handle(self, event: str) -> str:
+        return f"base:{event}"
+
+
+@dataclass(frozen=True, slots=True)
+class LoggingHandler:
+    def handle(self, event: str) -> str:
+        return f"logging:{event}"
+
+
+@dataclass(frozen=True, slots=True)
+class MetricsHandler:
+    def handle(self, event: str) -> str:
+        return f"metrics:{event}"
+
+
+Logging: TypeAlias = Annotated[EventHandler, Component("logging")]
+Metrics: TypeAlias = Annotated[EventHandler, Component("metrics")]
+
+
+def main() -> None:
+    container = Container(autoregister_concrete_types=False)
+
+    container.add_concrete(BaseHandler, provides=EventHandler)
+    container.add_concrete(LoggingHandler, provides=Logging)
+    container.add_concrete(MetricsHandler, provides=Metrics)
+
+    handlers = container.resolve(All[EventHandler])
+    print(
+        [handler.handle("evt") for handler in handlers],
+    )  # => ['base:evt', 'logging:evt', 'metrics:evt']
+
+    @container.inject
+    def dispatch(event: str, handlers: Injected[All[EventHandler]]) -> tuple[str, ...]:
+        return tuple(handler.handle(event) for handler in handlers)
+
+    print(dispatch("evt"))  # => ('base:evt', 'logging:evt', 'metrics:evt')
 
 
 if __name__ == "__main__":

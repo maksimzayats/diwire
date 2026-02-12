@@ -20,6 +20,7 @@ Each page below includes a single, self-contained script sourced *verbatim* from
    compilation
    function-injection
    named-components
+   all-components
    open-generics
    autoregistration
    container-context

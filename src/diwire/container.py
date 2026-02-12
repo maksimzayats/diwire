@@ -36,7 +36,14 @@ from diwire.injection import (
 )
 from diwire.integrations.pydantic_settings import is_pydantic_settings_subclass
 from diwire.lock_mode import LockMode
-from diwire.markers import ProviderMarker, is_provider_annotation, strip_provider_annotation
+from diwire.markers import (
+    ProviderMarker,
+    component_base_key,
+    is_all_annotation,
+    is_provider_annotation,
+    strip_all_annotation,
+    strip_provider_annotation,
+)
 from diwire.open_generics import OpenGenericRegistry, OpenGenericResolver, canonicalize_open_key
 from diwire.providers import (
     ContextManagerProvider,
@@ -2107,6 +2114,37 @@ class Container:
                 cache=cache,
                 in_progress=in_progress,
             )
+            cache[dependency] = inferred_level
+            return inferred_level
+        if is_all_annotation(dependency):
+            if dependency in in_progress:
+                return self._root_scope.level
+
+            inner = strip_all_annotation(dependency)
+            collected_keys: list[Any] = []
+            if self._providers_registrations.find_by_type(inner) is not None:
+                collected_keys.append(inner)
+            collected_keys.extend(
+                spec.provides
+                for spec in self._providers_registrations.values()
+                if component_base_key(spec.provides) == inner
+            )
+            if not collected_keys:
+                cache[dependency] = self._root_scope.level
+                return self._root_scope.level
+
+            in_progress.add(dependency)
+            try:
+                inferred_level = max(
+                    self._infer_dependency_scope_level(
+                        dependency=collected_key,
+                        cache=cache,
+                        in_progress=in_progress,
+                    )
+                    for collected_key in collected_keys
+                )
+            finally:
+                in_progress.remove(dependency)
             cache[dependency] = inferred_level
             return inferred_level
 

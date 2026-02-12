@@ -8,6 +8,8 @@ import pytest
 import diwire.markers as markers_module
 from diwire.container import Container
 from diwire.markers import (
+    All,
+    AllMarker,
     AsyncProvider,
     Component,
     FromContext,
@@ -16,9 +18,12 @@ from diwire.markers import (
     InjectedMarker,
     Provider,
     ProviderMarker,
+    component_base_key,
+    is_all_annotation,
     is_async_provider_annotation,
     is_from_context_annotation,
     is_provider_annotation,
+    strip_all_annotation,
     strip_from_context_annotation,
     strip_provider_annotation,
 )
@@ -168,6 +173,55 @@ def test_provider_helpers_detect_strip_and_check_async_flags() -> None:
     assert is_async_provider_annotation(int) is False
 
 
+def test_all_wraps_dependency_with_all_marker() -> None:
+    dependency = All[Database]
+
+    assert get_origin(dependency) is Annotated
+    annotation_args = get_args(dependency)
+    assert annotation_args[0] is Database
+    assert isinstance(annotation_args[1], AllMarker)
+    assert annotation_args[1].dependency_key is Database
+
+
+def test_all_strips_annotated_item_to_base_key() -> None:
+    dependency = All[PrimaryDatabaseComponent]
+
+    assert get_origin(dependency) is Annotated
+    annotation_args = get_args(dependency)
+    assert annotation_args[0] is Database
+    assert len(annotation_args) == 2
+    assert isinstance(annotation_args[1], AllMarker)
+    assert annotation_args[1].dependency_key is Database
+
+
+def test_injected_all_preserves_all_marker_metadata_when_nested() -> None:
+    dependency = Injected[All[Database]]
+
+    assert get_origin(dependency) is Annotated
+    annotation_args = get_args(dependency)
+    assert annotation_args[0] is Database
+    assert isinstance(annotation_args[1], AllMarker)
+    assert isinstance(annotation_args[2], InjectedMarker)
+
+
+def test_all_helpers_detect_and_strip_marker() -> None:
+    dependency = All[Database]
+
+    assert is_all_annotation(dependency) is True
+    assert strip_all_annotation(dependency) is Database
+    assert is_all_annotation(int) is False
+    assert strip_all_annotation(int) is int
+
+
+def test_component_base_key_detects_component_keys() -> None:
+    unrelated_annotated = Annotated[Database, "unrelated"]
+
+    assert component_base_key(PrimaryDatabaseComponent) is Database
+    assert component_base_key(Database) is None
+    assert component_base_key(Injected[PrimaryDatabaseComponent]) is Database
+    assert component_base_key(unrelated_annotated) is None
+
+
 def test_injected_provider_preserves_provider_metadata() -> None:
     dependency = Injected[Provider[PrimaryDatabaseComponent]]
 
@@ -186,8 +240,13 @@ def test_is_from_context_annotation_handles_invalid_annotated_shape(
     monkeypatch.setattr(markers_module, "get_origin", lambda _annotation: Annotated)
     monkeypatch.setattr(markers_module, "get_args", lambda _annotation: (int,))
 
-    assert markers_module.is_from_context_annotation(object()) is False
-    assert markers_module.is_provider_annotation(object()) is False
+    sentinel = object()
+
+    assert markers_module.is_from_context_annotation(sentinel) is False
+    assert markers_module.is_provider_annotation(sentinel) is False
+    assert markers_module.is_all_annotation(sentinel) is False
+    assert markers_module.strip_all_annotation(sentinel) is sentinel
+    assert markers_module.component_base_key(sentinel) is None
 
 
 def test_provider_dependencies_extractor_preserves_injected_component_dependency() -> None:
