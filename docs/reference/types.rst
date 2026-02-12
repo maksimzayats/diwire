@@ -13,6 +13,12 @@ LockMode
 .. autoclass:: diwire.LockMode
    :members:
 
+ResolverProtocol
+----------------
+
+.. autoclass:: diwire.ResolverProtocol
+   :members:
+
 Scope
 -----
 

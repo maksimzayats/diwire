@@ -17,7 +17,7 @@ Caching and invalidation
 
 The compiled resolver is cached on the container.
 
-Any registration mutation (calling ``register_*``) invalidates the cached resolver. The next call to ``compile()``,
+Any registration mutation (calling ``add_*`` or ``decorate(...)``) invalidates the cached resolver. The next call to ``compile()``,
 ``resolve()``, ``aresolve()``, or ``enter_scope()`` recompiles as needed.
 
 Strict mode hot-path rebinding
@@ -31,4 +31,3 @@ compiled resolver instance. This avoids container-level indirection for:
 - ``enter_scope()``
 
 Runnable example: :doc:`/howto/examples/compilation`.
-

@@ -191,6 +191,22 @@ def test_decorate_rejects_component_when_provides_is_already_component_qualified
         )
 
 
+def test_component_registration_requires_hashable_component_value() -> None:
+    container = Container()
+
+    with pytest.raises(
+        DIWireInvalidRegistrationError,
+        match="parameter 'component' must be hashable",
+    ):
+        container.add_instance(_Service("value"), provides=_Service, component=[])
+
+    with pytest.raises(
+        DIWireInvalidRegistrationError,
+        match="parameter 'component' must be hashable",
+    ):
+        container.add_instance(_Service("value"), provides=_Service, component=Component([]))
+
+
 def test_closed_generic_typevar_injection_works_with_component_qualified_provides() -> None:
     container = Container()
     container.add_concrete(

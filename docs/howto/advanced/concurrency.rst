@@ -1,5 +1,5 @@
 .. meta::
-   :description: Concurrency and diwire: resolving from multiple threads/tasks, request scopes, and container_context behavior with contextvars and threadpools.
+   :description: Concurrency and diwire: resolving from multiple threads/tasks, request scopes, LockMode behavior, and container_context considerations.
 
 Concurrency
 ===========
@@ -63,5 +63,9 @@ In async code, prefer:
 container_context and threadpools
 ---------------------------------
 
-Web frameworks sometimes run sync handlers in a threadpool. diwire's :data:`diwire.container_context` uses
-``contextvars`` and also includes a thread-local fallback for cases where the execution context is not copied.
+Web frameworks sometimes run sync handlers in a threadpool. :data:`diwire.container_context` is process-global for
+that instance, so it is visible from worker threads without any special context propagation.
+
+Because the binding is global, avoid rebinding :data:`diwire.container_context` in parallel test runs. For isolation,
+prefer passing a :class:`diwire.Container` / resolver explicitly or using an app-owned :class:`diwire.ContainerContext`
+instance.

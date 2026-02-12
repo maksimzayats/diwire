@@ -5,7 +5,6 @@ from collections.abc import Generator
 from typing import Annotated, Any, Generic, NamedTuple, TypeVar, cast
 
 import pytest
-from pydantic_settings import BaseSettings
 
 import diwire._internal.injection as injection_module
 from diwire import Component, Container, FromContext, Injected, Lifetime, Scope
@@ -51,10 +50,6 @@ class _AutoBranch:
 class _AutoRoot:
     def __init__(self, branch: _AutoBranch) -> None:
         self.branch = branch
-
-
-class _InjectedSettings(BaseSettings):
-    value: str = "settings"
 
 
 class _ResolverStub:
@@ -743,6 +738,12 @@ def test_inject_autoregister_true_registers_missing_dependency_chain() -> None:
 
 
 def test_inject_autoregister_registers_pydantic_settings_as_singleton_factory() -> None:
+    pydantic_settings_module = pytest.importorskip("pydantic_settings")
+    base_settings_type = cast("type[Any]", pydantic_settings_module.BaseSettings)
+
+    class _InjectedSettings(base_settings_type):
+        value: str = "settings"
+
     container = Container()
 
     @container.inject(autoregister_dependencies=True)

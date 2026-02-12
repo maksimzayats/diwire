@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import difflib
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -22,12 +23,29 @@ def _find_repo_root(start: Path) -> Path:
 REPO_ROOT = _find_repo_root(Path(__file__).resolve())
 EXAMPLES_ROOT = REPO_ROOT / "examples"
 SRC_ROOT = REPO_ROOT / "src"
+_OPTIONAL_EXAMPLE_DEPENDENCIES = {
+    "fastapi",
+    "pydantic",
+    "pydantic_settings",
+}
+_MISSING_MODULE_PATTERN = re.compile(r"No module named ['\"]([^'\"]+)['\"]")
 
 
 @dataclass(frozen=True, slots=True)
 class ExampleCase:
     path: Path
     expected_lines: list[str]
+
+
+def _find_missing_optional_dependency(stderr: str) -> str | None:
+    match = _MISSING_MODULE_PATTERN.search(stderr)
+    if match is None:
+        return None
+
+    module_name = match.group(1).split(".", maxsplit=1)[0]
+    if module_name in _OPTIONAL_EXAMPLE_DEPENDENCIES:
+        return module_name
+    return None
 
 
 def _iter_example_paths() -> list[Path]:
@@ -106,6 +124,10 @@ def test_examples_stdout_matches_inline_expectations(case: ExampleCase) -> None:
         text=True,
         check=False,
     )
+
+    missing_dependency = _find_missing_optional_dependency(completed.stderr)
+    if completed.returncode != 0 and missing_dependency is not None:
+        pytest.skip(f"Optional example dependency '{missing_dependency}' is unavailable")
 
     actual_lines = completed.stdout.splitlines()
 

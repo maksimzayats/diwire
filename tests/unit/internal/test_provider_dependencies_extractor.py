@@ -7,13 +7,11 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from types import ModuleType
-from typing import NamedTuple
+from typing import Any, NamedTuple, cast
 
 import attrs
 import msgspec
-import pydantic
 import pytest
-from pydantic import dataclasses as pydantic_dataclasses
 
 from diwire._internal.providers import ProviderDependenciesExtractor, ProviderDependency
 from diwire.exceptions import DIWireProviderDependencyInferenceError
@@ -168,8 +166,12 @@ def test_extracts_dependencies_from_msgspec_kw_only_struct_concrete_type() -> No
 
 
 def test_extracts_dependencies_from_pydantic_v2_basemodel_concrete_type() -> None:
-    class ConcreteService(pydantic.BaseModel):
-        model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+    pydantic_module = pytest.importorskip("pydantic")
+    base_model_type = cast("type[Any]", pydantic_module.BaseModel)
+    config_dict = cast("Any", pydantic_module.ConfigDict)
+
+    class ConcreteService(base_model_type):
+        model_config = config_dict(arbitrary_types_allowed=True)
         first: ServiceA
         second: ServiceB
 
@@ -185,7 +187,12 @@ def test_extracts_dependencies_from_pydantic_v2_basemodel_concrete_type() -> Non
 
 
 def test_extracts_dependencies_from_pydantic_dataclass_concrete_type() -> None:
-    @pydantic_dataclasses.dataclass(config=pydantic.ConfigDict(arbitrary_types_allowed=True))
+    pydantic_module = pytest.importorskip("pydantic")
+    pydantic_dataclasses_module = pytest.importorskip("pydantic.dataclasses")
+    config_dict = cast("Any", pydantic_module.ConfigDict)
+    dataclass_decorator = cast("Any", pydantic_dataclasses_module.dataclass)
+
+    @dataclass_decorator(config=config_dict(arbitrary_types_allowed=True))
     class ConcreteService:
         first: ServiceA
         second: ServiceB

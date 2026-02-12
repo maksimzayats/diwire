@@ -9,9 +9,7 @@ from types import ModuleType
 from typing import Any, Generic, NamedTuple, TypeVar, cast
 
 import msgspec
-import pydantic
 import pytest
-from pydantic_settings import BaseSettings
 
 from diwire import AsyncProvider, Container, Lifetime, Provider, Scope
 from diwire._internal.autoregistration import ConcreteTypeAutoregistrationPolicy
@@ -127,15 +125,6 @@ class MsgspecFrameworkDependency:
 
 class PydanticFrameworkDependency:
     pass
-
-
-class PydanticSettingsDependency(BaseSettings):
-    value: str = "settings"
-
-
-class RootWithPydanticSettingsDependency:
-    def __init__(self, dependency: PydanticSettingsDependency) -> None:
-        self.dependency = dependency
 
 
 class RootWithBuiltinDep:
@@ -418,7 +407,35 @@ def test_ensure_autoregistration_short_circuits_for_disabled_and_open_generic() 
     assert container._providers_registrations.find_by_type(_OpenAutoregDependency[int]) is None
 
 
+def test_resolve_autoregisters_settings_like_dependency_as_root_singleton(monkeypatch: Any) -> None:
+    class _SettingsLikeDependency:
+        value: str = "settings"
+
+    monkeypatch.setattr(
+        "diwire._internal.container.is_pydantic_settings_subclass",
+        lambda candidate: candidate is _SettingsLikeDependency,
+    )
+
+    container = Container()
+
+    first = container.resolve(_SettingsLikeDependency)
+    second = container.resolve(_SettingsLikeDependency)
+
+    settings_spec = container._providers_registrations.get_by_type(_SettingsLikeDependency)
+    assert first is second
+    assert settings_spec.factory is not None
+    assert settings_spec.concrete_type is None
+    assert settings_spec.lifetime is Lifetime.SCOPED
+    assert settings_spec.scope is Scope.APP
+
+
 def test_resolve_autoregisters_pydantic_settings_as_singleton_factory() -> None:
+    pydantic_settings_module = pytest.importorskip("pydantic_settings")
+    base_settings_type = cast("type[Any]", pydantic_settings_module.BaseSettings)
+
+    class PydanticSettingsDependency(base_settings_type):
+        value: str = "settings"
+
     container = Container()
 
     first = container.resolve(PydanticSettingsDependency)
@@ -433,6 +450,16 @@ def test_resolve_autoregisters_pydantic_settings_as_singleton_factory() -> None:
 
 
 def test_dependency_autoregistration_registers_pydantic_settings_as_root_singleton() -> None:
+    pydantic_settings_module = pytest.importorskip("pydantic_settings")
+    base_settings_type = cast("type[Any]", pydantic_settings_module.BaseSettings)
+
+    class PydanticSettingsDependency(base_settings_type):
+        value: str = "settings"
+
+    class RootWithPydanticSettingsDependency:
+        def __init__(self, dependency: PydanticSettingsDependency) -> None:
+            self.dependency = dependency
+
     container = Container()
 
     container.add_concrete(
@@ -513,8 +540,12 @@ def test_concrete_registration_autoregisters_msgspec_struct_dependencies() -> No
 
 
 def test_concrete_registration_autoregisters_pydantic_basemodel_v2_dependencies() -> None:
-    class PydanticRoot(pydantic.BaseModel):
-        model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+    pydantic_module = pytest.importorskip("pydantic")
+    base_model_type = cast("type[Any]", pydantic_module.BaseModel)
+    config_dict = cast("Any", pydantic_module.ConfigDict)
+
+    class PydanticRoot(base_model_type):
+        model_config = config_dict(arbitrary_types_allowed=True)
         dependency: PydanticFrameworkDependency
 
     container = Container()

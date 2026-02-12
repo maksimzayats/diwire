@@ -20,7 +20,7 @@ Basic usage
 
 1. Build/configure your container.
 2. Bind it once: ``container_context.set_current(container)``.
-3. Use ``container_context.register_*`` / ``container_context.inject`` / ``container_context.resolve`` without passing
+3. Use ``container_context.add_*`` / ``container_context.inject`` / ``container_context.resolve`` without passing
    the container around.
 
 Runnable example: :doc:`/howto/examples/container-context`.
@@ -32,4 +32,3 @@ Because the binding is process-global, tests should either:
 
 - bind once at session startup, or
 - create an app-owned ``ContainerContext()`` instance for isolation.
-

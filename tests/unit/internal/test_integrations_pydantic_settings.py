@@ -30,6 +30,22 @@ def test_load_base_settings_returns_none_when_base_settings_is_not_a_type(
     assert pydantic_settings_integration._load_base_settings("fake.module") is None
 
 
+def test_load_base_settings_returns_base_settings_when_type(monkeypatch: Any) -> None:
+    class _BaseSettings:
+        pass
+
+    module = ModuleType("test_module")
+    module.BaseSettings = _BaseSettings  # type: ignore[attr-defined]
+
+    def _import_module(_module_name: str) -> ModuleType:
+        return module
+
+    monkeypatch.setattr(importlib, "import_module", _import_module)
+
+    loaded = pydantic_settings_integration._load_base_settings("fake.module")
+    assert loaded is _BaseSettings
+
+
 def test_load_pydantic_v1_base_falls_back_to_pydantic_module(monkeypatch: Any) -> None:
     class _FallbackBaseSettings:
         pass
@@ -53,6 +69,29 @@ def test_load_pydantic_v1_base_falls_back_to_pydantic_module(monkeypatch: Any) -
     loaded = pydantic_settings_integration._load_pydantic_v1_base()
     assert loaded is _FallbackBaseSettings
     assert seen_module_names == ["pydantic.v1", "pydantic"]
+
+
+def test_load_pydantic_v1_base_prefers_v1_module(monkeypatch: Any) -> None:
+    class _PydanticV1BaseSettings:
+        pass
+
+    seen_module_names: list[str] = []
+
+    def _load_base_settings(module_name: str) -> type[Any] | None:
+        seen_module_names.append(module_name)
+        if module_name == "pydantic.v1":
+            return _PydanticV1BaseSettings
+        return None
+
+    monkeypatch.setattr(
+        pydantic_settings_integration,
+        "_load_base_settings",
+        _load_base_settings,
+    )
+
+    loaded = pydantic_settings_integration._load_pydantic_v1_base()
+    assert loaded is _PydanticV1BaseSettings
+    assert seen_module_names == ["pydantic.v1"]
 
 
 def test_is_pydantic_settings_subclass_returns_false_for_non_type() -> None:

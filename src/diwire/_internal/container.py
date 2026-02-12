@@ -1506,7 +1506,10 @@ class Container:
             )
             raise DIWireInvalidRegistrationError(msg)
 
-        component_marker = self._normalize_registration_component(component=component)
+        component_marker = self._normalize_registration_component(
+            component=component,
+            method_name=method_name,
+        )
         if get_origin(provides) is not Annotated:
             return build_annotated_key((provides, component_marker))
 
@@ -1515,10 +1518,29 @@ class Container:
         metadata = annotation_args[1:]
         return build_annotated_key((provides_inner, *metadata, component_marker))
 
-    def _normalize_registration_component(self, *, component: Component | Any) -> Component:
+    def _normalize_registration_component(
+        self,
+        *,
+        component: Component | Any,
+        method_name: str,
+    ) -> Component:
         if isinstance(component, Component):
-            return component
-        return Component(component)
+            component_marker = component
+            component_value = component.value
+        else:
+            component_marker = Component(component)
+            component_value = component
+
+        try:
+            hash(component_marker)
+        except TypeError as error:
+            msg = (
+                f"{method_name}() parameter 'component' must be hashable; "
+                f"got {type(component_value).__name__}."
+            )
+            raise DIWireInvalidRegistrationError(msg) from error
+
+        return component_marker
 
     def _resolve_registration_scope(
         self,
