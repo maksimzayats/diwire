@@ -50,7 +50,6 @@ from diwire._internal.open_generics import (
 )
 from diwire._internal.provider_context import (
     ProviderContext,
-    _ProviderBoundResolver,
     provider_context as default_provider_context,
 )
 from diwire._internal.providers import (
@@ -2535,13 +2534,7 @@ class Container:
                     ),
                 )
             if self._use_provider_context:
-                root_resolver = cast(
-                    "ResolverProtocol",
-                    _ProviderBoundResolver(
-                        resolver=root_resolver,
-                        provider_context=self._provider_context,
-                    ),
-                )
+                root_resolver = self._provider_context.wrap_resolver(root_resolver)
             self._root_resolver = root_resolver
         if not self._autoregister_concrete_types and not self._use_provider_context:
             self._bind_container_entrypoints(target=self._root_resolver)

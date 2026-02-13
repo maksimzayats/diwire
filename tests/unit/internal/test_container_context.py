@@ -18,6 +18,13 @@ def test_top_level_provider_context_export_is_available() -> None:
     assert isinstance(diwire.provider_context, ProviderContext)
 
 
+def test_provider_context_does_not_expose_resolver_stack_mutators() -> None:
+    context = ProviderContext()
+
+    assert not hasattr(context, "push_resolver")
+    assert not hasattr(context, "pop_resolver")
+
+
 def test_resolve_raises_when_no_bound_resolver_and_no_fallback_container() -> None:
     context = ProviderContext()
 

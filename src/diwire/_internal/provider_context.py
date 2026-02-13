@@ -50,9 +50,13 @@ class _ProviderBoundResolver:
         *,
         resolver: ResolverProtocol,
         provider_context: ProviderContext,
+        push_resolver: Callable[[ResolverProtocol], None],
+        pop_resolver: Callable[[], None],
     ) -> None:
         self._resolver = resolver
         self._provider_context = provider_context
+        self._push_resolver = push_resolver
+        self._pop_resolver = pop_resolver
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._resolver, name)
@@ -87,11 +91,13 @@ class _ProviderBoundResolver:
         return _ProviderBoundResolver(
             resolver=scoped_resolver,
             provider_context=self._provider_context,
+            push_resolver=self._push_resolver,
+            pop_resolver=self._pop_resolver,
         )
 
     def __enter__(self) -> Self:
         self._resolver.__enter__()
-        self._provider_context.push_resolver(cast("ResolverProtocol", self))
+        self._push_resolver(cast("ResolverProtocol", self))
         return self
 
     def __exit__(
@@ -103,11 +109,11 @@ class _ProviderBoundResolver:
         try:
             self._resolver.__exit__(exc_type, exc_value, traceback)
         finally:
-            self._provider_context.pop_resolver()
+            self._pop_resolver()
 
     async def __aenter__(self) -> Self:
         await cast("Any", self._resolver).__aenter__()
-        self._provider_context.push_resolver(cast("ResolverProtocol", self))
+        self._push_resolver(cast("ResolverProtocol", self))
         return self
 
     async def __aexit__(
@@ -119,7 +125,7 @@ class _ProviderBoundResolver:
         try:
             await self._resolver.__aexit__(exc_type, exc_value, traceback)
         finally:
-            self._provider_context.pop_resolver()
+            self._pop_resolver()
 
     def close(
         self,
@@ -152,12 +158,6 @@ class ProviderContext:
         )
         self._fallback_container: Container | None = None
         self._injected_callable_inspector = InjectedCallableInspector()
-
-    def push_resolver(self, resolver: ResolverProtocol) -> None:
-        self._push(resolver)
-
-    def pop_resolver(self) -> None:
-        self._pop()
 
     def set_fallback_container(self, container: Container) -> None:
         self._set_fallback_container(container)
@@ -202,14 +202,19 @@ class ProviderContext:
             return None
 
         fallback_resolver = fallback_container.compile()
-        fallback_resolver_any = cast("Any", fallback_resolver)
-        if isinstance(fallback_resolver_any, _ProviderBoundResolver):
-            return cast("ResolverProtocol", fallback_resolver_any)
+        return self.wrap_resolver(fallback_resolver)
+
+    def wrap_resolver(self, resolver: ResolverProtocol) -> ResolverProtocol:
+        resolver_any = cast("Any", resolver)
+        if isinstance(resolver_any, _ProviderBoundResolver):
+            return cast("ResolverProtocol", resolver_any)
         return cast(
             "ResolverProtocol",
             _ProviderBoundResolver(
-                resolver=fallback_resolver,
+                resolver=resolver,
                 provider_context=self,
+                push_resolver=self._push,
+                pop_resolver=self._pop,
             ),
         )
 
