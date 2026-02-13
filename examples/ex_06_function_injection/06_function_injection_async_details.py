@@ -1,10 +1,7 @@
 """Async function-injection deep dive.
 
-Extends ``01_function_injection.py`` with:
-
-- async callables using ``Injected[T]``
-- async provider resolution paths
-- caller overrides for injected async parameters
+This focused script covers async callables using ``Injected[T]`` and caller
+overrides for injected async parameters.
 """
 
 from __future__ import annotations

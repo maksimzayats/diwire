@@ -39,11 +39,11 @@ def main() -> None:
     int_repo = container.resolve(Repo[int])
     str_repo = container.resolve(Repo[str])
 
-    print(f"outer_type={type(int_repo).__name__}")
-    print(f"int_inner_type={type(int_repo.inner).__name__}")
-    print(f"str_inner_type={type(str_repo.inner).__name__}")
-    print(f"int_model_ok={int_repo.inner.model is int}")
-    print(f"str_model_ok={str_repo.inner.model is str}")
+    print(f"outer_type={type(int_repo).__name__}")  # => outer_type=TimedRepo
+    print(f"int_inner_type={type(int_repo.inner).__name__}")  # => int_inner_type=SqlRepo
+    print(f"str_inner_type={type(str_repo.inner).__name__}")  # => str_inner_type=SqlRepo
+    print(f"int_model_ok={int_repo.inner.model is int}")  # => int_model_ok=True
+    print(f"str_model_ok={str_repo.inner.model is str}")  # => str_model_ok=True
 
 
 if __name__ == "__main__":

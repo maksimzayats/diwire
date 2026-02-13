@@ -15,8 +15,8 @@ def main() -> None:
     from_context = handler(diwire_context={int: 7})
     overridden = handler(value=8)
 
-    print(f"from_context={from_context}")
-    print(f"overridden={overridden}")
+    print(f"from_context={from_context}")  # => from_context=7
+    print(f"overridden={overridden}")  # => overridden=8
 
 
 if __name__ == "__main__":

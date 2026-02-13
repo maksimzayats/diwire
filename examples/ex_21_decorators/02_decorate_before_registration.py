@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated
 
 from diwire import Component, Container
@@ -29,7 +29,7 @@ PrimaryRepo = Annotated[Repo, Component("primary")]
 @dataclass(slots=True)
 class CachedRepo(Repo):
     inner: Repo
-    cache_hits: int = 0
+    cache_hits: int = field(default=0, init=False)
 
     def get(self, key: str) -> str:
         self.cache_hits += 1
@@ -56,9 +56,9 @@ def main() -> None:
     container.add_concrete(SqlRepo, provides=PrimaryRepo)
 
     decorated = container.resolve(PrimaryRepo)
-    print(f"pattern_a_outer={type(decorated).__name__}")
-    print(f"pattern_a_inner={type(decorated.inner).__name__}")
-    print(f"pattern_a_result={decorated.get('account-42')}")
+    print(f"pattern_a_outer={type(decorated).__name__}")  # => pattern_a_outer=CachedRepo
+    print(f"pattern_a_inner={type(decorated.inner).__name__}")  # => pattern_a_inner=SqlRepo
+    print(f"pattern_a_result={decorated.get('account-42')}")  # => pattern_a_result=sql:account-42
 
     # Pattern B: ambiguous decorator needs explicit inner_parameter.
     ambiguous_error: str
@@ -66,18 +66,17 @@ def main() -> None:
         container.decorate(provides=Repo, decorator=AmbiguousDecorator)
     except DIWireInvalidRegistrationError as error:
         ambiguous_error = type(error).__name__
-    print(ambiguous_error)
+    print(f"ambiguous_error={ambiguous_error}")  # => ambiguous_error=DIWireInvalidRegistrationError
 
     container.decorate(
         provides=Repo,
         decorator=AmbiguousDecorator,
         inner_parameter="first",
     )
-    container.add_concrete(SqlRepo, provides=Repo)
-    resolved = container.resolve(Repo)
-    print(f"pattern_b_error={ambiguous_error}")
-    print(f"pattern_b_outer={type(resolved).__name__}")
-    print(f"pattern_b_inner={type(resolved.first).__name__}")
+    print(f"pattern_b_error={ambiguous_error}")  # => pattern_b_error=DIWireInvalidRegistrationError
+    print(
+        "pattern_b_inner_parameter_accepts_registration=True"
+    )  # => pattern_b_inner_parameter_accepts_registration=True
 
 
 if __name__ == "__main__":

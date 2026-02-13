@@ -10,7 +10,8 @@ class RequestDependency:
 
 
 def _resolver_scope_name(resolver: object) -> str:
-    return type(resolver).__name__.removeprefix("_").removesuffix("Resolver").upper()
+    inner_resolver = getattr(resolver, "_resolver", resolver)
+    return type(inner_resolver).__name__.removeprefix("_").removesuffix("Resolver").upper()
 
 
 def main() -> None:

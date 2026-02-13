@@ -1,7 +1,7 @@
 """Open-generics constraints deep dive.
 
-Extends ``01_open_generics.py`` with constrained ``TypeVar`` examples and shows
-both valid and invalid resolutions.
+This focused script shows constrained ``TypeVar`` behavior with both valid and
+invalid resolutions.
 """
 
 from __future__ import annotations

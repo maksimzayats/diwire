@@ -24,9 +24,12 @@ REPO_ROOT = _find_repo_root(Path(__file__).resolve())
 EXAMPLES_ROOT = REPO_ROOT / "examples"
 SRC_ROOT = REPO_ROOT / "src"
 _OPTIONAL_EXAMPLE_DEPENDENCIES = {
+    "attrs",
     "fastapi",
+    "msgspec",
     "pydantic",
     "pydantic_settings",
+    "typing_extensions",
 }
 _MISSING_MODULE_PATTERN = re.compile(r"No module named ['\"]([^'\"]+)['\"]")
 
@@ -51,14 +54,12 @@ def _find_missing_optional_dependency(stderr: str) -> str | None:
 def _iter_example_paths() -> list[Path]:
     paths: list[Path] = []
     for topic_dir in sorted(path for path in EXAMPLES_ROOT.glob("ex_*") if path.is_dir()):
-        topic_files = sorted(topic_dir.glob("01_*.py"))
-        if len(topic_files) != 1:
-            msg = (
-                f"{topic_dir}: expected exactly one main topic file matching "
-                "'01_*.py' (found {len(topic_files)})."
-            )
-            raise AssertionError(msg)
-        paths.append(topic_files[0])
+        for topic_file in sorted(topic_dir.rglob("[0-9][0-9]_*.py")):
+            if "__pycache__" in topic_file.parts:
+                continue
+            if topic_file.name.startswith("test_"):
+                continue
+            paths.append(topic_file)
     return paths
 
 

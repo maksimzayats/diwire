@@ -16,7 +16,11 @@ def main() -> None:
     try:
         handler(diwire_context={int: 7})
     except DIWireInvalidRegistrationError as error:
-        print(type(error).__name__)
+        error_name = type(error).__name__
+
+    print(
+        f"context_without_scope_error={error_name}"
+    )  # => context_without_scope_error=DIWireInvalidRegistrationError
 
 
 if __name__ == "__main__":

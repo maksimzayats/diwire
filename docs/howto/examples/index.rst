@@ -4,8 +4,8 @@
 Tutorial (runnable examples)
 ============================
 
-Each page below includes a single, self-contained script sourced *verbatim* from ``examples/`` via
-``literalinclude``.
+Each page below includes one or more focused, self-contained scripts sourced *verbatim* from
+``examples/`` via ``literalinclude``.
 
 - Run locally with ``uv run python ...``.
 - For Pyodide-compatible scripts, use the **Run** button in the top-right of the code block.
@@ -15,22 +15,22 @@ Each page below includes a single, self-contained script sourced *verbatim* from
 
    quickstart
    registration-methods
+   autoregistration
    lifetimes
    scopes
-   compilation
+   scope-context-values
    function-injection
    named-components
-   all-components
+   providers
+   compilation
    open-generics
-   autoregistration
    resolver-context
-   async
    lock-modes
+   async
+   errors
+   all-components
+   maybe
    supported-frameworks
    pydantic-settings
    pytest-plugin
    fastapi
-   providers
-   errors
-   scope-context-values
-   maybe

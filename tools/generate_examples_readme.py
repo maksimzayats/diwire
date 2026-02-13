@@ -23,6 +23,32 @@ _TOKEN_MAP = {
     "pytest": "Pytest",
     "uuid": "UUID",
 }
+TOPIC_SLUG_ORDER: list[str] = [
+    "quickstart",
+    "registration_methods",
+    "autoregistration",
+    "lifetimes",
+    "scopes_and_cleanup",
+    "scope_context_values",
+    "function_injection",
+    "named_components",
+    "providers",
+    "compilation",
+    "open_generics",
+    "resolver_context",
+    "lock_modes",
+    "async",
+    "errors_and_troubleshooting",
+    "all_components",
+    "maybe",
+    "decorators",
+    "class_context_managers",
+    "supported_frameworks",
+    "pydantic_settings",
+    "pytest_plugin",
+    "fastapi",
+]
+_TOPIC_SLUG_RANK = {slug: index for index, slug in enumerate(TOPIC_SLUG_ORDER)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,7 +86,13 @@ def discover_topics(examples_root: Path) -> list[Topic]:
         slug = match.group("slug")
         topic_entries.append((index, slug, candidate))
 
-    topic_entries.sort(key=lambda item: (item[0], item[1]))
+    topic_entries.sort(
+        key=lambda item: (
+            _TOPIC_SLUG_RANK.get(item[1], len(TOPIC_SLUG_ORDER)),
+            item[0],
+            item[1],
+        ),
+    )
     topics: list[Topic] = []
     for index, slug, topic_path in topic_entries:
         topic_anchor = _topic_anchor(index=index, slug=slug)

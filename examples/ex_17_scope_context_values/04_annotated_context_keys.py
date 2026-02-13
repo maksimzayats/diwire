@@ -31,8 +31,8 @@ def main() -> None:
         resolved = request_scope.resolve(ReplicaConsumer)
         direct = request_scope.resolve(FromContext[ReplicaNumber])
 
-    print(f"consumer_value={resolved.value}")
-    print(f"direct_value={direct}")
+    print(f"consumer_value={resolved.value}")  # => consumer_value=42
+    print(f"direct_value={direct}")  # => direct_value=42
 
 
 if __name__ == "__main__":
