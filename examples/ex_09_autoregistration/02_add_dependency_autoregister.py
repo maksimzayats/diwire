@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, DependencyRegistrationPolicy
+from diwire import Container
 
 
 class Dependency:
@@ -18,10 +18,7 @@ class Root:
 
 def main() -> None:
     container = Container()
-    container.add(
-        Root,
-        dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
-    )
+    container.add(Root)
 
     resolved = container.resolve(Root)
     autoregistered = isinstance(resolved.dependency, Dependency)

@@ -13,7 +13,7 @@ Dependency not registered
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 :class:`diwire.exceptions.DIWireDependencyNotRegisteredError` is raised when you resolve a key that is not registered
-and auto-registration is disabled (strict mode).
+with strict mode explicitly configured, or when the missing type cannot be auto-registered.
 
 Use ``Maybe[T]`` when you want missing registrations to resolve as ``None`` instead of raising.
 

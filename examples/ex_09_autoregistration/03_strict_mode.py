@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container
+from diwire import Container, DependencyRegistrationPolicy, MissingPolicy
 from diwire.exceptions import DIWireDependencyNotRegisteredError
 
 
@@ -18,7 +18,10 @@ class Root:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+    )
 
     try:
         container.resolve(Root)

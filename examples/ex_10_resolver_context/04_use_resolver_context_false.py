@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, Injected, ResolverContext, Scope
+from diwire import (
+    Container,
+    DependencyRegistrationPolicy,
+    Injected,
+    MissingPolicy,
+    ResolverContext,
+    Scope,
+)
 from diwire.exceptions import DIWireResolverNotSetError
 
 
@@ -20,6 +27,8 @@ def _bound_self(method: object) -> object | None:
 def main() -> None:
     context = ResolverContext()
     container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
         resolver_context=context,
         use_resolver_context=False,
     )

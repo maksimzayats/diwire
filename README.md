@@ -54,7 +54,7 @@ Define your classes. Resolve the top-level one. diwire figures out the rest.
 ```python
 from dataclasses import dataclass, field
 
-from diwire import Container, DependencyRegistrationPolicy, MissingPolicy
+from diwire import Container
 
 
 @dataclass
@@ -71,11 +71,7 @@ class UserRepository:
 class UserService:
     repo: UserRepository
 
-
-container = Container(
-    missing_policy=MissingPolicy.REGISTER_RECURSIVE,
-    dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
-)
+container = Container()
 service = container.resolve(UserService)
 print(service.repo.db.host)  # => localhost
 ```
@@ -85,17 +81,19 @@ print(service.repo.db.host)  # => localhost
 Use explicit registrations when you need configuration objects, interfaces/protocols, cleanup, or multiple
 implementations.
 
-**Strict mode (recommended for production):**
+**Strict mode (opt-in):**
 
 ```python
-from diwire import Container
+from diwire import Container, DependencyRegistrationPolicy, MissingPolicy
 
-container = Container()  # strict by default
+container = Container(
+    missing_policy=MissingPolicy.ERROR,
+    dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+)
 ```
 
-By default, ``Container()`` uses ``missing_policy=MissingPolicy.ERROR`` and
-``dependency_registration_policy=DependencyRegistrationPolicy.IGNORE``. Auto-wiring is opt-in
-(see [Quick start (auto-wiring)](#quick-start-auto-wiring)).
+``Container()`` enables recursive auto-wiring by default. Use strict mode when you need full
+control over registration and want missing dependencies to fail fast.
 
 ```python
 from typing import Protocol

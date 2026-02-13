@@ -11,7 +11,7 @@ This topic demonstrates:
 
 from __future__ import annotations
 
-from diwire import Container, Maybe
+from diwire import Container, DependencyRegistrationPolicy, Maybe, MissingPolicy
 from diwire.exceptions import DIWireDependencyNotRegisteredError
 
 
@@ -34,7 +34,10 @@ class ServiceWithoutDefault:
 
 
 def strict_container() -> Container:
-    return Container()
+    return Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+    )
 
 
 def main() -> None:

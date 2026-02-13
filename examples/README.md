@@ -59,7 +59,7 @@ diwire builds the full dependency chain for you.
 ```python
 from __future__ import annotations
 
-from diwire import Container, DependencyRegistrationPolicy, MissingPolicy
+from diwire import Container
 
 
 class Database:
@@ -78,10 +78,7 @@ class UserService:
 
 
 def main() -> None:
-    container = Container(
-        missing_policy=MissingPolicy.REGISTER_RECURSIVE,
-        dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
-    )
+    container = Container()
     service = container.resolve(UserService)
 
     print(f"db_host={service.repository.database.host}")  # => db_host=localhost
@@ -375,7 +372,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, DependencyRegistrationPolicy, MissingPolicy
+from diwire import Container
 
 
 class Leaf:
@@ -393,10 +390,7 @@ class Root:
 
 
 def main() -> None:
-    container = Container(
-        missing_policy=MissingPolicy.REGISTER_RECURSIVE,
-        dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
-    )
+    container = Container()
     resolved = container.resolve(Root)
     print(
         f"autoregister_chain={isinstance(resolved.branch.leaf, Leaf)}",
@@ -417,7 +411,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, DependencyRegistrationPolicy
+from diwire import Container
 
 
 class Dependency:
@@ -431,10 +425,7 @@ class Root:
 
 def main() -> None:
     container = Container()
-    container.add(
-        Root,
-        dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
-    )
+    container.add(Root)
 
     resolved = container.resolve(Root)
     autoregistered = isinstance(resolved.dependency, Dependency)
@@ -457,7 +448,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container
+from diwire import Container, DependencyRegistrationPolicy, MissingPolicy
 from diwire.exceptions import DIWireDependencyNotRegisteredError
 
 
@@ -471,7 +462,10 @@ class Root:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+    )
 
     try:
         container.resolve(Root)
@@ -1967,7 +1961,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, Injected, ResolverContext, Scope
+from diwire import (
+    Container,
+    DependencyRegistrationPolicy,
+    Injected,
+    MissingPolicy,
+    ResolverContext,
+    Scope,
+)
 from diwire.exceptions import DIWireResolverNotSetError
 
 
@@ -1983,6 +1984,8 @@ def _bound_self(method: object) -> object | None:
 def main() -> None:
     context = ResolverContext()
     container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
         resolver_context=context,
         use_resolver_context=False,
     )
@@ -2271,7 +2274,7 @@ Focused example: ``DIWireDependencyNotRegisteredError``.
 ```python
 from __future__ import annotations
 
-from diwire import Container
+from diwire import Container, DependencyRegistrationPolicy, MissingPolicy
 from diwire.exceptions import DIWireDependencyNotRegisteredError
 
 
@@ -2280,7 +2283,10 @@ class MissingDependency:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+    )
 
     try:
         container.resolve(MissingDependency)
@@ -2575,7 +2581,7 @@ This topic demonstrates:
 ```python
 from __future__ import annotations
 
-from diwire import Container, Maybe
+from diwire import Container, DependencyRegistrationPolicy, Maybe, MissingPolicy
 from diwire.exceptions import DIWireDependencyNotRegisteredError
 
 
@@ -2598,7 +2604,10 @@ class ServiceWithoutDefault:
 
 
 def strict_container() -> Container:
-    return Container()
+    return Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+    )
 
 
 def main() -> None:
