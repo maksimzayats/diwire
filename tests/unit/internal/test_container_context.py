@@ -23,6 +23,7 @@ def test_resolver_context_does_not_expose_resolver_stack_mutators() -> None:
 
     assert not hasattr(context, "push_resolver")
     assert not hasattr(context, "pop_resolver")
+    assert not hasattr(context, "wrap_resolver")
 
 
 def test_resolve_raises_when_no_bound_resolver_and_no_fallback_container() -> None:

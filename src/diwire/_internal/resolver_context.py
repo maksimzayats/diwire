@@ -147,6 +147,13 @@ class _ResolverBoundResolver:
 class ResolverContext:
     """Task/thread-safe context for resolver-bound injection and resolution."""
 
+    __slots__ = (
+        "_current_resolver_var",
+        "_fallback_container",
+        "_injected_callable_inspector",
+        "_token_stack_var",
+    )
+
     def __init__(self) -> None:
         self._current_resolver_var: ContextVar[ResolverProtocol | None] = ContextVar(
             "diwire_resolver_context_resolver",
@@ -202,9 +209,9 @@ class ResolverContext:
             return None
 
         fallback_resolver = fallback_container.compile()
-        return self.wrap_resolver(fallback_resolver)
+        return self._wrap_resolver(fallback_resolver)
 
-    def wrap_resolver(self, resolver: ResolverProtocol) -> ResolverProtocol:
+    def _wrap_resolver(self, resolver: ResolverProtocol) -> ResolverProtocol:
         resolver_any = cast("Any", resolver)
         if isinstance(resolver_any, _ResolverBoundResolver):
             return cast("ResolverProtocol", resolver_any)

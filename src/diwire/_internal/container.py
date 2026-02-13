@@ -2534,7 +2534,7 @@ class Container:
                     ),
                 )
             if self._use_resolver_context:
-                root_resolver = self._resolver_context.wrap_resolver(root_resolver)
+                root_resolver = self._resolver_context._wrap_resolver(root_resolver)  # noqa: SLF001
             self._root_resolver = root_resolver
         if not self._autoregister_concrete_types and not self._use_resolver_context:
             self._bind_container_entrypoints(target=self._root_resolver)
