@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import importlib.machinery
+import importlib.util
 import re
 import sys
 import traceback
@@ -25,6 +27,8 @@ _RESOLVER_CONTEXT_IMPORT_RE = re.compile(
     r"^\s*from\s+diwire\s+import\s+.*\bresolver_context\b",
     re.MULTILINE,
 )
+
+_OPTIONAL_DOC_DEPS: frozenset[str] = frozenset({"django", "fastapi", "flask", "starlette"})
 
 
 def _find_repo_root(start: Path) -> Path:
@@ -128,10 +132,22 @@ def _extract_python_code_blocks(doc_path: Path) -> list[CodeBlock]:
     return blocks
 
 
-def _assert_code_blocks_parse(blocks: list[CodeBlock], repo_root: Path) -> None:
-    for block in blocks:
+def _parse_code_block_or_raise(*, block: CodeBlock, repo_root: Path) -> None:
+    try:
         rel_path = block.doc_path.relative_to(repo_root)
         ast.parse(block.code, filename=f"{rel_path}:{block.header_line}")
+    except SyntaxError as exc:  # pragma: no cover
+        rel_path = block.doc_path.relative_to(repo_root)
+        msg = (
+            f"Invalid python syntax in docs code block: {rel_path}:{block.header_line}\n"
+            f"{type(exc).__name__}: {exc}"
+        )
+        raise AssertionError(msg) from exc
+
+
+def _assert_code_blocks_parse(blocks: list[CodeBlock], repo_root: Path) -> None:
+    for block in blocks:
+        _parse_code_block_or_raise(block=block, repo_root=repo_root)
 
 
 def _assert_resolver_context_imports(blocks: list[CodeBlock], repo_root: Path) -> None:
@@ -197,6 +213,21 @@ def _execution_failure_message(
     return f"Docs snippet execution failed: {rel_path}\n{type(exc).__name__}: {exc}{marker_note}"
 
 
+def _module_for_exec(*, module_name: str, doc_path: Path) -> ModuleType:
+    module = ModuleType(module_name)
+    module.__file__ = str(doc_path)
+
+    loader = importlib.machinery.SourceFileLoader(module_name, str(doc_path))
+    spec = importlib.util.spec_from_loader(module_name, loader)
+    if spec is None:
+        msg = f"Could not create module spec for {doc_path}"
+        raise AssertionError(msg)
+
+    module.__loader__ = loader
+    module.__spec__ = spec
+    return module
+
+
 REPO_ROOT = _find_repo_root(Path(__file__).resolve())
 DOCS_ROOT = REPO_ROOT / "docs"
 RST_FILES = _discover_rst_files(DOCS_ROOT)
@@ -214,8 +245,7 @@ def test_docs_python_code_blocks_execute(doc_path: Path) -> None:
 
     script, markers = _build_script(blocks, repo_root=REPO_ROOT)
     module_name = _module_name_for_doc(doc_path)
-    module = ModuleType(module_name)
-    module.__file__ = str(doc_path)
+    module = _module_for_exec(module_name=module_name, doc_path=doc_path)
 
     sys.modules[module_name] = module
     try:
@@ -223,7 +253,7 @@ def test_docs_python_code_blocks_execute(doc_path: Path) -> None:
         exec(compiled, module.__dict__)  # noqa: S102
     except ModuleNotFoundError as exc:
         missing = (exc.name or "").split(".", 1)[0]
-        if missing in {"flask", "django"}:
+        if missing in _OPTIONAL_DOC_DEPS:
             pytest.skip(
                 f"{doc_path.relative_to(REPO_ROOT)} requires optional dependency: {missing}"
             )
