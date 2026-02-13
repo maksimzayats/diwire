@@ -167,6 +167,15 @@ class ResolverContext:
         self._injected_callable_inspector = InjectedCallableInspector()
 
     def set_fallback_container(self, container: Container) -> None:
+        """Set the fallback container used when no resolver is bound.
+
+        Resolver-bound contexts always take precedence over this fallback.
+
+        Args:
+            container: Container used to compile fallback resolvers and injected
+                callables when no context resolver is active.
+
+        """
         self._set_fallback_container(container)
 
     def _push(self, resolver: ResolverProtocol) -> None:
@@ -232,6 +241,16 @@ class ResolverContext:
     def resolve(self, dependency: Any) -> Any: ...
 
     def resolve(self, dependency: Any) -> Any:
+        """Resolve a dependency from the active resolver or fallback container.
+
+        Args:
+            dependency: Dependency key to resolve.
+
+        Raises:
+            DIWireResolverNotSetError: If no resolver is bound and no fallback
+                container is configured.
+
+        """
         return self._require_context_or_fallback_resolver().resolve(dependency)
 
     @overload
@@ -241,6 +260,16 @@ class ResolverContext:
     async def aresolve(self, dependency: Any) -> Any: ...
 
     async def aresolve(self, dependency: Any) -> Any:
+        """Asynchronously resolve a dependency from context or fallback.
+
+        Args:
+            dependency: Dependency key to resolve.
+
+        Raises:
+            DIWireResolverNotSetError: If no resolver is bound and no fallback
+                container is configured.
+
+        """
         return await self._require_context_or_fallback_resolver().aresolve(dependency)
 
     def enter_scope(
@@ -249,6 +278,17 @@ class ResolverContext:
         *,
         context: Mapping[Any, Any] | None = None,
     ) -> ResolverProtocol:
+        """Enter a child scope on the active resolver or fallback resolver.
+
+        Args:
+            scope: Target scope to enter. ``None`` keeps the current scope.
+            context: Optional context payload merged into the entered scope.
+
+        Raises:
+            DIWireResolverNotSetError: If no resolver is bound and no fallback
+                container is configured.
+
+        """
         return self._require_context_or_fallback_resolver().enter_scope(scope, context=context)
 
     @overload
@@ -272,6 +312,31 @@ class ResolverContext:
         autoregister_dependencies: bool | Literal["from_container"] = "from_container",
         auto_open_scope: bool = True,
     ) -> InjectableF | Callable[[InjectableF], InjectableF]:
+        """Wrap callables so ``Injected[...]`` parameters resolve at invocation.
+
+        Resolution precedence at call time is explicit ``diwire_resolver``,
+        then an active context-bound resolver, then the configured fallback
+        container.
+
+        Args:
+            func: Callable to wrap directly, or ``"from_decorator"`` when used
+                as ``@resolver_context.inject(...)``.
+            scope: Explicit scope for wrapper generation, or ``"infer"`` to
+                infer from injected dependencies.
+            autoregister_dependencies: Dependency autoregistration policy for
+                wrapper generation, or ``"from_container"`` to inherit the
+                fallback container setting.
+            auto_open_scope: Whether invocation should auto-enter deeper scopes
+                required by injected dependencies.
+
+        Raises:
+            DIWireInvalidRegistrationError: If inject configuration values are
+                invalid, ``func`` is not callable, or the callable uses
+                reserved parameter names.
+            DIWireResolverNotSetError: If invocation has no explicit resolver,
+                no active context resolver, and no fallback container.
+
+        """
         resolved_scope = self._resolve_inject_scope(scope)
         resolved_autoregister_dependencies = self._resolve_inject_autoregister_dependencies(
             autoregister_dependencies=autoregister_dependencies,
