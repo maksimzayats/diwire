@@ -38,6 +38,30 @@ Registration-level overrides are available for ``add``, ``add_factory``,
 
    from diwire import Container, LockMode
 
+
+   class Service:
+       ...
+
+
+   class Cache:
+       ...
+
+
+   class Client:
+       ...
+
+
+   def build_service() -> Service:
+       return Service()
+
+
+   def build_cache() -> Cache:
+       return Cache()
+
+
+   def build_client() -> Client:
+       return Client()
+
    container = Container(lock_mode="auto")
    container.add_factory(build_service, provides=Service)  # inherits AUTO via "from_container"
    container.add_factory(build_cache, provides=Cache, lock_mode=LockMode.THREAD)

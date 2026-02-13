@@ -18,27 +18,31 @@ Minimal sketch
    from contextvars import ContextVar
 
    from starlette.applications import Starlette
+   from starlette.middleware import Middleware
+   from starlette.middleware.base import BaseHTTPMiddleware
    from starlette.requests import Request
    from starlette.responses import JSONResponse
 
-   from diwire import Container, Injected, Scope
+   from diwire import Container, Injected, Scope, resolver_context
 
    request_var: ContextVar[Request] = ContextVar("request_var")
-   app = Starlette()
+
+
+   class RequestVarMiddleware(BaseHTTPMiddleware):
+       async def dispatch(self, request: Request, call_next):
+           token = request_var.set(request)
+           try:
+               return await call_next(request)
+           finally:
+               request_var.reset(token)
+
+
+   app = Starlette(middleware=[Middleware(RequestVarMiddleware)])
    container = Container()
 
-
-   async def middleware(request: Request, call_next):
-       token = request_var.set(request)
-       try:
-           return await call_next(request)
-       finally:
-           request_var.reset(token)
-
-
-   app.middleware("http")(middleware)
-
-   container.add_factory(request_var.get, provides=Request,
+   container.add_factory(
+       lambda: request_var.get(),
+       provides=Request,
        scope=Scope.REQUEST,
    )
 

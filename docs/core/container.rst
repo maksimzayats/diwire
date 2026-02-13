@@ -9,17 +9,30 @@ The :class:`diwire.Container` is responsible for two things:
 1. **Registration**: mapping a dependency key (usually a type) to a provider.
 2. **Resolution**: creating objects by inspecting type hints and recursively resolving dependencies.
 
-Auto-wiring (default)
+Strict mode (default)
 ---------------------
 
-By default, diwire will auto-register concrete classes as you resolve them. This enables the “zero configuration”
-experience:
+By default, diwire is strict: resolving a dependency that is not registered raises
+:class:`diwire.exceptions.DIWireDependencyNotRegisteredError`.
+
+.. code-block:: python
+
+   from diwire import Container
+
+   container = Container()
+
+Runnable example: :doc:`/howto/examples/quickstart`.
+
+Auto-wiring (opt-in)
+--------------------
+
+If you want a “zero configuration” experience, opt in to auto-registration:
 
 .. code-block:: python
 
    from dataclasses import dataclass
 
-   from diwire import Container
+   from diwire import Container, DependencyRegistrationPolicy, MissingPolicy
 
 
    @dataclass
@@ -32,24 +45,13 @@ experience:
        repo: Repo
 
 
-   container = Container()
+   container = Container(
+       missing_policy=MissingPolicy.REGISTER_RECURSIVE,
+       dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
+   )
    _ = container.resolve(Service)
 
-Runnable example: :doc:`/howto/examples/quickstart`.
-
-Strict mode (no auto-registration)
-----------------------------------
-
-If you want full control, disable auto-registration:
-
-.. code-block:: python
-
-   from diwire import Container
-
-   container = Container()
-
-In this mode, resolving a dependency that is not registered raises
-:class:`diwire.exceptions.DIWireDependencyNotRegisteredError`.
+This preset tells diwire to register classes as they’re encountered during resolution.
 
 Dependency keys
 ---------------

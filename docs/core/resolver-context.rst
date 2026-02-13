@@ -27,8 +27,20 @@ Basic usage
 
    .. code-block:: python
 
+      from diwire import Container, resolver_context
+
+
+      class MyDependency:
+          ...
+
+
+      container = Container()
+      container.add(MyDependency)
+
       with container.compile():
           value = resolver_context.resolve(MyDependency)
+
+      assert isinstance(value, MyDependency)
 
 Runnable example: :doc:`/howto/examples/resolver-context`.
 

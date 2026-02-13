@@ -19,12 +19,12 @@ Minimal sketch
 
    from django.http import HttpRequest
 
-   from diwire import Container, Injected, Lifetime, Scope
+   from diwire import Container, Injected, Lifetime, Scope, resolver_context
 
    container = Container()
    request_var: ContextVar[HttpRequest] = ContextVar("request_var")
 
-   container.add_factory(request_var.get, provides=HttpRequest,
+   container.add_factory(lambda: request_var.get(), provides=HttpRequest,
        scope=Scope.REQUEST,
    )
 
@@ -59,4 +59,3 @@ Minimal sketch
 
 If you prefer managing scopes manually in middleware, resolve from the active resolver returned by
 ``enter_scope(...)`` rather than relying on injected wrappers.
-

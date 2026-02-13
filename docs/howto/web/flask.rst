@@ -21,7 +21,7 @@ Minimal sketch
 
    from flask import Flask, Request, request
 
-   from diwire import Container, Injected, Lifetime, Scope
+   from diwire import Container, Injected, Lifetime, Scope, resolver_context
 
    app = Flask(__name__)
    container = Container()

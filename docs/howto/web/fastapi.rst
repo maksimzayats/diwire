@@ -22,7 +22,7 @@ closes it when the endpoint returns.
 
    from fastapi import FastAPI
 
-   from diwire import Container, Injected, Lifetime, Scope
+   from diwire import Container, Injected, Lifetime, Scope, resolver_context
 
    app = FastAPI()
    container = Container()

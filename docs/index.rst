@@ -7,6 +7,8 @@ diwire
 
 **Type-driven dependency injection for Python. Zero runtime dependencies.**
 
+**Fastest DI library in our published benchmarks.** See :doc:`howto/advanced/performance`.
+
 diwire is a dependency injection container for Python 3.10+ that builds your object graph from type hints.
 It supports scopes + deterministic cleanup, async resolution, open generics, and fast steady-state resolution via
 compiled resolvers.
@@ -30,14 +32,14 @@ Define your classes. Resolve the top-level one. diwire figures out the rest.
 .. code-block:: python
    :class: py-run
 
-   from dataclasses import dataclass
+   from dataclasses import dataclass, field
 
-   from diwire import Container
+   from diwire import Container, DependencyRegistrationPolicy, MissingPolicy
 
 
    @dataclass
    class Database:
-       host: str = "localhost"
+       host: str = field(default="localhost", init=False)
 
 
    @dataclass
@@ -50,7 +52,10 @@ Define your classes. Resolve the top-level one. diwire figures out the rest.
        repo: UserRepository
 
 
-   container = Container()
+   container = Container(
+       missing_policy=MissingPolicy.REGISTER_RECURSIVE,
+       dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
+   )
    service = container.resolve(UserService)
    print(service.repo.db.host)  # => localhost
 
@@ -86,4 +91,3 @@ What to read next
    core/index
    howto/index
    reference/index
-
