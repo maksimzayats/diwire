@@ -205,7 +205,7 @@ class _TestMetaclass(type):
 def test_container_default_does_not_add_dependencies_during_registration() -> None:
     container = Container()
 
-    container.add_concrete(RootWithDirectDependency)
+    container.add(RootWithDirectDependency)
 
     assert container._providers_registrations.find_by_type(DirectDependency) is None
 
@@ -213,7 +213,7 @@ def test_container_default_does_not_add_dependencies_during_registration() -> No
 def test_registration_override_can_disable_dependency_autoregistration() -> None:
     container = Container(missing_policy=MissingPolicy.REGISTER_ROOT)
 
-    container.add_concrete(
+    container.add(
         RootWithDirectDependency,
         dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
     )
@@ -224,7 +224,7 @@ def test_registration_override_can_disable_dependency_autoregistration() -> None
 def test_registration_override_can_enable_dependency_autoregistration() -> None:
     container = Container(dependency_registration_policy=DependencyRegistrationPolicy.IGNORE)
 
-    container.add_concrete(
+    container.add(
         RootWithDirectDependency,
         dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
     )
@@ -237,7 +237,7 @@ def test_dependency_autoregistration_is_recursive() -> None:
         dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE
     )
 
-    container.add_concrete(RootWithNestedDependencies)
+    container.add(RootWithNestedDependencies)
 
     assert container._providers_registrations.find_by_type(IntermediateDependency) is not None
     assert container._providers_registrations.find_by_type(NestedDependency) is not None
@@ -247,10 +247,10 @@ def test_dependency_autoregistration_skips_already_registered_dependency() -> No
     container = Container(
         dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE
     )
-    container.add_concrete(ExistingDependency)
+    container.add(ExistingDependency)
     existing_spec = container._providers_registrations.get_by_type(ExistingDependency)
 
-    container.add_concrete(RootWithExistingDependency)
+    container.add(RootWithExistingDependency)
 
     assert container._providers_registrations.get_by_type(ExistingDependency) is existing_spec
 
@@ -260,7 +260,7 @@ def test_dependency_registration_policy_recursive_autoregisters_dependencies() -
         dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
     )
 
-    container.add_concrete(RootWithDirectDependency)
+    container.add(RootWithDirectDependency)
 
     assert container._providers_registrations.find_by_type(DirectDependency) is not None
 
@@ -270,7 +270,7 @@ def test_dependency_autoregistration_uses_parent_scope_and_lifetime() -> None:
         dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE
     )
 
-    container.add_concrete(
+    container.add(
         RootWithScopedDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
@@ -287,7 +287,7 @@ def test_dependency_autoregistration_ignores_registration_failures_and_continues
         dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE
     )
 
-    container.add_concrete(RootWithMixedDependencies)
+    container.add(RootWithMixedDependencies)
 
     assert container._providers_registrations.find_by_type(AbstractDependency) is None
     assert container._providers_registrations.find_by_type(ValidDependency) is not None
@@ -465,7 +465,7 @@ def test_resolve_provider_dependency_key_uses_existing_registration_without_reco
     container = Container(
         default_lifetime=Lifetime.TRANSIENT, missing_policy=MissingPolicy.REGISTER_ROOT
     )
-    container.add_concrete(_AutoProviderDependency)
+    container.add(_AutoProviderDependency)
     container.compile()
     graph_revision_before = container._graph_revision
 
@@ -598,7 +598,7 @@ def test_dependency_autoregistration_registers_pydantic_settings_as_root_singlet
         dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE
     )
 
-    container.add_concrete(
+    container.add(
         RootWithPydanticSettingsDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
@@ -645,7 +645,7 @@ def test_concrete_registration_autoregisters_namedtuple_class_dependencies() -> 
 
     container = Container()
 
-    container.add_concrete(
+    container.add(
         NamedTupleRoot,
         dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
     )
@@ -663,7 +663,7 @@ def test_concrete_registration_autoregisters_msgspec_struct_dependencies() -> No
 
     container = Container()
 
-    container.add_concrete(
+    container.add(
         MsgspecRoot,
         dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
     )
@@ -686,7 +686,7 @@ def test_concrete_registration_autoregisters_pydantic_basemodel_v2_dependencies(
 
     container = Container()
 
-    container.add_concrete(
+    container.add(
         PydanticRoot,
         dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
     )

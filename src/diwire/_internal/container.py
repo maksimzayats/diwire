@@ -271,7 +271,7 @@ class Container:
                 has_decoration_chain=has_decoration_chain,
             )
 
-    def add_concrete(
+    def add(
         self,
         concrete_type: type[Any],
         *,
@@ -322,10 +322,10 @@ class Container:
         Examples:
             .. code-block:: python
 
-                container.add_concrete(SqlRepo, provides=Repo)
+                container.add(SqlRepo, provides=Repo)
 
 
-                container.add_concrete(CachedRepo, provides=Repo)
+                container.add(CachedRepo, provides=Repo)
 
         """
         resolved_provides, resolved_concrete_type = self._resolve_concrete_registration_types(
@@ -335,24 +335,24 @@ class Container:
         resolved_provides_with_component = self._resolve_registration_component_provides(
             provides=resolved_provides,
             component=component,
-            method_name="add_concrete",
+            method_name="add",
         )
         resolved_scope = self._resolve_registration_scope(
             scope=scope,
-            method_name="add_concrete",
+            method_name="add",
         )
         resolved_lifetime = self._resolve_registration_lifetime(
             lifetime=lifetime,
-            method_name="add_concrete",
+            method_name="add",
         )
         explicit_dependencies = self._resolve_registration_dependencies(
             dependencies=dependencies,
-            method_name="add_concrete",
+            method_name="add",
         )
         resolved_dependency_registration_policy = (
             self._resolve_registration_dependency_registration_policy(
                 dependency_registration_policy=dependency_registration_policy,
-                method_name="add_concrete",
+                method_name="add",
             )
         )
 
@@ -1313,11 +1313,11 @@ class Container:
         elif provides_value is not None:
             resolved_provides = provides_value
         else:
-            msg = "add_concrete() parameter 'provides' must not be None; use 'infer'."
+            msg = "add() parameter 'provides' must not be None; use 'infer'."
             raise DIWireInvalidRegistrationError(msg)
 
         if concrete_type_value is None:
-            msg = "add_concrete() parameter 'concrete_type' must not be None; use 'infer'."
+            msg = "add() parameter 'concrete_type' must not be None; use 'infer'."
             raise DIWireInvalidRegistrationError(msg)
 
         return resolved_provides, concrete_type_value
@@ -1813,7 +1813,7 @@ class Container:
         if not self._concrete_autoregistration_policy.is_eligible_concrete(dependency):
             return
 
-        self.add_concrete(
+        self.add(
             dependency,
             scope=scope,
             lifetime=lifetime,
@@ -2392,7 +2392,7 @@ class Container:
         Examples:
             .. code-block:: python
 
-                container.add_concrete(Service)
+                container.add(Service)
                 container.compile()
                 service = container.resolve(Service)
 
@@ -2569,7 +2569,7 @@ class Container:
         Examples:
             .. code-block:: python
 
-                container.add_concrete(Service)
+                container.add(Service)
                 service = container.resolve(Service)
 
         """

@@ -20,8 +20,8 @@ class B:
 
 def main() -> None:
     container = Container()
-    container.add_concrete(A)
-    container.add_concrete(B)
+    container.add(A)
+    container.add(B)
 
     resolved_a = container.resolve(A)
     resolved_b = resolved_a.get_b()

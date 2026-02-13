@@ -202,13 +202,13 @@ def test_codegen_matches_expected_for_empty_app_root_graph() -> None:
 def test_codegen_matches_expected_for_scoped_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
-    container.add_concrete(
+    container.add(
         _SnapshotSession,
         provides=_SnapshotSession,
         scope=Scope.SESSION,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _SnapshotRequest,
         provides=_SnapshotRequest,
         scope=Scope.REQUEST,
@@ -288,19 +288,19 @@ def test_codegen_matches_expected_for_mixed_dependency_shape_graph() -> None:
 def test_codegen_matches_expected_for_request_root_filtered_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
-    container.add_concrete(
+    container.add(
         _SnapshotRequestRootAppService,
         provides=_SnapshotRequestRootAppService,
         scope=Scope.APP,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _SnapshotRequestRootSessionService,
         provides=_SnapshotRequestRootSessionService,
         scope=Scope.SESSION,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _SnapshotRequestRootRequestService,
         provides=_SnapshotRequestRootRequestService,
         scope=Scope.REQUEST,
@@ -314,19 +314,19 @@ def test_codegen_matches_expected_for_request_root_filtered_graph() -> None:
 def test_codegen_matches_expected_for_action_root_filtered_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
-    container.add_concrete(
+    container.add(
         _SnapshotActionRootRequestService,
         provides=_SnapshotActionRootRequestService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _SnapshotActionRootActionService,
         provides=_SnapshotActionRootActionService,
         scope=Scope.ACTION,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _SnapshotActionRootStepService,
         provides=_SnapshotActionRootStepService,
         scope=Scope.STEP,

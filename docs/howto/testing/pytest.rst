@@ -42,7 +42,7 @@ configuration. Injected parameters are always resolved from this root container.
    @pytest.fixture()
    def diwire_container() -> Container:
        container = Container()
-       container.add_concrete(FakeService, provides=Service,
+       container.add(FakeService, provides=Service,
            lifetime=Lifetime.SCOPED,
        )
        return container

@@ -151,10 +151,10 @@ def test_generated_code_passes_mypy_with_method_replacement_ignored(tmp_path: Pa
         )
 
 
-def test_add_concrete_decorator_usage_fails_but_direct_registration_passes(
+def test_add_decorator_usage_fails_but_direct_registration_passes(
     tmp_path: Path,
 ) -> None:
-    invalid_module_path = tmp_path / "invalid_add_concrete_decorator.py"
+    invalid_module_path = tmp_path / "invalid_add_decorator.py"
     invalid_module_path.write_text(
         """
 from __future__ import annotations
@@ -170,7 +170,7 @@ class IService(Protocol):
 container = Container()
 
 
-@container.add_concrete(provides=IService)
+@container.add(provides=IService)
 class Service:
     pass
 """.strip(),
@@ -192,7 +192,7 @@ class Service:
         or "none" in output.lower()
     )
 
-    valid_module_path = tmp_path / "valid_add_concrete_direct.py"
+    valid_module_path = tmp_path / "valid_add_direct.py"
     valid_module_path.write_text(
         """
 from __future__ import annotations
@@ -210,7 +210,7 @@ class Service:
 
 
 container = Container()
-container.add_concrete(Service, provides=IService)
+container.add(Service, provides=IService)
 """.strip(),
     )
 
@@ -221,9 +221,7 @@ container.add_concrete(Service, provides=IService)
             str(valid_module_path),
         ],
     )
-    assert exit_status == 0, (
-        f"Expected valid direct add_concrete usage to pass mypy.\n{stdout}\n{stderr}"
-    )
+    assert exit_status == 0, f"Expected valid direct add usage to pass mypy.\n{stdout}\n{stderr}"
 
 
 def _render_generated_modules() -> dict[str, str]:
@@ -232,13 +230,13 @@ def _render_generated_modules() -> dict[str, str]:
     empty_container = Container()
 
     scoped_container = Container()
-    scoped_container.add_concrete(
+    scoped_container.add(
         _MypySession,
         provides=_MypySession,
         scope=Scope.SESSION,
         lifetime=Lifetime.SCOPED,
     )
-    scoped_container.add_concrete(
+    scoped_container.add(
         _MypyRequest,
         provides=_MypyRequest,
         scope=Scope.REQUEST,
@@ -338,19 +336,19 @@ def _render_generated_modules() -> dict[str, str]:
     )
 
     request_root_container = Container()
-    request_root_container.add_concrete(
+    request_root_container.add(
         _MypyRequestRootAppService,
         provides=_MypyRequestRootAppService,
         scope=Scope.APP,
         lifetime=Lifetime.SCOPED,
     )
-    request_root_container.add_concrete(
+    request_root_container.add(
         _MypySession,
         provides=_MypySession,
         scope=Scope.SESSION,
         lifetime=Lifetime.SCOPED,
     )
-    request_root_container.add_concrete(
+    request_root_container.add(
         _MypyRequestRootRequestService,
         provides=_MypyRequestRootRequestService,
         scope=Scope.REQUEST,

@@ -9,7 +9,7 @@ class DIWireError(Exception):
 class DIWireInvalidRegistrationError(DIWireError):
     """Signal invalid registration or injection configuration.
 
-    Raised by registration APIs such as ``Container.add_concrete``,
+    Raised by registration APIs such as ``Container.add``,
     ``Container.add_factory``, ``Container.add_generator``,
     ``Container.add_context_manager``, and by ``ResolverContext.inject`` when
     arguments are invalid.

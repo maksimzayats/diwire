@@ -81,7 +81,7 @@ def test_codegen_matrix_caching_identity_by_kind_lifetime_scope(
         container.add_instance(instance, provides=_MatrixService)
     elif provider_kind == "concrete":
         assert lifetime is not None
-        container.add_concrete(
+        container.add(
             _MatrixService,
             provides=_MatrixService,
             lifetime=lifetime,

@@ -25,8 +25,8 @@ class _SpecialIntBox(IBox[int]):
 
 def main() -> None:
     container = Container()
-    container.add_concrete(Box, provides=IBox)
-    container.add_concrete(_SpecialIntBox, provides=IBox[int])
+    container.add(Box, provides=IBox)
+    container.add(_SpecialIntBox, provides=IBox[int])
 
     resolved = container.resolve(IBox[int])
     print(f"override={type(resolved).__name__}")  # => override=_SpecialIntBox

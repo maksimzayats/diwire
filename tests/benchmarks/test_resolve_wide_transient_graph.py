@@ -49,12 +49,12 @@ class _Root:
 
 def test_benchmark_diwire_resolve_wide_transient_graph(benchmark: Any) -> None:
     container = make_diwire_benchmark_container()
-    container.add_concrete(_DepA, lifetime=Lifetime.TRANSIENT)
-    container.add_concrete(_DepB, lifetime=Lifetime.TRANSIENT)
-    container.add_concrete(_DepC, lifetime=Lifetime.TRANSIENT)
-    container.add_concrete(_DepD, lifetime=Lifetime.TRANSIENT)
-    container.add_concrete(_DepE, lifetime=Lifetime.TRANSIENT)
-    container.add_concrete(_Root, lifetime=Lifetime.TRANSIENT)
+    container.add(_DepA, lifetime=Lifetime.TRANSIENT)
+    container.add(_DepB, lifetime=Lifetime.TRANSIENT)
+    container.add(_DepC, lifetime=Lifetime.TRANSIENT)
+    container.add(_DepD, lifetime=Lifetime.TRANSIENT)
+    container.add(_DepE, lifetime=Lifetime.TRANSIENT)
+    container.add(_Root, lifetime=Lifetime.TRANSIENT)
     container.compile()
     first = container.resolve(_Root)
     second = container.resolve(_Root)

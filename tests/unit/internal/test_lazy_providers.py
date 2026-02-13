@@ -125,8 +125,8 @@ class _AutoregConsumer:
 @pytest.mark.asyncio
 async def test_cycle_with_provider_breaks_codegen_cycle_and_resolves() -> None:
     container = Container()
-    container.add_concrete(_CycleA)
-    container.add_concrete(_CycleB)
+    container.add(_CycleA)
+    container.add(_CycleB)
 
     resolved = container.resolve(_CycleA)
     resolved_b = resolved.get_b()
@@ -137,8 +137,8 @@ async def test_cycle_with_provider_breaks_codegen_cycle_and_resolves() -> None:
 
 def test_unbroken_direct_cycle_still_raises() -> None:
     container = Container()
-    container.add_concrete(_DirectCycleA)
-    container.add_concrete(_DirectCycleB)
+    container.add(_DirectCycleA)
+    container.add(_DirectCycleB)
 
     with pytest.raises(DIWireInvalidProviderSpecError, match="Circular dependency detected"):
         container.resolve(_DirectCycleA)
@@ -146,12 +146,12 @@ def test_unbroken_direct_cycle_still_raises() -> None:
 
 def test_provider_preserves_scoped_lifetime_within_same_scope() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _RequestDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _RequestProviderConsumer,
         scope=Scope.REQUEST,
         lifetime=Lifetime.TRANSIENT,
@@ -167,12 +167,12 @@ def test_provider_preserves_scoped_lifetime_within_same_scope() -> None:
 
 def test_provider_preserves_transient_lifetime_within_same_scope() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _RequestDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.TRANSIENT,
     )
-    container.add_concrete(
+    container.add(
         _RequestProviderConsumer,
         scope=Scope.REQUEST,
         lifetime=Lifetime.TRANSIENT,
@@ -193,7 +193,7 @@ async def test_async_provider_returns_awaitable_and_resolves_dependency() -> Non
 
     container = Container()
     container.add_factory(_build_dependency, provides=_AsyncDependency)
-    container.add_concrete(_AsyncConsumer)
+    container.add(_AsyncConsumer)
 
     consumer = container.resolve(_AsyncConsumer)
     dependency = await consumer.get()
@@ -207,7 +207,7 @@ def test_sync_provider_to_async_chain_raises_on_call() -> None:
 
     container = Container()
     container.add_factory(_build_dependency, provides=_AsyncDependency)
-    container.add_concrete(_SyncProviderForAsyncDependency)
+    container.add(_SyncProviderForAsyncDependency)
 
     consumer = container.resolve(_SyncProviderForAsyncDependency)
 
@@ -221,7 +221,7 @@ def test_sync_provider_to_async_chain_raises_on_call() -> None:
 @pytest.mark.asyncio
 async def test_direct_resolve_provider_and_async_provider_dependency_keys() -> None:
     container = Container()
-    container.add_concrete(_InjectedConsumerDependency)
+    container.add(_InjectedConsumerDependency)
     resolver = container.compile()
 
     provider = resolver.resolve(Provider[_InjectedConsumerDependency])
@@ -238,7 +238,7 @@ async def test_direct_resolve_provider_and_async_provider_dependency_keys() -> N
 @pytest.mark.asyncio
 async def test_injected_wrapper_supports_provider_and_async_provider() -> None:
     container = Container()
-    container.add_concrete(_InjectedConsumerDependency)
+    container.add(_InjectedConsumerDependency)
 
     @resolver_context.inject
     def _sync_handler(
@@ -291,19 +291,19 @@ def test_autoregistration_unwraps_provider_dependency() -> None:
     container = Container(
         dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE
     )
-    container.add_concrete(_AutoregConsumer)
+    container.add(_AutoregConsumer)
 
     assert container._providers_registrations.find_by_type(_AutoregDependency) is not None
 
 
 def test_provider_rejects_deeper_scoped_dependency_during_planning() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _ScopedActionDependency,
         scope=Scope.ACTION,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _RequestScopedProviderConsumer,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
@@ -322,7 +322,7 @@ def test_provider_rejects_deeper_scoped_dependency_during_planning() -> None:
 )
 def test_provider_rejects_star_parameter_shapes(factory: object) -> None:
     container = Container()
-    container.add_concrete(_VarArgDependency)
+    container.add(_VarArgDependency)
     container.add_factory(
         cast("Any", factory),
         provides=(

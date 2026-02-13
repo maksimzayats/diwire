@@ -329,7 +329,7 @@ def test_container_injects_component_marked_dependencies() -> None:
     container = Container()
     container.add_factory(build_primary)
     container.add_factory(build_replica)
-    container.add_concrete(Repository)
+    container.add(Repository)
 
     repository = container.resolve(Repository)
 

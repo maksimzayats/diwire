@@ -37,11 +37,11 @@ Registrations are replaceable. In general, override **before** the first resolve
            ...
 
 
-   container.add_concrete(RealEmailClient, provides=EmailClient,
+   container.add(RealEmailClient, provides=EmailClient,
        lifetime=Lifetime.SCOPED,
    )
    # In tests: override BEFORE resolving anything that depends on it.
-   container.add_concrete(FakeEmailClient, provides=EmailClient,
+   container.add(FakeEmailClient, provides=EmailClient,
        lifetime=Lifetime.SCOPED,
    )
 

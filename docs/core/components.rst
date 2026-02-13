@@ -43,7 +43,7 @@ first by passing ``component=...``:
    # Runtime key is still Annotated[..., Component(...)]
    primary_cache = container.resolve(Annotated[Cache, Component("primary")])
 
-The same shortcut is available on ``add_concrete``, ``add_factory``,
+The same shortcut is available on ``add``, ``add_factory``,
 ``add_generator``, ``add_context_manager``, and ``decorate``.
 
 

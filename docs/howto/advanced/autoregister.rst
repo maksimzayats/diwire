@@ -26,7 +26,7 @@ Autoregister concrete types vs dependencies
 - ``missing_policy`` controls resolve-time behavior for unknown concrete classes.
 - ``dependency_registration_policy`` controls container-level defaults for whether provider dependencies are
   automatically registered as concrete types at **registration time**.
-- ``dependency_registration_policy`` is the call-level override on ``add_concrete``, ``add_factory``,
+- ``dependency_registration_policy`` is the call-level override on ``add``, ``add_factory``,
   ``add_generator``, ``add_context_manager``, and ``resolver_context.inject``.
 
 Pydantic settings auto-registration

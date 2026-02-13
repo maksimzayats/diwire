@@ -53,9 +53,9 @@ def test_add_instance_component_registers_component_qualified_key() -> None:
     assert container.resolve(Annotated[_Service, Component("marker")]) is marker_expected
 
 
-def test_add_concrete_component_registers_component_qualified_key() -> None:
+def test_add_component_registers_component_qualified_key() -> None:
     container = Container()
-    container.add_concrete(_ServiceImpl, provides=_Service, component="primary")
+    container.add(_ServiceImpl, provides=_Service, component="primary")
 
     resolved = container.resolve(Annotated[_Service, Component("primary")])
     assert isinstance(resolved, _ServiceImpl)
@@ -133,8 +133,8 @@ def test_add_context_manager_component_registers_and_runs_cleanup() -> None:
 
 def test_decorate_with_component_targets_component_qualified_binding() -> None:
     container = Container()
-    container.add_concrete(_RepoImpl, provides=_Repo)
-    container.add_concrete(_RepoImpl, provides=_Repo, component="primary")
+    container.add(_RepoImpl, provides=_Repo)
+    container.add(_RepoImpl, provides=_Repo, component="primary")
 
     container.decorate(
         provides=_Repo,
@@ -209,7 +209,7 @@ def test_component_registration_requires_hashable_component_value() -> None:
 
 def test_closed_generic_typevar_injection_works_with_component_qualified_provides() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _GenericValue,
         provides=_GenericValue[int],
         component="primary",

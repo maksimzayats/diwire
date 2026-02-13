@@ -253,7 +253,7 @@ def _make_generation_plan(
 def test_renderer_output_is_deterministic_and_composable() -> None:
     container = Container()
     container.add_instance(_Config(), provides=_Config)
-    container.add_concrete(_Service, provides=_Service, lifetime=Lifetime.TRANSIENT)
+    container.add(_Service, provides=_Service, lifetime=Lifetime.TRANSIENT)
 
     renderer = ResolversTemplateRenderer()
     code_first = renderer.get_providers_code(
@@ -302,7 +302,7 @@ def test_renderer_output_is_deterministic_and_composable() -> None:
 def test_renderer_output_avoids_reflective_hot_path_tokens() -> None:
     container = Container()
     container.add_instance(_Config(), provides=_Config)
-    container.add_concrete(_Service, provides=_Service, lifetime=Lifetime.SCOPED)
+    container.add(_Service, provides=_Service, lifetime=Lifetime.SCOPED)
 
     code = ResolversTemplateRenderer().get_providers_code(
         root_scope=Scope.APP,
@@ -586,19 +586,19 @@ def test_renderer_documents_instance_lifetime_from_container_default() -> None:
 
 def test_renderer_filters_providers_and_scopes_when_root_scope_is_request() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _Config,
         provides=_Config,
         scope=Scope.APP,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _RequestRootSessionService,
         provides=_RequestRootSessionService,
         scope=Scope.SESSION,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _RequestRootOnlyService,
         provides=_RequestRootOnlyService,
         scope=Scope.REQUEST,

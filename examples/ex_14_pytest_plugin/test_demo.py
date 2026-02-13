@@ -18,7 +18,7 @@ class ServiceImpl(Service):
 @pytest.fixture()
 def diwire_container() -> Container:
     container = Container()
-    container.add_concrete(
+    container.add(
         ServiceImpl,
         provides=Service,
         lifetime=Lifetime.SCOPED,

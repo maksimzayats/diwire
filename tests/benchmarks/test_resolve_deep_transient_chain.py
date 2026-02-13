@@ -42,12 +42,12 @@ class _Root:
 
 def test_benchmark_diwire_resolve_deep_transient_chain(benchmark: Any) -> None:
     container = make_diwire_benchmark_container()
-    container.add_concrete(_Dep0, lifetime=Lifetime.TRANSIENT)
-    container.add_concrete(_Dep1, lifetime=Lifetime.TRANSIENT)
-    container.add_concrete(_Dep2, lifetime=Lifetime.TRANSIENT)
-    container.add_concrete(_Dep3, lifetime=Lifetime.TRANSIENT)
-    container.add_concrete(_Dep4, lifetime=Lifetime.TRANSIENT)
-    container.add_concrete(_Root, lifetime=Lifetime.TRANSIENT)
+    container.add(_Dep0, lifetime=Lifetime.TRANSIENT)
+    container.add(_Dep1, lifetime=Lifetime.TRANSIENT)
+    container.add(_Dep2, lifetime=Lifetime.TRANSIENT)
+    container.add(_Dep3, lifetime=Lifetime.TRANSIENT)
+    container.add(_Dep4, lifetime=Lifetime.TRANSIENT)
+    container.add(_Root, lifetime=Lifetime.TRANSIENT)
     container.compile()
     first = container.resolve(_Root)
     second = container.resolve(_Root)

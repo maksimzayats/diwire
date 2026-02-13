@@ -33,7 +33,7 @@ Minimal sketch
        ...
 
 
-   container.add_concrete(Service, provides=Service,
+   container.add(Service, provides=Service,
        lifetime=Lifetime.SCOPED,
        scope=Scope.REQUEST,
    )

@@ -43,9 +43,9 @@ Metrics: TypeAlias = Annotated[EventHandler, Component("metrics")]
 def main() -> None:
     container = Container()
 
-    container.add_concrete(BaseHandler, provides=EventHandler)
-    container.add_concrete(LoggingHandler, provides=Logging)
-    container.add_concrete(MetricsHandler, provides=Metrics)
+    container.add(BaseHandler, provides=EventHandler)
+    container.add(LoggingHandler, provides=Logging)
+    container.add(MetricsHandler, provides=Metrics)
 
     handlers = container.resolve(All[EventHandler])
     print(

@@ -118,7 +118,7 @@ def test_resolve_maybe_returns_registered_dependency_value() -> None:
 
 def test_resolve_maybe_propagates_nested_registration_errors() -> None:
     container = _strict_container()
-    container.add_concrete(_BrokenService, provides=_BrokenService)
+    container.add(_BrokenService, provides=_BrokenService)
 
     with pytest.raises(DIWireDependencyNotRegisteredError):
         container.resolve(Maybe[_BrokenService])
@@ -126,7 +126,7 @@ def test_resolve_maybe_propagates_nested_registration_errors() -> None:
 
 def test_missing_maybe_dependency_uses_constructor_default() -> None:
     container = _strict_container()
-    container.add_concrete(_OptionalDefaultConsumer, provides=_OptionalDefaultConsumer)
+    container.add(_OptionalDefaultConsumer, provides=_OptionalDefaultConsumer)
 
     resolved = container.resolve(_OptionalDefaultConsumer)
 
@@ -135,7 +135,7 @@ def test_missing_maybe_dependency_uses_constructor_default() -> None:
 
 def test_missing_maybe_dependency_without_default_injects_none() -> None:
     container = _strict_container()
-    container.add_concrete(_OptionalNoneConsumer, provides=_OptionalNoneConsumer)
+    container.add(_OptionalNoneConsumer, provides=_OptionalNoneConsumer)
 
     resolved = container.resolve(_OptionalNoneConsumer)
 
@@ -146,7 +146,7 @@ def test_registered_maybe_dependency_overrides_constructor_default() -> None:
     container = _strict_container()
     dependency = _MaybeDependency()
     container.add_instance(dependency, provides=_MaybeDependency)
-    container.add_concrete(_OptionalDefaultConsumer, provides=_OptionalDefaultConsumer)
+    container.add(_OptionalDefaultConsumer, provides=_OptionalDefaultConsumer)
 
     resolved = container.resolve(_OptionalDefaultConsumer)
 
@@ -172,7 +172,7 @@ def test_inject_maybe_dependency_uses_default_when_missing_and_overrides_when_re
 
 def test_inject_scope_inference_uses_inner_dependency_scope_for_maybe() -> None:
     container = _strict_container()
-    container.add_concrete(
+    container.add(
         _RequestScopedDependency,
         provides=_RequestScopedDependency,
         scope=Scope.REQUEST,
@@ -192,7 +192,7 @@ def test_inject_scope_inference_uses_inner_dependency_scope_for_maybe() -> None:
 
 def test_resolve_maybe_closed_generic_uses_open_generic_registration_match() -> None:
     container = _strict_container()
-    container.add_concrete(_MaybeBoxImpl, provides=_MaybeBox)
+    container.add(_MaybeBoxImpl, provides=_MaybeBox)
 
     resolved = container.resolve(Maybe[_MaybeBox[int]])
 
@@ -202,7 +202,7 @@ def test_resolve_maybe_closed_generic_uses_open_generic_registration_match() -> 
 
 def test_resolve_maybe_from_context_returns_none_only_when_context_key_is_missing() -> None:
     container = _strict_container()
-    container.add_concrete(_MaybeBoxImpl, provides=_MaybeBox)
+    container.add(_MaybeBoxImpl, provides=_MaybeBox)
 
     with container.enter_scope(Scope.REQUEST) as request_scope:
         assert request_scope.resolve(Maybe[FromContext[int]]) is None

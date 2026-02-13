@@ -1,4 +1,4 @@
-"""Focused example: ``add_concrete`` for constructor-based creation."""
+"""Focused example: ``add`` for constructor-based creation."""
 
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ class Service:
 
 def main() -> None:
     container = Container()
-    container.add_concrete(Dependency, provides=Dependency)
-    container.add_concrete(Service, provides=Service)
+    container.add(Dependency, provides=Dependency)
+    container.add(Service, provides=Service)
 
     resolved = container.resolve(Service)
     print(

@@ -68,7 +68,7 @@ def main() -> None:
     container.add_instance("Hello", provides=str)
     tracer = Tracer(events=[])
     container.add_instance(tracer, provides=Tracer)
-    container.add_concrete(SimpleGreeter, provides=Greeter)
+    container.add(SimpleGreeter, provides=Greeter)
 
     # Step 1: one decorator.
     container.decorate(provides=Greeter, decorator=TracedGreeter)
@@ -99,7 +99,7 @@ def main() -> None:
 
     # Step 3: replace the base binding; decorators remain.
     container.add_instance("Hi", provides=str)
-    container.add_concrete(FriendlyGreeter, provides=Greeter)
+    container.add(FriendlyGreeter, provides=Greeter)
     rebound_greeter = container.resolve(Greeter)
     rebound_result = rebound_greeter.greet("Lee")
     print(

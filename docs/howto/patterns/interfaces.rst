@@ -6,7 +6,7 @@ Interfaces (Protocol/ABC)
 
 If your code depends on abstractions (Protocols/ABCs), you must tell diwire what concrete class to build.
 
-Use ``add_concrete(..., provides=...)``:
+Use ``add(..., provides=...)``:
 
 .. code-block:: python
 
@@ -25,7 +25,7 @@ Use ``add_concrete(..., provides=...)``:
 
 
    container = Container()
-   container.add_concrete(SystemClock, provides=Clock,
+   container.add(SystemClock, provides=Clock,
        lifetime=Lifetime.SCOPED,
    )
 

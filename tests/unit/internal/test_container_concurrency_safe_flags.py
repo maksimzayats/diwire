@@ -51,7 +51,7 @@ class OverrideDecoratedFactoryService:
 
 def test_container_default_lock_mode_auto() -> None:
     container = Container()
-    container.add_concrete(ConcreteService)
+    container.add(ConcreteService)
 
     assert container._providers_registrations.get_by_type(ConcreteService).lock_mode == "auto"
 
@@ -69,7 +69,7 @@ def test_registration_default_from_container_applies_to_all_non_instance_registr
 
     container = Container(lock_mode=LockMode.NONE)
     container.add_instance(InstanceService())
-    container.add_concrete(ConcreteService)
+    container.add(ConcreteService)
     container.add_factory(build_factory)
     container.add_generator(build_generator)
     container.add_context_manager(build_context_manager)
@@ -106,7 +106,7 @@ def test_registration_override_lock_mode_takes_precedence() -> None:
 
     container = Container(lock_mode=LockMode.NONE)
     container.add_factory(build_factory, lock_mode=LockMode.THREAD)
-    container.add_concrete(OverrideConcreteService, lock_mode=LockMode.ASYNC)
+    container.add(OverrideConcreteService, lock_mode=LockMode.ASYNC)
     container.add_generator(build_generator, lock_mode=LockMode.NONE)
     container.add_context_manager(
         build_context_manager,

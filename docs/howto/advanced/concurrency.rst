@@ -31,7 +31,7 @@ LockMode
    If you resolve sync cached providers from multiple threads, set ``LockMode.THREAD``
    at the container or registration level.
 
-Registration-level overrides are available for ``add_concrete``, ``add_factory``,
+Registration-level overrides are available for ``add``, ``add_factory``,
 ``add_generator``, and ``add_context_manager``:
 
 .. code-block:: python

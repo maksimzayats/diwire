@@ -47,7 +47,7 @@ Minimal sketch
        ...
 
 
-   container.add_concrete(Service, provides=Service, scope=Scope.REQUEST)
+   container.add(Service, provides=Service, scope=Scope.REQUEST)
 
 
    @resolver_context.inject(scope=Scope.REQUEST)

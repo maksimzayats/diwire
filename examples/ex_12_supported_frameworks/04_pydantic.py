@@ -20,7 +20,7 @@ def main() -> None:
     container = Container()
     dependency = Dependency()
     container.add_instance(dependency)
-    container.add_concrete(Consumer)
+    container.add(Consumer)
 
     print(
         f"pydantic_ok={container.resolve(Consumer).dependency is dependency}",

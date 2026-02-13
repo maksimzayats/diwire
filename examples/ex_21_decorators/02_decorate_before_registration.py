@@ -53,7 +53,7 @@ def main() -> None:
         decorator=CachedRepo,
         inner_parameter="inner",
     )
-    container.add_concrete(SqlRepo, provides=PrimaryRepo)
+    container.add(SqlRepo, provides=PrimaryRepo)
 
     decorated = container.resolve(PrimaryRepo)
     print(f"pattern_a_outer={type(decorated).__name__}")  # => pattern_a_outer=CachedRepo

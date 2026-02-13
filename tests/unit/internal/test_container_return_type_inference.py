@@ -232,11 +232,11 @@ def test_explicit_provides_bypasses_return_type_inference_for_all_provider_kinds
     assert async_context_spec.context_manager is typed_valid_cm
 
 
-def test_add_concrete_without_required_provider_argument_raises_type_error() -> None:
+def test_add_without_required_provider_argument_raises_type_error() -> None:
     container = Container()
 
     with pytest.raises(TypeError):
-        cast("Any", container).add_concrete()
+        cast("Any", container).add()
 
 
 def test_add_factory_without_required_provider_argument_raises_type_error() -> None:
@@ -263,16 +263,16 @@ def test_add_context_manager_without_required_provider_argument_raises_type_erro
 def test_register_concrete_with_provides_only_uses_the_same_concrete_type() -> None:
     container = Container()
 
-    container.add_concrete(DecoratorConcreteService)
+    container.add(DecoratorConcreteService)
 
     provider_spec = container._providers_registrations.get_by_type(DecoratorConcreteService)
     assert provider_spec.concrete_type is DecoratorConcreteService
 
 
-def test_add_concrete_returns_none_and_registers_provider() -> None:
+def test_add_returns_none_and_registers_provider() -> None:
     container = Container()
 
-    result = cast("Any", container).add_concrete(
+    result = cast("Any", container).add(
         DecoratorConcreteService,
         provides=DecoratorConcreteService,
     )

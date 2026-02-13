@@ -52,7 +52,7 @@ def _build_random_container(
         )
         state = (state * 1103515245 + 12345) & 0x7FFFFFFF
         lifetime = (Lifetime.TRANSIENT, Lifetime.SCOPED)[state % 2]
-        container.add_concrete(
+        container.add(
             node_type,
             provides=node_type,
             lifetime=lifetime,
@@ -125,8 +125,8 @@ def test_fuzz_codegen_raises_for_cycle_graph() -> None:
     _CycleB.__init__ = cast("Any", _init_cycle_b)  # type: ignore[method-assign]
 
     container = Container()
-    container.add_concrete(_CycleA, provides=_CycleA, lifetime=Lifetime.SCOPED)
-    container.add_concrete(_CycleB, provides=_CycleB, lifetime=Lifetime.SCOPED)
+    container.add(_CycleA, provides=_CycleA, lifetime=Lifetime.SCOPED)
+    container.add(_CycleB, provides=_CycleB, lifetime=Lifetime.SCOPED)
 
     with pytest.raises(DIWireInvalidProviderSpecError, match="Circular dependency detected"):
         ResolversTemplateRenderer().get_providers_code(

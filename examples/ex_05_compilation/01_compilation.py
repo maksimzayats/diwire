@@ -20,13 +20,13 @@ class SecondService:
 
 def main() -> None:
     container = Container()
-    container.add_concrete(FirstService, provides=FirstService)
+    container.add(FirstService, provides=FirstService)
 
     compiled_first = container.compile()
     compiled_second = container.compile()
     print(f"compile_cached={compiled_first is compiled_second}")  # => compile_cached=True
 
-    container.add_concrete(SecondService, provides=SecondService)
+    container.add(SecondService, provides=SecondService)
     compiled_third = container.compile()
     print(
         f"compile_invalidated={compiled_third is not compiled_first}",

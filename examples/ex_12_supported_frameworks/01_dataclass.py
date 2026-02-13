@@ -21,7 +21,7 @@ def main() -> None:
     container = Container()
     dependency = Dependency(name="framework")
     container.add_instance(dependency)
-    container.add_concrete(Consumer)
+    container.add(Consumer)
 
     print(
         f"dataclass_ok={container.resolve(Consumer).dependency is dependency}",

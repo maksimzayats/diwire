@@ -295,7 +295,7 @@ async def test_aresolve_auto_compiles_root_resolver_when_uncompiled() -> None:
 
 def test_compile_wraps_codegen_resolver_when_open_generic_registry_present() -> None:
     container = Container()
-    container.add_concrete(_OpenRuntimeServiceImpl, provides=_OpenRuntimeService)
+    container.add(_OpenRuntimeServiceImpl, provides=_OpenRuntimeService)
 
     compiled_resolver = container.compile()
 
@@ -311,7 +311,7 @@ def test_enter_scope_auto_compiles_root_resolver_when_uncompiled() -> None:
     container = Container(
         use_resolver_context=False,
     )
-    container.add_concrete(
+    container.add(
         _RequestService,
         provides=_RequestService,
         scope=Scope.REQUEST,
@@ -379,7 +379,7 @@ def test_registering_after_compile_invalidates_compilation_and_rebinds_lazy_entr
         ),
         (
             "concrete",
-            lambda: container.add_concrete(
+            lambda: container.add(
                 _RegisteredByConcrete,
                 provides=_RegisteredByConcrete,
             ),
@@ -552,7 +552,7 @@ def test_transient_provider_is_not_cached() -> None:
 
 def test_scope_resolution_requires_explicit_opened_scope_chain() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _RequestService,
         provides=_RequestService,
         scope=Scope.REQUEST,
@@ -643,7 +643,7 @@ def test_scope_resolver_can_directly_resolve_from_context_marker() -> None:
 
 def test_codegen_passes_resolver_to_inject_wrapped_provider_calls() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _InjectScopedDependency,
         provides=_InjectScopedDependency,
         scope=Scope.REQUEST,
@@ -672,7 +672,7 @@ def test_codegen_passes_resolver_to_inject_wrapped_provider_calls() -> None:
 @pytest.mark.asyncio
 async def test_codegen_async_inject_wrapper_provider_receives_resolver() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _InjectScopedDependency,
         provides=_InjectScopedDependency,
         scope=Scope.REQUEST,
@@ -702,7 +702,7 @@ async def test_codegen_async_inject_wrapper_provider_receives_resolver() -> None
 
 def test_codegen_nested_inject_wrappers_runtime_scope_consistency() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _InjectScopedDependency,
         provides=_InjectScopedDependency,
         scope=Scope.REQUEST,
@@ -924,13 +924,13 @@ def test_codegen_exec_handles_escaped_module_and_qualname_in_docstrings() -> Non
 
 def test_enter_scope_can_choose_skippable_or_next_non_skippable_scope() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _SessionService,
         provides=_SessionService,
         scope=Scope.SESSION,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _RequestService,
         provides=_RequestService,
         scope=Scope.REQUEST,
@@ -1504,7 +1504,7 @@ def test_cleanup_callbacks_execute_in_lifo_order() -> None:
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _Both,
         provides=_Both,
         scope=Scope.REQUEST,
@@ -1561,7 +1561,7 @@ def test_resolver_close_matches_with_cleanup_order_for_generator_and_context_man
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _Both,
         provides=_Both,
         scope=Scope.REQUEST,
@@ -1631,7 +1631,7 @@ def test_cleanup_keeps_first_cleanup_error_when_multiple_callbacks_fail() -> Non
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _Both,
         provides=_Both,
         scope=Scope.REQUEST,
@@ -1727,7 +1727,7 @@ async def test_async_cleanup_callbacks_execute_in_lifo_order_and_drain_stack() -
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _Both,
         provides=_Both,
         scope=Scope.REQUEST,
@@ -1780,7 +1780,7 @@ async def test_resolver_aclose_matches_async_with_cleanup_order_for_async_provid
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _Both,
         provides=_Both,
         scope=Scope.REQUEST,
@@ -1851,7 +1851,7 @@ async def test_async_cleanup_keeps_first_cleanup_error_when_multiple_callbacks_f
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _Both,
         provides=_Both,
         scope=Scope.REQUEST,
@@ -1978,7 +1978,7 @@ async def test_async_context_manager_dependency_chain_requires_aresolve() -> Non
 @pytest.mark.asyncio
 async def test_async_scope_mismatch_raises_for_deeper_scoped_provider() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _RequestService,
         provides=_RequestService,
         scope=Scope.REQUEST,
@@ -2216,25 +2216,25 @@ def test_scope_chain_transitions_cover_session_request_action_and_step_paths() -
         pass
 
     container = Container()
-    container.add_concrete(
+    container.add(
         _SessionService,
         provides=_SessionService,
         scope=Scope.SESSION,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _RequestService,
         provides=_RequestService,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _ActionService,
         provides=_ActionService,
         scope=Scope.ACTION,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _StepService,
         provides=_StepService,
         scope=Scope.STEP,

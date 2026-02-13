@@ -42,8 +42,8 @@ def main() -> None:
 
     print(f"missing_maybe={container.resolve(Maybe[ApiClient])!r}")  # => missing_maybe=None
 
-    container.add_concrete(ServiceWithDefault, provides=ServiceWithDefault)
-    container.add_concrete(ServiceWithoutDefault, provides=ServiceWithoutDefault)
+    container.add(ServiceWithDefault, provides=ServiceWithDefault)
+    container.add(ServiceWithoutDefault, provides=ServiceWithoutDefault)
 
     with_default = container.resolve(ServiceWithDefault)
     without_default = container.resolve(ServiceWithoutDefault)

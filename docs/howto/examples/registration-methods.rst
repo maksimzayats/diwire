@@ -7,8 +7,22 @@ Registration methods
 What you'll learn
 -----------------
 
-- Register providers using ``add_instance()``, ``add_concrete()``, and factory variants.
+- Register providers using ``add()``, ``add_instance()``, and factory variants.
 - Pick the registration method that matches a single responsibility.
+
+Add
+---
+
+Run locally
+~~~~~~~~~~~
+
+.. code-block:: bash
+
+   uv run python examples/ex_02_registration_methods/01_add.py
+
+.. literalinclude:: ../../../examples/ex_02_registration_methods/01_add.py
+   :language: python
+   :class: diwire-example py-run
 
 Add instance
 ------------
@@ -18,23 +32,9 @@ Run locally
 
 .. code-block:: bash
 
-   uv run python examples/ex_02_registration_methods/01_add_instance.py
+   uv run python examples/ex_02_registration_methods/02_add_instance.py
 
-.. literalinclude:: ../../../examples/ex_02_registration_methods/01_add_instance.py
-   :language: python
-   :class: diwire-example py-run
-
-Add concrete
-------------
-
-Run locally
-~~~~~~~~~~~
-
-.. code-block:: bash
-
-   uv run python examples/ex_02_registration_methods/02_add_concrete.py
-
-.. literalinclude:: ../../../examples/ex_02_registration_methods/02_add_concrete.py
+.. literalinclude:: ../../../examples/ex_02_registration_methods/02_add_instance.py
    :language: python
    :class: diwire-example py-run
 

@@ -23,8 +23,8 @@ class UsesExpensiveProvider:
 def main() -> None:
     Expensive.build_count = 0
     container = Container()
-    container.add_concrete(Expensive)
-    container.add_concrete(UsesExpensiveProvider)
+    container.add(Expensive)
+    container.add(UsesExpensiveProvider)
 
     consumer = container.resolve(UsesExpensiveProvider)
     before_call = Expensive.build_count

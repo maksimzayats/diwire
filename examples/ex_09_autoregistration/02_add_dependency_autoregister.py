@@ -18,7 +18,7 @@ class Root:
 
 def main() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         Root,
         dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
     )

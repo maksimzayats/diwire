@@ -16,7 +16,7 @@ def _resolver_scope_name(resolver: object) -> str:
 
 def main() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         RequestDependency,
         provides=RequestDependency,
         scope=Scope.REQUEST,

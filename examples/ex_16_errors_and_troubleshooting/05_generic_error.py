@@ -27,7 +27,7 @@ class DefaultModelBox(ModelBox[M]):
 
 def main() -> None:
     container = Container()
-    container.add_concrete(DefaultModelBox, provides=ModelBox)
+    container.add(DefaultModelBox, provides=ModelBox)
 
     invalid_key = cast("Any", ModelBox)[str]
     try:

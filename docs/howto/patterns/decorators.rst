@@ -57,7 +57,7 @@ Tracing Example
 
    container = Container()
    container.add_instance("https://api.example.com", provides=str)
-   container.add_concrete(RequestsHttpClient, provides=HttpClient)
+   container.add(RequestsHttpClient, provides=HttpClient)
    container.add_instance(Tracer(), provides=Tracer)
    container.decorate(provides=HttpClient, decorator=TracedHttpClient)
 
@@ -79,7 +79,7 @@ Caching Example
            self.inner = inner
 
 
-   container.add_concrete(SqlRepo, provides=Repo)
+   container.add(SqlRepo, provides=Repo)
    container.decorate(provides=Repo, decorator=CachedRepo)
 
 Decorator Rules

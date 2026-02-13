@@ -48,7 +48,7 @@ If you can write this:
 
 When you need explicit control, you still have it:
 
-- interface/protocol bindings via ``add_concrete(..., provides=...)``
+- interface/protocol bindings via ``add(..., provides=...)``
 - instances via ``add_instance(...)``
 - factories (sync/async/generator/context manager)
 - lifetimes (``TRANSIENT``, ``SCOPED``) and scope transitions (root-scoped ``SCOPED`` behaves like a singleton)

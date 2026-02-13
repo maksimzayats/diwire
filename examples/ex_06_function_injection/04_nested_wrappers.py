@@ -24,7 +24,7 @@ class OuterService:
 
 def main() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         RequestDependency,
         provides=RequestDependency,
         scope=Scope.REQUEST,

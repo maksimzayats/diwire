@@ -18,7 +18,7 @@ class _FakeService(_Service):
 @pytest.fixture()
 def diwire_container() -> Container:
     container = Container()
-    container.add_concrete(
+    container.add(
         _FakeService,
         provides=_Service,
         lifetime=Lifetime.SCOPED,

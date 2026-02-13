@@ -16,7 +16,7 @@ class _ScopedService:
 
 def test_benchmark_diwire_enter_close_scope_resolve_scoped_100(benchmark: Any) -> None:
     container = make_diwire_benchmark_container()
-    container.add_concrete(
+    container.add(
         _ScopedService,
         lifetime=Lifetime.SCOPED,
         scope=Scope.REQUEST,

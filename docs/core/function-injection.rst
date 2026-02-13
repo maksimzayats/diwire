@@ -99,7 +99,7 @@ wrapper:
        pass
 
    container = Container()
-   container.add_concrete(
+   container.add(
        RequestService,
        provides=RequestService,
        scope=Scope.REQUEST,

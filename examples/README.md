@@ -102,15 +102,52 @@ if __name__ == "__main__":
 ## 02. Registration Methods
 
 Files:
-- [01_add_instance.py](#ex-02-registration-methods--01-add-instance-py)
-- [02_add_concrete.py](#ex-02-registration-methods--02-add-concrete-py)
+- [01_add.py](#ex-02-registration-methods--01-add-py)
+- [02_add_instance.py](#ex-02-registration-methods--02-add-instance-py)
 - [03_add_factory.py](#ex-02-registration-methods--03-add-factory-py)
 - [04_add_generator_cleanup.py](#ex-02-registration-methods--04-add-generator-cleanup-py)
 - [05_add_context_manager_cleanup.py](#ex-02-registration-methods--05-add-context-manager-cleanup-py)
 - [06_explicit_dependencies.py](#ex-02-registration-methods--06-explicit-dependencies-py)
 
-<a id="ex-02-registration-methods--01-add-instance-py"></a>
-### 01_add_instance.py ([ex_02_registration_methods/01_add_instance.py](ex_02_registration_methods/01_add_instance.py))
+<a id="ex-02-registration-methods--01-add-py"></a>
+### 01_add.py ([ex_02_registration_methods/01_add.py](ex_02_registration_methods/01_add.py))
+
+Focused example: ``add`` for constructor-based creation.
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from diwire import Container
+
+
+class Dependency:
+    pass
+
+
+@dataclass(slots=True)
+class Service:
+    dependency: Dependency
+
+
+def main() -> None:
+    container = Container()
+    container.add(Dependency, provides=Dependency)
+    container.add(Service, provides=Service)
+
+    resolved = container.resolve(Service)
+    print(
+        f"concrete_injected_dep={isinstance(resolved.dependency, Dependency)}",
+    )  # => concrete_injected_dep=True
+
+
+if __name__ == "__main__":
+    main()
+```
+
+<a id="ex-02-registration-methods--02-add-instance-py"></a>
+### 02_add_instance.py ([ex_02_registration_methods/02_add_instance.py](ex_02_registration_methods/02_add_instance.py))
 
 Focused example: ``add_instance`` for pre-built objects.
 
@@ -135,43 +172,6 @@ def main() -> None:
     first = container.resolve(Config)
     second = container.resolve(Config)
     print(f"instance_singleton={first is second}")  # => instance_singleton=True
-
-
-if __name__ == "__main__":
-    main()
-```
-
-<a id="ex-02-registration-methods--02-add-concrete-py"></a>
-### 02_add_concrete.py ([ex_02_registration_methods/02_add_concrete.py](ex_02_registration_methods/02_add_concrete.py))
-
-Focused example: ``add_concrete`` for constructor-based creation.
-
-```python
-from __future__ import annotations
-
-from dataclasses import dataclass
-
-from diwire import Container
-
-
-class Dependency:
-    pass
-
-
-@dataclass(slots=True)
-class Service:
-    dependency: Dependency
-
-
-def main() -> None:
-    container = Container()
-    container.add_concrete(Dependency, provides=Dependency)
-    container.add_concrete(Service, provides=Service)
-
-    resolved = container.resolve(Service)
-    print(
-        f"concrete_injected_dep={isinstance(resolved.dependency, Dependency)}",
-    )  # => concrete_injected_dep=True
 
 
 if __name__ == "__main__":
@@ -431,7 +431,7 @@ class Root:
 
 def main() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         Root,
         dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
     )
@@ -563,7 +563,7 @@ class ScopedService:
 def main() -> None:
     container = Container()
 
-    container.add_concrete(
+    container.add(
         TransientService,
         provides=TransientService,
         lifetime=Lifetime.TRANSIENT,
@@ -572,7 +572,7 @@ def main() -> None:
     transient_second = container.resolve(TransientService)
     print(f"transient_new={transient_first is not transient_second}")  # => transient_new=True
 
-    container.add_concrete(
+    container.add(
         SingletonService,
         provides=SingletonService,
         lifetime=Lifetime.SCOPED,
@@ -581,7 +581,7 @@ def main() -> None:
     singleton_second = container.resolve(SingletonService)
     print(f"singleton_same={singleton_first is singleton_second}")  # => singleton_same=True
 
-    container.add_concrete(
+    container.add(
         ScopedService,
         provides=ScopedService,
         scope=Scope.REQUEST,
@@ -634,7 +634,7 @@ def _resolver_scope_name(resolver: object) -> str:
 
 def main() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         RequestDependency,
         provides=RequestDependency,
         scope=Scope.REQUEST,
@@ -675,7 +675,7 @@ class RequestDependency:
 
 def main() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         RequestDependency,
         provides=RequestDependency,
         scope=Scope.REQUEST,
@@ -1136,7 +1136,7 @@ class OuterService:
 
 def main() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         RequestDependency,
         provides=RequestDependency,
         scope=Scope.REQUEST,
@@ -1428,8 +1428,8 @@ class B:
 
 def main() -> None:
     container = Container()
-    container.add_concrete(A)
-    container.add_concrete(B)
+    container.add(A)
+    container.add(B)
 
     resolved_a = container.resolve(A)
     resolved_b = resolved_a.get_b()
@@ -1471,8 +1471,8 @@ class UsesExpensiveProvider:
 def main() -> None:
     Expensive.build_count = 0
     container = Container()
-    container.add_concrete(Expensive)
-    container.add_concrete(UsesExpensiveProvider)
+    container.add(Expensive)
+    container.add(UsesExpensiveProvider)
 
     consumer = container.resolve(UsesExpensiveProvider)
     before_call = Expensive.build_count
@@ -1516,13 +1516,13 @@ class UsesExpensiveProvider:
 def _run_scenario(*, lifetime: Lifetime) -> tuple[int, bool]:
     Expensive.build_count = 0
     container = Container()
-    container.add_concrete(
+    container.add(
         Expensive,
         provides=Expensive,
         scope=Scope.REQUEST,
         lifetime=lifetime,
     )
-    container.add_concrete(
+    container.add(
         UsesExpensiveProvider,
         provides=UsesExpensiveProvider,
         scope=Scope.REQUEST,
@@ -1582,13 +1582,13 @@ class SecondService:
 
 def main() -> None:
     container = Container()
-    container.add_concrete(FirstService, provides=FirstService)
+    container.add(FirstService, provides=FirstService)
 
     compiled_first = container.compile()
     compiled_second = container.compile()
     print(f"compile_cached={compiled_first is compiled_second}")  # => compile_cached=True
 
-    container.add_concrete(SecondService, provides=SecondService)
+    container.add(SecondService, provides=SecondService)
     compiled_third = container.compile()
     print(
         f"compile_invalidated={compiled_third is not compiled_first}",
@@ -1681,8 +1681,8 @@ class _SpecialIntBox(IBox[int]):
 
 def main() -> None:
     container = Container()
-    container.add_concrete(Box, provides=IBox)
-    container.add_concrete(_SpecialIntBox, provides=IBox[int])
+    container.add(Box, provides=IBox)
+    container.add(_SpecialIntBox, provides=IBox[int])
 
     resolved = container.resolve(IBox[int])
     print(f"override={type(resolved).__name__}")  # => override=_SpecialIntBox
@@ -1725,8 +1725,8 @@ class ListRepo(Repo[list[U]]):
 
 def main() -> None:
     container = Container()
-    container.add_concrete(GenericRepo, provides=Repo)
-    container.add_concrete(ListRepo, provides=Repo[list[U]])
+    container.add(GenericRepo, provides=Repo)
+    container.add(ListRepo, provides=Repo[list[U]])
 
     resolved = cast("ListRepo[int]", container.resolve(Repo[list[int]]))
     print(f"specificity_item={resolved.item_type.__name__}")  # => specificity_item=int
@@ -1820,7 +1820,7 @@ class ConstrainedBoxImpl(ConstrainedBox[Allowed]):
 
 def main() -> None:
     container = Container()
-    container.add_concrete(ConstrainedBoxImpl, provides=ConstrainedBox)
+    container.add(ConstrainedBoxImpl, provides=ConstrainedBox)
 
     valid_int = container.resolve(ConstrainedBox[int])
     valid_str = container.resolve(ConstrainedBox[str])
@@ -2312,7 +2312,7 @@ class RequestDependency:
 
 def main() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         RequestDependency,
         provides=RequestDependency,
         scope=Scope.REQUEST,
@@ -2435,7 +2435,7 @@ class DefaultModelBox(ModelBox[M]):
 
 def main() -> None:
     container = Container()
-    container.add_concrete(DefaultModelBox, provides=ModelBox)
+    container.add(DefaultModelBox, provides=ModelBox)
 
     invalid_key = cast("Any", ModelBox)[str]
     try:
@@ -2533,9 +2533,9 @@ Metrics: TypeAlias = Annotated[EventHandler, Component("metrics")]
 def main() -> None:
     container = Container()
 
-    container.add_concrete(BaseHandler, provides=EventHandler)
-    container.add_concrete(LoggingHandler, provides=Logging)
-    container.add_concrete(MetricsHandler, provides=Metrics)
+    container.add(BaseHandler, provides=EventHandler)
+    container.add(LoggingHandler, provides=Logging)
+    container.add(MetricsHandler, provides=Metrics)
 
     handlers = container.resolve(All[EventHandler])
     print(
@@ -2606,8 +2606,8 @@ def main() -> None:
 
     print(f"missing_maybe={container.resolve(Maybe[ApiClient])!r}")  # => missing_maybe=None
 
-    container.add_concrete(ServiceWithDefault, provides=ServiceWithDefault)
-    container.add_concrete(ServiceWithoutDefault, provides=ServiceWithoutDefault)
+    container.add(ServiceWithDefault, provides=ServiceWithDefault)
+    container.add(ServiceWithoutDefault, provides=ServiceWithoutDefault)
 
     with_default = container.resolve(ServiceWithDefault)
     without_default = container.resolve(ServiceWithoutDefault)
@@ -2717,7 +2717,7 @@ def main() -> None:
     container.add_instance("Hello", provides=str)
     tracer = Tracer(events=[])
     container.add_instance(tracer, provides=Tracer)
-    container.add_concrete(SimpleGreeter, provides=Greeter)
+    container.add(SimpleGreeter, provides=Greeter)
 
     # Step 1: one decorator.
     container.decorate(provides=Greeter, decorator=TracedGreeter)
@@ -2748,7 +2748,7 @@ def main() -> None:
 
     # Step 3: replace the base binding; decorators remain.
     container.add_instance("Hi", provides=str)
-    container.add_concrete(FriendlyGreeter, provides=Greeter)
+    container.add(FriendlyGreeter, provides=Greeter)
     rebound_greeter = container.resolve(Greeter)
     rebound_result = rebound_greeter.greet("Lee")
     print(
@@ -2821,7 +2821,7 @@ def main() -> None:
         decorator=CachedRepo,
         inner_parameter="inner",
     )
-    container.add_concrete(SqlRepo, provides=PrimaryRepo)
+    container.add(SqlRepo, provides=PrimaryRepo)
 
     decorated = container.resolve(PrimaryRepo)
     print(f"pattern_a_outer={type(decorated).__name__}")  # => pattern_a_outer=CachedRepo
@@ -3006,7 +3006,7 @@ def main() -> None:
     container = Container()
     dependency = Dependency(name="framework")
     container.add_instance(dependency)
-    container.add_concrete(Consumer)
+    container.add(Consumer)
 
     print(
         f"dataclass_ok={container.resolve(Consumer).dependency is dependency}",
@@ -3042,7 +3042,7 @@ def main() -> None:
     container = Container()
     dependency = Dependency()
     container.add_instance(dependency)
-    container.add_concrete(Consumer)
+    container.add(Consumer)
 
     print(
         f"namedtuple_ok={container.resolve(Consumer).dependency is dependency}",
@@ -3079,7 +3079,7 @@ def main() -> None:
     container = Container()
     dependency = Dependency()
     container.add_instance(dependency)
-    container.add_concrete(Consumer)
+    container.add(Consumer)
 
     print(f"attrs_ok={container.resolve(Consumer).dependency is dependency}")  # => attrs_ok=True
 
@@ -3114,7 +3114,7 @@ def main() -> None:
     container = Container()
     dependency = Dependency()
     container.add_instance(dependency)
-    container.add_concrete(Consumer)
+    container.add(Consumer)
 
     print(
         f"pydantic_ok={container.resolve(Consumer).dependency is dependency}",
@@ -3150,7 +3150,7 @@ def main() -> None:
     container = Container()
     dependency = Dependency()
     container.add_instance(dependency)
-    container.add_concrete(Consumer)
+    container.add(Consumer)
 
     print(
         f"msgspec_ok={container.resolve(Consumer).dependency is dependency}",
@@ -3265,7 +3265,7 @@ class ServiceImpl(Service):
 @pytest.fixture()
 def diwire_container() -> Container:
     container = Container()
-    container.add_concrete(
+    container.add(
         ServiceImpl,
         provides=Service,
         lifetime=Lifetime.SCOPED,

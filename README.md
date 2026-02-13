@@ -107,7 +107,7 @@ class SystemClock:
 
 
 container = Container()
-container.add_concrete(
+container.add(
     SystemClock,
     provides=Clock,
     lifetime=Lifetime.SCOPED,

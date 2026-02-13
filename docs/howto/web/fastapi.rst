@@ -33,7 +33,7 @@ closes it when the endpoint returns.
            return "ok"
 
 
-   container.add_concrete(RequestService, provides=RequestService,
+   container.add(RequestService, provides=RequestService,
        scope=Scope.REQUEST,
        lifetime=Lifetime.SCOPED,
    )

@@ -17,7 +17,7 @@ class _TransientService:
 
 def test_benchmark_diwire_resolve_transient(benchmark: Any) -> None:
     container = make_diwire_benchmark_container()
-    container.add_concrete(_TransientService, lifetime=Lifetime.TRANSIENT)
+    container.add(_TransientService, lifetime=Lifetime.TRANSIENT)
     container.compile()
     first = container.resolve(_TransientService)
     second = container.resolve(_TransientService)

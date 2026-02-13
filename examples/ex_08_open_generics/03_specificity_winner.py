@@ -27,8 +27,8 @@ class ListRepo(Repo[list[U]]):
 
 def main() -> None:
     container = Container()
-    container.add_concrete(GenericRepo, provides=Repo)
-    container.add_concrete(ListRepo, provides=Repo[list[U]])
+    container.add(GenericRepo, provides=Repo)
+    container.add(ListRepo, provides=Repo[list[U]])
 
     resolved = cast("ListRepo[int]", container.resolve(Repo[list[int]]))
     print(f"specificity_item={resolved.item_type.__name__}")  # => specificity_item=int

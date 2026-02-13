@@ -14,24 +14,10 @@ diwire can auto-wire many graphs with zero registrations, but real applications 
 Direct registration APIs
 ------------------------
 
-Instances
-^^^^^^^^^
+Add (concrete types)
+^^^^^^^^^^^^^^^^^^^^
 
-Use :meth:`diwire.Container.add_instance` to bind an already-created object:
-
-.. code-block:: python
-
-   from diwire import Container
-
-   class Config: ...
-
-   container = Container()
-   container.add_instance(Config())
-
-Concrete types
-^^^^^^^^^^^^^^
-
-Use :meth:`diwire.Container.add_concrete` when you want to resolve ``provides`` but construct ``concrete_type``:
+Use :meth:`diwire.Container.add` when you want to resolve ``provides`` but construct ``concrete_type``:
 
 .. code-block:: python
 
@@ -50,7 +36,21 @@ Use :meth:`diwire.Container.add_concrete` when you want to resolve ``provides`` 
 
 
    container = Container()
-   container.add_concrete(SystemClock, provides=Clock)
+   container.add(SystemClock, provides=Clock)
+
+Instances
+^^^^^^^^^
+
+Use :meth:`diwire.Container.add_instance` to bind an already-created object:
+
+.. code-block:: python
+
+   from diwire import Container
+
+   class Config: ...
+
+   container = Container()
+   container.add_instance(Config())
 
 Factories
 ^^^^^^^^^

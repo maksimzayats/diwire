@@ -38,40 +38,40 @@ def _context_manager() -> Generator[_Service, None, None]:
             "add_instance\\(\\) parameter 'provides'",
         ),
         (
-            lambda container: container.add_concrete(_Service, provides=cast("Any", None)),
-            "add_concrete\\(\\) parameter 'provides'",
+            lambda container: container.add(_Service, provides=cast("Any", None)),
+            "add\\(\\) parameter 'provides'",
         ),
         (
-            lambda container: container.add_concrete(cast("Any", None), provides=_Service),
-            "add_concrete\\(\\) parameter 'concrete_type'",
+            lambda container: container.add(cast("Any", None), provides=_Service),
+            "add\\(\\) parameter 'concrete_type'",
         ),
         (
-            lambda container: container.add_concrete(
+            lambda container: container.add(
                 _Service,
                 scope=cast("Any", None),
             ),
-            "add_concrete\\(\\) parameter 'scope'",
+            "add\\(\\) parameter 'scope'",
         ),
         (
-            lambda container: container.add_concrete(
+            lambda container: container.add(
                 _Service,
                 lifetime=cast("Any", None),
             ),
-            "add_concrete\\(\\) parameter 'lifetime'",
+            "add\\(\\) parameter 'lifetime'",
         ),
         (
-            lambda container: container.add_concrete(
+            lambda container: container.add(
                 _Service,
                 dependencies=cast("Any", None),
             ),
-            "add_concrete\\(\\) parameter 'dependencies'",
+            "add\\(\\) parameter 'dependencies'",
         ),
         (
-            lambda container: container.add_concrete(
+            lambda container: container.add(
                 _Service,
                 dependency_registration_policy=cast("Any", None),
             ),
-            "add_concrete\\(\\) parameter 'dependency_registration_policy'",
+            "add\\(\\) parameter 'dependency_registration_policy'",
         ),
         (
             lambda container: container.add_factory(cast("Any", None)),
@@ -244,7 +244,7 @@ def test_policy_parameters_accept_enums_and_from_container_literal() -> None:
         missing_policy=MissingPolicy.ERROR,
         dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
     )
-    container.add_concrete(
+    container.add(
         _Service,
         dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
     )
@@ -261,10 +261,10 @@ def test_policy_parameters_accept_enums_and_from_container_literal() -> None:
     assert callable(context.inject(dependency_registration_policy="from_container"))
 
 
-def test_container_add_concrete_accepts_non_class_provides_key() -> None:
+def test_container_add_accepts_non_class_provides_key() -> None:
     container = Container()
 
-    container.add_concrete(_Service, provides=cast("Any", "alias"))
+    container.add(_Service, provides=cast("Any", "alias"))
 
     operation = container._providers_registrations.find_by_type("alias")
     assert operation is not None
@@ -371,21 +371,21 @@ async def test_container_aresolve_rejects_invalid_auto_register_parameters(
             "auto_add_dependencies",
         ),
         (
-            lambda: cast("Any", Container()).add_concrete(
+            lambda: cast("Any", Container()).add(
                 _Service,
                 register_dependencies=True,
             ),
             "register_dependencies",
         ),
         (
-            lambda: cast("Any", Container()).add_concrete(
+            lambda: cast("Any", Container()).add(
                 _Service,
                 autoregister_dependencies=True,
             ),
             "autoregister_dependencies",
         ),
         (
-            lambda: cast("Any", Container()).add_concrete(
+            lambda: cast("Any", Container()).add(
                 _Service,
                 add_dependencies=True,
             ),

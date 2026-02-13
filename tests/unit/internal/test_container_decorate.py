@@ -131,7 +131,7 @@ def test_decorate_applies_immediately_when_base_binding_already_exists() -> None
     container = Container()
     container.add_instance("https://api.example.com", provides=str)
     container.add_instance(_Tracer(), provides=_Tracer)
-    container.add_concrete(_RequestsHttpClient, provides=_HttpClient)
+    container.add(_RequestsHttpClient, provides=_HttpClient)
 
     container.decorate(provides=_HttpClient, decorator=_TracedHttpClient)
 
@@ -146,7 +146,7 @@ def test_decorate_can_be_called_before_base_registration() -> None:
     container.decorate(provides=_HttpClient, decorator=_TracedHttpClient)
     container.add_instance("https://api.example.com", provides=str)
     container.add_instance(_Tracer(), provides=_Tracer)
-    container.add_concrete(_RequestsHttpClient, provides=_HttpClient)
+    container.add(_RequestsHttpClient, provides=_HttpClient)
 
     resolved = container.resolve(_HttpClient)
     assert isinstance(resolved, _TracedHttpClient)
@@ -155,7 +155,7 @@ def test_decorate_can_be_called_before_base_registration() -> None:
 
 def test_decorators_stack_in_registration_order() -> None:
     container = Container()
-    container.add_concrete(_ServiceImpl, provides=_Service)
+    container.add(_ServiceImpl, provides=_Service)
 
     container.decorate(provides=_Service, decorator=_FirstLayer)
     container.decorate(provides=_Service, decorator=_SecondLayer)
@@ -184,7 +184,7 @@ def test_decorate_requires_explicit_inner_parameter_for_ambiguous_decorator() ->
 
 def test_decorate_supports_annotated_keys_with_explicit_inner_parameter() -> None:
     container = Container()
-    container.add_concrete(_PrimaryRepoImpl, provides=PrimaryRepo)
+    container.add(_PrimaryRepoImpl, provides=PrimaryRepo)
 
     container.decorate(
         provides=PrimaryRepo,
@@ -222,12 +222,12 @@ def test_decorate_applies_to_later_open_generic_registration() -> None:
 def test_re_registering_base_binding_rebuilds_decorator_chain() -> None:
     container = Container()
     container.decorate(provides=_Repo, decorator=_LockAwareRepoDecorator)
-    container.add_concrete(_RepoA, provides=_Repo, lock_mode=LockMode.THREAD)
+    container.add(_RepoA, provides=_Repo, lock_mode=LockMode.THREAD)
 
     first = container.resolve(_Repo)
     first_spec = container._providers_registrations.get_by_type(_Repo)
 
-    container.add_concrete(_RepoB, provides=_Repo, lock_mode=LockMode.NONE)
+    container.add(_RepoB, provides=_Repo, lock_mode=LockMode.NONE)
 
     second = container.resolve(_Repo)
     second_spec = container._providers_registrations.get_by_type(_Repo)

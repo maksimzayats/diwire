@@ -137,7 +137,7 @@ def test_explicit_dependencies_for_concrete_type_are_validated() -> None:
     }
 
     container = Container()
-    container.add_concrete(ConcreteService, provides=Service, dependencies=dependencies)
+    container.add(ConcreteService, provides=Service, dependencies=dependencies)
 
     provider_spec = container._providers_registrations.get_by_type(Service)
     assert [dependency.parameter.name for dependency in provider_spec.dependencies] == ["dep"]

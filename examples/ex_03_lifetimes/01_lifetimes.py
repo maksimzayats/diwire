@@ -24,7 +24,7 @@ class ScopedService:
 def main() -> None:
     container = Container()
 
-    container.add_concrete(
+    container.add(
         TransientService,
         provides=TransientService,
         lifetime=Lifetime.TRANSIENT,
@@ -33,7 +33,7 @@ def main() -> None:
     transient_second = container.resolve(TransientService)
     print(f"transient_new={transient_first is not transient_second}")  # => transient_new=True
 
-    container.add_concrete(
+    container.add(
         SingletonService,
         provides=SingletonService,
         lifetime=Lifetime.SCOPED,
@@ -42,7 +42,7 @@ def main() -> None:
     singleton_second = container.resolve(SingletonService)
     print(f"singleton_same={singleton_first is singleton_second}")  # => singleton_same=True
 
-    container.add_concrete(
+    container.add(
         ScopedService,
         provides=ScopedService,
         scope=Scope.REQUEST,

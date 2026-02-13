@@ -17,7 +17,7 @@ class _SingletonService:
 
 def test_benchmark_diwire_resolve_singleton(benchmark: Any) -> None:
     container = make_diwire_benchmark_container()
-    container.add_concrete(_SingletonService, lifetime=Lifetime.SCOPED)
+    container.add(_SingletonService, lifetime=Lifetime.SCOPED)
     container.compile()
     first = container.resolve(_SingletonService)
     second = container.resolve(_SingletonService)

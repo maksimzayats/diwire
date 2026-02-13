@@ -363,13 +363,13 @@ def test_inject_sync_raises_for_async_dependency_chain() -> None:
 
 def test_inject_infers_scope_depth_from_dependency_graph() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _RequestDependency,
         provides=_RequestDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _RequestConsumer,
         provides=_RequestConsumer,
         scope=Scope.SESSION,
@@ -478,7 +478,7 @@ def test_inject_auto_open_scope_is_noop_when_target_scope_is_already_opened() ->
 
 def test_inject_auto_open_scope_infers_target_scope() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _RequestDependency,
         provides=_RequestDependency,
         scope=Scope.REQUEST,
@@ -501,7 +501,7 @@ def test_inject_auto_open_scope_infers_target_scope_after_late_registration() ->
     def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
         return dep
 
-    container.add_concrete(
+    container.add(
         _RequestDependency,
         provides=_RequestDependency,
         scope=Scope.REQUEST,
@@ -593,7 +593,7 @@ def test_inject_auto_open_scope_raises_when_inferred_scope_has_no_matching_scope
 @pytest.mark.asyncio
 async def test_inject_async_scope_mismatch_without_request_resolver() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _RequestDependency,
         provides=_RequestDependency,
         scope=Scope.REQUEST,
@@ -616,7 +616,7 @@ async def test_inject_async_scope_mismatch_without_request_resolver() -> None:
 @pytest.mark.asyncio
 async def test_inject_async_auto_open_scope_without_manual_scope_management() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _RequestDependency,
         provides=_RequestDependency,
         scope=Scope.REQUEST,
@@ -634,7 +634,7 @@ async def test_inject_async_auto_open_scope_without_manual_scope_management() ->
 
 def test_inject_nested_wrappers_propagate_same_resolver() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _RequestDependency,
         provides=_RequestDependency,
         scope=Scope.REQUEST,
@@ -674,13 +674,13 @@ def test_inject_nested_wrappers_propagate_same_resolver() -> None:
 
 def test_inject_rejects_explicit_scope_shallower_than_inferred() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _RequestDependency,
         provides=_RequestDependency,
         scope=Scope.REQUEST,
         lifetime=Lifetime.SCOPED,
     )
-    container.add_concrete(
+    container.add(
         _RequestConsumer,
         provides=_RequestConsumer,
         scope=Scope.SESSION,
@@ -702,7 +702,7 @@ def test_inject_revalidates_explicit_scope_after_late_registration_sync() -> Non
         return dep
 
     with pytest.raises(DIWireInvalidRegistrationError, match="shallower than required"):
-        container.add_concrete(
+        container.add(
             _RequestDependency,
             provides=_RequestDependency,
             scope=Scope.REQUEST,
@@ -722,7 +722,7 @@ async def test_inject_revalidates_explicit_scope_after_late_registration_async()
         return dep
 
     with pytest.raises(DIWireInvalidRegistrationError, match="shallower than required"):
-        container.add_concrete(
+        container.add(
             _RequestDependency,
             provides=_RequestDependency,
             scope=Scope.REQUEST,
@@ -740,7 +740,7 @@ def test_inject_without_explicit_scope_still_works_after_late_registration() -> 
     def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
         return dep
 
-    container.add_concrete(
+    container.add(
         _RequestDependency,
         provides=_RequestDependency,
         scope=Scope.REQUEST,
@@ -761,7 +761,7 @@ def test_inject_revalidates_explicit_scope_on_registration_when_still_compatible
     def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
         return dep
 
-    container.add_concrete(
+    container.add(
         _RequestDependency,
         provides=_RequestDependency,
         scope=Scope.REQUEST,
@@ -982,7 +982,7 @@ def test_inject_preserves_component_annotated_dependency_key() -> None:
 
 def test_inject_scope_mismatch_is_raised_when_no_compatible_resolver_is_provided() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _RequestDependency,
         provides=_RequestDependency,
         scope=Scope.REQUEST,
@@ -1203,7 +1203,7 @@ def test_enter_scope_if_needed_raises_for_legacy_resolver_with_context_kwarg() -
 
 def test_infer_dependency_scope_level_uses_cache_and_handles_cycle_guard() -> None:
     container = Container()
-    container.add_concrete(
+    container.add(
         _RequestDependency,
         provides=_RequestDependency,
         scope=Scope.REQUEST,
@@ -1234,7 +1234,7 @@ def test_infer_dependency_scope_level_uses_cache_and_handles_cycle_guard() -> No
 
 def test_inject_resolves_open_generic_dependency_via_wrapper_fallback() -> None:
     container = Container()
-    container.add_concrete(_InjectedOpenBoxImpl, provides=_InjectedOpenBox)
+    container.add(_InjectedOpenBoxImpl, provides=_InjectedOpenBox)
 
     @resolver_context.inject
     def handler(box: Injected[_InjectedOpenBox[str]]) -> str:
@@ -1269,7 +1269,7 @@ def test_is_registered_in_resolver_fallback_checks_container_and_open_generic_re
         is True
     )
 
-    container.add_concrete(_InjectedOpenBoxImpl, provides=_InjectedOpenBox)
+    container.add(_InjectedOpenBoxImpl, provides=_InjectedOpenBox)
     assert (
         container._is_registered_in_resolver(
             resolver=resolver_without_registered_checker,

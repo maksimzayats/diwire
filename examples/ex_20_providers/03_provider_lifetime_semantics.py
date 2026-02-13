@@ -23,13 +23,13 @@ class UsesExpensiveProvider:
 def _run_scenario(*, lifetime: Lifetime) -> tuple[int, bool]:
     Expensive.build_count = 0
     container = Container()
-    container.add_concrete(
+    container.add(
         Expensive,
         provides=Expensive,
         scope=Scope.REQUEST,
         lifetime=lifetime,
     )
-    container.add_concrete(
+    container.add(
         UsesExpensiveProvider,
         provides=UsesExpensiveProvider,
         scope=Scope.REQUEST,

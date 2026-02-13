@@ -93,8 +93,8 @@ async def _async_context_box(type_arg: type[T]) -> AsyncGenerator[_IBox[T], None
 
 def test_open_key_canonicalization_allows_latest_override_for_equivalent_keys() -> None:
     container = Container()
-    container.add_concrete(_BoxA, provides=_IBox)
-    container.add_concrete(_BoxB, provides=_IBox[T])
+    container.add(_BoxA, provides=_IBox)
+    container.add(_BoxB, provides=_IBox[T])
 
     resolved = container.resolve(_IBox[int])
 
@@ -103,7 +103,7 @@ def test_open_key_canonicalization_allows_latest_override_for_equivalent_keys() 
 
 def test_open_concrete_registration_resolves_closed_generic_requests() -> None:
     container = Container()
-    container.add_concrete(_Box, provides=_IBox)
+    container.add(_Box, provides=_IBox)
 
     resolved = container.resolve(_IBox[str])
 
@@ -113,8 +113,8 @@ def test_open_concrete_registration_resolves_closed_generic_requests() -> None:
 
 def test_closed_registration_wins_over_open_template() -> None:
     container = Container()
-    container.add_concrete(_Box, provides=_IBox)
-    container.add_concrete(_SpecialIntBox, provides=_IBox[int])
+    container.add(_Box, provides=_IBox)
+    container.add(_SpecialIntBox, provides=_IBox[int])
 
     int_box = container.resolve(_IBox[int])
     str_box = container.resolve(_IBox[str])
@@ -126,8 +126,8 @@ def test_closed_registration_wins_over_open_template() -> None:
 
 def test_closed_generic_override_with_kw_only_dataclass_typevar_field_is_resolvable() -> None:
     container = Container()
-    container.add_concrete(_KeywordBoxImpl, provides=_KeywordBox)
-    container.add_concrete(_KeywordSpecialIntBox, provides=_KeywordBox[int])
+    container.add(_KeywordBoxImpl, provides=_KeywordBox)
+    container.add(_KeywordSpecialIntBox, provides=_KeywordBox[int])
 
     str_box = container.resolve(_KeywordBox[str])
     int_box = container.resolve(_KeywordBox[int])
@@ -258,8 +258,8 @@ class _ListRepo(_Repo[list[U]]):
 
 def test_most_specific_open_template_wins_for_matching_request() -> None:
     container = Container()
-    container.add_concrete(_GenericRepo, provides=_Repo)
-    container.add_concrete(_ListRepo, provides=_Repo[list[U]])
+    container.add(_GenericRepo, provides=_Repo)
+    container.add(_ListRepo, provides=_Repo[list[U]])
 
     resolved_specific = container.resolve(_Repo[list[int]])
     resolved_fallback = container.resolve(_Repo[str])
@@ -292,7 +292,7 @@ class _DefaultModelBox(_ModelBox[M]):
 
 def test_typevar_bound_is_validated_at_resolve_time() -> None:
     container = Container()
-    container.add_concrete(_DefaultModelBox, provides=_ModelBox)
+    container.add(_DefaultModelBox, provides=_ModelBox)
 
     valid = container.resolve(_ModelBox[_User])
     assert isinstance(valid, _DefaultModelBox)
@@ -305,7 +305,7 @@ def test_typevar_bound_is_validated_at_resolve_time() -> None:
 
 def test_injected_open_generic_uses_open_resolver_fallback() -> None:
     container = Container()
-    container.add_concrete(_Box, provides=_IBox)
+    container.add(_Box, provides=_IBox)
 
     @resolver_context.inject
     def handler(box: Injected[_IBox[str]]) -> str:
@@ -318,8 +318,8 @@ def test_injected_open_generic_uses_open_resolver_fallback() -> None:
 def test_resolver_context_fallback_uses_latest_canonical_open_key() -> None:
     context = ResolverContext()
     runtime = Container(resolver_context=context)
-    runtime.add_concrete(_BoxA, provides=_IBox)
-    runtime.add_concrete(_BoxB, provides=_IBox[T])
+    runtime.add(_BoxA, provides=_IBox)
+    runtime.add(_BoxB, provides=_IBox[T])
 
     @context.inject
     def handler(box: Injected[_IBox[int]]) -> _IBox[int]:
@@ -390,7 +390,7 @@ def test_open_scoped_cache_works_when_entering_action_scope_directly() -> None:
 
 def test_resolving_open_generic_without_type_arguments_remains_unregistered() -> None:
     container = Container()
-    container.add_concrete(_Box, provides=_IBox)
+    container.add(_Box, provides=_IBox)
 
     with pytest.raises(DIWireDependencyNotRegisteredError):
         container.resolve(_IBox)
@@ -398,7 +398,7 @@ def test_resolving_open_generic_without_type_arguments_remains_unregistered() ->
 
 def test_autoregister_skips_open_generic_dependencies_when_match_exists() -> None:
     container = Container()
-    container.add_concrete(_Box, provides=_IBox)
+    container.add(_Box, provides=_IBox)
 
     resolved = container.resolve(_IBox[int])
 
