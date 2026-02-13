@@ -1,4 +1,4 @@
-container_context
+provider_context
 =================
 
-.. autodata:: diwire.container_context
+.. autodata:: diwire.provider_context

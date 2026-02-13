@@ -941,7 +941,7 @@ def test_renderer_local_value_build_passes_internal_resolver_to_inject_wrapper_p
         workflow_by_slot={workflow.slot: workflow},
     )
 
-    assert lines == ["value = _provider_1(", "    __diwire_resolver=self,", ")"]
+    assert lines == ["value = _provider_1(", "    diwire_resolver=self,", ")"]
 
 
 def test_renderer_emits_resolver_kwarg_for_async_inject_wrapper() -> None:
@@ -971,7 +971,7 @@ def test_renderer_emits_resolver_kwarg_for_async_inject_wrapper() -> None:
 
     assert lines == [
         "value = _provider_1(",
-        "    __diwire_resolver=self,",
+        "    diwire_resolver=self,",
         ")",
         "value = await value",
     ]
@@ -1029,7 +1029,7 @@ def test_renderer_non_inject_provider_no_extra_kwarg() -> None:
         workflow_by_slot={workflow.slot: workflow},
     )
 
-    assert "__diwire_resolver" not in "\n".join(lines)
+    assert "diwire_resolver" not in "\n".join(lines)
 
 
 def test_renderer_async_cache_replace_returns_empty_for_non_cached_workflow() -> None:
@@ -1281,7 +1281,7 @@ def test_inline_root_sync_dependency_expression_appends_resolver_for_inject_wrap
         depth=0,
     )
 
-    assert expression == "_provider_5(__diwire_resolver=self._root_resolver)"
+    assert expression == "_provider_5(diwire_resolver=self._root_resolver)"
 
 
 def test_renderer_emits_root_resolver_expression_for_inline_nested_inject_wrapper() -> None:
@@ -1318,7 +1318,7 @@ def test_renderer_emits_root_resolver_expression_for_inline_nested_inject_wrappe
         depth=0,
     )
 
-    assert expression == "_provider_5(__diwire_resolver=self._root_resolver)"
+    assert expression == "_provider_5(diwire_resolver=self._root_resolver)"
 
 
 def test_append_internal_resolver_argument_inserts_before_var_keyword_dependency() -> None:
@@ -1330,7 +1330,7 @@ def test_append_internal_resolver_argument_inserts_before_var_keyword_dependency
         resolver_expression="self",
     )
 
-    assert arguments == ["dependency", "__diwire_resolver=self", "**resolved_options"]
+    assert arguments == ["dependency", "diwire_resolver=self", "**resolved_options"]
 
 
 def test_renderer_places_internal_resolver_before_varkw() -> None:
@@ -1342,7 +1342,7 @@ def test_renderer_places_internal_resolver_before_varkw() -> None:
         resolver_expression="self",
     )
 
-    assert arguments == ["dependency", "__diwire_resolver=self", "**resolved_options"]
+    assert arguments == ["dependency", "diwire_resolver=self", "**resolved_options"]
 
 
 def test_renderer_format_dependency_argument_raises_for_invalid_keyword_parameter_name() -> None:

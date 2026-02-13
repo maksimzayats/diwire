@@ -277,7 +277,7 @@ class RootResolver:
             if parent_context is not None and key in parent_context:
                 return parent_context[key]
             parent_context_resolver = parent_context_resolver._parent_context_resolver
-        msg = (f"Context value for {key!r} is not provided. Pass it via `enter_scope(..., context={...})` (or `__diwire_context` for injected callables).")
+        msg = (f"Context value for {key!r} is not provided. Pass it via `enter_scope(..., context={...})` (or `diwire_context` for injected callables).")
         raise DIWireDependencyNotRegisteredError(msg)
 
     def _is_registered_dependency(self, dependency: Any) -> bool:
@@ -586,7 +586,7 @@ class _ActionResolver:
             if parent_context is not None and key in parent_context:
                 return parent_context[key]
             parent_context_resolver = parent_context_resolver._parent_context_resolver
-        msg = (f"Context value for {key!r} is not provided. Pass it via `enter_scope(..., context={...})` (or `__diwire_context` for injected callables).")
+        msg = (f"Context value for {key!r} is not provided. Pass it via `enter_scope(..., context={...})` (or `diwire_context` for injected callables).")
         raise DIWireDependencyNotRegisteredError(msg)
 
     def _is_registered_dependency(self, dependency: Any) -> bool:
@@ -859,7 +859,7 @@ class _StepResolver:
             if parent_context is not None and key in parent_context:
                 return parent_context[key]
             parent_context_resolver = parent_context_resolver._parent_context_resolver
-        msg = (f"Context value for {key!r} is not provided. Pass it via `enter_scope(..., context={...})` (or `__diwire_context` for injected callables).")
+        msg = (f"Context value for {key!r} is not provided. Pass it via `enter_scope(..., context={...})` (or `diwire_context` for injected callables).")
         raise DIWireDependencyNotRegisteredError(msg)
 
     def _is_registered_dependency(self, dependency: Any) -> bool:

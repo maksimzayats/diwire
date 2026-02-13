@@ -19,7 +19,7 @@ Recommended order
 6. :doc:`components` - multiple implementations via ``Component("name")``
 7. :doc:`open-generics` - open generic registrations and type-safe resolution
 8. :doc:`async` - async factories, async cleanup, and ``aresolve()``
-9. :doc:`container-context` - global context container for framework integration
+9. :doc:`provider-context` - global context container for framework integration
 10. :doc:`compilation` - precomputing the graph for speed
 11. :doc:`errors` - common error modes and how to debug them
 12. :doc:`integrations` - dataclasses/namedtuple/pydantic/attrs/msgspec notes
@@ -35,7 +35,7 @@ Recommended order
    components
    open-generics
    async
-   container-context
+   provider-context
    compilation
    errors
    integrations

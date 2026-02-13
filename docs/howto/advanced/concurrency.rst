@@ -1,5 +1,5 @@
 .. meta::
-   :description: Concurrency and diwire: resolving from multiple threads/tasks, request scopes, LockMode behavior, and container_context considerations.
+   :description: Concurrency and diwire: resolving from multiple threads/tasks, request scopes, LockMode behavior, and provider_context considerations.
 
 Concurrency
 ===========
@@ -60,12 +60,12 @@ In async code, prefer:
 - async factories + :meth:`diwire.Container.aresolve`
 - ``async with container.enter_scope(...):`` for scoped async cleanup
 
-container_context and threadpools
+provider_context and threadpools
 ---------------------------------
 
-Web frameworks sometimes run sync handlers in a threadpool. :data:`diwire.container_context` is process-global for
+Web frameworks sometimes run sync handlers in a threadpool. :data:`diwire.provider_context` is process-global for
 that instance, so it is visible from worker threads without any special context propagation.
 
-Because the binding is global, avoid rebinding :data:`diwire.container_context` in parallel test runs. For isolation,
-prefer passing a :class:`diwire.Container` / resolver explicitly or using an app-owned :class:`diwire.ContainerContext`
+Because the binding is global, avoid rebinding :data:`diwire.provider_context` in parallel test runs. For isolation,
+prefer passing a :class:`diwire.Container` / resolver explicitly or using an app-owned :class:`diwire.ProviderContext`
 instance.

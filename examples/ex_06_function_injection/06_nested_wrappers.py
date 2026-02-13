@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, Injected, Lifetime, Scope
+from diwire import Container, Injected, Lifetime, Scope, provider_context
 
 
 class RequestDependency:
@@ -31,11 +31,11 @@ def main() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject
+    @provider_context.inject
     def build_inner(dependency: Injected[RequestDependency]) -> InnerService:
         return InnerService(dependency=dependency)
 
-    @container.inject
+    @provider_context.inject
     def build_outer(
         inner: Injected[InnerService],
         dependency: Injected[RequestDependency],

@@ -48,6 +48,11 @@ from diwire._internal.open_generics import (
     OpenGenericResolver,
     canonicalize_open_key,
 )
+from diwire._internal.provider_context import (
+    ProviderContext,
+    _ProviderBoundResolver,
+    provider_context as default_provider_context,
+)
 from diwire._internal.providers import (
     ContextManagerProvider,
     FactoryProvider,
@@ -114,6 +119,8 @@ class Container:
         lock_mode: LockMode | Literal["auto"] = "auto",
         autoregister_concrete_types: bool = True,
         autoregister_dependencies: bool = True,
+        provider_context: ProviderContext = default_provider_context,
+        use_provider_context: bool = True,
     ) -> None:
         """Initialize a container and configure default registration behavior.
 
@@ -132,6 +139,10 @@ class Container:
                 autoregistration during resolution.
             autoregister_dependencies: Enable autoregistration of provider
                 dependencies discovered at registration time.
+            provider_context: Provider context used by ``provider_context.inject``
+                fallback behavior for this container.
+            use_provider_context: Wrap compiled resolvers so context-manager
+                entry binds into ``provider_context``.
 
         Notes:
             Common presets are: default mode (both autoregistration flags
@@ -156,6 +167,8 @@ class Container:
         self._lock_mode = lock_mode
         self._autoregister_concrete_types = autoregister_concrete_types
         self._autoregister_dependencies = autoregister_dependencies
+        self._provider_context = provider_context
+        self._use_provider_context = use_provider_context
 
         self._concrete_autoregistration_policy = ConcreteTypeAutoregistrationPolicy()
         self._provider_dependencies_extractor = ProviderDependenciesExtractor()
@@ -178,6 +191,7 @@ class Container:
         self._container_entrypoints: dict[str, Callable[..., Any]] = {
             method_name: getattr(self, method_name) for method_name in self._ENTRYPOINT_METHOD_NAMES
         }
+        self._provider_context.set_fallback_container(self)
 
     # region Registration Methods
     def add_instance(
@@ -1956,106 +1970,6 @@ class Container:
             autoregister_dependencies=True,
         )
 
-    @overload
-    def inject(
-        self,
-        func: InjectableF,
-    ) -> InjectableF: ...
-
-    @overload
-    def inject(
-        self,
-        func: Literal["from_decorator"] = "from_decorator",
-        *,
-        scope: BaseScope | Literal["infer"] = "infer",
-        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
-        auto_open_scope: bool = True,
-    ) -> Callable[[InjectableF], InjectableF]: ...
-
-    def inject(
-        self,
-        func: InjectableF | Literal["from_decorator"] = "from_decorator",
-        *,
-        scope: BaseScope | Literal["infer"] = "infer",
-        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
-        auto_open_scope: bool = True,
-    ) -> InjectableF | Callable[[InjectableF], InjectableF]:
-        """Decorate a callable to resolve ``Injected`` and ``FromContext`` parameters.
-
-        The wrapper hides injected/context parameters from the public signature.
-        Callers may still override any injected argument explicitly.
-
-        Args:
-            func: Callable to wrap, or ``"from_decorator"`` for decorator form.
-            scope: Explicit scope to open for each call, or ``"infer"`` to infer
-                required depth from injected dependency scopes.
-            autoregister_dependencies: Override dependency autoregistration for
-                injected keys.
-            auto_open_scope: Open inferred/explicit scope automatically.
-
-        Returns:
-            Wrapped callable, or a decorator when ``func="from_decorator"``.
-
-        Raises:
-            DIWireInvalidRegistrationError: If arguments are invalid, reserved
-                parameter names are declared, or context usage is inconsistent.
-
-        Notes:
-            Reserved kwargs consumed by wrappers:
-            ``__diwire_context`` and ``__diwire_resolver``.
-            Wrapped callables cannot declare parameters with those names.
-
-        Examples:
-            .. code-block:: python
-
-                @container.inject(scope=Scope.REQUEST)
-                def handle(
-                    service: Injected[Service],
-                    tenant_id: FromContext[int],
-                    value: int,
-                ) -> str:
-                    return service.process(value, tenant_id)
-
-
-                result = handle(10, __diwire_context={int: 7})
-
-        """
-        scope_value = cast("Any", scope)
-        resolved_scope: BaseScope | None
-        if scope_value == "infer":
-            resolved_scope = None
-        elif isinstance(scope_value, BaseScope):
-            resolved_scope = scope_value
-        else:
-            msg = "inject() parameter 'scope' must be BaseScope or 'infer'."
-            raise DIWireInvalidRegistrationError(msg)
-
-        autoregister_dependencies_value = cast("Any", autoregister_dependencies)
-        resolved_autoregister_dependencies: bool | None
-        if autoregister_dependencies_value == "from_container":
-            resolved_autoregister_dependencies = None
-        elif isinstance(autoregister_dependencies_value, bool):
-            resolved_autoregister_dependencies = autoregister_dependencies_value
-        else:
-            msg = "inject() parameter 'autoregister_dependencies' must be bool or 'from_container'."
-            raise DIWireInvalidRegistrationError(msg)
-
-        def decorator(callable_obj: InjectableF) -> InjectableF:
-            return self._inject_callable(
-                callable_obj=callable_obj,
-                scope=resolved_scope,
-                autoregister_dependencies=resolved_autoregister_dependencies,
-                auto_open_scope=auto_open_scope,
-            )
-
-        func_value = cast("Any", func)
-        if func_value == "from_decorator":
-            return decorator
-        if not callable(func_value):
-            msg = "inject() parameter 'func' must be callable or 'from_decorator'."
-            raise DIWireInvalidRegistrationError(msg)
-        return decorator(func_value)
-
     def _inject_callable(
         self,
         *,
@@ -2581,8 +2495,9 @@ class Container:
         """Compile and cache the root resolver for current registrations.
 
         Compilation is lazy and invalidated by any registration mutation. In
-        strict mode (autoregistration disabled), hot-path entrypoints are
-        rebound to the compiled resolver for lower call overhead.
+        strict mode (autoregistration disabled) with
+        ``use_provider_context=False``, hot-path entrypoints are rebound to the
+        compiled resolver for lower call overhead.
 
         Returns:
             The compiled root resolver.
@@ -2619,8 +2534,16 @@ class Container:
                         scope_level=self._root_scope.level,
                     ),
                 )
+            if self._use_provider_context:
+                root_resolver = cast(
+                    "ResolverProtocol",
+                    _ProviderBoundResolver(
+                        resolver=root_resolver,
+                        provider_context=self._provider_context,
+                    ),
+                )
             self._root_resolver = root_resolver
-        if not self._autoregister_concrete_types:
+        if not self._autoregister_concrete_types and not self._use_provider_context:
             self._bind_container_entrypoints(target=self._root_resolver)
 
         return self._root_resolver

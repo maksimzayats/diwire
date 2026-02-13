@@ -8,7 +8,7 @@ from importlib.metadata import PackageNotFoundError, version
 from textwrap import indent
 from typing import Any
 
-from diwire._internal.injection import INJECT_RESOLVER_KWARG
+from diwire._internal.injection import INJECT_CONTEXT_KWARG, INJECT_RESOLVER_KWARG
 from diwire._internal.lock_mode import LockMode
 from diwire._internal.providers import Lifetime, ProviderDependency, ProvidersRegistrations
 from diwire._internal.resolvers.templates.mini_jinja import Environment, Template
@@ -1121,7 +1121,8 @@ class ResolversTemplateRenderer:
             "        parent_context_resolver = parent_context_resolver._parent_context_resolver",
             (
                 '    msg = (f"Context value for {key!r} is not provided. Pass it via '
-                "`enter_scope(..., context={...})` (or `__diwire_context` for injected callables)."
+                "`enter_scope(..., context={...})` (or "
+                f"`{INJECT_CONTEXT_KWARG}` for injected callables)."
                 '")'
             ),
             "    raise DIWireDependencyNotRegisteredError(msg)",

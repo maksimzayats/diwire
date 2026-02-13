@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated
 
-from diwire import Component, Container, Injected
+from diwire import Component, Container, Injected, provider_context
 
 
 @dataclass(slots=True)
@@ -30,7 +30,7 @@ def main() -> None:
     container.add_factory(lambda: UserStore(backend="redis"), provides=PrimaryStore)
     container.add_factory(lambda: UserStore(backend="memory"), provides=FallbackStore)
 
-    @container.inject
+    @provider_context.inject
     def load_users(
         primary_store: Injected[PrimaryStore],
         fallback_store: Injected[FallbackStore],

@@ -23,7 +23,7 @@ Each page below includes a single, self-contained script sourced *verbatim* from
    all-components
    open-generics
    autoregistration
-   container-context
+   provider-context
    async
    lock-modes
    supported-frameworks

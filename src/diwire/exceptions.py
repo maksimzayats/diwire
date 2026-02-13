@@ -11,7 +11,7 @@ class DIWireInvalidRegistrationError(DIWireError):
 
     Raised by registration APIs such as ``Container.add_concrete``,
     ``Container.add_factory``, ``Container.add_generator``,
-    ``Container.add_context_manager``, and by ``Container.inject`` when
+    ``Container.add_context_manager``, and by ``ProviderContext.inject`` when
     arguments are invalid.
 
     Typical fixes include providing valid ``provides``/``scope``/``lifetime``
@@ -52,14 +52,15 @@ class DIWireDependencyNotRegisteredError(DIWireError):
     """
 
 
-class DIWireContainerNotSetError(DIWireError):
-    """Signal use of ``container_context`` before a container is bound.
+class DIWireProviderNotSetError(DIWireError):
+    """Signal use of ``provider_context`` before a resolver is bound.
 
-    Raised by ``ContainerContext.get_current`` and proxy operations that require
-    an active container.
+    Raised by ``ProviderContext.resolve``, ``ProviderContext.aresolve``,
+    ``ProviderContext.enter_scope``, and ``ProviderContext.inject`` call paths
+    that require an active resolver or fallback container.
 
-    Typical fix is calling ``container_context.set_current(container)`` during
-    application startup before resolution calls.
+    Typical fixes are entering a resolver context (``with container.compile():``)
+    or passing an explicit resolver via ``diwire_resolver=...``.
     """
 
 

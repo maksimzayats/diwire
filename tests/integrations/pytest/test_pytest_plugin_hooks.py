@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 from collections.abc import Callable
 from typing import Any, cast
@@ -110,5 +111,23 @@ def test_pyfunc_call_passes_through_when_container_state_is_missing() -> None:
     next(hook)
 
     assert item.obj is test_handler
+    next(hook, None)
+    assert item.obj is test_handler
+
+
+def test_pyfunc_call_wraps_async_injected_callable_and_restores_original() -> None:
+    container = Container()
+    default_dependency = _Service("container")
+    container.add_instance(default_dependency, provides=_Service)
+
+    async def test_handler(service: Injected[_Service]) -> _Service:
+        return service
+
+    item = _DummyPyFuncItem(obj=test_handler, container=container)
+    hook = pytest_pyfunc_call(cast("Any", item))
+    next(hook)
+
+    assert asyncio.run(item.obj()) is default_dependency
+
     next(hook, None)
     assert item.obj is test_handler

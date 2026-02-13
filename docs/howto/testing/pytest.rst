@@ -69,33 +69,33 @@ Container fixture
        # Prefer a fresh container per test.
        return Container()
 
-Using container_context in tests
+Using provider_context in tests
 --------------------------------
 
-If your app uses :data:`diwire.container_context`, bind it in a fixture.
-
-``container_context`` is process-global for that instance and ``set_current()`` does not return a token. Prefer either:
-
-- bind once at session startup, or
-- create and use an app-owned ``ContainerContext()`` instance for test isolation.
+If your app uses :data:`diwire.provider_context`, prefer explicit resolver injection in tests.
+This avoids ambient resolver state leaks between tests.
 
 .. code-block:: python
 
    import pytest
 
-   from diwire import Container, ContainerContext
+   from diwire import Container, Injected, provider_context
 
 
    @pytest.fixture
-   def container_context() -> ContainerContext:
-       return ContainerContext()
-
-
-   @pytest.fixture
-   def container(container_context: ContainerContext) -> Container:
-       container = Container()
-       container_context.set_current(container)
+   def container() -> Container:
+       container = Container(autoregister_concrete_types=False)
+       container.add_instance(Service(), provides=Service)
        return container
+
+
+   @provider_context.inject
+   def build_service(service: Injected[Service]) -> Service:
+       return service
+
+
+   def test_build_service(container: Container) -> None:
+       assert build_service(diwire_resolver=container.compile()) is not None
 
 Cleaning up scopes
 ------------------

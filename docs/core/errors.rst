@@ -47,11 +47,11 @@ Dependency inference failures
 :class:`diwire.exceptions.DIWireProviderDependencyInferenceError` is raised when diwire cannot infer provider
 dependencies from type hints (for example, missing annotations).
 
-ContainerContext not bound
+ProviderContext not bound
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-:class:`diwire.exceptions.DIWireContainerNotSetError` is raised when :data:`diwire.container_context` is used before an
-active container is bound via ``set_current()``.
+:class:`diwire.exceptions.DIWireProviderNotSetError` is raised when :data:`diwire.provider_context` is used before an
+active resolver is bound (or when ``provider_context.inject`` has no explicit resolver and no fallback container).
 
 Runnable examples
 -----------------

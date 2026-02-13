@@ -8,7 +8,7 @@ from typing import Annotated, Any, Generic, NamedTuple, TypeVar, cast
 import pytest
 
 import diwire._internal.injection as injection_module
-from diwire import Component, Container, FromContext, Injected, Lifetime, Scope
+from diwire import Component, Container, FromContext, Injected, Lifetime, Scope, provider_context
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
     DIWireInvalidRegistrationError,
@@ -143,7 +143,7 @@ def test_inject_wrapper_preserves_callable_metadata() -> None:
         """Handler docstring."""
         return f"{value}:{dep.value}"
 
-    wrapped = container.inject(_handler)
+    wrapped = provider_context.inject(_handler)
     wrapped_any = cast("Any", wrapped)
 
     assert wrapped.__name__ == _handler.__name__
@@ -157,7 +157,7 @@ def test_inject_decorator_supports_direct_form() -> None:
     dependency = _InjectedSyncDependency("direct")
     container.add_instance(dependency, provides=_InjectedSyncDependency)
 
-    @container.inject
+    @provider_context.inject
     def handler(value: str, dep: Injected[_InjectedSyncDependency]) -> str:
         return f"{value}:{dep.value}"
 
@@ -171,7 +171,7 @@ def test_inject_decorator_supports_factory_form() -> None:
     dependency = _InjectedSyncDependency("factory")
     container.add_instance(dependency, provides=_InjectedSyncDependency)
 
-    @container.inject()
+    @provider_context.inject()
     def handler(value: str, dep: Injected[_InjectedSyncDependency]) -> str:
         return f"{value}:{dep.value}"
 
@@ -182,7 +182,7 @@ def test_inject_decorator_supports_factory_form() -> None:
 def test_inject_signature_removes_injected_parameters() -> None:
     container = Container()
 
-    @container.inject
+    @provider_context.inject
     def handler(
         value: str,
         dep: Injected[_InjectedSyncDependency],
@@ -197,7 +197,7 @@ def test_inject_signature_removes_injected_parameters() -> None:
 def test_inject_signature_removes_from_context_parameters() -> None:
     container = Container()
 
-    @container.inject(scope=Scope.REQUEST)
+    @provider_context.inject(scope=Scope.REQUEST)
     def handler(
         value: str,
         context_value: FromContext[int],
@@ -215,7 +215,7 @@ def test_inject_allows_explicit_override_for_injected_parameter() -> None:
     custom = _InjectedSyncDependency("custom")
     container.add_instance(dependency, provides=_InjectedSyncDependency)
 
-    @container.inject
+    @provider_context.inject
     def handler(dep: Injected[_InjectedSyncDependency]) -> str:
         return dep.value
 
@@ -230,7 +230,7 @@ async def test_inject_supports_async_callables() -> None:
     dependency = _InjectedAsyncDependency("async")
     container.add_instance(dependency, provides=_InjectedAsyncDependency)
 
-    @container.inject
+    @provider_context.inject
     async def handler(value: str, dep: Injected[_InjectedAsyncDependency]) -> str:
         return f"{value}:{dep.value}"
 
@@ -245,7 +245,7 @@ async def test_inject_async_allows_explicit_override_for_injected_parameter() ->
     custom = _InjectedAsyncDependency("custom")
     container.add_instance(dependency, provides=_InjectedAsyncDependency)
 
-    @container.inject
+    @provider_context.inject
     async def handler(dep: Injected[_InjectedAsyncDependency]) -> str:
         return dep.value
 
@@ -259,12 +259,12 @@ def test_inject_uses_internal_resolver_when_provided() -> None:
     resolved = _InjectedSyncDependency("provided")
     resolver = _ResolverStub(resolved)
 
-    @container.inject
+    @provider_context.inject
     def handler(dep: Injected[_InjectedSyncDependency]) -> _InjectedSyncDependency:
         return dep
 
     injected_handler = cast("Any", handler)
-    result = injected_handler(__diwire_resolver=resolver)
+    result = injected_handler(diwire_resolver=resolver)
 
     assert result is resolved
     assert resolver.sync_calls == 1
@@ -277,12 +277,12 @@ async def test_inject_async_uses_internal_resolver_aresolve_when_provided() -> N
     resolved = _InjectedAsyncDependency("provided")
     resolver = _ResolverStub(resolved)
 
-    @container.inject
+    @provider_context.inject
     async def handler(dep: Injected[_InjectedAsyncDependency]) -> _InjectedAsyncDependency:
         return dep
 
     injected_handler = cast("Any", handler)
-    result = await injected_handler(__diwire_resolver=resolver)
+    result = await injected_handler(diwire_resolver=resolver)
 
     assert result is resolved
     assert resolver.async_calls == 1
@@ -295,7 +295,7 @@ def test_inject_falls_back_to_compiled_root_resolver() -> None:
     dependency = _InjectedSyncDependency("root")
     container.add_instance(dependency, provides=_InjectedSyncDependency)
 
-    @container.inject
+    @provider_context.inject
     def handler(dep: Injected[_InjectedSyncDependency]) -> _InjectedSyncDependency:
         return dep
 
@@ -309,19 +309,19 @@ def test_inject_falls_back_to_compiled_root_resolver() -> None:
 def test_inject_resolves_from_context_when_scope_is_opened_with_internal_context_kwarg() -> None:
     container = Container()
 
-    @container.inject(scope=Scope.REQUEST)
+    @provider_context.inject(scope=Scope.REQUEST)
     def handler(value: FromContext[int]) -> int:
         return value
 
     injected_handler = cast("Any", handler)
-    assert injected_handler(__diwire_context={int: 7}) == 7
+    assert injected_handler(diwire_context={int: 7}) == 7
     assert injected_handler(value=8) == 8
 
 
 def test_inject_context_kwarg_without_scope_opening_raises_clear_error() -> None:
     container = Container()
 
-    @container.inject(auto_open_scope=False)
+    @provider_context.inject(auto_open_scope=False)
     def handler(value: FromContext[int]) -> int:
         return value
 
@@ -330,7 +330,7 @@ def test_inject_context_kwarg_without_scope_opening_raises_clear_error() -> None
         DIWireInvalidRegistrationError,
         match="was provided but no new scope was opened",
     ):
-        injected_handler(__diwire_context={int: 7})
+        injected_handler(diwire_context={int: 7})
 
 
 def test_inject_sync_raises_for_async_dependency_chain() -> None:
@@ -340,7 +340,7 @@ def test_inject_sync_raises_for_async_dependency_chain() -> None:
     container = Container()
     container.add_factory(_provide_dependency, provides=_InjectedAsyncDependency)
 
-    @container.inject
+    @provider_context.inject
     def handler(dep: Injected[_InjectedAsyncDependency]) -> _InjectedAsyncDependency:
         return dep
 
@@ -367,14 +367,14 @@ def test_inject_infers_scope_depth_from_dependency_graph() -> None:
         lifetime=Lifetime.TRANSIENT,
     )
 
-    @container.inject(scope=Scope.REQUEST)
+    @provider_context.inject(scope=Scope.REQUEST)
     def handler(dep: Injected[_RequestConsumer]) -> _RequestConsumer:
         return dep
 
     with container.enter_scope(Scope.SESSION) as session_scope:
         with session_scope.enter_scope() as request_scope:
             injected_handler = cast("Any", handler)
-            resolved = injected_handler(__diwire_resolver=request_scope)
+            resolved = injected_handler(diwire_resolver=request_scope)
             assert isinstance(resolved, _RequestConsumer)
             assert isinstance(resolved.dependency, _RequestDependency)
 
@@ -397,7 +397,7 @@ def test_inject_auto_open_scope_from_root_without_resolver() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject(scope=Scope.REQUEST, auto_open_scope=True)
+    @provider_context.inject(scope=Scope.REQUEST, auto_open_scope=True)
     def handler(resource: Injected[_RequestScopedResource]) -> _RequestScopedResource:
         return resource
 
@@ -425,13 +425,13 @@ def test_inject_auto_open_scope_from_parent_internal_resolver() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject(scope=Scope.REQUEST, auto_open_scope=True)
+    @provider_context.inject(scope=Scope.REQUEST, auto_open_scope=True)
     def handler(resource: Injected[_RequestScopedResource]) -> _RequestScopedResource:
         return resource
 
     injected_handler = cast("Any", handler)
     with container.enter_scope(Scope.SESSION) as session_scope:
-        resolved = injected_handler(__diwire_resolver=session_scope)
+        resolved = injected_handler(diwire_resolver=session_scope)
         assert isinstance(resolved, _RequestScopedResource)
         assert cleanup_called is True
 
@@ -454,13 +454,13 @@ def test_inject_auto_open_scope_is_noop_when_target_scope_is_already_opened() ->
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject(scope=Scope.REQUEST, auto_open_scope=True)
+    @provider_context.inject(scope=Scope.REQUEST, auto_open_scope=True)
     def handler(resource: Injected[_RequestScopedResource]) -> _RequestScopedResource:
         return resource
 
     injected_handler = cast("Any", handler)
     with container.enter_scope(Scope.REQUEST) as request_scope:
-        resolved = injected_handler(__diwire_resolver=request_scope)
+        resolved = injected_handler(diwire_resolver=request_scope)
         assert isinstance(resolved, _RequestScopedResource)
         assert cleanup_called is False
 
@@ -476,7 +476,7 @@ def test_inject_auto_open_scope_infers_target_scope() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject(auto_open_scope=True)
+    @provider_context.inject(auto_open_scope=True)
     def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
         return dep
 
@@ -488,7 +488,7 @@ def test_inject_auto_open_scope_infers_target_scope() -> None:
 def test_inject_auto_open_scope_infers_target_scope_after_late_registration() -> None:
     container = Container()
 
-    @container.inject(auto_open_scope=True)
+    @provider_context.inject(auto_open_scope=True)
     def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
         return dep
 
@@ -509,13 +509,13 @@ def test_inject_auto_open_scope_swallow_scope_mismatch_for_deeper_resolver() -> 
     dependency = _InjectedSyncDependency("value")
     container.add_instance(dependency, provides=_InjectedSyncDependency)
 
-    @container.inject(scope=Scope.SESSION, auto_open_scope=True)
+    @provider_context.inject(scope=Scope.SESSION, auto_open_scope=True)
     def handler(dep: Injected[_InjectedSyncDependency]) -> _InjectedSyncDependency:
         return dep
 
     injected_handler = cast("Any", handler)
     with container.enter_scope(Scope.REQUEST) as request_scope:
-        resolved = injected_handler(__diwire_resolver=request_scope)
+        resolved = injected_handler(diwire_resolver=request_scope)
         assert resolved is dependency
 
 
@@ -532,13 +532,13 @@ def test_inject_auto_open_scope_reraises_non_shallower_scope_mismatch() -> None:
             msg = "invalid transition"
             raise DIWireScopeMismatchError(msg)
 
-    @container.inject(scope=Scope.REQUEST, auto_open_scope=True)
+    @provider_context.inject(scope=Scope.REQUEST, auto_open_scope=True)
     def handler(dep: Injected[_InjectedSyncDependency]) -> _InjectedSyncDependency:
         return dep
 
     injected_handler = cast("Any", handler)
     with pytest.raises(DIWireScopeMismatchError, match="invalid transition"):
-        injected_handler(__diwire_resolver=_Resolver())
+        injected_handler(diwire_resolver=_Resolver())
 
 
 def test_inject_auto_open_scope_raises_when_inferred_scope_has_no_matching_scope(
@@ -560,7 +560,7 @@ def test_inject_auto_open_scope_raises_when_inferred_scope_has_no_matching_scope
         match="has no matching scope in the root scope owner",
     ):
 
-        @container.inject(auto_open_scope=True)
+        @provider_context.inject(auto_open_scope=True)
         def _handler(dep: Injected[_InjectedSyncDependency]) -> _InjectedSyncDependency:
             return dep
 
@@ -577,7 +577,7 @@ async def test_inject_async_scope_mismatch_without_request_resolver() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject(auto_open_scope=False)
+    @provider_context.inject(auto_open_scope=False)
     async def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
         return dep
 
@@ -586,7 +586,7 @@ async def test_inject_async_scope_mismatch_without_request_resolver() -> None:
         await injected_handler()
 
     with container.enter_scope() as request_scope:
-        resolved = await injected_handler(__diwire_resolver=request_scope)
+        resolved = await injected_handler(diwire_resolver=request_scope)
         assert isinstance(resolved, _RequestDependency)
 
 
@@ -600,7 +600,7 @@ async def test_inject_async_auto_open_scope_without_manual_scope_management() ->
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject(scope=Scope.REQUEST, auto_open_scope=True)
+    @provider_context.inject(scope=Scope.REQUEST, auto_open_scope=True)
     async def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
         return dep
 
@@ -618,11 +618,11 @@ def test_inject_nested_wrappers_propagate_same_resolver() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject
+    @provider_context.inject
     def build_inner(dependency: Injected[_RequestDependency]) -> _NestedInnerService:
         return _NestedInnerService(dependency=dependency)
 
-    @container.inject
+    @provider_context.inject
     def build_outer(
         inner: Injected[_NestedInnerService],
         dependency: Injected[_RequestDependency],
@@ -666,7 +666,7 @@ def test_inject_rejects_explicit_scope_shallower_than_inferred() -> None:
 
     with pytest.raises(DIWireInvalidRegistrationError, match="shallower than required"):
 
-        @container.inject(scope=Scope.SESSION)
+        @provider_context.inject(scope=Scope.SESSION)
         def _handler(dep: Injected[_RequestConsumer]) -> _RequestConsumer:
             return dep
 
@@ -674,7 +674,7 @@ def test_inject_rejects_explicit_scope_shallower_than_inferred() -> None:
 def test_inject_revalidates_explicit_scope_after_late_registration_sync() -> None:
     container = Container(autoregister_dependencies=False)
 
-    @container.inject(scope=Scope.SESSION)
+    @provider_context.inject(scope=Scope.SESSION)
     def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
         return dep
 
@@ -694,7 +694,7 @@ def test_inject_revalidates_explicit_scope_after_late_registration_sync() -> Non
 async def test_inject_revalidates_explicit_scope_after_late_registration_async() -> None:
     container = Container(autoregister_dependencies=False)
 
-    @container.inject(scope=Scope.SESSION)
+    @provider_context.inject(scope=Scope.SESSION)
     async def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
         return dep
 
@@ -713,7 +713,7 @@ async def test_inject_revalidates_explicit_scope_after_late_registration_async()
 def test_inject_without_explicit_scope_still_works_after_late_registration() -> None:
     container = Container()
 
-    @container.inject
+    @provider_context.inject
     def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
         return dep
 
@@ -726,7 +726,7 @@ def test_inject_without_explicit_scope_still_works_after_late_registration() -> 
 
     injected_handler = cast("Any", handler)
     with container.enter_scope() as request_scope:
-        resolved = injected_handler(__diwire_resolver=request_scope)
+        resolved = injected_handler(diwire_resolver=request_scope)
 
     assert isinstance(resolved, _RequestDependency)
 
@@ -734,7 +734,7 @@ def test_inject_without_explicit_scope_still_works_after_late_registration() -> 
 def test_inject_revalidates_explicit_scope_on_registration_when_still_compatible() -> None:
     container = Container()
 
-    @container.inject(scope=Scope.REQUEST)
+    @provider_context.inject(scope=Scope.REQUEST)
     def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
         return dep
 
@@ -747,7 +747,7 @@ def test_inject_revalidates_explicit_scope_on_registration_when_still_compatible
 
     injected_handler = cast("Any", handler)
     with container.enter_scope() as request_scope:
-        resolved = injected_handler(__diwire_resolver=request_scope)
+        resolved = injected_handler(diwire_resolver=request_scope)
 
     assert isinstance(resolved, _RequestDependency)
 
@@ -755,7 +755,7 @@ def test_inject_revalidates_explicit_scope_on_registration_when_still_compatible
 def test_inject_autoregister_true_registers_missing_dependency_chain() -> None:
     container = Container()
 
-    @container.inject(autoregister_dependencies=True)
+    @provider_context.inject(autoregister_dependencies=True)
     def handler(dep: Injected[_AutoRoot]) -> _AutoRoot:
         return dep
 
@@ -771,7 +771,7 @@ def test_inject_autoregister_registers_pydantic_settings_as_singleton_factory() 
 
     container = Container()
 
-    @container.inject(autoregister_dependencies=True)
+    @provider_context.inject(autoregister_dependencies=True)
     def handler(settings: Injected[_InjectedSettings]) -> _InjectedSettings:
         return settings
 
@@ -790,7 +790,7 @@ def test_inject_autoregister_registers_pydantic_settings_as_singleton_factory() 
 def test_inject_autoregister_false_disables_default_autoregistration() -> None:
     container = Container()
 
-    @container.inject(autoregister_dependencies=False)
+    @provider_context.inject(autoregister_dependencies=False)
     def handler(dep: Injected[_AutoRoot]) -> _AutoRoot:
         return dep
 
@@ -801,7 +801,7 @@ def test_inject_autoregister_false_disables_default_autoregistration() -> None:
 def test_inject_autoregister_none_uses_container_default() -> None:
     container = Container()
 
-    @container.inject
+    @provider_context.inject
     def handler(dep: Injected[_AutoRoot]) -> _AutoRoot:
         return dep
 
@@ -821,7 +821,7 @@ def test_inject_autoregister_none_respects_runtime_container_toggle_matrix(
 ) -> None:
     container = Container(autoregister_dependencies=case.default_enabled)
 
-    @container.inject
+    @provider_context.inject
     def handler(dep: Injected[_AutoRoot]) -> _AutoRoot:
         return dep
 
@@ -833,7 +833,7 @@ def test_inject_autoregister_none_respects_runtime_container_toggle_matrix(
 def test_inject_autoregister_uses_explicit_scope_seed() -> None:
     container = Container()
 
-    @container.inject(scope=Scope.REQUEST, autoregister_dependencies=True)
+    @provider_context.inject(scope=Scope.REQUEST, autoregister_dependencies=True)
     def handler(dep: Injected[_AutoRoot]) -> _AutoRoot:
         return dep
 
@@ -854,9 +854,9 @@ def test_inject_rejects_reserved_internal_resolver_parameter_name() -> None:
         match="cannot declare reserved parameter",
     ):
 
-        @container.inject
+        @provider_context.inject
         def _handler(
-            __diwire_resolver: object,
+            diwire_resolver: object,
             /,
             dep: Injected[_InjectedSyncDependency],
         ) -> None:
@@ -871,13 +871,57 @@ def test_inject_rejects_reserved_internal_context_parameter_name() -> None:
         match="cannot declare reserved parameter",
     ):
 
-        @container.inject
+        @provider_context.inject
         def _handler(
-            __diwire_context: object,
+            diwire_context: object,
             /,
             dep: Injected[_InjectedSyncDependency],
         ) -> None:
             _ = dep
+
+
+def test_internal_inject_callable_rejects_reserved_internal_resolver_parameter_name() -> None:
+    container = Container()
+
+    def _handler(
+        diwire_resolver: object,
+        /,
+        dep: Injected[_InjectedSyncDependency],
+    ) -> None:
+        _ = dep
+
+    with pytest.raises(
+        DIWireInvalidRegistrationError,
+        match="cannot declare reserved parameter",
+    ):
+        container._inject_callable(
+            callable_obj=_handler,
+            scope=None,
+            autoregister_dependencies=None,
+            auto_open_scope=True,
+        )
+
+
+def test_internal_inject_callable_rejects_reserved_internal_context_parameter_name() -> None:
+    container = Container()
+
+    def _handler(
+        diwire_context: object,
+        /,
+        dep: Injected[_InjectedSyncDependency],
+    ) -> None:
+        _ = dep
+
+    with pytest.raises(
+        DIWireInvalidRegistrationError,
+        match="cannot declare reserved parameter",
+    ):
+        container._inject_callable(
+            callable_obj=_handler,
+            scope=None,
+            autoregister_dependencies=None,
+            auto_open_scope=True,
+        )
 
 
 def test_inject_preserves_component_annotated_dependency_key() -> None:
@@ -888,7 +932,7 @@ def test_inject_preserves_component_annotated_dependency_key() -> None:
 
     container.add_factory(provide_primary)
 
-    @container.inject
+    @provider_context.inject
     def handler(database: Injected[PrimaryDatabase]) -> _Database:
         return database
 
@@ -907,7 +951,7 @@ def test_inject_scope_mismatch_is_raised_when_no_compatible_resolver_is_provided
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject(auto_open_scope=False)
+    @provider_context.inject(auto_open_scope=False)
     def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
         return dep
 
@@ -921,15 +965,15 @@ def test_inject_wrapper_does_not_forward_internal_resolver_kwarg_to_user_callabl
     dependency = _InjectedSyncDependency("value")
     resolver = _ResolverStub(dependency)
 
-    @container.inject
+    @provider_context.inject
     def handler(
         dep: Injected[_InjectedSyncDependency],
         **kwargs: object,
     ) -> tuple[str, bool]:
-        return dep.value, "__diwire_resolver" in kwargs
+        return dep.value, "diwire_resolver" in kwargs
 
     injected_handler = cast("Any", handler)
-    value, has_internal_kwarg = injected_handler(__diwire_resolver=resolver)
+    value, has_internal_kwarg = injected_handler(diwire_resolver=resolver)
 
     assert value == "value"
     assert has_internal_kwarg is False
@@ -941,7 +985,7 @@ def test_inject_decorated_method_keeps_descriptor_binding_behavior() -> None:
     container.add_instance(dependency, provides=_InjectedSyncDependency)
 
     class _Handler:
-        @container.inject
+        @provider_context.inject
         def run(self, dep: Injected[_InjectedSyncDependency]) -> str:
             return dep.value
 
@@ -957,7 +1001,7 @@ def test_inject_staticmethod_behavior() -> None:
 
     class _Handler:
         @staticmethod
-        @container.inject
+        @provider_context.inject
         def run(value: str, dep: Injected[_InjectedSyncDependency]) -> str:
             return f"{value}:{dep.value}"
 
@@ -977,7 +1021,7 @@ def test_inject_classmethod_behavior() -> None:
         label = "handler"
 
         @classmethod
-        @container.inject
+        @provider_context.inject
         def run(cls, dep: Injected[_InjectedSyncDependency]) -> str:
             return f"{cls.label}:{dep.value}"
 
@@ -997,7 +1041,7 @@ def test_inject_callable_object_behavior() -> None:
         def __call__(self, value: str, dep: Injected[_InjectedSyncDependency]) -> str:
             return f"{value}:{dep.value}"
 
-    wrapped = container.inject(_Handler().__call__)
+    wrapped = provider_context.inject(_Handler().__call__)
     wrapped_callable = cast("Any", wrapped)
 
     assert tuple(inspect.signature(wrapped).parameters) == ("value",)
@@ -1007,7 +1051,7 @@ def test_inject_callable_object_behavior() -> None:
 def test_inject_with_no_injected_params_is_noop_runtime() -> None:
     container = Container()
 
-    @container.inject
+    @provider_context.inject
     def handler(value: str) -> str:
         return value
 
@@ -1022,7 +1066,7 @@ def test_inject_keyword_only_parameter_resolution() -> None:
     dependency = _InjectedSyncDependency("keyword-only")
     container.add_instance(dependency, provides=_InjectedSyncDependency)
 
-    @container.inject
+    @provider_context.inject
     def handler(*, dep: Injected[_InjectedSyncDependency]) -> str:
         return dep.value
 
@@ -1036,7 +1080,7 @@ def test_inject_positional_only_parameter_resolution() -> None:
     dependency = _InjectedSyncDependency("positional-only")
     container.add_instance(dependency, provides=_InjectedSyncDependency)
 
-    @container.inject
+    @provider_context.inject
     def handler(value: str, dep: Injected[_InjectedSyncDependency], /) -> str:
         return f"{value}:{dep.value}"
 
@@ -1054,7 +1098,7 @@ def test_inject_reserved_kwarg_rejection_on_methods() -> None:
 
     def _run(
         self: object,
-        __diwire_resolver: object,
+        diwire_resolver: object,
         /,
         dep: Injected[_InjectedSyncDependency],
     ) -> None:
@@ -1066,7 +1110,7 @@ def test_inject_reserved_kwarg_rejection_on_methods() -> None:
     ):
 
         class _Handler:
-            run = container.inject(_run)
+            run = provider_context.inject(_run)
 
 
 def test_resolve_injected_dependency_handles_empty_and_missing_marker_annotations() -> None:
@@ -1154,7 +1198,7 @@ def test_inject_resolves_open_generic_dependency_via_wrapper_fallback() -> None:
     container = Container()
     container.add_concrete(_InjectedOpenBoxImpl, provides=_InjectedOpenBox)
 
-    @container.inject
+    @provider_context.inject
     def handler(box: Injected[_InjectedOpenBox[str]]) -> str:
         resolved_box = cast("Any", box)
         return resolved_box.type_arg.__name__

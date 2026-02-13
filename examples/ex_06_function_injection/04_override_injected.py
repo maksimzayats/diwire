@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, Injected
+from diwire import Container, Injected, provider_context
 
 
 @dataclass(slots=True)
@@ -16,7 +16,7 @@ def main() -> None:
     container = Container(autoregister_concrete_types=False)
     container.add_instance(User(email="container@example.com"))
 
-    @container.inject
+    @provider_context.inject
     def handler(user: Injected[User]) -> str:
         return user.email
 

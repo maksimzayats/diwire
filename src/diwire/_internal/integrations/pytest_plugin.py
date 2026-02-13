@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import inspect
 from collections.abc import Callable, Iterator
 from contextlib import suppress
@@ -8,7 +9,12 @@ from typing import Any, cast
 import pytest
 
 from diwire._internal.container import Container
-from diwire._internal.injection import InjectedCallableInspector, InjectedParameter
+from diwire._internal.injection import (
+    INJECT_RESOLVER_KWARG,
+    InjectedCallableInspector,
+    InjectedParameter,
+)
+from diwire._internal.provider_context import provider_context
 
 _DIWIRE_CONTAINER_ATTR = "_diwire_container"
 _DIWIRE_INJECTED_PARAMETERS_ATTR = "__diwire_pytest_injected_parameters__"
@@ -82,9 +88,9 @@ def pytest_pycollect_makeitem(
 def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> Iterator[None]:
     """Wrap test function execution to resolve ``Injected[...]`` parameters.
 
-    The wrapper swaps the callable with ``container.inject(original_callable)``
-    for the duration of the test call. If no container state is attached to the
-    node, this hook is a no-op.
+    The wrapper swaps the callable with ``provider_context.inject(original_callable)``
+    for the duration of the test call and executes with an explicit resolver
+    kwarg. If no container state is attached to the node, this hook is a no-op.
 
     Limitations:
         Injection requires a callable test object and plugin-managed state on the
@@ -127,7 +133,23 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> Iterator[None]:
         original_callable_as_any.__signature__ = original_signature
 
     try:
-        pyfuncitem.obj = container.inject(original_callable)
+        injected_callable = provider_context.inject(original_callable)
+        resolver = container.compile()
+        if inspect.iscoroutinefunction(injected_callable):
+
+            @functools.wraps(injected_callable)
+            async def _invoke_with_resolver(*args: Any, **kwargs: Any) -> Any:
+                kwargs[INJECT_RESOLVER_KWARG] = resolver
+                return await cast("Any", injected_callable)(*args, **kwargs)
+
+        else:
+
+            @functools.wraps(injected_callable)
+            def _invoke_with_resolver(*args: Any, **kwargs: Any) -> Any:
+                kwargs[INJECT_RESOLVER_KWARG] = resolver
+                return injected_callable(*args, **kwargs)
+
+        pyfuncitem.obj = _invoke_with_resolver
     finally:
         if had_signature_override:
             original_callable_as_any.__signature__ = signature_override

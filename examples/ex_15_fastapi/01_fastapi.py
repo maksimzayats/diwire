@@ -1,8 +1,8 @@
-"""FastAPI integration via ``@container.inject(scope=Scope.REQUEST)``.
+"""FastAPI integration via ``@provider_context.inject(scope=Scope.REQUEST)``.
 
 This module demonstrates request-scoped injection without network startup:
 
-1. A FastAPI route function decorated with ``@container.inject``.
+1. A FastAPI route function decorated with ``@provider_context.inject``.
 2. A request-scoped generator resource that increments open/close counters.
 3. Two in-process calls through ``TestClient``.
 """
@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from diwire import Container, Injected, Lifetime, Scope
+from diwire import Container, Injected, Lifetime, Scope, provider_context
 
 
 @dataclass(slots=True)
@@ -45,7 +45,7 @@ def main() -> None:
     )
 
     @app.get("/resource/{item_id}")
-    @container.inject(scope=Scope.REQUEST)
+    @provider_context.inject(scope=Scope.REQUEST)
     def get_resource(item_id: int, resource: Injected[RequestResource]) -> dict[str, int | str]:
         return {"id": item_id, "resource": resource.label}
 

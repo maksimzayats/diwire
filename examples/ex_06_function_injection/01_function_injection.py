@@ -3,7 +3,7 @@
 This topic demonstrates:
 
 1. ``Injected[T]`` marker semantics and signature filtering.
-2. ``@container.inject`` behavior with caller overrides.
+2. ``@provider_context.inject`` behavior with caller overrides.
 3. ``auto_open_scope`` cleanup for scoped generator resources.
 4. Nested injected wrappers as providers sharing the same active resolver.
 """
@@ -14,7 +14,7 @@ import inspect
 from collections.abc import Generator
 from dataclasses import dataclass
 
-from diwire import Container, Injected, Lifetime, Scope
+from diwire import Container, Injected, Lifetime, Scope, provider_context
 
 
 @dataclass(slots=True)
@@ -49,7 +49,7 @@ def main() -> None:
         provides=User,
     )
 
-    @container.inject
+    @provider_context.inject
     def render_user(
         user_email: str,
         user: Injected[User],
@@ -90,7 +90,7 @@ def main() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject(scope=Scope.REQUEST, auto_open_scope=True)
+    @provider_context.inject(scope=Scope.REQUEST, auto_open_scope=True)
     def use_scoped_resource(resource: Injected[RequestScopedResource]) -> RequestScopedResource:
         return resource
 
@@ -104,11 +104,11 @@ def main() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject
+    @provider_context.inject
     def build_inner(dependency: Injected[RequestDependency]) -> NestedInnerService:
         return NestedInnerService(dependency=dependency)
 
-    @container.inject
+    @provider_context.inject
     def build_outer(
         inner: Injected[NestedInnerService],
         dependency: Injected[RequestDependency],

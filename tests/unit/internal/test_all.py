@@ -6,7 +6,7 @@ from typing import Annotated, Any, Protocol, TypeAlias, cast
 
 import pytest
 
-from diwire import All, Component, Container, Injected, Lifetime, Scope
+from diwire import All, Component, Container, Injected, Lifetime, Scope, provider_context
 from diwire.exceptions import DIWireInvalidProviderSpecError
 
 
@@ -66,7 +66,7 @@ def test_inject_can_inject_all_dependency() -> None:
     container.add_factory(lambda: _Handler("base"), provides=EventHandler)
     container.add_factory(lambda: _Handler("logging"), provides=LoggingHandler)
 
-    @container.inject
+    @provider_context.inject
     def run(handlers: Injected[All[EventHandler]]) -> tuple[str, ...]:
         return tuple(handler.handle("evt") for handler in handlers)
 
@@ -97,7 +97,7 @@ def test_infer_scope_level_for_injected_all_auto_opens_deeper_scopes() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject
+    @provider_context.inject
     def run(handlers: Injected[All[EventHandler]]) -> tuple[str, ...]:
         return tuple(handler.handle("evt") for handler in handlers)
 

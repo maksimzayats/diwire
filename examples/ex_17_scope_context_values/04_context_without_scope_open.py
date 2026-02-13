@@ -1,20 +1,20 @@
-"""Passing __diwire_context without opening a scope raises a clear error."""
+"""Passing diwire_context without opening a scope raises a clear error."""
 
 from __future__ import annotations
 
-from diwire import Container, FromContext
+from diwire import Container, FromContext, provider_context
 from diwire.exceptions import DIWireInvalidRegistrationError
 
 
 def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    Container(autoregister_concrete_types=False)
 
-    @container.inject(auto_open_scope=False)
+    @provider_context.inject(auto_open_scope=False)
     def handler(value: FromContext[int]) -> int:
         return value
 
     try:
-        handler(__diwire_context={int: 7})
+        handler(diwire_context={int: 7})
     except DIWireInvalidRegistrationError as error:
         print(type(error).__name__)
 

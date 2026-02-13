@@ -1,5 +1,5 @@
 .. meta::
-   :description: Pattern for using diwire with Starlette/ASGI: request scopes, @container.inject, and contextvars for request-bound dependencies.
+   :description: Pattern for using diwire with Starlette/ASGI: request scopes, @provider_context.inject, and contextvars for request-bound dependencies.
 
 Starlette (and other ASGI frameworks)
 =====================================
@@ -7,7 +7,7 @@ Starlette (and other ASGI frameworks)
 There is no Starlette-specific integration in diwire (by design). The recommended pattern is:
 
 1. Build a container at startup.
-2. Use ``@container.inject(scope=Scope.REQUEST)`` for request handlers.
+2. Use ``@provider_context.inject(scope=Scope.REQUEST)`` for request handlers.
 3. Use ``contextvars`` only for request-bound objects (``Request``, user, trace id, ...), not for “current container”.
 
 Minimal sketch
@@ -50,11 +50,10 @@ Minimal sketch
    container.add_concrete(Service, provides=Service, scope=Scope.REQUEST)
 
 
-   @container.inject(scope=Scope.REQUEST)
+   @provider_context.inject(scope=Scope.REQUEST)
    async def handler(request: Request, service: Injected[Service]) -> JSONResponse:
        _ = request
        _ = service
        return JSONResponse({"ok": True})
 
 The exact routing API differs between ASGI frameworks, but the DI pieces stay the same.
-

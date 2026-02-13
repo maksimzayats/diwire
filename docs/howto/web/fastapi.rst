@@ -1,5 +1,5 @@
 .. meta::
-   :description: How to use diwire with FastAPI: per-request scopes via @container.inject(scope=Scope.REQUEST) and Injected[T] parameters.
+   :description: How to use diwire with FastAPI: per-request scopes via @provider_context.inject(scope=Scope.REQUEST) and Injected[T] parameters.
    :keywords: fastapi dependency injection, python dependency injection fastapi, request scope dependency injection
 
 FastAPI
@@ -14,7 +14,7 @@ FastAPI already has its own dependency system, but diwire is useful when you wan
 Recommended pattern: decorate endpoints
 ------------------------------------------------
 
-Decorate endpoints with :meth:`diwire.Container.inject` and use ``Injected[T]`` parameters for injected dependencies.
+Decorate endpoints with :meth:`diwire.ProviderContext.inject` and use ``Injected[T]`` parameters for injected dependencies.
 With ``scope=Scope.REQUEST`` (and the default ``auto_open_scope=True``), the wrapper opens a request scope per call and
 closes it when the endpoint returns.
 
@@ -40,11 +40,11 @@ closes it when the endpoint returns.
 
 
    @app.get("/health")
-   @container.inject(scope=Scope.REQUEST)
+   @provider_context.inject(scope=Scope.REQUEST)
    def health(service: Injected[RequestService]) -> dict[str, str]:
        return {"status": service.run()}
 
-Decorator order matters: apply ``@container.inject(...)`` *below* the FastAPI decorator so FastAPI sees the injected
+Decorator order matters: apply ``@provider_context.inject(...)`` *below* the FastAPI decorator so FastAPI sees the injected
 wrapper signature (Injected parameters are removed from the public signature).
 
 Runnable example

@@ -27,7 +27,7 @@ make examples-readme
 - [07. Named Components](#ex-07-named-components)
 - [08. Open Generics](#ex-08-open-generics)
 - [09. Autoregistration](#ex-09-autoregistration)
-- [10. Container Context](#ex-10-container-context)
+- [10. Provider Context](#ex-10-provider-context)
 - [11. Lock Modes](#ex-11-lock-modes)
 - [12. Supported Frameworks](#ex-12-supported-frameworks)
 - [13. Pydantic Settings](#ex-13-pydantic-settings)
@@ -572,7 +572,8 @@ class SingletonResource:
 
 
 def _resolver_scope_name(resolver: object) -> str:
-    class_name = type(resolver).__name__
+    inner_resolver = getattr(resolver, "_resolver", resolver)
+    class_name = type(inner_resolver).__name__
     return class_name.removeprefix("_").removesuffix("Resolver").upper()
 
 
@@ -898,7 +899,7 @@ Function injection from basic marker usage to nested wrapper behavior.
 This topic demonstrates:
 
 1. ``Injected[T]`` marker semantics and signature filtering.
-2. ``@container.inject`` behavior with caller overrides.
+2. ``@provider_context.inject`` behavior with caller overrides.
 3. ``auto_open_scope`` cleanup for scoped generator resources.
 4. Nested injected wrappers as providers sharing the same active resolver.
 
@@ -909,7 +910,7 @@ import inspect
 from collections.abc import Generator
 from dataclasses import dataclass
 
-from diwire import Container, Injected, Lifetime, Scope
+from diwire import Container, Injected, Lifetime, Scope, provider_context
 
 
 @dataclass(slots=True)
@@ -944,7 +945,7 @@ def main() -> None:
         provides=User,
     )
 
-    @container.inject
+    @provider_context.inject
     def render_user(
         user_email: str,
         user: Injected[User],
@@ -985,7 +986,7 @@ def main() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject(scope=Scope.REQUEST, auto_open_scope=True)
+    @provider_context.inject(scope=Scope.REQUEST, auto_open_scope=True)
     def use_scoped_resource(resource: Injected[RequestScopedResource]) -> RequestScopedResource:
         return resource
 
@@ -999,11 +1000,11 @@ def main() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject
+    @provider_context.inject
     def build_inner(dependency: Injected[RequestDependency]) -> NestedInnerService:
         return NestedInnerService(dependency=dependency)
 
-    @container.inject
+    @provider_context.inject
     def build_outer(
         inner: Injected[NestedInnerService],
         dependency: Injected[RequestDependency],
@@ -1052,7 +1053,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
-from diwire import Container, Injected
+from diwire import Container, Injected, provider_context
 
 
 @dataclass(slots=True)
@@ -1064,7 +1065,7 @@ async def main() -> None:
     container = Container(autoregister_concrete_types=False)
     container.add_instance(AsyncUser(email="async@example.com"))
 
-    @container.inject
+    @provider_context.inject
     async def handler(user: Injected[AsyncUser]) -> str:
         return user.email
 
@@ -1094,7 +1095,7 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 
-from diwire import Container, Injected
+from diwire import Container, Injected, provider_context
 
 
 @dataclass(slots=True)
@@ -1106,7 +1107,7 @@ def main() -> None:
     container = Container(autoregister_concrete_types=False)
     container.add_instance(User(email="user@example.com"))
 
-    @container.inject
+    @provider_context.inject
     def handler(user_email: str, user: Injected[User], user_name: str) -> str:
         return f"{user_email}|{user_name}|{user.email}"
 
@@ -1128,7 +1129,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, Injected
+from diwire import Container, Injected, provider_context
 
 
 @dataclass(slots=True)
@@ -1140,7 +1141,7 @@ def main() -> None:
     container = Container(autoregister_concrete_types=False)
     container.add_instance(User(email="container@example.com"))
 
-    @container.inject
+    @provider_context.inject
     def handler(user: Injected[User]) -> str:
         return user.email
 
@@ -1165,7 +1166,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 
-from diwire import Container, Injected, Lifetime, Scope
+from diwire import Container, Injected, Lifetime, Scope, provider_context
 
 
 class Resource:
@@ -1189,7 +1190,7 @@ def main() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject(scope=Scope.REQUEST, auto_open_scope=True)
+    @provider_context.inject(scope=Scope.REQUEST, auto_open_scope=True)
     def handler(resource: Injected[Resource]) -> Resource:
         return resource
 
@@ -1211,7 +1212,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, Injected, Lifetime, Scope
+from diwire import Container, Injected, Lifetime, Scope, provider_context
 
 
 class RequestDependency:
@@ -1238,11 +1239,11 @@ def main() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject
+    @provider_context.inject
     def build_inner(dependency: Injected[RequestDependency]) -> InnerService:
         return InnerService(dependency=dependency)
 
-    @container.inject
+    @provider_context.inject
     def build_outer(
         inner: Injected[InnerService],
         dependency: Injected[RequestDependency],
@@ -1295,7 +1296,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated
 
-from diwire import Component, Container, Injected
+from diwire import Component, Container, Injected, provider_context
 
 
 @dataclass(slots=True)
@@ -1316,7 +1317,7 @@ def main() -> None:
     container.add_factory(lambda: UserStore(backend="redis"), provides=PrimaryStore)
     container.add_factory(lambda: UserStore(backend="memory"), provides=FallbackStore)
 
-    @container.inject
+    @provider_context.inject
     def load_users(
         primary_store: Injected[PrimaryStore],
         fallback_store: Injected[FallbackStore],
@@ -1346,7 +1347,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated
 
-from diwire import Component, Container, Injected
+from diwire import Component, Container, Injected, provider_context
 
 
 @dataclass(slots=True)
@@ -1363,7 +1364,7 @@ def main() -> None:
     container.add_instance(Cache(backend="redis"), provides=Cache, component="primary")
     container.add_instance(Cache(backend="memory"), provides=Cache, component=Component("fallback"))
 
-    @container.inject
+    @provider_context.inject
     def load(
         primary: Injected[PrimaryCache],
         fallback: Injected[FallbackCache],
@@ -2031,35 +2032,28 @@ if __name__ == "__main__":
     main()
 ```
 
-<a id="ex-10-container-context"></a>
-## 10. Container Context
+<a id="ex-10-provider-context"></a>
+## 10. Provider Context
 
 Files:
-- [01_container_context.py](#ex-10-container-context--01-container-context-py)
-- [02_unbound_error.py](#ex-10-container-context--02-unbound-error-py)
-- [03_deferred_replay.py](#ex-10-container-context--03-deferred-replay-py)
-- [04_inject_wrappers.py](#ex-10-container-context--04-inject-wrappers-py)
-- [05_rebind.py](#ex-10-container-context--05-rebind-py)
+- [01_provider_context.py](#ex-10-provider-context--01-provider-context-py)
+- [02_unbound_error.py](#ex-10-provider-context--02-unbound-error-py)
+- [03_bound_resolution.py](#ex-10-provider-context--03-bound-resolution-py)
+- [04_inject_wrappers.py](#ex-10-provider-context--04-inject-wrappers-py)
+- [05_use_provider_context_false.py](#ex-10-provider-context--05-use-provider-context-false-py)
 
-<a id="ex-10-container-context--01-container-context-py"></a>
-### 01_container_context.py ([ex_10_container_context/01_container_context.py](ex_10_container_context/01_container_context.py))
+<a id="ex-10-provider-context--01-provider-context-py"></a>
+### 01_provider_context.py ([ex_10_provider_context/01_provider_context.py](ex_10_provider_context/01_provider_context.py))
 
-ContainerContext: unbound errors, replay, injection, and rebind behavior.
-
-This module demonstrates:
-
-1. ``DIWireContainerNotSetError`` when context is used before binding.
-2. Deferred registration replay when calling ``set_current``.
-3. ``@container_context.inject`` for a function and an instance method.
-4. Re-binding to a new container and replaying all recorded operations.
+ProviderContext: unbound errors, fallback injection, and bound resolver precedence.
 
 ```python
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, ContainerContext, Injected
-from diwire.exceptions import DIWireContainerNotSetError
+from diwire import Container, Injected, ProviderContext
+from diwire.exceptions import DIWireProviderNotSetError
 
 
 @dataclass(slots=True)
@@ -2067,134 +2061,102 @@ class Message:
     value: str
 
 
-@dataclass(slots=True)
-class Service:
-    message: Message
-
-
 def main() -> None:
-    context = ContainerContext()
+    context = ProviderContext()
 
     try:
-        context.resolve(Service)
-    except DIWireContainerNotSetError as error:
-        unbound_error = type(error).__name__
-    print(f"unbound_error={unbound_error}")  # => unbound_error=DIWireContainerNotSetError
+        context.resolve(Message)
+    except DIWireProviderNotSetError as error:
+        print(f"unbound_error={type(error).__name__}")  # => unbound_error=DIWireProviderNotSetError
 
-    context.add_instance(Message(value="context-message"))
-    context.add_concrete(Service)
+    first = Container(provider_context=context, autoregister_concrete_types=False)
+    first.add_instance(Message("first"), provides=Message)
 
-    first_container = Container(autoregister_concrete_types=False)
-    context.set_current(first_container)
-    replay_ok = first_container.resolve(Service).message.value == "context-message"
-    print(f"replay_ok={replay_ok}")  # => replay_ok=True
+    second = Container(provider_context=context, autoregister_concrete_types=False)
+    second.add_instance(Message("second"), provides=Message)
 
     @context.inject
     def read_message(message: Injected[Message]) -> str:
         return message.value
 
-    print(f"inject_function_ok={read_message() == 'context-message'}")  # => inject_function_ok=True
+    print(f"fallback_last_wins={read_message() == 'second'}")  # => fallback_last_wins=True
 
-    class Handler:
-        @context.inject
-        def read(self, message: Injected[Message]) -> str:
-            return message.value
-
-    handler = Handler()
-    print(f"inject_method_ok={handler.read() == 'context-message'}")  # => inject_method_ok=True
-
-    second_container = Container(autoregister_concrete_types=False)
-    context.set_current(second_container)
-    rebind_replays = second_container.resolve(Service).message.value == "context-message"
-    print(f"rebind_replays={rebind_replays}")  # => rebind_replays=True
+    with first.compile():
+        print(f"bound_precedence={read_message() == 'first'}")  # => bound_precedence=True
 
 
 if __name__ == "__main__":
     main()
 ```
 
-<a id="ex-10-container-context--02-unbound-error-py"></a>
-### 02_unbound_error.py ([ex_10_container_context/02_unbound_error.py](ex_10_container_context/02_unbound_error.py))
+<a id="ex-10-provider-context--02-unbound-error-py"></a>
+### 02_unbound_error.py ([ex_10_provider_context/02_unbound_error.py](ex_10_provider_context/02_unbound_error.py))
 
-Focused example: unbound ``ContainerContext`` usage error.
+Focused example: unbound ``ProviderContext`` usage error.
 
 ```python
 from __future__ import annotations
 
-from diwire import ContainerContext
-from diwire.exceptions import DIWireContainerNotSetError
-
-
-class Service:
-    pass
+from diwire import ProviderContext
+from diwire.exceptions import DIWireProviderNotSetError
 
 
 def main() -> None:
-    context = ContainerContext()
+    context = ProviderContext()
 
     try:
-        context.resolve(Service)
-    except DIWireContainerNotSetError as error:
-        error_name = type(error).__name__
-
-    print(f"unbound_error={error_name}")  # => unbound_error=DIWireContainerNotSetError
+        context.resolve(str)
+    except DIWireProviderNotSetError as error:
+        print(f"unbound_error={type(error).__name__}")  # => unbound_error=DIWireProviderNotSetError
 
 
 if __name__ == "__main__":
     main()
 ```
 
-<a id="ex-10-container-context--03-deferred-replay-py"></a>
-### 03_deferred_replay.py ([ex_10_container_context/03_deferred_replay.py](ex_10_container_context/03_deferred_replay.py))
+<a id="ex-10-provider-context--03-bound-resolution-py"></a>
+### 03_bound_resolution.py ([ex_10_provider_context/03_bound_resolution.py](ex_10_provider_context/03_bound_resolution.py))
 
-Focused example: deferred registrations replay on ``set_current``.
+Focused example: bound resolver resolution through ProviderContext.
 
 ```python
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, ContainerContext
-
-
-@dataclass(slots=True)
-class Message:
-    value: str
+from diwire import Container, ProviderContext
 
 
 @dataclass(slots=True)
 class Service:
-    message: Message
+    value: str
 
 
 def main() -> None:
-    context = ContainerContext()
-    context.add_instance(Message(value="context-message"))
-    context.add_concrete(Service)
+    context = ProviderContext()
+    container = Container(provider_context=context, autoregister_concrete_types=False)
+    container.add_instance(Service("bound"), provides=Service)
 
-    container = Container(autoregister_concrete_types=False)
-    context.set_current(container)
-
-    print(
-        f"replay_ok={container.resolve(Service).message.value == 'context-message'}",
-    )  # => replay_ok=True
+    with container.compile():
+        resolved = context.resolve(Service)
+        print(f"bound_resolve_ok={resolved.value == 'bound'}")  # => bound_resolve_ok=True
 
 
 if __name__ == "__main__":
     main()
 ```
 
-<a id="ex-10-container-context--04-inject-wrappers-py"></a>
-### 04_inject_wrappers.py ([ex_10_container_context/04_inject_wrappers.py](ex_10_container_context/04_inject_wrappers.py))
+<a id="ex-10-provider-context--04-inject-wrappers-py"></a>
+### 04_inject_wrappers.py ([ex_10_provider_context/04_inject_wrappers.py](ex_10_provider_context/04_inject_wrappers.py))
 
-Focused example: ``@container_context.inject`` on function and method.
+Focused example: ``@provider_context.inject`` on function and method.
 
 ```python
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, ContainerContext, Injected
+from diwire import Container, Injected, provider_context
 
 
 @dataclass(slots=True)
@@ -2203,24 +2165,25 @@ class Message:
 
 
 def main() -> None:
-    context = ContainerContext()
-    context.add_instance(Message(value="context-message"))
-    context.set_current(Container(autoregister_concrete_types=False))
+    container = Container(autoregister_concrete_types=False)
+    container.add_instance(Message(value="context-message"), provides=Message)
 
-    @context.inject
+    @provider_context.inject
     def read_function(message: Injected[Message]) -> str:
         return message.value
 
-    class Reader:
-        @context.inject
+    class Handler:
+        @provider_context.inject
         def read_method(self, message: Injected[Message]) -> str:
             return message.value
 
+    handler = Handler()
+
     print(
-        f"inject_function_ok={read_function() == 'context-message'}",
+        f"inject_function_ok={read_function() == 'context-message'}"
     )  # => inject_function_ok=True
     print(
-        f"inject_method_ok={Reader().read_method() == 'context-message'}",
+        f"inject_method_ok={handler.read_method() == 'context-message'}"
     )  # => inject_method_ok=True
 
 
@@ -2228,43 +2191,31 @@ if __name__ == "__main__":
     main()
 ```
 
-<a id="ex-10-container-context--05-rebind-py"></a>
-### 05_rebind.py ([ex_10_container_context/05_rebind.py](ex_10_container_context/05_rebind.py))
+<a id="ex-10-provider-context--05-use-provider-context-false-py"></a>
+### 05_use_provider_context_false.py ([ex_10_provider_context/05_use_provider_context_false.py](ex_10_provider_context/05_use_provider_context_false.py))
 
-Focused example: rebinding replays all stored operations.
+Focused example: strict-mode entrypoint rebind with use_provider_context=False.
 
 ```python
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-from diwire import Container, ContainerContext
+from diwire import Container
 
 
-@dataclass(slots=True)
-class Message:
-    value: str
-
-
-@dataclass(slots=True)
-class Service:
-    message: Message
+def _bound_self(method: object) -> object | None:
+    return getattr(method, "__self__", None)
 
 
 def main() -> None:
-    context = ContainerContext()
-    context.add_instance(Message(value="context-message"))
-    context.add_concrete(Service)
+    container = Container(
+        autoregister_concrete_types=False,
+        autoregister_dependencies=False,
+        use_provider_context=False,
+    )
+    container.add_instance("legacy", provides=str)
 
-    first = Container(autoregister_concrete_types=False)
-    context.set_current(first)
-
-    second = Container(autoregister_concrete_types=False)
-    context.set_current(second)
-
-    print(
-        f"rebind_replays={second.resolve(Service).message.value == 'context-message'}",
-    )  # => rebind_replays=True
+    compiled = container.compile()
+    print(f"rebind_enabled={_bound_self(container.resolve) is compiled}")  # => rebind_enabled=True
 
 
 if __name__ == "__main__":
@@ -2821,11 +2772,11 @@ Files:
 <a id="ex-15-fastapi--01-fastapi-py"></a>
 ### 01_fastapi.py ([ex_15_fastapi/01_fastapi.py](ex_15_fastapi/01_fastapi.py))
 
-FastAPI integration via ``@container.inject(scope=Scope.REQUEST)``.
+FastAPI integration via ``@provider_context.inject(scope=Scope.REQUEST)``.
 
 This module demonstrates request-scoped injection without network startup:
 
-1. A FastAPI route function decorated with ``@container.inject``.
+1. A FastAPI route function decorated with ``@provider_context.inject``.
 2. A request-scoped generator resource that increments open/close counters.
 3. Two in-process calls through ``TestClient``.
 
@@ -2839,7 +2790,7 @@ from dataclasses import dataclass
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from diwire import Container, Injected, Lifetime, Scope
+from diwire import Container, Injected, Lifetime, Scope, provider_context
 
 
 @dataclass(slots=True)
@@ -2868,7 +2819,7 @@ def main() -> None:
     )
 
     @app.get("/resource/{item_id}")
-    @container.inject(scope=Scope.REQUEST)
+    @provider_context.inject(scope=Scope.REQUEST)
     def get_resource(item_id: int, resource: Injected[RequestResource]) -> dict[str, int | str]:
         return {"id": item_id, "resource": resource.label}
 
@@ -3353,22 +3304,22 @@ if __name__ == "__main__":
 <a id="ex-17-scope-context-values--02-injected-callable-context-py"></a>
 ### 02_injected_callable_context.py ([ex_17_scope_context_values/02_injected_callable_context.py](ex_17_scope_context_values/02_injected_callable_context.py))
 
-Injected callables can consume FromContext values via __diwire_context.
+Injected callables can consume FromContext values via diwire_context.
 
 ```python
 from __future__ import annotations
 
-from diwire import Container, FromContext, Scope
+from diwire import Container, FromContext, Scope, provider_context
 
 
 def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    Container(autoregister_concrete_types=False)
 
-    @container.inject(scope=Scope.REQUEST)
+    @provider_context.inject(scope=Scope.REQUEST)
     def handler(value: FromContext[int]) -> int:
         return value
 
-    from_context = handler(__diwire_context={int: 7})
+    from_context = handler(diwire_context={int: 7})
     overridden = handler(value=8)
 
     print(f"from_context={from_context}")
@@ -3427,24 +3378,24 @@ if __name__ == "__main__":
 <a id="ex-17-scope-context-values--04-context-without-scope-open-py"></a>
 ### 04_context_without_scope_open.py ([ex_17_scope_context_values/04_context_without_scope_open.py](ex_17_scope_context_values/04_context_without_scope_open.py))
 
-Passing __diwire_context without opening a scope raises a clear error.
+Passing diwire_context without opening a scope raises a clear error.
 
 ```python
 from __future__ import annotations
 
-from diwire import Container, FromContext
+from diwire import Container, FromContext, provider_context
 from diwire.exceptions import DIWireInvalidRegistrationError
 
 
 def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    Container(autoregister_concrete_types=False)
 
-    @container.inject(auto_open_scope=False)
+    @provider_context.inject(auto_open_scope=False)
     def handler(value: FromContext[int]) -> int:
         return value
 
     try:
-        handler(__diwire_context={int: 7})
+        handler(diwire_context={int: 7})
     except DIWireInvalidRegistrationError as error:
         print(type(error).__name__)
 
@@ -4001,7 +3952,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated, Protocol, TypeAlias
 
-from diwire import All, Component, Container, Injected
+from diwire import All, Component, Container, Injected, provider_context
 
 
 class EventHandler(Protocol):
@@ -4042,7 +3993,7 @@ def main() -> None:
         [handler.handle("evt") for handler in handlers],
     )  # => ['base:evt', 'logging:evt', 'metrics:evt']
 
-    @container.inject
+    @provider_context.inject
     def dispatch(event: str, handlers: Injected[All[EventHandler]]) -> tuple[str, ...]:
         return tuple(handler.handle(event) for handler in handlers)
 

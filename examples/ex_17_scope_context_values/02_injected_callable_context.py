@@ -1,18 +1,18 @@
-"""Injected callables can consume FromContext values via __diwire_context."""
+"""Injected callables can consume FromContext values via diwire_context."""
 
 from __future__ import annotations
 
-from diwire import Container, FromContext, Scope
+from diwire import Container, FromContext, Scope, provider_context
 
 
 def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    Container(autoregister_concrete_types=False)
 
-    @container.inject(scope=Scope.REQUEST)
+    @provider_context.inject(scope=Scope.REQUEST)
     def handler(value: FromContext[int]) -> int:
         return value
 
-    from_context = handler(__diwire_context={int: 7})
+    from_context = handler(diwire_context={int: 7})
     overridden = handler(value=8)
 
     print(f"from_context={from_context}")

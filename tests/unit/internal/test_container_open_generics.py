@@ -9,7 +9,15 @@ from typing import Annotated, Any, Generic, TypeVar, cast
 
 import pytest
 
-from diwire import Component, Container, ContainerContext, Injected, Lifetime, Scope
+from diwire import (
+    Component,
+    Container,
+    Injected,
+    Lifetime,
+    ProviderContext,
+    Scope,
+    provider_context,
+)
 from diwire._internal.providers import ProviderDependency
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
@@ -147,7 +155,7 @@ def test_open_generator_registration_supports_type_argument_injection() -> None:
     assert resolved.type is bytes
 
 
-def test_open_context_manager_registration_works_inside_container_context() -> None:
+def test_open_context_manager_registration_works_inside_provider_context() -> None:
     container = Container()
     container.add_context_manager(_context_box, provides=_IBox)
 
@@ -176,7 +184,6 @@ def test_open_generic_scope_resolver_close_runs_cleanup_via_wrapper_delegate() -
     )
 
     request_scope = container.enter_scope()
-    assert type(request_scope).__name__.endswith("OpenGenericResolver")
 
     resolved = request_scope.resolve(_IBox[int])
     assert isinstance(resolved, _Box)
@@ -218,7 +225,6 @@ async def test_open_generic_scope_resolver_aclose_runs_cleanup_via_wrapper_deleg
     )
 
     request_scope = container.enter_scope()
-    assert type(request_scope).__name__.endswith("OpenGenericResolver")
 
     resolved = await request_scope.aresolve(_IBox[int])
     assert isinstance(resolved, _Box)
@@ -301,7 +307,7 @@ def test_injected_open_generic_uses_open_resolver_fallback() -> None:
     container = Container()
     container.add_concrete(_Box, provides=_IBox)
 
-    @container.inject
+    @provider_context.inject
     def handler(box: Injected[_IBox[str]]) -> str:
         resolved_box = cast("Any", box)
         return resolved_box.type.__name__
@@ -309,15 +315,17 @@ def test_injected_open_generic_uses_open_resolver_fallback() -> None:
     assert cast("Any", handler)() == "str"
 
 
-def test_container_context_replays_open_registrations_with_canonical_keys() -> None:
-    context = ContainerContext()
-    context.add_concrete(_BoxA, provides=_IBox)
-    context.add_concrete(_BoxB, provides=_IBox[T])
+def test_provider_context_fallback_uses_latest_canonical_open_key() -> None:
+    context = ProviderContext()
+    runtime = Container(provider_context=context)
+    runtime.add_concrete(_BoxA, provides=_IBox)
+    runtime.add_concrete(_BoxB, provides=_IBox[T])
 
-    runtime = Container()
-    context.set_current(runtime)
+    @context.inject
+    def handler(box: Injected[_IBox[int]]) -> _IBox[int]:
+        return box
 
-    resolved = runtime.resolve(_IBox[int])
+    resolved = cast("Any", handler)()
     assert isinstance(resolved, _BoxB)
 
 

@@ -30,7 +30,8 @@ class SingletonResource:
 
 
 def _resolver_scope_name(resolver: object) -> str:
-    class_name = type(resolver).__name__
+    inner_resolver = getattr(resolver, "_resolver", resolver)
+    class_name = type(inner_resolver).__name__
     return class_name.removeprefix("_").removesuffix("Resolver").upper()
 
 

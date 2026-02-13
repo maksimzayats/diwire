@@ -12,8 +12,8 @@ from diwire._internal.markers import (
 )
 
 _ANNOTATED_DEPENDENCY_MIN_ARGS = 2
-INJECT_RESOLVER_KWARG = "__diwire_resolver"
-INJECT_CONTEXT_KWARG = "__diwire_context"
+INJECT_RESOLVER_KWARG = "diwire_resolver"
+INJECT_CONTEXT_KWARG = "diwire_context"
 INJECT_WRAPPER_MARKER = "__diwire_inject_wrapper__"
 
 

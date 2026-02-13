@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 
-from diwire import Container, Injected, Lifetime, Scope
+from diwire import Container, Injected, Lifetime, Scope, provider_context
 
 
 class Resource:
@@ -28,9 +28,12 @@ def main() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @container.inject(scope=Scope.REQUEST, auto_open_scope=True)
+    @provider_context.inject(scope=Scope.REQUEST, auto_open_scope=True)
     def handler(resource: Injected[Resource]) -> Resource:
         return resource
+
+    with provider_context.enter_scope() as s:
+        print(s)
 
     _ = handler()
     print(f"auto_scope_cleanup={state['cleaned']}")  # => auto_scope_cleanup=True

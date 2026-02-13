@@ -1,5 +1,5 @@
 .. meta::
-   :description: diwire function injection example: Injected[T] and @container.inject.
+   :description: diwire function injection example: Injected[T] and @provider_context.inject.
 
 Function injection
 ==================
@@ -8,7 +8,7 @@ What you'll learn
 -----------------
 
 - Use ``Injected[T]`` to mark injected parameters.
-- Wrap callables with ``@container.inject(...)``.
+- Wrap callables with ``@provider_context.inject(...)``.
 
 Run locally
 -----------
@@ -23,4 +23,3 @@ Example
 .. literalinclude:: ../../../examples/ex_06_function_injection/01_function_injection.py
    :language: python
    :class: diwire-example py-run
-

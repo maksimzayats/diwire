@@ -67,7 +67,7 @@ if TYPE_CHECKING:
     Examples:
         .. code-block:: python
 
-            @container.inject
+            @provider_context.inject
             def run(service: Injected[Service], value: int) -> str:
                 return service.handle(value)
     """
@@ -89,7 +89,7 @@ if TYPE_CHECKING:
 
             Priority = Annotated[int, Component("priority")]
 
-            @container.inject(scope=Scope.REQUEST)
+            @provider_context.inject(scope=Scope.REQUEST)
             def handler(
                 request_id: FromContext[int],
                 priority: FromContext[Priority],
@@ -134,7 +134,7 @@ else:
         Examples:
             .. code-block:: python
 
-                @container.inject
+                @provider_context.inject
                 def run(service: Injected[Service], value: int) -> str:
                     return service.handle(value)
 
@@ -166,7 +166,7 @@ else:
                 Priority = Annotated[int, Component("priority")]
 
 
-                @container.inject(scope=Scope.REQUEST)
+                @provider_context.inject(scope=Scope.REQUEST)
                 def handler(
                     request_id: FromContext[int],
                     priority: FromContext[Priority],
