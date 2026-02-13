@@ -1,11 +1,11 @@
-"""ProviderContext: unbound errors, fallback resolution/scope/injection, and bound precedence."""
+"""ResolverContext: unbound errors, fallback resolution/scope/injection, and bound precedence."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, Injected, ProviderContext, Scope
-from diwire.exceptions import DIWireProviderNotSetError
+from diwire import Container, Injected, ResolverContext, Scope
+from diwire.exceptions import DIWireResolverNotSetError
 
 
 @dataclass(slots=True)
@@ -14,17 +14,17 @@ class Message:
 
 
 def main() -> None:
-    context = ProviderContext()
+    context = ResolverContext()
 
     try:
         context.resolve(Message)
-    except DIWireProviderNotSetError as error:
-        print(f"unbound_error={type(error).__name__}")  # => unbound_error=DIWireProviderNotSetError
+    except DIWireResolverNotSetError as error:
+        print(f"unbound_error={type(error).__name__}")  # => unbound_error=DIWireResolverNotSetError
 
-    first = Container(provider_context=context, autoregister_concrete_types=False)
+    first = Container(resolver_context=context, autoregister_concrete_types=False)
     first.add_instance(Message("first"), provides=Message)
 
-    second = Container(provider_context=context, autoregister_concrete_types=False)
+    second = Container(resolver_context=context, autoregister_concrete_types=False)
     second.add_instance(Message("second"), provides=Message)
 
     print(

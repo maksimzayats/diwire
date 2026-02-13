@@ -1,5 +1,5 @@
 .. meta::
-   :description: Function injection in diwire using Injected[T] and ProviderContext.inject.
+   :description: Function injection in diwire using Injected[T] and ResolverContext.inject.
 
 Function injection
 ==================
@@ -10,7 +10,7 @@ The building blocks are:
 
 - :class:`diwire.Injected` - a type wrapper used as ``Injected[T]`` to mark injected parameters
 - :class:`diwire.FromContext` - a type wrapper used as ``FromContext[T]`` to read per-scope context
-- :meth:`diwire.ProviderContext.inject` - a decorator that returns an injected callable wrapper
+- :meth:`diwire.ResolverContext.inject` - a decorator that returns an injected callable wrapper
 
 Basic usage
 -----------
@@ -23,23 +23,23 @@ See the runnable scripts in :doc:`/howto/examples/function-injection` (Injected 
 Decorator style
 ---------------
 
-``ProviderContext.inject`` supports all decorator forms:
+``ResolverContext.inject`` supports all decorator forms:
 
-- ``@provider_context.inject``
-- ``@provider_context.inject()``
-- ``@provider_context.inject(scope=Scope.REQUEST, autoregister_dependencies=True)``
-- ``@provider_context.inject(scope=Scope.REQUEST, auto_open_scope=False)``
+- ``@resolver_context.inject``
+- ``@resolver_context.inject()``
+- ``@resolver_context.inject(scope=Scope.REQUEST, autoregister_dependencies=True)``
+- ``@resolver_context.inject(scope=Scope.REQUEST, auto_open_scope=False)``
 
 Example:
 
 .. code-block:: python
 
-   from diwire import Container, Injected, Scope, provider_context
+   from diwire import Container, Injected, Scope, resolver_context
 
    container = Container()
 
 
-   @provider_context.inject(scope=Scope.REQUEST)
+   @resolver_context.inject(scope=Scope.REQUEST)
    def handler(service: Injected["Service"]) -> str:
        return service.run()
 
@@ -63,11 +63,11 @@ Pass context with reserved kwarg ``diwire_context`` when the wrapper opens a new
 .. code-block:: python
    :class: diwire-example py-run
 
-   from diwire import Container, FromContext, Scope, provider_context
+   from diwire import Container, FromContext, Scope, resolver_context
 
    container = Container()
 
-   @provider_context.inject(scope=Scope.REQUEST)
+   @resolver_context.inject(scope=Scope.REQUEST)
    def handler(value: FromContext[int]) -> int:
        return value
 
@@ -85,7 +85,7 @@ closes it at the end of the call.
 
 .. code-block:: python
 
-   from diwire import Container, Injected, Lifetime, Scope, provider_context
+   from diwire import Container, Injected, Lifetime, Scope, resolver_context
 
    class RequestService:
        pass
@@ -96,7 +96,7 @@ closes it at the end of the call.
        lifetime=Lifetime.SCOPED,
    )
 
-   @provider_context.inject(scope=Scope.REQUEST)
+   @resolver_context.inject(scope=Scope.REQUEST)
    def handler(service: Injected[RequestService]) -> RequestService:
        return service
 
@@ -107,4 +107,4 @@ Naming note
 
 The API name is ``inject``. Considered alternatives were ``wire``, ``autowire``, ``inject_call``, and ``inject_params``.
 
-For framework integration (FastAPI/Starlette), also see :doc:`provider-context` and :doc:`../howto/web/fastapi`.
+For framework integration (FastAPI/Starlette), also see :doc:`resolver-context` and :doc:`../howto/web/fastapi`.

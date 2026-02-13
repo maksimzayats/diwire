@@ -69,17 +69,17 @@ Container fixture
        # Prefer a fresh container per test.
        return Container()
 
-Using provider_context in tests
+Using resolver_context in tests
 --------------------------------
 
-If your app uses :data:`diwire.provider_context`, prefer explicit resolver injection in tests.
+If your app uses :data:`diwire.resolver_context`, prefer explicit resolver injection in tests.
 This avoids ambient resolver state leaks between tests.
 
 .. code-block:: python
 
    import pytest
 
-   from diwire import Container, Injected, provider_context
+   from diwire import Container, Injected, resolver_context
 
 
    @pytest.fixture
@@ -89,7 +89,7 @@ This avoids ambient resolver state leaks between tests.
        return container
 
 
-   @provider_context.inject
+   @resolver_context.inject
    def build_service(service: Injected[Service]) -> Service:
        return service
 

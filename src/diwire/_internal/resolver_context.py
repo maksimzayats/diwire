@@ -16,7 +16,7 @@ from diwire._internal.injection import (
 )
 from diwire._internal.resolvers.protocol import ResolverProtocol
 from diwire._internal.scope import BaseScope
-from diwire.exceptions import DIWireInvalidRegistrationError, DIWireProviderNotSetError
+from diwire.exceptions import DIWireInvalidRegistrationError, DIWireResolverNotSetError
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -42,19 +42,19 @@ class _InjectWrapperConfig:
     auto_open_scope: bool
 
 
-class _ProviderBoundResolver:
-    """Resolver wrapper that synchronizes resolver context with ProviderContext."""
+class _ResolverBoundResolver:
+    """Resolver wrapper that synchronizes resolver context with ResolverContext."""
 
     def __init__(
         self,
         *,
         resolver: ResolverProtocol,
-        provider_context: ProviderContext,
+        resolver_context: ResolverContext,
         push_resolver: Callable[[ResolverProtocol], None],
         pop_resolver: Callable[[], None],
     ) -> None:
         self._resolver = resolver
-        self._provider_context = provider_context
+        self._resolver_context = resolver_context
         self._push_resolver = push_resolver
         self._pop_resolver = pop_resolver
 
@@ -84,13 +84,13 @@ class _ProviderBoundResolver:
         scope: BaseScope | None = None,
         *,
         context: Mapping[Any, Any] | None = None,
-    ) -> _ProviderBoundResolver:
+    ) -> _ResolverBoundResolver:
         scoped_resolver = self._resolver.enter_scope(scope, context=context)
         if scoped_resolver is self._resolver:
             return self
-        return _ProviderBoundResolver(
+        return _ResolverBoundResolver(
             resolver=scoped_resolver,
-            provider_context=self._provider_context,
+            resolver_context=self._resolver_context,
             push_resolver=self._push_resolver,
             pop_resolver=self._pop_resolver,
         )
@@ -144,16 +144,16 @@ class _ProviderBoundResolver:
         await self._resolver.aclose(exc_type, exc_value, traceback)
 
 
-class ProviderContext:
+class ResolverContext:
     """Task/thread-safe context for resolver-bound injection and resolution."""
 
     def __init__(self) -> None:
         self._current_resolver_var: ContextVar[ResolverProtocol | None] = ContextVar(
-            "diwire_provider_context_resolver",
+            "diwire_resolver_context_resolver",
             default=None,
         )
         self._token_stack_var: ContextVar[tuple[Token[ResolverProtocol | None], ...]] = ContextVar(
-            "diwire_provider_context_tokens",
+            "diwire_resolver_context_tokens",
             default=(),
         )
         self._fallback_container: Container | None = None
@@ -191,10 +191,10 @@ class ProviderContext:
             return fallback_resolver
 
         msg = (
-            "Provider is not set for provider_context. Enter a compiled resolver context "
-            "before using provider_context."
+            "Resolver is not set for resolver_context. Enter a compiled resolver context "
+            "before using resolver_context."
         )
-        raise DIWireProviderNotSetError(msg)
+        raise DIWireResolverNotSetError(msg)
 
     def _get_fallback_resolver_or_none(self) -> ResolverProtocol | None:
         fallback_container = self._fallback_container
@@ -206,13 +206,13 @@ class ProviderContext:
 
     def wrap_resolver(self, resolver: ResolverProtocol) -> ResolverProtocol:
         resolver_any = cast("Any", resolver)
-        if isinstance(resolver_any, _ProviderBoundResolver):
+        if isinstance(resolver_any, _ResolverBoundResolver):
             return cast("ResolverProtocol", resolver_any)
         return cast(
             "ResolverProtocol",
-            _ProviderBoundResolver(
+            _ResolverBoundResolver(
                 resolver=resolver,
-                provider_context=self,
+                resolver_context=self,
                 push_resolver=self._push,
                 pop_resolver=self._pop,
             ),
@@ -388,20 +388,20 @@ class ProviderContext:
             return _InjectInvocationState(source="fallback", context_resolver=None)
 
         msg = (
-            "Provider is not set for provider_context.inject. Pass "
+            "Resolver is not set for resolver_context.inject. Pass "
             f"'{INJECT_RESOLVER_KWARG}' explicitly, enter a resolver context, "
-            "or initialize a container with this ProviderContext."
+            "or initialize a container with this ResolverContext."
         )
-        raise DIWireProviderNotSetError(msg)
+        raise DIWireResolverNotSetError(msg)
 
     def _require_inject_fallback_container(self) -> Container:
         fallback_container = self._fallback_container
         if fallback_container is None:
             msg = (
-                "ProviderContext.inject requires a fallback container. Initialize a container "
-                "with this ProviderContext before decorating callables."
+                "ResolverContext.inject requires a fallback container. Initialize a container "
+                "with this ResolverContext before decorating callables."
             )
-            raise DIWireProviderNotSetError(msg)
+            raise DIWireResolverNotSetError(msg)
         return fallback_container
 
     def _get_cached_injected_callable(
@@ -449,4 +449,4 @@ class ProviderContext:
         return getattr(callable_obj, "__qualname__", repr(callable_obj))
 
 
-provider_context = ProviderContext()
+resolver_context = ResolverContext()

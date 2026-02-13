@@ -1,10 +1,10 @@
-"""Focused example: ``@provider_context.inject`` on function and method."""
+"""Focused example: ``@resolver_context.inject`` on function and method."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, Injected, provider_context
+from diwire import Container, Injected, resolver_context
 
 
 @dataclass(slots=True)
@@ -16,12 +16,12 @@ def main() -> None:
     container = Container(autoregister_concrete_types=False)
     container.add_instance(Message(value="context-message"), provides=Message)
 
-    @provider_context.inject
+    @resolver_context.inject
     def read_function(message: Injected[Message]) -> str:
         return message.value
 
     class Handler:
-        @provider_context.inject
+        @resolver_context.inject
         def read_method(self, message: Injected[Message]) -> str:
             return message.value
 

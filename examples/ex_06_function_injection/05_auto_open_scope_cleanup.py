@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 
-from diwire import Container, Injected, Lifetime, Scope, provider_context
+from diwire import Container, Injected, Lifetime, Scope, resolver_context
 
 
 class Resource:
@@ -28,7 +28,7 @@ def main() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @provider_context.inject(scope=Scope.REQUEST, auto_open_scope=True)
+    @resolver_context.inject(scope=Scope.REQUEST, auto_open_scope=True)
     def handler(resource: Injected[Resource]) -> Resource:
         return resource
 

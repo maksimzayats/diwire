@@ -1,5 +1,5 @@
 .. meta::
-   :description: Pattern for using diwire with Flask/WSGI: request scopes via @provider_context.inject(scope=Scope.REQUEST) and request-bound dependencies.
+   :description: Pattern for using diwire with Flask/WSGI: request scopes via @resolver_context.inject(scope=Scope.REQUEST) and request-bound dependencies.
 
 Flask (WSGI)
 ============
@@ -12,7 +12,7 @@ Recommended pattern
 
 1. Create a global container at app startup.
 2. Register request-scoped providers with ``Lifetime.SCOPED`` and ``scope=Scope.REQUEST``.
-3. Decorate views with ``@provider_context.inject(scope=Scope.REQUEST)`` (the wrapper opens/closes a request scope per call).
+3. Decorate views with ``@resolver_context.inject(scope=Scope.REQUEST)`` (the wrapper opens/closes a request scope per call).
 
 Minimal sketch
 --------------
@@ -40,7 +40,7 @@ Minimal sketch
 
 
    @app.get("/health")
-   @provider_context.inject(scope=Scope.REQUEST)
+   @resolver_context.inject(scope=Scope.REQUEST)
    def health(service: Injected[Service]) -> dict[str, bool]:
        _ = service
        return {"ok": True}

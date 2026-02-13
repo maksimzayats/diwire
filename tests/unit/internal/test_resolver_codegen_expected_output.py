@@ -6,7 +6,7 @@ from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from diwire import BaseScope, Container, FromContext, Injected, Lifetime, Scope, provider_context
+from diwire import BaseScope, Container, FromContext, Injected, Lifetime, Scope, resolver_context
 from diwire._internal.providers import ProviderSpec
 from diwire._internal.resolvers.templates.renderer import ResolversTemplateRenderer
 
@@ -376,7 +376,7 @@ def test_codegen_matches_expected_for_inject_wrapper_provider_graph() -> None:
         provides=_SnapshotInjectWrapperDependency,
     )
 
-    build_service = provider_context.inject(_build_snapshot_inject_wrapper_service)
+    build_service = resolver_context.inject(_build_snapshot_inject_wrapper_service)
 
     container.add_factory(
         build_service,
@@ -396,7 +396,7 @@ def test_codegen_matches_expected_for_async_inject_wrapper_provider_graph() -> N
         provides=_SnapshotAsyncInjectWrapperDependency,
     )
 
-    build_service = provider_context.inject(_build_snapshot_async_inject_wrapper_service)
+    build_service = resolver_context.inject(_build_snapshot_async_inject_wrapper_service)
 
     container.add_factory(
         build_service,
@@ -416,7 +416,7 @@ def test_codegen_matches_expected_for_nested_inline_root_inject_wrapper_graph() 
         provides=_SnapshotInlineRootInjectDependency,
     )
 
-    build_inject_service = provider_context.inject(_build_snapshot_inline_root_inject_service)
+    build_inject_service = resolver_context.inject(_build_snapshot_inline_root_inject_service)
     container.add_factory(
         build_inject_service,
         provides=_SnapshotInlineRootInjectService,
@@ -442,7 +442,7 @@ def test_codegen_matches_expected_for_inject_wrapper_varkw_argument_order_graph(
     container = Container()
     container.add_instance({"first": 1, "second": 2}, provides=options_type)
 
-    build_service = provider_context.inject(_build_snapshot_inject_wrapper_varkw_service)
+    build_service = resolver_context.inject(_build_snapshot_inject_wrapper_varkw_service)
 
     container.add_factory(
         build_service,

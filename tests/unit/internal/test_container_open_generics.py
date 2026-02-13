@@ -14,9 +14,9 @@ from diwire import (
     Container,
     Injected,
     Lifetime,
-    ProviderContext,
+    ResolverContext,
     Scope,
-    provider_context,
+    resolver_context,
 )
 from diwire._internal.providers import ProviderDependency
 from diwire.exceptions import (
@@ -155,7 +155,7 @@ def test_open_generator_registration_supports_type_argument_injection() -> None:
     assert resolved.type is bytes
 
 
-def test_open_context_manager_registration_works_inside_provider_context() -> None:
+def test_open_context_manager_registration_works_inside_resolver_context() -> None:
     container = Container()
     container.add_context_manager(_context_box, provides=_IBox)
 
@@ -307,7 +307,7 @@ def test_injected_open_generic_uses_open_resolver_fallback() -> None:
     container = Container()
     container.add_concrete(_Box, provides=_IBox)
 
-    @provider_context.inject
+    @resolver_context.inject
     def handler(box: Injected[_IBox[str]]) -> str:
         resolved_box = cast("Any", box)
         return resolved_box.type.__name__
@@ -315,9 +315,9 @@ def test_injected_open_generic_uses_open_resolver_fallback() -> None:
     assert cast("Any", handler)() == "str"
 
 
-def test_provider_context_fallback_uses_latest_canonical_open_key() -> None:
-    context = ProviderContext()
-    runtime = Container(provider_context=context)
+def test_resolver_context_fallback_uses_latest_canonical_open_key() -> None:
+    context = ResolverContext()
+    runtime = Container(resolver_context=context)
     runtime.add_concrete(_BoxA, provides=_IBox)
     runtime.add_concrete(_BoxB, provides=_IBox[T])
 

@@ -13,7 +13,7 @@ from diwire import (
     Maybe,
     Provider,
     Scope,
-    provider_context,
+    resolver_context,
 )
 from diwire.exceptions import DIWireDependencyNotRegisteredError
 
@@ -159,7 +159,7 @@ def test_registered_maybe_dependency_overrides_constructor_default() -> None:
 def test_inject_maybe_dependency_uses_default_when_missing_and_overrides_when_registered() -> None:
     container = _strict_container()
 
-    @provider_context.inject
+    @resolver_context.inject
     def handler(
         dependency: Injected[Maybe[_MaybeDependency]] = _INJECT_DEFAULT_SENTINEL,
     ) -> object:
@@ -182,7 +182,7 @@ def test_inject_scope_inference_uses_inner_dependency_scope_for_maybe() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @provider_context.inject(auto_open_scope=True)
+    @resolver_context.inject(auto_open_scope=True)
     def handler(
         dependency: Injected[Maybe[_RequestScopedDependency]],
     ) -> _RequestScopedDependency | None:

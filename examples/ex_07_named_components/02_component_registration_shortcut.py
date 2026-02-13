@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated
 
-from diwire import Component, Container, Injected, provider_context
+from diwire import Component, Container, Injected, resolver_context
 
 
 @dataclass(slots=True)
@@ -26,7 +26,7 @@ def main() -> None:
     container.add_instance(Cache(backend="redis"), provides=Cache, component="primary")
     container.add_instance(Cache(backend="memory"), provides=Cache, component=Component("fallback"))
 
-    @provider_context.inject
+    @resolver_context.inject
     def load(
         primary: Injected[PrimaryCache],
         fallback: Injected[FallbackCache],

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from diwire import Container, FromContext, Scope, provider_context
+from diwire import Container, FromContext, Scope, resolver_context
 
 
 def main() -> None:
     Container(autoregister_concrete_types=False)
 
-    @provider_context.inject(scope=Scope.REQUEST)
+    @resolver_context.inject(scope=Scope.REQUEST)
     def handler(value: FromContext[int]) -> int:
         return value
 

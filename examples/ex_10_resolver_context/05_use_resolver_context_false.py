@@ -1,4 +1,4 @@
-"""Focused example: strict-mode entrypoint rebind with use_provider_context=False."""
+"""Focused example: strict-mode entrypoint rebind with use_resolver_context=False."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ def main() -> None:
     container = Container(
         autoregister_concrete_types=False,
         autoregister_dependencies=False,
-        use_provider_context=False,
+        use_resolver_context=False,
     )
     container.add_instance("legacy", provides=str)
 

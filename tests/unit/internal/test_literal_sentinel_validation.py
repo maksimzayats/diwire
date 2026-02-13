@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from diwire import Container, ProviderContext
+from diwire import Container, ResolverContext
 from diwire.exceptions import DIWireInvalidRegistrationError
 
 
@@ -215,11 +215,11 @@ def test_container_rejects_none_for_literal_sentinel_parameters(
         ),
     ],
 )
-def test_provider_context_rejects_none_for_literal_sentinel_parameters(
-    invoke: Callable[[ProviderContext], Any],
+def test_resolver_context_rejects_none_for_literal_sentinel_parameters(
+    invoke: Callable[[ResolverContext], Any],
     match: str,
 ) -> None:
-    context = ProviderContext()
+    context = ResolverContext()
 
     with pytest.raises(DIWireInvalidRegistrationError, match=match):
         invoke(context)

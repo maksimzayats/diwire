@@ -1,5 +1,5 @@
 .. meta::
-   :description: diwire function injection example: Injected[T] and @provider_context.inject.
+   :description: diwire function injection example: Injected[T] and @resolver_context.inject.
 
 Function injection
 ==================
@@ -8,7 +8,7 @@ What you'll learn
 -----------------
 
 - Use ``Injected[T]`` to mark injected parameters.
-- Wrap callables with ``@provider_context.inject(...)``.
+- Wrap callables with ``@resolver_context.inject(...)``.
 
 Run locally
 -----------

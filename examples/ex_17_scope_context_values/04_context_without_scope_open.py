@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from diwire import Container, FromContext, provider_context
+from diwire import Container, FromContext, resolver_context
 from diwire.exceptions import DIWireInvalidRegistrationError
 
 
 def main() -> None:
     Container(autoregister_concrete_types=False)
 
-    @provider_context.inject(auto_open_scope=False)
+    @resolver_context.inject(auto_open_scope=False)
     def handler(value: FromContext[int]) -> int:
         return value
 

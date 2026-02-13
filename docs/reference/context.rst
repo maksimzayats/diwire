@@ -1,4 +1,4 @@
-provider_context
+resolver_context
 =================
 
-.. autodata:: diwire.provider_context
+.. autodata:: diwire.resolver_context

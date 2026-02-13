@@ -5,7 +5,7 @@ from typing import Any, Generic, TypeVar, cast
 
 import pytest
 
-from diwire import AsyncProvider, Container, Injected, Lifetime, Provider, Scope, provider_context
+from diwire import AsyncProvider, Container, Injected, Lifetime, Provider, Scope, resolver_context
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
     DIWireInvalidProviderSpecError,
@@ -231,13 +231,13 @@ async def test_injected_wrapper_supports_provider_and_async_provider() -> None:
     container = Container()
     container.add_concrete(_InjectedConsumerDependency)
 
-    @provider_context.inject
+    @resolver_context.inject
     def _sync_handler(
         dependency_provider: Injected[Provider[_InjectedConsumerDependency]],
     ) -> _InjectedConsumerDependency:
         return dependency_provider()
 
-    @provider_context.inject
+    @resolver_context.inject
     async def _async_handler(
         dependency_provider: Injected[AsyncProvider[_InjectedConsumerDependency]],
     ) -> _InjectedConsumerDependency:

@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated, Protocol, TypeAlias
 
-from diwire import All, Component, Container, Injected, provider_context
+from diwire import All, Component, Container, Injected, resolver_context
 
 
 class EventHandler(Protocol):
@@ -52,7 +52,7 @@ def main() -> None:
         [handler.handle("evt") for handler in handlers],
     )  # => ['base:evt', 'logging:evt', 'metrics:evt']
 
-    @provider_context.inject
+    @resolver_context.inject
     def dispatch(event: str, handlers: Injected[All[EventHandler]]) -> tuple[str, ...]:
         return tuple(handler.handle(event) for handler in handlers)
 

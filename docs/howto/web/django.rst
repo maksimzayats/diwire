@@ -1,5 +1,5 @@
 .. meta::
-   :description: Pattern for using diwire with Django: request-bound dependencies and request scopes via @provider_context.inject(scope=Scope.REQUEST).
+   :description: Pattern for using diwire with Django: request-bound dependencies and request scopes via @resolver_context.inject(scope=Scope.REQUEST).
 
 Django
 ======
@@ -8,7 +8,7 @@ There is no Django-specific integration in diwire. The recommended pattern is:
 
 1. Create a global container at startup.
 2. Use middleware to store the current ``HttpRequest`` in a ``ContextVar``.
-3. Decorate views with ``@provider_context.inject(scope=Scope.REQUEST)`` to open/close a request scope per call.
+3. Decorate views with ``@resolver_context.inject(scope=Scope.REQUEST)`` to open/close a request scope per call.
 
 Minimal sketch
 --------------
@@ -51,7 +51,7 @@ Minimal sketch
    )
 
 
-   @provider_context.inject(scope=Scope.REQUEST)
+   @resolver_context.inject(scope=Scope.REQUEST)
    def view(request: HttpRequest, service: Injected[Service]):
        _ = request
        _ = service

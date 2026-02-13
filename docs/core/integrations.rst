@@ -42,6 +42,6 @@ FastAPI
 -------
 
 diwire does not require a dedicated FastAPI integration module. The recommended pattern is to decorate endpoints with
-``@provider_context.inject(scope=Scope.REQUEST)``.
+``@resolver_context.inject(scope=Scope.REQUEST)``.
 
 See :doc:`/howto/web/fastapi` and the runnable script :doc:`/howto/examples/fastapi`.

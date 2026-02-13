@@ -1,10 +1,10 @@
-"""Focused example: bound resolver resolution through ProviderContext."""
+"""Focused example: bound resolver resolution through ResolverContext."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, ProviderContext
+from diwire import Container, ResolverContext
 
 
 @dataclass(slots=True)
@@ -13,8 +13,8 @@ class Service:
 
 
 def main() -> None:
-    context = ProviderContext()
-    container = Container(provider_context=context, autoregister_concrete_types=False)
+    context = ResolverContext()
+    container = Container(resolver_context=context, autoregister_concrete_types=False)
     container.add_instance(Service("bound"), provides=Service)
 
     with container.compile():

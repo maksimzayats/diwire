@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 
-from diwire import Container, Injected, provider_context
+from diwire import Container, Injected, resolver_context
 
 
 @dataclass(slots=True)
@@ -17,7 +17,7 @@ def main() -> None:
     container = Container(autoregister_concrete_types=False)
     container.add_instance(User(email="user@example.com"))
 
-    @provider_context.inject
+    @resolver_context.inject
     def handler(user_email: str, user: Injected[User], user_name: str) -> str:
         return f"{user_email}|{user_name}|{user.email}"
 

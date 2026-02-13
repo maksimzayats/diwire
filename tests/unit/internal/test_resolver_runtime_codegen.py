@@ -11,7 +11,7 @@ from typing import Any, Generic, TypeVar, cast
 
 import pytest
 
-from diwire import Container, FromContext, Injected, Lifetime, LockMode, Scope, provider_context
+from diwire import Container, FromContext, Injected, Lifetime, LockMode, Scope, resolver_context
 from diwire._internal.providers import ProviderSpec
 from diwire._internal.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire.exceptions import (
@@ -220,7 +220,7 @@ async def test_async_singleton_uses_async_cached_method_replacement() -> None:
 def test_compile_returns_cached_resolver_and_rebinds_entrypoints() -> None:
     container = Container(
         autoregister_concrete_types=False,
-        use_provider_context=False,
+        use_resolver_context=False,
     )
     container.add_instance(_Resource(), provides=_Resource)
 
@@ -252,7 +252,7 @@ def test_resolve_auto_compiles_root_resolver_when_uncompiled() -> None:
     resource = _Resource()
     container = Container(
         autoregister_concrete_types=False,
-        use_provider_context=False,
+        use_resolver_context=False,
     )
     container.add_instance(resource, provides=_Resource)
 
@@ -272,7 +272,7 @@ async def test_aresolve_auto_compiles_root_resolver_when_uncompiled() -> None:
     resource = _Resource()
     container = Container(
         autoregister_concrete_types=False,
-        use_provider_context=False,
+        use_resolver_context=False,
     )
     container.add_instance(resource, provides=_Resource)
 
@@ -293,7 +293,7 @@ def test_compile_wraps_codegen_resolver_when_open_generic_registry_present() -> 
 
     compiled_resolver = container.compile()
 
-    assert type(compiled_resolver).__name__ == "_ProviderBoundResolver"
+    assert type(compiled_resolver).__name__ == "_ResolverBoundResolver"
     assert type(cast("Any", compiled_resolver)._resolver).__name__.endswith("OpenGenericResolver")
     assert _bound_self(container.resolve) is container
     resolved = container.resolve(_OpenRuntimeService[int])
@@ -304,7 +304,7 @@ def test_compile_wraps_codegen_resolver_when_open_generic_registry_present() -> 
 def test_enter_scope_auto_compiles_root_resolver_when_uncompiled() -> None:
     container = Container(
         autoregister_concrete_types=False,
-        use_provider_context=False,
+        use_resolver_context=False,
     )
     container.add_concrete(
         _RequestService,
@@ -364,7 +364,7 @@ def test_registering_after_compile_invalidates_compilation_and_rebinds_lazy_entr
 
     container = Container(
         autoregister_concrete_types=False,
-        use_provider_context=False,
+        use_resolver_context=False,
     )
     previous_resolver = container.compile()
 
@@ -570,7 +570,7 @@ def test_scope_resolution_requires_explicit_opened_scope_chain() -> None:
             assert from_request is from_action
 
 
-def test_provider_context_dependency_is_resolved_and_missing_value_errors() -> None:
+def test_resolver_context_dependency_is_resolved_and_missing_value_errors() -> None:
     def build_consumer(value: FromContext[int]) -> _ContextValueConsumer:
         return _ContextValueConsumer(value=value)
 
@@ -646,7 +646,7 @@ def test_codegen_passes_resolver_to_inject_wrapped_provider_calls() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @provider_context.inject
+    @resolver_context.inject
     def build_consumer(
         dependency: Injected[_InjectScopedDependency],
     ) -> _InjectScopedConsumer:
@@ -675,7 +675,7 @@ async def test_codegen_async_inject_wrapper_provider_receives_resolver() -> None
         lifetime=Lifetime.SCOPED,
     )
 
-    @provider_context.inject
+    @resolver_context.inject
     async def build_consumer(
         dependency: Injected[_InjectScopedDependency],
     ) -> _InjectScopedConsumer:
@@ -705,13 +705,13 @@ def test_codegen_nested_inject_wrappers_runtime_scope_consistency() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    @provider_context.inject
+    @resolver_context.inject
     def build_inner(
         dependency: Injected[_InjectScopedDependency],
     ) -> _InjectNestedInnerConsumer:
         return _InjectNestedInnerConsumer(dependency=dependency)
 
-    @provider_context.inject
+    @resolver_context.inject
     def build_outer(
         inner: Injected[_InjectNestedInnerConsumer],
         dependency: Injected[_InjectScopedDependency],
@@ -746,7 +746,7 @@ def test_codegen_inject_wrapper_singleton_thread_safe_stress() -> None:
     container = Container()
     container.add_instance(dependency, provides=_Resource)
 
-    @provider_context.inject
+    @resolver_context.inject
     def build_singleton(resource: Injected[_Resource]) -> _DependsOnResource:
         nonlocal calls
         calls += 1
@@ -776,7 +776,7 @@ async def test_codegen_inject_wrapper_singleton_async_stress() -> None:
     container = Container()
     container.add_instance(dependency, provides=_Resource)
 
-    @provider_context.inject
+    @resolver_context.inject
     async def build_singleton(resource: Injected[_Resource]) -> _DependsOnResource:
         nonlocal calls
         calls += 1
@@ -807,7 +807,7 @@ def test_codegen_inject_wrapper_unsafe_mode_stress_no_deadlock() -> None:
     container = Container()
     container.add_instance(dependency, provides=_Resource)
 
-    @provider_context.inject
+    @resolver_context.inject
     def build_singleton(resource: Injected[_Resource]) -> _DependsOnResource:
         nonlocal calls
         with calls_lock:

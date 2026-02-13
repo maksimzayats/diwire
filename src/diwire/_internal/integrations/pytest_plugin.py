@@ -14,7 +14,7 @@ from diwire._internal.injection import (
     InjectedCallableInspector,
     InjectedParameter,
 )
-from diwire._internal.provider_context import provider_context
+from diwire._internal.resolver_context import resolver_context
 
 _DIWIRE_CONTAINER_ATTR = "_diwire_container"
 _DIWIRE_INJECTED_PARAMETERS_ATTR = "__diwire_pytest_injected_parameters__"
@@ -88,7 +88,7 @@ def pytest_pycollect_makeitem(
 def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> Iterator[None]:
     """Wrap test function execution to resolve ``Injected[...]`` parameters.
 
-    The wrapper swaps the callable with ``provider_context.inject(original_callable)``
+    The wrapper swaps the callable with ``resolver_context.inject(original_callable)``
     for the duration of the test call and executes with an explicit resolver
     kwarg. If no container state is attached to the node, this hook is a no-op.
 
@@ -133,7 +133,7 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> Iterator[None]:
         original_callable_as_any.__signature__ = original_signature
 
     try:
-        injected_callable = provider_context.inject(original_callable)
+        injected_callable = resolver_context.inject(original_callable)
         resolver = container.compile()
         if inspect.iscoroutinefunction(injected_callable):
 

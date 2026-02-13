@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
-from diwire import Container, Injected, provider_context
+from diwire import Container, Injected, resolver_context
 
 
 @dataclass(slots=True)
@@ -24,7 +24,7 @@ async def main() -> None:
     container = Container(autoregister_concrete_types=False)
     container.add_instance(AsyncUser(email="async@example.com"))
 
-    @provider_context.inject
+    @resolver_context.inject
     async def handler(user: Injected[AsyncUser]) -> str:
         return user.email
 

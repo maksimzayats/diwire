@@ -48,10 +48,6 @@ from diwire._internal.open_generics import (
     OpenGenericResolver,
     canonicalize_open_key,
 )
-from diwire._internal.provider_context import (
-    ProviderContext,
-    provider_context as default_provider_context,
-)
 from diwire._internal.providers import (
     ContextManagerProvider,
     FactoryProvider,
@@ -62,6 +58,10 @@ from diwire._internal.providers import (
     ProviderReturnTypeExtractor,
     ProviderSpec,
     ProvidersRegistrations,
+)
+from diwire._internal.resolver_context import (
+    ResolverContext,
+    resolver_context as default_resolver_context,
 )
 from diwire._internal.resolvers.manager import ResolversManager
 from diwire._internal.resolvers.protocol import ResolverProtocol
@@ -118,8 +118,8 @@ class Container:
         lock_mode: LockMode | Literal["auto"] = "auto",
         autoregister_concrete_types: bool = True,
         autoregister_dependencies: bool = True,
-        provider_context: ProviderContext = default_provider_context,
-        use_provider_context: bool = True,
+        resolver_context: ResolverContext = default_resolver_context,
+        use_resolver_context: bool = True,
     ) -> None:
         """Initialize a container and configure default registration behavior.
 
@@ -138,10 +138,10 @@ class Container:
                 autoregistration during resolution.
             autoregister_dependencies: Enable autoregistration of provider
                 dependencies discovered at registration time.
-            provider_context: Provider context used by ``provider_context.inject``
+            resolver_context: Resolver context used by ``resolver_context.inject``
                 fallback behavior for this container.
-            use_provider_context: Wrap compiled resolvers so context-manager
-                entry binds into ``provider_context``.
+            use_resolver_context: Wrap compiled resolvers so context-manager
+                entry binds into ``resolver_context``.
 
         Notes:
             Common presets are: default mode (both autoregistration flags
@@ -166,8 +166,8 @@ class Container:
         self._lock_mode = lock_mode
         self._autoregister_concrete_types = autoregister_concrete_types
         self._autoregister_dependencies = autoregister_dependencies
-        self._provider_context = provider_context
-        self._use_provider_context = use_provider_context
+        self._resolver_context = resolver_context
+        self._use_resolver_context = use_resolver_context
 
         self._concrete_autoregistration_policy = ConcreteTypeAutoregistrationPolicy()
         self._provider_dependencies_extractor = ProviderDependenciesExtractor()
@@ -190,7 +190,7 @@ class Container:
         self._container_entrypoints: dict[str, Callable[..., Any]] = {
             method_name: getattr(self, method_name) for method_name in self._ENTRYPOINT_METHOD_NAMES
         }
-        self._provider_context.set_fallback_container(self)
+        self._resolver_context.set_fallback_container(self)
 
     # region Registration Methods
     def add_instance(
@@ -2495,7 +2495,7 @@ class Container:
 
         Compilation is lazy and invalidated by any registration mutation. In
         strict mode (autoregistration disabled) with
-        ``use_provider_context=False``, hot-path entrypoints are rebound to the
+        ``use_resolver_context=False``, hot-path entrypoints are rebound to the
         compiled resolver for lower call overhead.
 
         Returns:
@@ -2533,10 +2533,10 @@ class Container:
                         scope_level=self._root_scope.level,
                     ),
                 )
-            if self._use_provider_context:
-                root_resolver = self._provider_context.wrap_resolver(root_resolver)
+            if self._use_resolver_context:
+                root_resolver = self._resolver_context.wrap_resolver(root_resolver)
             self._root_resolver = root_resolver
-        if not self._autoregister_concrete_types and not self._use_provider_context:
+        if not self._autoregister_concrete_types and not self._use_resolver_context:
             self._bind_container_entrypoints(target=self._root_resolver)
 
         return self._root_resolver
