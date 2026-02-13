@@ -32,9 +32,6 @@ def main() -> None:
     def handler(resource: Injected[Resource]) -> Resource:
         return resource
 
-    with provider_context.enter_scope() as s:
-        print(s)
-
     _ = handler()
     print(f"auto_scope_cleanup={state['cleaned']}")  # => auto_scope_cleanup=True
 
