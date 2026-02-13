@@ -8,7 +8,7 @@ from pathlib import Path
 
 from diwire import BaseScope, Container, FromContext, Injected, Lifetime, Scope, resolver_context
 from diwire._internal.providers import ProviderSpec
-from diwire._internal.resolvers.templates.renderer import ResolversTemplateRenderer
+from diwire._internal.resolvers.assembly.renderer import ResolversAssemblyRenderer
 
 _EXPECTED_DIR = Path(__file__).with_name("assembly_expected")
 
@@ -490,7 +490,7 @@ def test_normalize_dynamic_metadata_normalizes_annotated_symbol_variants() -> No
 
 
 def _render(*, container: Container, root_scope: BaseScope) -> str:
-    renderer = ResolversTemplateRenderer()
+    renderer = ResolversAssemblyRenderer()
     return renderer.get_providers_code(
         root_scope=root_scope,
         registrations=container._providers_registrations,

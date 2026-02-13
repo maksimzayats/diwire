@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 
 from diwire import Container, Lifetime, LockMode, Scope
-from diwire._internal.resolvers.templates.renderer import ResolversTemplateRenderer
+from diwire._internal.resolvers.assembly.renderer import ResolversAssemblyRenderer
 from diwire.exceptions import DIWireAsyncDependencyInSyncContextError, DIWireScopeMismatchError
 
 
@@ -35,7 +35,7 @@ def _build_resolver_with_cleanup_mode(
     container: Container,
     cleanup_enabled: bool,
 ) -> Any:
-    code = ResolversTemplateRenderer().get_providers_code(
+    code = ResolversAssemblyRenderer().get_providers_code(
         root_scope=Scope.APP,
         registrations=container._providers_registrations,
     )
@@ -277,7 +277,7 @@ def test_assembly_matrix_cached_sync_path_lock_generation_follows_lock_mode(
     )
     slot = container._providers_registrations.get_by_type(_MatrixService).slot
 
-    generated = ResolversTemplateRenderer().get_providers_code(
+    generated = ResolversAssemblyRenderer().get_providers_code(
         root_scope=Scope.APP,
         registrations=container._providers_registrations,
     )

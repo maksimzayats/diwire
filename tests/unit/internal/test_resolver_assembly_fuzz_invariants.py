@@ -7,7 +7,7 @@ import pytest
 
 from diwire import Container, Lifetime, Scope
 from diwire._internal.providers import ProviderSpec
-from diwire._internal.resolvers.templates.renderer import ResolversTemplateRenderer
+from diwire._internal.resolvers.assembly.renderer import ResolversAssemblyRenderer
 from diwire.exceptions import DIWireInvalidProviderSpecError
 
 _SEEDS = (3, 7, 13, 31, 71)
@@ -70,14 +70,14 @@ def test_fuzz_assembly_is_deterministic_for_same_seed(seed: int) -> None:
     try:
         ProviderSpec.SLOT_COUNTER = 0
         first_container, _, _ = _build_random_container(seed)
-        first_code = ResolversTemplateRenderer().get_providers_code(
+        first_code = ResolversAssemblyRenderer().get_providers_code(
             root_scope=Scope.APP,
             registrations=first_container._providers_registrations,
         )
 
         ProviderSpec.SLOT_COUNTER = 0
         second_container, _, _ = _build_random_container(seed)
-        second_code = ResolversTemplateRenderer().get_providers_code(
+        second_code = ResolversAssemblyRenderer().get_providers_code(
             root_scope=Scope.APP,
             registrations=second_container._providers_registrations,
         )
@@ -129,7 +129,7 @@ def test_fuzz_assembly_raises_for_cycle_graph() -> None:
     container.add(_CycleB, provides=_CycleB, lifetime=Lifetime.SCOPED)
 
     with pytest.raises(DIWireInvalidProviderSpecError, match="Circular dependency detected"):
-        ResolversTemplateRenderer().get_providers_code(
+        ResolversAssemblyRenderer().get_providers_code(
             root_scope=Scope.APP,
             registrations=container._providers_registrations,
         )

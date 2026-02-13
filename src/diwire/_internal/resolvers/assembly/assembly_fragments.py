@@ -1,6 +1,6 @@
 from textwrap import dedent
 
-MODULE_TEMPLATE = dedent(
+MODULE_ASSEMBLY_FRAGMENT = dedent(
     """
     {{ module_docstring_block }}
 
@@ -14,7 +14,7 @@ MODULE_TEMPLATE = dedent(
     """,
 ).strip()
 
-IMPORTS_TEMPLATE = dedent(
+IMPORTS_ASSEMBLY_FRAGMENT = dedent(
     """
     from __future__ import annotations
     {% if uses_asyncio_import %}
@@ -50,7 +50,7 @@ IMPORTS_TEMPLATE = dedent(
     """,
 ).strip()
 
-GLOBALS_TEMPLATE = dedent(
+GLOBALS_ASSEMBLY_FRAGMENT = dedent(
     """
 _MISSING_RESOLVER: Any = object()
 _MISSING_CACHE: Any = object()
@@ -66,7 +66,7 @@ _dep_registered_keys: set[Any] = set()
 """,
 ).strip()
 
-CLASS_TEMPLATE = dedent(
+CLASS_ASSEMBLY_FRAGMENT = dedent(
     """
     class {{ class_name }}:
     {% if class_docstring_block %}
@@ -107,7 +107,7 @@ CLASS_TEMPLATE = dedent(
     """,
 ).strip()
 
-INIT_METHOD_TEMPLATE = dedent(
+INIT_METHOD_ASSEMBLY_FRAGMENT = dedent(
     """
     def __init__(
         self,
@@ -120,7 +120,7 @@ INIT_METHOD_TEMPLATE = dedent(
     """,
 ).strip()
 
-ENTER_SCOPE_METHOD_TEMPLATE = dedent(
+ENTER_SCOPE_METHOD_ASSEMBLY_FRAGMENT = dedent(
     """
     def enter_scope(
         self,
@@ -135,7 +135,7 @@ ENTER_SCOPE_METHOD_TEMPLATE = dedent(
     """,
 ).strip()
 
-DISPATCH_RESOLVE_METHOD_TEMPLATE = dedent(
+DISPATCH_RESOLVE_METHOD_ASSEMBLY_FRAGMENT = dedent(
     """
     def resolve(self, dependency: Any) -> Any:
     {% if docstring_block %}
@@ -145,7 +145,7 @@ DISPATCH_RESOLVE_METHOD_TEMPLATE = dedent(
     """,
 ).strip()
 
-DISPATCH_ARESOLVE_METHOD_TEMPLATE = dedent(
+DISPATCH_ARESOLVE_METHOD_ASSEMBLY_FRAGMENT = dedent(
     """
     async def aresolve(self, dependency: Any) -> Any:
     {% if docstring_block %}
@@ -155,21 +155,21 @@ DISPATCH_ARESOLVE_METHOD_TEMPLATE = dedent(
     """,
 ).strip()
 
-CONTEXT_ENTER_METHOD_TEMPLATE = dedent(
+CONTEXT_ENTER_METHOD_ASSEMBLY_FRAGMENT = dedent(
     """
     def __enter__(self) -> {{ return_annotation }}:
         return self
     """,
 ).strip()
 
-CONTEXT_AENTER_METHOD_TEMPLATE = dedent(
+CONTEXT_AENTER_METHOD_ASSEMBLY_FRAGMENT = dedent(
     """
     async def __aenter__(self) -> {{ return_annotation }}:
         return self
     """,
 ).strip()
 
-CONTEXT_CLOSE_METHOD_TEMPLATE = dedent(
+CONTEXT_CLOSE_METHOD_ASSEMBLY_FRAGMENT = dedent(
     """
     def close(
         self,
@@ -181,7 +181,7 @@ CONTEXT_CLOSE_METHOD_TEMPLATE = dedent(
     """,
 ).strip()
 
-CONTEXT_ACLOSE_METHOD_TEMPLATE = dedent(
+CONTEXT_ACLOSE_METHOD_ASSEMBLY_FRAGMENT = dedent(
     """
     async def aclose(
         self,
@@ -193,7 +193,7 @@ CONTEXT_ACLOSE_METHOD_TEMPLATE = dedent(
     """,
 ).strip()
 
-CONTEXT_EXIT_NO_CLEANUP_TEMPLATE = dedent(
+CONTEXT_EXIT_NO_CLEANUP_ASSEMBLY_FRAGMENT = dedent(
     """
     def __exit__(
         self,
@@ -205,7 +205,7 @@ CONTEXT_EXIT_NO_CLEANUP_TEMPLATE = dedent(
     """,
 ).strip()
 
-CONTEXT_AEXIT_NO_CLEANUP_TEMPLATE = dedent(
+CONTEXT_AEXIT_NO_CLEANUP_ASSEMBLY_FRAGMENT = dedent(
     """
     async def __aexit__(
         self,
@@ -217,7 +217,7 @@ CONTEXT_AEXIT_NO_CLEANUP_TEMPLATE = dedent(
     """,
 ).strip()
 
-CONTEXT_EXIT_WITH_CLEANUP_TEMPLATE = dedent(
+CONTEXT_EXIT_WITH_CLEANUP_ASSEMBLY_FRAGMENT = dedent(
     """
     def __exit__(
         self,
@@ -250,7 +250,7 @@ CONTEXT_EXIT_WITH_CLEANUP_TEMPLATE = dedent(
     """,
 ).strip()
 
-CONTEXT_AEXIT_WITH_CLEANUP_TEMPLATE = dedent(
+CONTEXT_AEXIT_WITH_CLEANUP_ASSEMBLY_FRAGMENT = dedent(
     """
     async def __aexit__(
         self,
@@ -282,7 +282,7 @@ CONTEXT_AEXIT_WITH_CLEANUP_TEMPLATE = dedent(
     """,
 ).strip()
 
-SYNC_METHOD_TEMPLATE = dedent(
+SYNC_METHOD_ASSEMBLY_FRAGMENT = dedent(
     """
     def resolve_{{ slot }}(self) -> Any:
     {% if docstring_block %}
@@ -292,7 +292,7 @@ SYNC_METHOD_TEMPLATE = dedent(
     """,
 ).strip()
 
-ASYNC_METHOD_TEMPLATE = dedent(
+ASYNC_METHOD_ASSEMBLY_FRAGMENT = dedent(
     """
     async def aresolve_{{ slot }}(self) -> Any:
     {% if docstring_block %}
@@ -302,7 +302,7 @@ ASYNC_METHOD_TEMPLATE = dedent(
     """,
 ).strip()
 
-BUILD_FUNCTION_TEMPLATE = dedent(
+BUILD_FUNCTION_ASSEMBLY_FRAGMENT = dedent(
     """
     def build_root_resolver(
         registrations: ProvidersRegistrations,

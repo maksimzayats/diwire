@@ -33,7 +33,7 @@ def test_build_root_resolver_rebinds_known_scope_globals_and_skips_missing_ones(
             "    }\n"
         )
 
-    monkeypatch.setattr(manager._template_renderer, "get_providers_code", _get_providers_code)
+    monkeypatch.setattr(manager._assembly_renderer, "get_providers_code", _get_providers_code)
 
     registrations = ProvidersRegistrations()
     root_resolver = cast("Any", manager.build_root_resolver(Scope.APP, registrations))
@@ -67,7 +67,7 @@ def test_build_root_resolver_raises_for_invalid_scope_name_before_exec(
         called = True
         return "def build_root_resolver(registrations):\n    return registrations\n"
 
-    monkeypatch.setattr(manager._template_renderer, "get_providers_code", _get_providers_code)
+    monkeypatch.setattr(manager._assembly_renderer, "get_providers_code", _get_providers_code)
     monkeypatch.setattr(Scope.APP, "scope_name", "bad.name")
 
     with pytest.raises(DIWireInvalidProviderSpecError, match="scope_name"):
@@ -91,7 +91,7 @@ def test_build_root_resolver_raises_for_keyword_scope_name_before_exec(
         called = True
         return "def build_root_resolver(registrations):\n    return registrations\n"
 
-    monkeypatch.setattr(manager._template_renderer, "get_providers_code", _get_providers_code)
+    monkeypatch.setattr(manager._assembly_renderer, "get_providers_code", _get_providers_code)
     monkeypatch.setattr(Scope.APP, "scope_name", "for")
 
     with pytest.raises(DIWireInvalidProviderSpecError, match="keyword"):

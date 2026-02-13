@@ -9,7 +9,7 @@ from mypy import api as mypy_api
 
 from diwire import Container, Lifetime, Scope
 from diwire._internal.providers import ProviderSpec
-from diwire._internal.resolvers.templates.renderer import ResolversTemplateRenderer
+from diwire._internal.resolvers.assembly.renderer import ResolversAssemblyRenderer
 
 _PYPROJECT_PATH = Path(__file__).resolve().parents[3] / "pyproject.toml"
 
@@ -225,7 +225,7 @@ container.add(Service, provides=IService)
 
 
 def _render_generated_modules() -> dict[str, str]:
-    renderer = ResolversTemplateRenderer()
+    renderer = ResolversAssemblyRenderer()
 
     empty_container = Container()
 

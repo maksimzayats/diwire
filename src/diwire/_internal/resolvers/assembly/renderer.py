@@ -11,34 +11,34 @@ from typing import Any
 from diwire._internal.injection import INJECT_CONTEXT_KWARG, INJECT_RESOLVER_KWARG
 from diwire._internal.lock_mode import LockMode
 from diwire._internal.providers import Lifetime, ProviderDependency, ProvidersRegistrations
-from diwire._internal.resolvers.templates.mini_jinja import Environment, Template
-from diwire._internal.resolvers.templates.planner import (
+from diwire._internal.resolvers.assembly.assembly_fragments import (
+    ASYNC_METHOD_ASSEMBLY_FRAGMENT,
+    BUILD_FUNCTION_ASSEMBLY_FRAGMENT,
+    CLASS_ASSEMBLY_FRAGMENT,
+    CONTEXT_ACLOSE_METHOD_ASSEMBLY_FRAGMENT,
+    CONTEXT_AENTER_METHOD_ASSEMBLY_FRAGMENT,
+    CONTEXT_AEXIT_NO_CLEANUP_ASSEMBLY_FRAGMENT,
+    CONTEXT_AEXIT_WITH_CLEANUP_ASSEMBLY_FRAGMENT,
+    CONTEXT_CLOSE_METHOD_ASSEMBLY_FRAGMENT,
+    CONTEXT_ENTER_METHOD_ASSEMBLY_FRAGMENT,
+    CONTEXT_EXIT_NO_CLEANUP_ASSEMBLY_FRAGMENT,
+    CONTEXT_EXIT_WITH_CLEANUP_ASSEMBLY_FRAGMENT,
+    DISPATCH_ARESOLVE_METHOD_ASSEMBLY_FRAGMENT,
+    DISPATCH_RESOLVE_METHOD_ASSEMBLY_FRAGMENT,
+    ENTER_SCOPE_METHOD_ASSEMBLY_FRAGMENT,
+    GLOBALS_ASSEMBLY_FRAGMENT,
+    IMPORTS_ASSEMBLY_FRAGMENT,
+    INIT_METHOD_ASSEMBLY_FRAGMENT,
+    MODULE_ASSEMBLY_FRAGMENT,
+    SYNC_METHOD_ASSEMBLY_FRAGMENT,
+)
+from diwire._internal.resolvers.assembly.mini_assembly import AssemblySnippet, Environment
+from diwire._internal.resolvers.assembly.planner import (
     ProviderDependencyPlan,
     ProviderWorkflowPlan,
     ResolverGenerationPlan,
     ResolverGenerationPlanner,
     ScopePlan,
-)
-from diwire._internal.resolvers.templates.templates import (
-    ASYNC_METHOD_TEMPLATE,
-    BUILD_FUNCTION_TEMPLATE,
-    CLASS_TEMPLATE,
-    CONTEXT_ACLOSE_METHOD_TEMPLATE,
-    CONTEXT_AENTER_METHOD_TEMPLATE,
-    CONTEXT_AEXIT_NO_CLEANUP_TEMPLATE,
-    CONTEXT_AEXIT_WITH_CLEANUP_TEMPLATE,
-    CONTEXT_CLOSE_METHOD_TEMPLATE,
-    CONTEXT_ENTER_METHOD_TEMPLATE,
-    CONTEXT_EXIT_NO_CLEANUP_TEMPLATE,
-    CONTEXT_EXIT_WITH_CLEANUP_TEMPLATE,
-    DISPATCH_ARESOLVE_METHOD_TEMPLATE,
-    DISPATCH_RESOLVE_METHOD_TEMPLATE,
-    ENTER_SCOPE_METHOD_TEMPLATE,
-    GLOBALS_TEMPLATE,
-    IMPORTS_TEMPLATE,
-    INIT_METHOD_TEMPLATE,
-    MODULE_TEMPLATE,
-    SYNC_METHOD_TEMPLATE,
 )
 from diwire._internal.scope import BaseScope, BaseScopes, Scope
 from diwire.exceptions import DIWireInvalidProviderSpecError
@@ -48,14 +48,14 @@ _MIN_CONSTRUCTOR_BASE_ARGUMENTS = 4
 _MAX_INLINE_ROOT_DEPENDENCY_DEPTH = 3
 _OMIT_INLINE_ARGUMENT: Any = object()
 _GENERATOR_SOURCE = (
-    "diwire._internal.resolvers.templates.renderer.ResolversTemplateRenderer.get_providers_code"
+    "diwire._internal.resolvers.assembly.renderer.ResolversAssemblyRenderer.get_providers_code"
 )
 logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
 class RenderContext:
-    """Context for rendering resolver templates."""
+    """Context for rendering resolver assemblies."""
 
     root_scope: BaseScope
     scopes: type[BaseScopes]
@@ -79,26 +79,40 @@ class DependencyExpressionContext:
         return f"self.{self.root_scope.resolver_attr_name}"
 
 
-class ResolversTemplateRenderer:
+class ResolversAssemblyRenderer:
     """Renderer for generated resolver code."""
 
     def __init__(self) -> None:
         self._env = Environment(autoescape=False)
-        self._module_template = self._template(MODULE_TEMPLATE)
-        self._imports_template = self._template(IMPORTS_TEMPLATE)
-        self._globals_template = self._template(GLOBALS_TEMPLATE)
-        self._class_template = self._template(CLASS_TEMPLATE)
-        self._init_method_template = self._template(INIT_METHOD_TEMPLATE)
-        self._enter_scope_method_template = self._template(ENTER_SCOPE_METHOD_TEMPLATE)
-        self._context_enter_method_template = self._template(CONTEXT_ENTER_METHOD_TEMPLATE)
-        self._context_aenter_method_template = self._template(CONTEXT_AENTER_METHOD_TEMPLATE)
-        self._context_close_method_template = self._template(CONTEXT_CLOSE_METHOD_TEMPLATE)
-        self._context_aclose_method_template = self._template(CONTEXT_ACLOSE_METHOD_TEMPLATE)
-        self._resolve_dispatch_template = self._template(DISPATCH_RESOLVE_METHOD_TEMPLATE)
-        self._aresolve_dispatch_template = self._template(DISPATCH_ARESOLVE_METHOD_TEMPLATE)
-        self._sync_method_template = self._template(SYNC_METHOD_TEMPLATE)
-        self._async_method_template = self._template(ASYNC_METHOD_TEMPLATE)
-        self._build_function_template = self._template(BUILD_FUNCTION_TEMPLATE)
+        self._module_assembly = self._compile_assembly(MODULE_ASSEMBLY_FRAGMENT)
+        self._imports_assembly = self._compile_assembly(IMPORTS_ASSEMBLY_FRAGMENT)
+        self._globals_assembly = self._compile_assembly(GLOBALS_ASSEMBLY_FRAGMENT)
+        self._class_assembly = self._compile_assembly(CLASS_ASSEMBLY_FRAGMENT)
+        self._init_method_assembly = self._compile_assembly(INIT_METHOD_ASSEMBLY_FRAGMENT)
+        self._enter_scope_method_assembly = self._compile_assembly(
+            ENTER_SCOPE_METHOD_ASSEMBLY_FRAGMENT
+        )
+        self._context_enter_method_assembly = self._compile_assembly(
+            CONTEXT_ENTER_METHOD_ASSEMBLY_FRAGMENT
+        )
+        self._context_aenter_method_assembly = self._compile_assembly(
+            CONTEXT_AENTER_METHOD_ASSEMBLY_FRAGMENT
+        )
+        self._context_close_method_assembly = self._compile_assembly(
+            CONTEXT_CLOSE_METHOD_ASSEMBLY_FRAGMENT
+        )
+        self._context_aclose_method_assembly = self._compile_assembly(
+            CONTEXT_ACLOSE_METHOD_ASSEMBLY_FRAGMENT
+        )
+        self._resolve_dispatch_assembly = self._compile_assembly(
+            DISPATCH_RESOLVE_METHOD_ASSEMBLY_FRAGMENT
+        )
+        self._aresolve_dispatch_assembly = self._compile_assembly(
+            DISPATCH_ARESOLVE_METHOD_ASSEMBLY_FRAGMENT
+        )
+        self._sync_method_assembly = self._compile_assembly(SYNC_METHOD_ASSEMBLY_FRAGMENT)
+        self._async_method_assembly = self._compile_assembly(ASYNC_METHOD_ASSEMBLY_FRAGMENT)
+        self._build_function_assembly = self._compile_assembly(BUILD_FUNCTION_ASSEMBLY_FRAGMENT)
         self._render_root_scope_level: int | None = None
 
     def get_providers_code(
@@ -134,7 +148,7 @@ class ResolversTemplateRenderer:
             classes_block = self._render_classes(plan=plan)
             build_block = self._render_build_function(plan=plan)
 
-            return self._module_template.render(
+            return self._module_assembly.render(
                 module_docstring_block=module_docstring_block,
                 imports_block=imports_block,
                 globals_block=globals_block,
@@ -148,7 +162,7 @@ class ResolversTemplateRenderer:
         uses_generator_context_helpers = any(
             workflow.provider_attribute == "generator" for workflow in plan.workflows
         )
-        return self._imports_template.render(
+        return self._imports_assembly.render(
             uses_threading_import=plan.thread_lock_count > 0,
             uses_asyncio_import=plan.async_lock_count > 0,
             uses_generator_context_helpers=uses_generator_context_helpers,
@@ -234,7 +248,7 @@ class ResolversTemplateRenderer:
             if workflow.uses_async_lock:
                 lock_lines.append(f"_dep_{workflow.slot}_async_lock = asyncio.Lock()")
 
-        return self._globals_template.render(
+        return self._globals_assembly.render(
             provider_globals_block="\n".join([*scope_lines, *provider_lines]),
             lock_globals_block="\n".join(lock_lines),
         ).strip()
@@ -287,11 +301,11 @@ class ResolversTemplateRenderer:
         )
 
         if plan.has_cleanup:
-            exit_method_block = self._indent_block(CONTEXT_EXIT_WITH_CLEANUP_TEMPLATE)
-            aexit_method_block = self._indent_block(CONTEXT_AEXIT_WITH_CLEANUP_TEMPLATE)
+            exit_method_block = self._indent_block(CONTEXT_EXIT_WITH_CLEANUP_ASSEMBLY_FRAGMENT)
+            aexit_method_block = self._indent_block(CONTEXT_AEXIT_WITH_CLEANUP_ASSEMBLY_FRAGMENT)
         else:
-            exit_method_block = self._indent_block(CONTEXT_EXIT_NO_CLEANUP_TEMPLATE)
-            aexit_method_block = self._indent_block(CONTEXT_AEXIT_NO_CLEANUP_TEMPLATE)
+            exit_method_block = self._indent_block(CONTEXT_EXIT_NO_CLEANUP_ASSEMBLY_FRAGMENT)
+            aexit_method_block = self._indent_block(CONTEXT_AEXIT_NO_CLEANUP_ASSEMBLY_FRAGMENT)
 
         resolver_methods: list[str] = []
         for workflow in plan.workflows:
@@ -315,15 +329,15 @@ class ResolversTemplateRenderer:
         resolver_methods_block = "\n\n".join(
             self._indent_block(method) for method in resolver_methods
         )
-        enter_method_block = self._context_enter_method_template.render(
+        enter_method_block = self._context_enter_method_assembly.render(
             return_annotation=class_plan.class_name,
         ).strip()
-        aenter_method_block = self._context_aenter_method_template.render(
+        aenter_method_block = self._context_aenter_method_assembly.render(
             return_annotation=class_plan.class_name,
         ).strip()
-        close_method_block = self._context_close_method_template.render().strip()
-        aclose_method_block = self._context_aclose_method_template.render().strip()
-        return self._class_template.render(
+        close_method_block = self._context_close_method_assembly.render().strip()
+        aclose_method_block = self._context_aclose_method_assembly.render().strip()
+        return self._class_assembly.render(
             class_name=class_plan.class_name,
             class_docstring_block=class_docstring_block,
             slots_block=slots_block,
@@ -356,7 +370,7 @@ class ResolversTemplateRenderer:
             plan=plan,
             class_plan=class_plan,
         )
-        return self._init_method_template.render(
+        return self._init_method_assembly.render(
             signature_block=self._join_lines(self._indent_lines(signature_lines, 1)),
             docstring_block=self._join_lines(
                 self._indent_lines(
@@ -558,7 +572,7 @@ class ResolversTemplateRenderer:
             ),
         )
         if immediate_next is None:
-            return self._enter_scope_method_template.render(
+            return self._enter_scope_method_assembly.render(
                 return_annotation=return_annotation,
                 docstring_block=docstring_block,
                 body_block=self._join_lines(
@@ -690,7 +704,7 @@ class ResolversTemplateRenderer:
                 "raise DIWireScopeMismatchError(msg)",
             ],
         )
-        return self._enter_scope_method_template.render(
+        return self._enter_scope_method_assembly.render(
             return_annotation=return_annotation,
             docstring_block=docstring_block,
             body_block=self._join_lines(self._indent_lines(body_lines, 1)),
@@ -1006,7 +1020,7 @@ class ResolversTemplateRenderer:
                 "raise DIWireDependencyNotRegisteredError(msg)",
             ],
         )
-        return self._resolve_dispatch_template.render(
+        return self._resolve_dispatch_assembly.render(
             docstring_block=self._join_lines(
                 self._indent_lines(
                     self._docstring_lines(
@@ -1097,7 +1111,7 @@ class ResolversTemplateRenderer:
                 "raise DIWireDependencyNotRegisteredError(msg)",
             ],
         )
-        return self._aresolve_dispatch_template.render(
+        return self._aresolve_dispatch_assembly.render(
             docstring_block=self._join_lines(
                 self._indent_lines(
                     self._docstring_lines(self._dispatch_docstring_lines(plan=plan, is_async=True)),
@@ -1276,7 +1290,7 @@ class ResolversTemplateRenderer:
                     "This resolver delegates to the cache owner resolver so scoped caching remains "
                     "consistent across nested resolvers."
                 )
-            return self._sync_method_template.render(
+            return self._sync_method_assembly.render(
                 slot=workflow.slot,
                 docstring_block=self._resolver_docstring_block(
                     class_plan=class_plan,
@@ -1308,7 +1322,7 @@ class ResolversTemplateRenderer:
                     resolver_name="owner_resolver",
                 )
                 body_lines.append(f"return owner_resolver.resolve_{workflow.slot}()")
-            return self._sync_method_template.render(
+            return self._sync_method_assembly.render(
                 slot=workflow.slot,
                 docstring_block=self._resolver_docstring_block(
                     class_plan=class_plan,
@@ -1332,7 +1346,7 @@ class ResolversTemplateRenderer:
                     "raise DIWireAsyncDependencyInSyncContextError(msg)",
                 ],
             )
-            return self._sync_method_template.render(
+            return self._sync_method_assembly.render(
                 slot=workflow.slot,
                 docstring_block=self._resolver_docstring_block(
                     class_plan=class_plan,
@@ -1373,7 +1387,7 @@ class ResolversTemplateRenderer:
                     1,
                 ),
             )
-            return self._sync_method_template.render(
+            return self._sync_method_assembly.render(
                 slot=workflow.slot,
                 docstring_block=self._resolver_docstring_block(
                     class_plan=class_plan,
@@ -1404,7 +1418,7 @@ class ResolversTemplateRenderer:
                     "return cached_value",
                 ],
             )
-            return self._sync_method_template.render(
+            return self._sync_method_assembly.render(
                 slot=workflow.slot,
                 docstring_block=self._resolver_docstring_block(
                     class_plan=class_plan,
@@ -1428,7 +1442,7 @@ class ResolversTemplateRenderer:
                 "return value",
             ],
         )
-        return self._sync_method_template.render(
+        return self._sync_method_assembly.render(
             slot=workflow.slot,
             docstring_block=self._resolver_docstring_block(
                 class_plan=class_plan,
@@ -1448,7 +1462,7 @@ class ResolversTemplateRenderer:
         workflow: ProviderWorkflowPlan,
     ) -> str:
         if not workflow.requires_async:
-            return self._async_method_template.render(
+            return self._async_method_assembly.render(
                 slot=workflow.slot,
                 docstring_block=self._resolver_docstring_block(
                     class_plan=class_plan,
@@ -1493,7 +1507,7 @@ class ResolversTemplateRenderer:
                     "This resolver delegates to the cache owner resolver so scoped caching remains "
                     "consistent across nested resolvers."
                 )
-            return self._async_method_template.render(
+            return self._async_method_assembly.render(
                 slot=workflow.slot,
                 docstring_block=self._resolver_docstring_block(
                     class_plan=class_plan,
@@ -1525,7 +1539,7 @@ class ResolversTemplateRenderer:
                     resolver_name="owner_resolver",
                 )
                 body_lines.append(f"return await owner_resolver.aresolve_{workflow.slot}()")
-            return self._async_method_template.render(
+            return self._async_method_assembly.render(
                 slot=workflow.slot,
                 docstring_block=self._resolver_docstring_block(
                     class_plan=class_plan,
@@ -1569,7 +1583,7 @@ class ResolversTemplateRenderer:
                     1,
                 ),
             )
-            return self._async_method_template.render(
+            return self._async_method_assembly.render(
                 slot=workflow.slot,
                 docstring_block=self._resolver_docstring_block(
                     class_plan=class_plan,
@@ -1600,7 +1614,7 @@ class ResolversTemplateRenderer:
                     "return cached_value",
                 ],
             )
-            return self._async_method_template.render(
+            return self._async_method_assembly.render(
                 slot=workflow.slot,
                 docstring_block=self._resolver_docstring_block(
                     class_plan=class_plan,
@@ -1624,7 +1638,7 @@ class ResolversTemplateRenderer:
                 "return value",
             ],
         )
-        return self._async_method_template.render(
+        return self._async_method_assembly.render(
             slot=workflow.slot,
             docstring_block=self._resolver_docstring_block(
                 class_plan=class_plan,
@@ -2534,7 +2548,7 @@ class ResolversTemplateRenderer:
                 else "return RootResolver()",
             ],
         )
-        return self._build_function_template.render(
+        return self._build_function_assembly.render(
             return_annotation="RootResolver",
             docstring_block=self._join_lines(
                 self._indent_lines(
@@ -2858,7 +2872,7 @@ class ResolversTemplateRenderer:
     def _uses_stateless_scope_reuse(self, *, plan: ResolverGenerationPlan) -> bool:
         return not any(workflow.scope_level > plan.root_scope_level for workflow in plan.workflows)
 
-    def _template(self, text: str) -> Template:
+    def _compile_assembly(self, text: str) -> AssemblySnippet:
         return self._env.from_string(text)
 
     def _indent_block(self, block: str) -> str:
@@ -2902,11 +2916,11 @@ class ResolversTemplateRenderer:
 def main() -> None:
     """Render and print generated resolver code for development inspection.
 
-    This entrypoint instantiates the template renderer with an empty
+    This entrypoint instantiates the assembly renderer with an empty
     registration set and prints the generated resolver module to stdout. It is
-    intended for local tooling, debugging, and template iteration.
+    intended for local tooling, debugging, and assembly iteration.
     """
-    renderer = ResolversTemplateRenderer()
+    renderer = ResolversAssemblyRenderer()
     rendered_code = renderer.get_providers_code(
         root_scope=Scope.APP,
         registrations=ProvidersRegistrations(),
