@@ -18,7 +18,7 @@ class AsyncUser:
 
 
 async def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     container.add_instance(AsyncUser(email="async@example.com"))
 
     @resolver_context.inject

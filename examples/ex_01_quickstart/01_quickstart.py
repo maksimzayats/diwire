@@ -6,7 +6,7 @@ diwire builds the full dependency chain for you.
 
 from __future__ import annotations
 
-from diwire import Container
+from diwire import AutoregisterContainer
 
 
 class Database:
@@ -25,7 +25,7 @@ class UserService:
 
 
 def main() -> None:
-    container = Container()
+    container = AutoregisterContainer()
     service = container.resolve(UserService)
 
     print(f"db_host={service.repository.database.host}")  # => db_host=localhost

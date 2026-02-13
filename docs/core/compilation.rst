@@ -1,5 +1,5 @@
 .. meta::
-   :description: Compilation in diwire: compile() caching, invalidation on registration changes, and hot-path binding in strict mode.
+   :description: Compilation in diwire: compile() caching, invalidation on registration changes, and hot-path binding in strict containers.
 
 Compilation
 ===========
@@ -23,7 +23,7 @@ Any registration mutation (calling ``add_*`` or ``decorate(...)``) invalidates t
 Strict mode hot-path rebinding
 ------------------------------
 
-In strict mode (``autoregister_concrete_types=False``), diwire can bind hot-path container entrypoints directly to the
+In strict mode (:class:`diwire.Container`), diwire can bind hot-path container entrypoints directly to the
 compiled resolver instance. This avoids container-level indirection for:
 
 - ``resolve()``

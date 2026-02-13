@@ -5,7 +5,10 @@ import inspect
 from collections.abc import Callable
 from typing import Any, cast
 
+import pytest
+
 from diwire import Container, Injected
+from diwire.integrations import pytest_plugin as diwire_pytest_plugin
 from diwire.integrations.pytest_plugin import pytest_pycollect_makeitem, pytest_pyfunc_call
 
 
@@ -28,6 +31,15 @@ class _DummyPyFuncItem:
         self.obj = obj
         if container is not None:
             self._diwire_container = container
+
+
+def test_diwire_container_fixture_requires_override() -> None:
+    fixture_fn = cast(
+        "Callable[..., Container]",
+        cast("Any", diwire_pytest_plugin.diwire_container).__wrapped__,
+    )
+    with pytest.raises(RuntimeError, match="requires overriding the 'diwire_container' fixture"):
+        fixture_fn()
 
 
 def test_pycollect_makeitem_ignores_non_callable_objects() -> None:

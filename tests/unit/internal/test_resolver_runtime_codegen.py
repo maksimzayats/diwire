@@ -11,7 +11,16 @@ from typing import Any, Generic, TypeVar, cast
 
 import pytest
 
-from diwire import Container, FromContext, Injected, Lifetime, LockMode, Scope, resolver_context
+from diwire import (
+    AutoregisterContainer,
+    Container,
+    FromContext,
+    Injected,
+    Lifetime,
+    LockMode,
+    Scope,
+    resolver_context,
+)
 from diwire._internal.providers import ProviderSpec
 from diwire._internal.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire.exceptions import (
@@ -219,7 +228,6 @@ async def test_async_singleton_uses_async_cached_method_replacement() -> None:
 
 def test_compile_returns_cached_resolver_and_rebinds_entrypoints() -> None:
     container = Container(
-        autoregister_concrete_types=False,
         use_resolver_context=False,
     )
     container.add_instance(_Resource(), provides=_Resource)
@@ -251,7 +259,6 @@ def test_compile_returns_cached_resolver_and_rebinds_entrypoints() -> None:
 def test_resolve_auto_compiles_root_resolver_when_uncompiled() -> None:
     resource = _Resource()
     container = Container(
-        autoregister_concrete_types=False,
         use_resolver_context=False,
     )
     container.add_instance(resource, provides=_Resource)
@@ -271,7 +278,6 @@ def test_resolve_auto_compiles_root_resolver_when_uncompiled() -> None:
 async def test_aresolve_auto_compiles_root_resolver_when_uncompiled() -> None:
     resource = _Resource()
     container = Container(
-        autoregister_concrete_types=False,
         use_resolver_context=False,
     )
     container.add_instance(resource, provides=_Resource)
@@ -288,7 +294,7 @@ async def test_aresolve_auto_compiles_root_resolver_when_uncompiled() -> None:
 
 
 def test_compile_wraps_codegen_resolver_when_open_generic_registry_present() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     container.add_concrete(_OpenRuntimeServiceImpl, provides=_OpenRuntimeService)
 
     compiled_resolver = container.compile()
@@ -303,7 +309,6 @@ def test_compile_wraps_codegen_resolver_when_open_generic_registry_present() -> 
 
 def test_enter_scope_auto_compiles_root_resolver_when_uncompiled() -> None:
     container = Container(
-        autoregister_concrete_types=False,
         use_resolver_context=False,
     )
     container.add_concrete(
@@ -363,7 +368,6 @@ def test_registering_after_compile_invalidates_compilation_and_rebinds_lazy_entr
         return _ManagedContext()
 
     container = Container(
-        autoregister_concrete_types=False,
         use_resolver_context=False,
     )
     previous_resolver = container.compile()
@@ -431,7 +435,7 @@ def test_autoregister_keeps_container_entrypoints_and_skips_existing_registratio
     class _AutoRegisteredService:
         pass
 
-    container = Container()
+    container = AutoregisterContainer()
 
     first = container.resolve(_AutoRegisteredService)
     root_resolver = container._root_resolver
@@ -837,7 +841,7 @@ def test_codegen_inject_wrapper_unsafe_mode_stress_no_deadlock() -> None:
 
 
 def test_generated_dispatch_raises_for_unknown_dependency_in_sync_and_async_paths() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
 
     with pytest.raises(DIWireDependencyNotRegisteredError):
         container.resolve(object)

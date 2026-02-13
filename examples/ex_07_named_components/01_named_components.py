@@ -25,7 +25,7 @@ FallbackStore = Annotated[UserStore, Component("fallback")]
 
 
 def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
 
     container.add_factory(lambda: UserStore(backend="redis"), provides=PrimaryStore)
     container.add_factory(lambda: UserStore(backend="memory"), provides=FallbackStore)

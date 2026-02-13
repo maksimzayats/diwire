@@ -13,7 +13,7 @@ class AsyncService:
 
 
 async def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
 
     async def build_async_service() -> AsyncService:
         await asyncio.sleep(0)

@@ -1,5 +1,5 @@
 .. meta::
-   :description: How the diwire Container resolves dependencies from type hints, how auto-registration works, and what counts as a dependency key.
+   :description: How diwire containers resolve dependencies, with strict Container defaults and explicit AutoregisterContainer auto-wiring.
 
 Container
 =========
@@ -9,17 +9,31 @@ The :class:`diwire.Container` is responsible for two things:
 1. **Registration**: mapping a dependency key (usually a type) to a provider.
 2. **Resolution**: creating objects by inspecting type hints and recursively resolving dependencies.
 
-Auto-wiring (default)
----------------------
+Strict Container (default)
+--------------------------
 
-By default, diwire will auto-register concrete classes as you resolve them. This enables the “zero configuration”
+:class:`diwire.Container` is strict by default. Dependencies must be registered explicitly:
+
+.. code-block:: python
+
+   from diwire import Container
+
+   container = Container()
+
+In this mode, resolving a dependency that is not registered raises
+:class:`diwire.exceptions.DIWireDependencyNotRegisteredError`.
+
+Auto-wiring (explicit opt-in)
+-----------------------------
+
+Use :class:`diwire.AutoregisterContainer` when you want the “zero configuration”
 experience:
 
 .. code-block:: python
 
    from dataclasses import dataclass
 
-   from diwire import Container
+   from diwire import AutoregisterContainer
 
 
    @dataclass
@@ -32,24 +46,10 @@ experience:
        repo: Repo
 
 
-   container = Container()
+   container = AutoregisterContainer()
    _ = container.resolve(Service)
 
 Runnable example: :doc:`/howto/examples/quickstart`.
-
-Strict mode (no auto-registration)
-----------------------------------
-
-If you want full control, disable auto-registration:
-
-.. code-block:: python
-
-   from diwire import Container
-
-   container = Container(autoregister_concrete_types=False, autoregister_dependencies=False)
-
-In this mode, resolving a dependency that is not registered raises
-:class:`diwire.exceptions.DIWireDependencyNotRegisteredError`.
 
 Dependency keys
 ---------------
@@ -66,4 +66,3 @@ Next
 ----
 
 Go to :doc:`registration` for the explicit registration APIs, and :doc:`scopes` for scope transitions and cleanup.
-

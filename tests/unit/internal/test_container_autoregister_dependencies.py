@@ -11,7 +11,7 @@ from typing import Any, Generic, NamedTuple, TypeVar, cast
 import msgspec
 import pytest
 
-from diwire import AsyncProvider, Container, Lifetime, Provider, Scope
+from diwire import AsyncProvider, AutoregisterContainer, Container, Lifetime, Provider, Scope
 from diwire._internal.autoregistration import ConcreteTypeAutoregistrationPolicy
 from diwire.exceptions import DIWireDependencyNotRegisteredError
 
@@ -194,8 +194,25 @@ class _TestMetaclass(type):
     pass
 
 
-def test_container_default_autoregisters_dependencies_during_registration() -> None:
+def test_container_is_strict_by_default() -> None:
     container = Container()
+    container.add_concrete(RootWithDirectDependency)
+
+    assert container._providers_registrations.find_by_type(DirectDependency) is None
+    with pytest.raises(DIWireDependencyNotRegisteredError):
+        container.resolve(ResolveRoot)
+
+
+def test_container_init_rejects_removed_autoregistration_kwargs() -> None:
+    container_ctor = cast("Any", Container)
+    with pytest.raises(TypeError, match="autoregister_concrete_types"):
+        container_ctor(autoregister_concrete_types=False)
+    with pytest.raises(TypeError, match="autoregister_dependencies"):
+        container_ctor(autoregister_dependencies=False)
+
+
+def test_container_default_autoregisters_dependencies_during_registration() -> None:
+    container = AutoregisterContainer()
 
     container.add_concrete(RootWithDirectDependency)
 
@@ -205,7 +222,7 @@ def test_container_default_autoregisters_dependencies_during_registration() -> N
 
 
 def test_registration_override_can_disable_dependency_autoregistration() -> None:
-    container = Container()
+    container = AutoregisterContainer()
 
     container.add_concrete(
         RootWithDirectDependency,
@@ -216,7 +233,7 @@ def test_registration_override_can_disable_dependency_autoregistration() -> None
 
 
 def test_registration_override_can_enable_dependency_autoregistration() -> None:
-    container = Container(autoregister_dependencies=False)
+    container = AutoregisterContainer(autoregister_dependencies=False)
 
     container.add_concrete(
         RootWithDirectDependency,
@@ -227,7 +244,7 @@ def test_registration_override_can_enable_dependency_autoregistration() -> None:
 
 
 def test_dependency_autoregistration_is_recursive() -> None:
-    container = Container()
+    container = AutoregisterContainer()
 
     container.add_concrete(RootWithNestedDependencies)
 
@@ -236,7 +253,7 @@ def test_dependency_autoregistration_is_recursive() -> None:
 
 
 def test_dependency_autoregistration_skips_already_registered_dependency() -> None:
-    container = Container()
+    container = AutoregisterContainer()
     container.add_concrete(ExistingDependency)
     existing_spec = container._providers_registrations.get_by_type(ExistingDependency)
 
@@ -246,18 +263,14 @@ def test_dependency_autoregistration_skips_already_registered_dependency() -> No
 
 
 def test_strict_container_skips_dependency_autoregistration_even_when_enabled() -> None:
-    container = Container(
-        autoregister_concrete_types=False,
-        autoregister_dependencies=True,
-    )
-
-    container.add_concrete(RootWithDirectDependency)
+    container = Container()
+    container.add_concrete(RootWithDirectDependency, autoregister_dependencies=True)
 
     assert container._providers_registrations.find_by_type(DirectDependency) is None
 
 
 def test_dependency_autoregistration_uses_parent_scope_and_lifetime() -> None:
-    container = Container()
+    container = AutoregisterContainer()
 
     container.add_concrete(
         RootWithScopedDependency,
@@ -272,7 +285,7 @@ def test_dependency_autoregistration_uses_parent_scope_and_lifetime() -> None:
 
 
 def test_dependency_autoregistration_ignores_registration_failures_and_continues() -> None:
-    container = Container()
+    container = AutoregisterContainer()
 
     container.add_concrete(RootWithMixedDependencies)
 
@@ -281,7 +294,7 @@ def test_dependency_autoregistration_ignores_registration_failures_and_continues
 
 
 def test_resolve_autoregistration_skips_builtin_dependency_types() -> None:
-    container = Container()
+    container = AutoregisterContainer()
 
     with pytest.raises(DIWireDependencyNotRegisteredError) as exc_info:
         container.resolve(RootWithBuiltinDep)
@@ -293,7 +306,7 @@ def test_resolve_autoregistration_skips_builtin_dependency_types() -> None:
 
 
 def test_resolve_autoregistration_skips_pathlib_path_dependency() -> None:
-    container = Container()
+    container = AutoregisterContainer()
 
     with pytest.raises(DIWireDependencyNotRegisteredError):
         container.resolve(RootWithPathDep)
@@ -310,7 +323,7 @@ def test_resolve_autoregistration_skips_pathlib_path_dependency() -> None:
 
 
 def test_resolve_autoregistration_skips_uuid_dependency() -> None:
-    container = Container()
+    container = AutoregisterContainer()
 
     with pytest.raises(DIWireDependencyNotRegisteredError):
         container.resolve(RootWithUuidDep)
@@ -330,7 +343,7 @@ def test_autoregistration_policy_skips_metaclasses() -> None:
 
 
 def test_factory_decorator_can_autoregister_dependencies() -> None:
-    container = Container()
+    container = AutoregisterContainer()
 
     @container.add_factory(
         provides=DecoratorService,
@@ -346,7 +359,7 @@ def test_factory_decorator_can_autoregister_dependencies() -> None:
 
 
 def test_resolve_autoregistration_integration_registers_dependency_chain() -> None:
-    container = Container()
+    container = AutoregisterContainer()
 
     resolved = container.resolve(ResolveRoot)
 
@@ -356,7 +369,7 @@ def test_resolve_autoregistration_integration_registers_dependency_chain() -> No
 
 
 def test_resolve_provider_dependency_key_autoregisters_inner_dependency() -> None:
-    container = Container(default_lifetime=Lifetime.TRANSIENT)
+    container = AutoregisterContainer(default_lifetime=Lifetime.TRANSIENT)
 
     provider = container.resolve(Provider[_AutoProviderDependency])
     first = provider()
@@ -369,7 +382,7 @@ def test_resolve_provider_dependency_key_autoregisters_inner_dependency() -> Non
 
 @pytest.mark.asyncio
 async def test_resolve_async_provider_dependency_key_autoregisters_inner_dependency() -> None:
-    container = Container(default_lifetime=Lifetime.TRANSIENT)
+    container = AutoregisterContainer(default_lifetime=Lifetime.TRANSIENT)
 
     provider = container.resolve(AsyncProvider[_AutoProviderDependency])
     first = await provider()
@@ -381,7 +394,7 @@ async def test_resolve_async_provider_dependency_key_autoregisters_inner_depende
 
 
 def test_resolve_provider_dependency_key_uses_existing_registration_without_recompile() -> None:
-    container = Container(default_lifetime=Lifetime.TRANSIENT)
+    container = AutoregisterContainer(default_lifetime=Lifetime.TRANSIENT)
     container.add_concrete(_AutoProviderDependency)
     container.compile()
     graph_revision_before = container._graph_revision
@@ -394,7 +407,7 @@ def test_resolve_provider_dependency_key_uses_existing_registration_without_reco
 
 
 def test_resolve_reraises_when_missing_dependency_cannot_be_autoregistered() -> None:
-    container = Container()
+    container = AutoregisterContainer()
 
     with pytest.raises(DIWireDependencyNotRegisteredError):
         container.resolve(str)
@@ -402,7 +415,7 @@ def test_resolve_reraises_when_missing_dependency_cannot_be_autoregistered() -> 
 
 @pytest.mark.asyncio
 async def test_aresolve_provider_dependency_key_autoregisters_then_reuses_compilation() -> None:
-    container = Container(default_lifetime=Lifetime.TRANSIENT)
+    container = AutoregisterContainer(default_lifetime=Lifetime.TRANSIENT)
 
     first_provider = await container.aresolve(Provider[_AutoProviderDependency])
     second_provider = await container.aresolve(Provider[_AutoProviderDependency])
@@ -416,7 +429,7 @@ async def test_aresolve_provider_dependency_key_autoregisters_then_reuses_compil
 
 @pytest.mark.asyncio
 async def test_aresolve_autoregisters_on_miss_and_reraises_when_graph_unchanged() -> None:
-    container = Container()
+    container = AutoregisterContainer()
 
     resolved = await container.aresolve(ResolveRoot)
 
@@ -426,13 +439,13 @@ async def test_aresolve_autoregisters_on_miss_and_reraises_when_graph_unchanged(
 
 
 def test_ensure_autoregistration_short_circuits_for_disabled_and_open_generic() -> None:
-    strict_container = Container(autoregister_concrete_types=False)
+    strict_container = Container()
 
     strict_container._ensure_autoregistration(DirectDependency)
 
     assert strict_container._providers_registrations.find_by_type(DirectDependency) is None
 
-    container = Container()
+    container = AutoregisterContainer()
     container.add_factory(_build_open_autoreg_dependency, provides=_OpenAutoregDependency)
 
     container._ensure_autoregistration(_OpenAutoregDependency[int])
@@ -449,7 +462,7 @@ def test_resolve_autoregisters_settings_like_dependency_as_root_singleton(monkey
         lambda candidate: candidate is _SettingsLikeDependency,
     )
 
-    container = Container()
+    container = AutoregisterContainer()
 
     first = container.resolve(_SettingsLikeDependency)
     second = container.resolve(_SettingsLikeDependency)
@@ -466,7 +479,7 @@ def test_resolve_autoregisters_pydantic_settings_as_singleton_factory() -> None:
     if pydantic_settings_base is None:
         pytest.skip("pydantic_settings is unavailable")
 
-    container = Container()
+    container = AutoregisterContainer()
 
     first = container.resolve(PydanticSettingsDependency)
     second = container.resolve(PydanticSettingsDependency)
@@ -483,7 +496,7 @@ def test_dependency_autoregistration_registers_pydantic_settings_as_root_singlet
     if pydantic_settings_base is None:
         pytest.skip("pydantic_settings is unavailable")
 
-    container = Container()
+    container = AutoregisterContainer()
 
     container.add_concrete(
         RootWithPydanticSettingsDependency,
@@ -514,7 +527,7 @@ def test_resolve_autoregisters_pydantic_v1_settings_as_singleton_factory() -> No
         class PydanticV1SettingsDependency(base_settings_type):
             value: int = 7
 
-        container = Container()
+        container = AutoregisterContainer()
         first = container.resolve(PydanticV1SettingsDependency)
         second = container.resolve(PydanticV1SettingsDependency)
 
@@ -530,7 +543,7 @@ def test_concrete_registration_autoregisters_namedtuple_class_dependencies() -> 
     class NamedTupleRoot(NamedTuple):
         dependency: NamedTupleFrameworkDependency
 
-    container = Container()
+    container = AutoregisterContainer()
 
     container.add_concrete(
         NamedTupleRoot,
@@ -548,7 +561,7 @@ def test_concrete_registration_autoregisters_msgspec_struct_dependencies() -> No
     class MsgspecRoot(msgspec.Struct):
         dependency: MsgspecFrameworkDependency
 
-    container = Container()
+    container = AutoregisterContainer()
 
     container.add_concrete(
         MsgspecRoot,
@@ -571,7 +584,7 @@ def test_concrete_registration_autoregisters_pydantic_basemodel_v2_dependencies(
         model_config = config_dict(arbitrary_types_allowed=True)
         dependency: PydanticFrameworkDependency
 
-    container = Container()
+    container = AutoregisterContainer()
 
     container.add_concrete(
         PydanticRoot,

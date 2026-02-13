@@ -19,12 +19,7 @@ def _bound_self(method: object) -> object | None:
 
 def main() -> None:
     context = ResolverContext()
-    container = Container(
-        resolver_context=context,
-        autoregister_concrete_types=False,
-        autoregister_dependencies=False,
-        use_resolver_context=False,
-    )
+    container = Container(resolver_context=context, use_resolver_context=False)
     container.add_instance(Message("legacy"), provides=Message)
 
     @context.inject(scope=Scope.REQUEST)

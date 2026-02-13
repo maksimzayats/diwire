@@ -1,31 +1,42 @@
 .. meta::
-   :description: Tune diwire auto-registration: strict mode flags, dependency auto-registration during registration, and scope-safety behavior.
+   :description: Tune diwire auto-registration using strict Container and explicit AutoregisterContainer.
 
 Auto-registration tuning
 ========================
 
-Auto-registration enables the “just write types, then resolve the root” experience. It is enabled by default.
+Auto-registration enables the “just write types, then resolve the root” experience.
 
 Strict mode (disable auto-registration)
 ---------------------------------------
 
-Disable auto-registration when you want your app to fail fast if anything is missing:
+Use :class:`diwire.Container` when you want your app to fail fast if anything is missing:
 
 .. code-block:: python
 
    from diwire import Container
 
-   container = Container(autoregister_concrete_types=False, autoregister_dependencies=False)
+   container = Container()
 
 In strict mode, resolving an unregistered dependency raises
 :class:`diwire.exceptions.DIWireDependencyNotRegisteredError`.
 
-Autoregister concrete types vs dependencies
--------------------------------------------
+Opt-in autoregistration
+-----------------------
 
-- ``autoregister_concrete_types`` controls whether unknown *resolved* concrete classes are automatically registered.
-- ``autoregister_dependencies`` controls whether provider dependencies are automatically registered as concrete types at
-  **registration time** (when diwire can infer a dependency list for a provider).
+Use :class:`diwire.AutoregisterContainer` for explicit auto-wiring:
+
+.. code-block:: python
+
+   from diwire import AutoregisterContainer
+
+   container = AutoregisterContainer()
+
+Concrete types vs dependencies
+------------------------------
+
+- ``AutoregisterContainer`` always enables unknown *resolved* concrete class autoregistration.
+- ``AutoregisterContainer(autoregister_dependencies=False)`` disables registration-time dependency autoregistration
+  while keeping resolve-time concrete autoregistration enabled.
 
 Pydantic settings auto-registration
 -----------------------------------

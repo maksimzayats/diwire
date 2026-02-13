@@ -1,11 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar, cast
+from typing import Annotated, Any, Generic, TypeVar, cast
 
 import pytest
 
-from diwire import AsyncProvider, Container, Injected, Lifetime, Provider, Scope, resolver_context
+from diwire import (
+    AsyncProvider,
+    AutoregisterContainer,
+    Container,
+    Injected,
+    Lifetime,
+    Provider,
+    Scope,
+    resolver_context,
+)
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
     DIWireInvalidProviderSpecError,
@@ -279,10 +288,18 @@ def test_provider_direct_resolve_supports_open_generic_dependencies() -> None:
 
 
 def test_autoregistration_unwraps_provider_dependency() -> None:
-    container = Container()
+    container = AutoregisterContainer()
     container.add_concrete(_AutoregConsumer)
 
     assert container._providers_registrations.find_by_type(_AutoregDependency) is not None
+
+
+def test_provider_dependency_unwrap_ignores_non_provider_metadata_markers() -> None:
+    container = Container()
+    dependency_key = Annotated[_AutoregDependency, "a", "b"]
+
+    assert container._extract_provider_inner_dependency_fast(dependency_key) is None
+    assert container._unwrap_provider_dependency_key(dependency_key) is dependency_key
 
 
 def test_provider_rejects_deeper_scoped_dependency_during_planning() -> None:

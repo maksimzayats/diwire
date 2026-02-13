@@ -64,7 +64,7 @@ class CountingGreeter:
 
 
 def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     container.add_instance("Hello", provides=str)
     tracer = Tracer(events=[])
     container.add_instance(tracer, provides=Tracer)

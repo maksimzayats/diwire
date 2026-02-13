@@ -34,10 +34,7 @@ class ServiceWithoutDefault:
 
 
 def strict_container() -> Container:
-    return Container(
-        autoregister_concrete_types=False,
-        autoregister_dependencies=False,
-    )
+    return Container()
 
 
 def main() -> None:

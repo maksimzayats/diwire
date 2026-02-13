@@ -24,17 +24,18 @@ _INJECTED_CALLABLE_INSPECTOR = InjectedCallableInspector()
 
 @pytest.fixture()
 def diwire_container() -> Container:
-    """Create a per-test DI container used by the plugin.
+    """Fixture hook for the plugin-managed test container.
 
-    Tests that use ``Injected[...]`` parameters resolve them from this container.
-    The fixture is function-scoped, so registrations are isolated between tests
-    unless users override fixture scope explicitly.
-
-    Returns:
-        A new ``Container`` instance.
+    Users must override this fixture in their own test suite to provide
+    registrations for injected dependencies.
 
     """
-    return Container()
+    msg = (
+        "The diwire pytest plugin requires overriding the 'diwire_container' fixture in your "
+        "test suite. Define @pytest.fixture() def diwire_container() -> Container: ... "
+        "and return a configured container."
+    )
+    raise RuntimeError(msg)
 
 
 @pytest.fixture(autouse=True)

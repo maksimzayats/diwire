@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container
+from diwire import AutoregisterContainer
 
 
 class Dependency:
@@ -17,7 +17,7 @@ class Root:
 
 
 def main() -> None:
-    container = Container(autoregister_dependencies=False)
+    container = AutoregisterContainer(autoregister_dependencies=False)
     container.add_concrete(Root, autoregister_dependencies=True)
 
     resolved = container.resolve(Root)

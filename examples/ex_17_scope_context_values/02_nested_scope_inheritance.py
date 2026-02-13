@@ -6,7 +6,7 @@ from diwire import Container, FromContext, Scope
 
 
 def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
 
     with (
         container.enter_scope(Scope.REQUEST, context={int: 1, str: "parent"}) as request_scope,

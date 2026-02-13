@@ -24,7 +24,7 @@ Use ``add_concrete(..., provides=...)``:
            return "now"
 
 
-   container = Container(autoregister_concrete_types=False)
+   container = Container()
    container.add_concrete(SystemClock, provides=Clock,
        lifetime=Lifetime.SCOPED,
    )

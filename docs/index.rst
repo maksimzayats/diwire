@@ -32,7 +32,7 @@ Define your classes. Resolve the top-level one. diwire figures out the rest.
 
    from dataclasses import dataclass
 
-   from diwire import Container
+   from diwire import AutoregisterContainer
 
 
    @dataclass
@@ -50,7 +50,7 @@ Define your classes. Resolve the top-level one. diwire figures out the rest.
        repo: UserRepository
 
 
-   container = Container()
+   container = AutoregisterContainer()
    service = container.resolve(UserService)
    print(service.repo.db.host)  # => localhost
 
@@ -86,4 +86,3 @@ What to read next
    core/index
    howto/index
    reference/index
-

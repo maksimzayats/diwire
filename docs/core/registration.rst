@@ -4,7 +4,7 @@
 Registration
 ============
 
-diwire can auto-wire many graphs with zero registrations, but real applications typically need explicit providers for:
+:class:`diwire.Container` is strict by default, so real applications typically use explicit providers for:
 
 - configuration objects (instances / singletons)
 - interfaces / protocols (bind to a concrete implementation)
@@ -49,7 +49,7 @@ Use :meth:`diwire.Container.add_concrete` when you want to resolve ``provides`` 
            return "now"
 
 
-   container = Container(autoregister_concrete_types=False)
+   container = Container()
    container.add_concrete(SystemClock, provides=Clock)
 
 Factories
@@ -66,7 +66,7 @@ Use :meth:`diwire.Container.add_factory` for custom construction logic (sync or 
    def build_client() -> Client:
        return Client()
 
-   container = Container(autoregister_concrete_types=False)
+   container = Container()
    container.add_factory(build_client, provides=Client)
 
 Cleanup providers
@@ -89,7 +89,7 @@ all support decorator usage:
 
    from diwire import Container
 
-   container = Container(autoregister_concrete_types=False)
+   container = Container()
 
 
    @container.add_factory()
@@ -106,4 +106,3 @@ Next
 ----
 
 Continue with :doc:`lifetimes` and :doc:`scopes` to control caching and cleanup.
-

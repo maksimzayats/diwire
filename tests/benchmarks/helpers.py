@@ -13,8 +13,6 @@ BENCHMARK_ROUNDS = 5
 def make_diwire_benchmark_container() -> Container:
     return Container(
         lock_mode=LockMode.NONE,
-        autoregister_concrete_types=False,
-        autoregister_dependencies=False,
         use_resolver_context=False,
     )
 

@@ -34,9 +34,9 @@ Example:
 
 .. code-block:: python
 
-   from diwire import Container, Injected, Scope, resolver_context
+   from diwire import AutoregisterContainer, Injected, Scope, resolver_context
 
-   container = Container()
+   container = AutoregisterContainer()
 
 
    @resolver_context.inject(scope=Scope.REQUEST)

@@ -13,7 +13,7 @@ class Config:
 
 
 def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     config = Config(value="singleton")
     container.add_instance(config, provides=Config)
 

@@ -19,7 +19,7 @@ def build_consumer(value: FromContext[ReplicaNumber]) -> ReplicaConsumer:
 
 
 def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     container.add_factory(
         build_consumer,
         provides=ReplicaConsumer,

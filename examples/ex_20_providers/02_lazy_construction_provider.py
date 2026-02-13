@@ -22,7 +22,7 @@ class UsesExpensiveProvider:
 
 def main() -> None:
     Expensive.build_count = 0
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     container.add_concrete(Expensive)
     container.add_concrete(UsesExpensiveProvider)
 

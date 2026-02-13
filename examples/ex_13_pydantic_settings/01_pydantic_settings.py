@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pydantic_settings import BaseSettings
 
-from diwire import Container
+from diwire import AutoregisterContainer
 
 
 class AppSettings(BaseSettings):
@@ -17,7 +17,7 @@ class AppSettings(BaseSettings):
 
 
 def main() -> None:
-    container = Container()
+    container = AutoregisterContainer()
 
     first = container.resolve(AppSettings)
     second = container.resolve(AppSettings)
