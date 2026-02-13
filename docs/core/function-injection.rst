@@ -53,6 +53,9 @@ Behavior notes
 
 Generated resolver code passes an internal kwarg (``diwire_resolver``) only for inject-wrapped providers.
 This is an internal mechanism; user code should not pass it directly unless integrating at a low level.
+One exception is ``Container(..., use_resolver_context=False)`` mode: unbound
+``@resolver_context.inject`` calls must pass ``diwire_resolver=...`` explicitly
+(or run under another bound resolver context).
 
 FromContext in injected callables
 ---------------------------------

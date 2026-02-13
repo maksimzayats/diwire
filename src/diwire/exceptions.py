@@ -58,7 +58,10 @@ class DIWireResolverNotSetError(DIWireError):
     Raised by ``ResolverContext.resolve``, ``ResolverContext.aresolve``,
     ``ResolverContext.enter_scope``, and ``ResolverContext.inject`` call paths
     when neither an active resolver context nor a fallback container can serve
-    the call.
+    the call. For ``ResolverContext.inject``, fallback injection is disabled
+    when the fallback container uses ``use_resolver_context=False``, so calls
+    must pass ``diwire_resolver=...`` explicitly (or run under a bound resolver
+    context).
 
     Typical fixes are entering a resolver context (``with container.compile():``)
     or passing an explicit resolver via ``diwire_resolver=...``.

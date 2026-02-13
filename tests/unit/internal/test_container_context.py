@@ -136,6 +136,23 @@ def test_inject_uses_fallback_container_when_unbound() -> None:
     assert cast("Any", handler)() == "fallback"
 
 
+def test_inject_requires_explicit_resolver_when_fallback_disables_resolver_context() -> None:
+    context = ResolverContext()
+    container = Container(resolver_context=context, use_resolver_context=False)
+    container.add_instance(_Service("fallback"), provides=_Service)
+
+    @context.inject
+    def handler(service: Injected[_Service]) -> str:
+        return service.value
+
+    injected_handler = cast("Any", handler)
+    with pytest.raises(DIWireResolverNotSetError, match="use_resolver_context=True"):
+        injected_handler()
+
+    with container.enter_scope(Scope.REQUEST) as request_scope:
+        assert injected_handler(diwire_resolver=request_scope) == "fallback"
+
+
 def test_last_container_wins_for_fallback_inject() -> None:
     context = ResolverContext()
     first = Container(resolver_context=context)

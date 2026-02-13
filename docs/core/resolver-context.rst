@@ -14,7 +14,8 @@ What it is (and isn't)
 - ``resolve`` / ``aresolve`` / ``enter_scope`` use the currently bound resolver first, and fall back
   to the latest container configured for this ``ResolverContext``.
 - ``inject`` can use one of three resolver sources at call time:
-  explicit ``diwire_resolver``, bound resolver from ``resolver_context``, or fallback container compile.
+  explicit ``diwire_resolver``, bound resolver from ``resolver_context``, or fallback container compile
+  when the fallback container is configured with ``use_resolver_context=True``.
 - Fallback container policy is **last container wins** per ``ResolverContext`` instance.
 
 Basic usage

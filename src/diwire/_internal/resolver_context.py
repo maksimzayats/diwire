@@ -316,7 +316,7 @@ class ResolverContext:
 
         Resolution precedence at call time is explicit ``diwire_resolver``,
         then an active context-bound resolver, then the configured fallback
-        container.
+        container when it is configured with ``use_resolver_context=True``.
 
         Args:
             func: Callable to wrap directly, or ``"from_decorator"`` when used
@@ -334,7 +334,8 @@ class ResolverContext:
                 invalid, ``func`` is not callable, or the callable uses
                 reserved parameter names.
             DIWireResolverNotSetError: If invocation has no explicit resolver,
-                no active context resolver, and no fallback container.
+                no active context resolver, and no fallback container eligible
+                for inject fallback.
 
         """
         resolved_scope = self._resolve_inject_scope(scope)
@@ -456,13 +457,17 @@ class ResolverContext:
 
         fallback_container = self._fallback_container
         if fallback_container is not None:
-            fallback_container.compile()
-            return _InjectInvocationState(source="fallback", context_resolver=None)
+            fallback_uses_resolver_context = bool(
+                getattr(fallback_container, "_use_resolver_context", True)
+            )
+            if fallback_uses_resolver_context:
+                fallback_container.compile()
+                return _InjectInvocationState(source="fallback", context_resolver=None)
 
         msg = (
             "Resolver is not set for resolver_context.inject. Pass "
             f"'{INJECT_RESOLVER_KWARG}' explicitly, enter a resolver context, "
-            "or initialize a container with this ResolverContext."
+            "or initialize a fallback container with use_resolver_context=True."
         )
         raise DIWireResolverNotSetError(msg)
 
