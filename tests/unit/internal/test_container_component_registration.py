@@ -61,17 +61,17 @@ def test_add_concrete_component_registers_component_qualified_key() -> None:
     assert isinstance(resolved, _ServiceImpl)
 
 
-def test_add_factory_infer_and_decorator_forms_support_component() -> None:
+def test_add_factory_infer_form_supports_component() -> None:
     container = Container()
 
     def _build_direct() -> _Service:
         return _Service("direct")
 
-    container.add_factory(_build_direct, component="direct")
-
-    @container.add_factory(component="decorator")
-    def _build_decorator() -> _Service:
+    def _build_component() -> _Service:
         return _Service("decorator")
+
+    container.add_factory(_build_direct, component="direct")
+    container.add_factory(_build_component, component="decorator")
 
     resolved_direct = container.resolve(Annotated[_Service, Component("direct")])
     resolved_decorator = container.resolve(Annotated[_Service, Component("decorator")])

@@ -232,22 +232,32 @@ def test_explicit_provides_bypasses_return_type_inference_for_all_provider_kinds
     assert async_context_spec.context_manager is typed_valid_cm
 
 
-def test_register_concrete_without_arguments_returns_decorator() -> None:
+def test_add_concrete_without_required_provider_argument_raises_type_error() -> None:
     container = Container()
 
-    assert callable(container.add_concrete())
+    with pytest.raises(TypeError):
+        cast("Any", container).add_concrete()
 
 
-def test_register_generator_with_decorator_sentinel_returns_decorator() -> None:
+def test_add_factory_without_required_provider_argument_raises_type_error() -> None:
     container = Container()
 
-    assert callable(container.add_generator())
+    with pytest.raises(TypeError):
+        cast("Any", container).add_factory()
 
 
-def test_register_context_manager_with_decorator_sentinel_returns_decorator() -> None:
+def test_add_generator_without_required_provider_argument_raises_type_error() -> None:
     container = Container()
 
-    assert callable(container.add_context_manager())
+    with pytest.raises(TypeError):
+        cast("Any", container).add_generator()
+
+
+def test_add_context_manager_without_required_provider_argument_raises_type_error() -> None:
+    container = Container()
+
+    with pytest.raises(TypeError):
+        cast("Any", container).add_context_manager()
 
 
 def test_register_concrete_with_provides_only_uses_the_same_concrete_type() -> None:
@@ -259,43 +269,41 @@ def test_register_concrete_with_provides_only_uses_the_same_concrete_type() -> N
     assert provider_spec.concrete_type is DecoratorConcreteService
 
 
-def test_concrete_decorator_registers_provider() -> None:
+def test_add_concrete_returns_none_and_registers_provider() -> None:
     container = Container()
 
-    decorator = container.add_concrete(provides=DecoratorConcreteService)
-    returned_type = decorator(DecoratorConcreteService)
-
-    assert returned_type is DecoratorConcreteService
+    result = cast("Any", container).add_concrete(
+        DecoratorConcreteService,
+        provides=DecoratorConcreteService,
+    )
+    assert result is None
     provider_spec = container._providers_registrations.get_by_type(DecoratorConcreteService)
     assert provider_spec.concrete_type is DecoratorConcreteService
 
 
-def test_generator_decorator_registers_provider() -> None:
+def test_add_generator_returns_none_and_registers_provider() -> None:
     def build_service() -> Generator[DecoratorService, None, None]:
         yield DecoratorService()
 
     container = Container()
 
-    decorator = container.add_generator(provides=DecoratorService)
-    returned_generator = decorator(build_service)
-
-    assert returned_generator is build_service
+    result = cast("Any", container).add_generator(build_service, provides=DecoratorService)
+    assert result is None
     provider_spec = container._providers_registrations.get_by_type(DecoratorService)
     assert provider_spec.generator is build_service
 
 
-def test_context_manager_decorator_registers_provider() -> None:
+def test_add_context_manager_returns_none_and_registers_provider() -> None:
     @contextmanager
     def build_service() -> Generator[DecoratorService, None, None]:
         yield DecoratorService()
 
     container = Container()
 
-    decorator = container.add_context_manager(
+    result = cast("Any", container).add_context_manager(
+        build_service,
         provides=DecoratorService,
     )
-    returned_context_manager = decorator(build_service)
-
-    assert returned_context_manager is build_service
+    assert result is None
     provider_spec = container._providers_registrations.get_by_type(DecoratorService)
     assert provider_spec.context_manager is build_service

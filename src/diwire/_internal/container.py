@@ -10,7 +10,6 @@ from types import TracebackType
 from typing import (
     Annotated,
     Any,
-    Generic,
     Literal,
     TypeVar,
     cast,
@@ -76,9 +75,7 @@ from diwire.exceptions import (
 )
 
 T = TypeVar("T")
-F = TypeVar("F", bound=Callable[..., Any])
 InjectableF = TypeVar("InjectableF", bound=Callable[..., Any])
-C = TypeVar("C", bound=type[Any])
 
 logger = logging.getLogger(__name__)
 _MISSING_CLOSED_GENERIC_INJECTION = object()
@@ -274,7 +271,6 @@ class Container:
                 has_decoration_chain=has_decoration_chain,
             )
 
-    @overload
     def add_concrete(
         self,
         concrete_type: type[Any],
@@ -287,46 +283,15 @@ class Container:
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         dependency_registration_policy: DependencyRegistrationPolicy
         | Literal["from_container"] = "from_container",
-    ) -> None: ...
-
-    @overload
-    def add_concrete(
-        self,
-        concrete_type: Literal["from_decorator"] = "from_decorator",
-        *,
-        provides: Any | Literal["infer"] = "infer",
-        component: Component | Any | None = None,
-        scope: BaseScope | Literal["from_container"] = "from_container",
-        lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
-        lock_mode: LockMode | Literal["from_container"] = "from_container",
-        dependency_registration_policy: DependencyRegistrationPolicy
-        | Literal["from_container"] = "from_container",
-    ) -> Callable[[C], C]: ...
-
-    def add_concrete(
-        self,
-        concrete_type: C | Literal["from_decorator"] = "from_decorator",
-        *,
-        provides: Any | Literal["infer"] = "infer",
-        component: Component | Any | None = None,
-        scope: BaseScope | Literal["from_container"] = "from_container",
-        lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
-        lock_mode: LockMode | Literal["from_container"] = "from_container",
-        dependency_registration_policy: DependencyRegistrationPolicy
-        | Literal["from_container"] = "from_container",
-    ) -> Callable[[C], C] | None:
+    ) -> None:
         """Register a concrete type provider.
 
-        Supports direct calls and decorator form. ``provides`` may be a protocol,
-        concrete type, annotated token, or open generic key. Dependencies are
-        inferred from constructor annotations unless explicit dependencies are
-        passed.
+        ``provides`` may be a protocol, concrete type, annotated token, or open
+        generic key. Dependencies are inferred from constructor annotations
+        unless explicit dependencies are passed.
 
         Args:
-            concrete_type: Concrete class to instantiate, or ``"from_decorator"``
-                to return a decorator.
+            concrete_type: Concrete class to instantiate.
             provides: Dependency key produced by this provider. ``"infer"`` uses
                 ``concrete_type`` directly.
             component: Optional component marker value used to register under
@@ -340,9 +305,6 @@ class Container:
                 container lock mode.
             dependency_registration_policy: Override dependency autoregistration for
                 this registration.
-
-        Returns:
-            ``None`` in direct mode or a decorator in decorator mode.
 
         Raises:
             DIWireInvalidRegistrationError: If parameters are invalid or scope
@@ -363,24 +325,9 @@ class Container:
                 container.add_concrete(SqlRepo, provides=Repo)
 
 
-                @container.add_concrete(provides=Repo)
-                class CachedRepo(SqlRepo): ...
+                container.add_concrete(CachedRepo, provides=Repo)
 
         """
-        decorator: _ConcreteTypeRegistrationDecorator[Any] = _ConcreteTypeRegistrationDecorator(
-            container=self,
-            scope=scope,
-            lifetime=lifetime,
-            provides=provides,
-            component=component,
-            dependencies=dependencies,
-            lock_mode=lock_mode,
-            dependency_registration_policy=dependency_registration_policy,
-        )
-
-        if concrete_type == "from_decorator":
-            return decorator
-
         resolved_provides, resolved_concrete_type = self._resolve_concrete_registration_types(
             provides=provides,
             concrete_type=concrete_type,
@@ -454,7 +401,7 @@ class Container:
                     original_provides=resolved_provides_with_component,
                     has_decoration_chain=has_decoration_chain,
                 )
-                return None
+                return
 
             (
                 closed_generic_injections,
@@ -496,7 +443,7 @@ class Container:
                     original_provides=resolved_provides_with_component,
                     has_decoration_chain=has_decoration_chain,
                 )
-                return None
+                return
 
             self._providers_registrations.add(
                 ProviderSpec(
@@ -524,9 +471,6 @@ class Container:
                 has_decoration_chain=has_decoration_chain,
             )
 
-            return None
-
-    @overload
     def add_factory(
         self,
         factory: Callable[..., Any] | Callable[..., Awaitable[Any]],
@@ -539,46 +483,15 @@ class Container:
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         dependency_registration_policy: DependencyRegistrationPolicy
         | Literal["from_container"] = "from_container",
-    ) -> None: ...
-
-    @overload
-    def add_factory(
-        self,
-        factory: Literal["from_decorator"] = "from_decorator",
-        *,
-        provides: Any | Literal["infer"] = "infer",
-        component: Component | Any | None = None,
-        scope: BaseScope | Literal["from_container"] = "from_container",
-        lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
-        lock_mode: LockMode | Literal["from_container"] = "from_container",
-        dependency_registration_policy: DependencyRegistrationPolicy
-        | Literal["from_container"] = "from_container",
-    ) -> Callable[[F], F]: ...
-
-    def add_factory(
-        self,
-        factory: (
-            Callable[..., Any] | Callable[..., Awaitable[Any]] | Literal["from_decorator"]
-        ) = "from_decorator",
-        *,
-        provides: Any | Literal["infer"] = "infer",
-        component: Component | Any | None = None,
-        scope: BaseScope | Literal["from_container"] = "from_container",
-        lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
-        lock_mode: LockMode | Literal["from_container"] = "from_container",
-        dependency_registration_policy: DependencyRegistrationPolicy
-        | Literal["from_container"] = "from_container",
-    ) -> Callable[[F], F] | None:
+    ) -> None:
         """Register a factory provider.
 
-        Supports direct calls and decorator form. ``provides`` may be a protocol,
-        concrete type, annotated token, or open generic key. Dependencies are
-        inferred from factory parameters unless explicit dependencies are passed.
+        ``provides`` may be a protocol, concrete type, annotated token, or open
+        generic key. Dependencies are inferred from factory parameters unless
+        explicit dependencies are passed.
 
         Args:
-            factory: Provider function/callable, or ``"from_decorator"``.
+            factory: Provider function/callable.
             provides: Dependency key produced by the factory. ``"infer"`` uses
                 the return annotation.
             component: Optional component marker value used to register under
@@ -589,9 +502,6 @@ class Container:
             lock_mode: Lock strategy, or ``"from_container"``.
             dependency_registration_policy: Override dependency autoregistration for
                 this registration.
-
-        Returns:
-            ``None`` in direct mode or a decorator in decorator mode.
 
         Raises:
             DIWireInvalidRegistrationError: If configuration or annotations are
@@ -612,28 +522,16 @@ class Container:
                 container.add_factory(lambda settings: Client(settings), provides=Client)
 
 
-                @container.add_factory(provides=Box[T])
                 def build_box(value_type: type[T]) -> Box[T]:
                     return Box(value_type)
 
+
+                container.add_factory(build_box, provides=Box[T])
+
         """
-        decorator: _FactoryRegistrationDecorator[Any] = _FactoryRegistrationDecorator(
-            container=self,
-            scope=scope,
-            lifetime=lifetime,
-            provides=provides,
-            component=component,
-            dependencies=dependencies,
-            lock_mode=lock_mode,
-            dependency_registration_policy=dependency_registration_policy,
-        )
-
         factory_value = cast("Any", factory)
-        if factory_value == "from_decorator":
-            return decorator
-
         if not callable(factory_value):
-            msg = "add_factory() parameter 'factory' must be callable or 'from_decorator'."
+            msg = "add_factory() parameter 'factory' must be callable."
             raise DIWireInvalidRegistrationError(msg)
 
         factory_provider = cast("FactoryProvider[Any]", factory_value)
@@ -693,9 +591,7 @@ class Container:
             dependencies=dependencies_for_provider,
             resolved_dependency_registration_policy=resolved_dependency_registration_policy,
         )
-        return None
 
-    @overload
     def add_generator(
         self,
         generator: (
@@ -710,47 +606,14 @@ class Container:
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         dependency_registration_policy: DependencyRegistrationPolicy
         | Literal["from_container"] = "from_container",
-    ) -> None: ...
-
-    @overload
-    def add_generator(
-        self,
-        generator: Literal["from_decorator"] = "from_decorator",
-        *,
-        provides: Any | Literal["infer"] = "infer",
-        component: Component | Any | None = None,
-        scope: BaseScope | Literal["from_container"] = "from_container",
-        lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
-        lock_mode: LockMode | Literal["from_container"] = "from_container",
-        dependency_registration_policy: DependencyRegistrationPolicy
-        | Literal["from_container"] = "from_container",
-    ) -> Callable[[F], F]: ...
-
-    def add_generator(
-        self,
-        generator: (
-            Callable[..., Generator[Any, None, None]]
-            | Callable[..., AsyncGenerator[Any, None]]
-            | Literal["from_decorator"]
-        ) = "from_decorator",
-        *,
-        provides: Any | Literal["infer"] = "infer",
-        component: Component | Any | None = None,
-        scope: BaseScope | Literal["from_container"] = "from_container",
-        lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
-        lock_mode: LockMode | Literal["from_container"] = "from_container",
-        dependency_registration_policy: DependencyRegistrationPolicy
-        | Literal["from_container"] = "from_container",
-    ) -> Callable[[F], F] | None:
+    ) -> None:
         """Register a generator or async-generator provider with cleanup.
 
         The yielded value is resolved as the dependency, and teardown runs when
         the owning resolver scope exits (or container closes for root scope).
 
         Args:
-            generator: Generator provider, or ``"from_decorator"``.
+            generator: Generator provider.
             provides: Dependency key produced by the yield value.
             component: Optional component marker value used to register under
                 ``Annotated[provides, Component(...)]``.
@@ -759,9 +622,6 @@ class Container:
             dependencies: Explicit dependency mapping, or ``"infer"``.
             lock_mode: Lock strategy, or ``"from_container"``.
             dependency_registration_policy: Override dependency autoregistration.
-
-        Returns:
-            ``None`` in direct mode or a decorator in decorator mode.
 
         Raises:
             DIWireInvalidRegistrationError: If registration arguments are invalid.
@@ -775,29 +635,21 @@ class Container:
         Examples:
             .. code-block:: python
 
-                @container.add_generator(scope=Scope.REQUEST, provides=Session)
                 def open_session(engine: Engine) -> Generator[Session, None, None]:
                     with Session(engine) as session:
                         yield session
 
+
+                container.add_generator(
+                    open_session,
+                    scope=Scope.REQUEST,
+                    provides=Session,
+                )
+
         """
-        decorator: _GeneratorRegistrationDecorator[Any] = _GeneratorRegistrationDecorator(
-            container=self,
-            scope=scope,
-            lifetime=lifetime,
-            provides=provides,
-            component=component,
-            dependencies=dependencies,
-            lock_mode=lock_mode,
-            dependency_registration_policy=dependency_registration_policy,
-        )
-
         generator_value = cast("Any", generator)
-        if generator_value == "from_decorator":
-            return decorator
-
         if not callable(generator_value):
-            msg = "add_generator() parameter 'generator' must be callable or 'from_decorator'."
+            msg = "add_generator() parameter 'generator' must be callable."
             raise DIWireInvalidRegistrationError(msg)
 
         generator_provider = cast("GeneratorProvider[Any]", generator_value)
@@ -857,9 +709,7 @@ class Container:
             dependencies=dependencies_for_provider,
             resolved_dependency_registration_policy=resolved_dependency_registration_policy,
         )
-        return None
 
-    @overload
     def add_context_manager(
         self,
         context_manager: ContextManagerProvider[Any],
@@ -872,43 +722,14 @@ class Container:
         lock_mode: LockMode | Literal["from_container"] = "from_container",
         dependency_registration_policy: DependencyRegistrationPolicy
         | Literal["from_container"] = "from_container",
-    ) -> None: ...
-
-    @overload
-    def add_context_manager(
-        self,
-        context_manager: Literal["from_decorator"] = "from_decorator",
-        *,
-        provides: Any | Literal["infer"] = "infer",
-        component: Component | Any | None = None,
-        scope: BaseScope | Literal["from_container"] = "from_container",
-        lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
-        lock_mode: LockMode | Literal["from_container"] = "from_container",
-        dependency_registration_policy: DependencyRegistrationPolicy
-        | Literal["from_container"] = "from_container",
-    ) -> Callable[[F], F]: ...
-
-    def add_context_manager(
-        self,
-        context_manager: ContextManagerProvider[Any] | Literal["from_decorator"] = "from_decorator",
-        *,
-        provides: Any | Literal["infer"] = "infer",
-        component: Component | Any | None = None,
-        scope: BaseScope | Literal["from_container"] = "from_container",
-        lifetime: Lifetime | Literal["from_container"] = "from_container",
-        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
-        lock_mode: LockMode | Literal["from_container"] = "from_container",
-        dependency_registration_policy: DependencyRegistrationPolicy
-        | Literal["from_container"] = "from_container",
-    ) -> Callable[[F], F] | None:
+    ) -> None:
         """Register a context-manager or async-context-manager provider.
 
         The entered value is resolved as the dependency, and ``__exit__`` /
         ``__aexit__`` runs when the owning resolver scope exits.
 
         Args:
-            context_manager: Context-manager provider, or ``"from_decorator"``.
+            context_manager: Context-manager provider.
             provides: Dependency key produced by the entered value.
             component: Optional component marker value used to register under
                 ``Annotated[provides, Component(...)]``.
@@ -917,9 +738,6 @@ class Container:
             dependencies: Explicit dependency mapping, or ``"infer"``.
             lock_mode: Lock strategy, or ``"from_container"``.
             dependency_registration_policy: Override dependency autoregistration.
-
-        Returns:
-            ``None`` in direct mode or a decorator in decorator mode.
 
         Raises:
             DIWireInvalidRegistrationError: If registration arguments are invalid.
@@ -933,31 +751,20 @@ class Container:
         Examples:
             .. code-block:: python
 
-                @container.add_context_manager(scope=Scope.REQUEST, provides=Session)
                 def session(engine: Engine) -> ContextManager[Session]:
                     return Session(engine)
 
+
+                container.add_context_manager(
+                    session,
+                    scope=Scope.REQUEST,
+                    provides=Session,
+                )
+
         """
-        decorator: _ContextManagerRegistrationDecorator[Any] = _ContextManagerRegistrationDecorator(
-            container=self,
-            scope=scope,
-            lifetime=lifetime,
-            provides=provides,
-            component=component,
-            dependencies=dependencies,
-            lock_mode=lock_mode,
-            dependency_registration_policy=dependency_registration_policy,
-        )
-
         context_manager_value = cast("Any", context_manager)
-        if context_manager_value == "from_decorator":
-            return decorator
-
         if not callable(context_manager_value):
-            msg = (
-                "add_context_manager() parameter 'context_manager' must be callable or "
-                "'from_decorator'."
-            )
+            msg = "add_context_manager() parameter 'context_manager' must be callable."
             raise DIWireInvalidRegistrationError(msg)
 
         context_manager_provider = cast("ContextManagerProvider[Any]", context_manager_value)
@@ -1019,7 +826,6 @@ class Container:
             dependencies=dependencies_for_provider,
             resolved_dependency_registration_policy=resolved_dependency_registration_policy,
         )
-        return None
 
     def decorate(
         self,
@@ -3019,130 +2825,6 @@ class Container:
         return await self.__aexit__(exc_type, exc_value, traceback)
 
     # endregion Resolution and Scope Management
-
-
-@dataclass(slots=True, kw_only=True)
-class _ConcreteTypeRegistrationDecorator(Generic[T]):
-    """A decorator for registering concrete type providers in the container."""
-
-    container: Container
-    scope: BaseScope | Literal["from_container"] = "from_container"
-    lifetime: Lifetime | Literal["from_container"] = "from_container"
-    provides: Any | Literal["infer"] = "infer"
-    component: Component | Any | None = None
-    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer"
-    lock_mode: LockMode | Literal["from_container"] = "from_container"
-    dependency_registration_policy: DependencyRegistrationPolicy | Literal["from_container"] = (
-        "from_container"
-    )
-
-    def __call__(self, concrete_type: C) -> C:
-        """Register the concrete type provider in the container."""
-        self.container.add_concrete(
-            concrete_type,
-            provides=self.provides,
-            component=self.component,
-            scope=self.scope,
-            lifetime=self.lifetime,
-            dependencies=self.dependencies,
-            lock_mode=self.lock_mode,
-            dependency_registration_policy=self.dependency_registration_policy,
-        )
-
-        return concrete_type
-
-
-@dataclass(slots=True, kw_only=True)
-class _FactoryRegistrationDecorator(Generic[T]):
-    """A decorator for registering factory providers in the container."""
-
-    container: Container
-    scope: BaseScope | Literal["from_container"] = "from_container"
-    lifetime: Lifetime | Literal["from_container"] = "from_container"
-    provides: Any | Literal["infer"] = "infer"
-    component: Component | Any | None = None
-    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer"
-    lock_mode: LockMode | Literal["from_container"] = "from_container"
-    dependency_registration_policy: DependencyRegistrationPolicy | Literal["from_container"] = (
-        "from_container"
-    )
-
-    def __call__(self, factory: F) -> F:
-        """Register the factory provider in the container."""
-        self.container.add_factory(
-            factory,
-            provides=self.provides,
-            component=self.component,
-            scope=self.scope,
-            lifetime=self.lifetime,
-            dependencies=self.dependencies,
-            lock_mode=self.lock_mode,
-            dependency_registration_policy=self.dependency_registration_policy,
-        )
-
-        return factory
-
-
-@dataclass(slots=True, kw_only=True)
-class _GeneratorRegistrationDecorator(Generic[T]):
-    """A decorator for registering generator providers in the container."""
-
-    container: Container
-    scope: BaseScope | Literal["from_container"] = "from_container"
-    lifetime: Lifetime | Literal["from_container"] = "from_container"
-    provides: Any | Literal["infer"] = "infer"
-    component: Component | Any | None = None
-    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer"
-    lock_mode: LockMode | Literal["from_container"] = "from_container"
-    dependency_registration_policy: DependencyRegistrationPolicy | Literal["from_container"] = (
-        "from_container"
-    )
-
-    def __call__(self, generator: F) -> F:
-        """Register the generator provider in the container."""
-        self.container.add_generator(
-            generator,
-            provides=self.provides,
-            component=self.component,
-            scope=self.scope,
-            lifetime=self.lifetime,
-            dependencies=self.dependencies,
-            lock_mode=self.lock_mode,
-            dependency_registration_policy=self.dependency_registration_policy,
-        )
-
-        return generator
-
-
-@dataclass(slots=True, kw_only=True)
-class _ContextManagerRegistrationDecorator(Generic[T]):
-    """A decorator for registering context manager providers in the container."""
-
-    container: Container
-    scope: BaseScope | Literal["from_container"] = "from_container"
-    lifetime: Lifetime | Literal["from_container"] = "from_container"
-    provides: Any | Literal["infer"] = "infer"
-    component: Component | Any | None = None
-    dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer"
-    lock_mode: LockMode | Literal["from_container"] = "from_container"
-    dependency_registration_policy: DependencyRegistrationPolicy | Literal["from_container"] = (
-        "from_container"
-    )
-
-    def __call__(self, context_manager: F) -> F:
-        """Register the context manager provider in the container."""
-        self.container.add_context_manager(
-            context_manager,
-            provides=self.provides,
-            component=self.component,
-            scope=self.scope,
-            lifetime=self.lifetime,
-            dependencies=self.dependencies,
-            lock_mode=self.lock_mode,
-            dependency_registration_policy=self.dependency_registration_policy,
-        )
-
-        return context_manager
 
 
 @dataclass(frozen=True, slots=True)

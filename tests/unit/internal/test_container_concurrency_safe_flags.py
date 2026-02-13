@@ -113,11 +113,11 @@ def test_registration_override_lock_mode_takes_precedence() -> None:
         lock_mode=LockMode.ASYNC,
     )
 
-    decorator = container.add_factory(
+    container.add_factory(
+        build_decorated_factory,
         provides=OverrideDecoratedFactoryService,
         lock_mode=LockMode.THREAD,
     )
-    decorator(build_decorated_factory)
 
     assert (
         container._providers_registrations.get_by_type(OverrideConcreteService).lock_mode

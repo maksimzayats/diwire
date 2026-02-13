@@ -64,7 +64,7 @@ def test_missing_explicit_dependencies_raises_inference_error() -> None:
         container.add_factory(build_service, provides=Service)
 
 
-def test_decorator_registration_accepts_explicit_dependencies() -> None:
+def test_direct_registration_accepts_explicit_dependencies() -> None:
     def build_service(raw_dependency) -> Service:  # type: ignore[no-untyped-def]
         return Service()
 
@@ -74,10 +74,7 @@ def test_decorator_registration_accepts_explicit_dependencies() -> None:
     }
 
     container = Container()
-    decorator = container.add_factory(provides=Service, dependencies=dependencies)
-    returned_factory = decorator(build_service)
-
-    assert returned_factory is build_service
+    container.add_factory(build_service, provides=Service, dependencies=dependencies)
 
     provider_spec = container._providers_registrations.get_by_type(Service)
     assert [dependency.parameter.name for dependency in provider_spec.dependencies] == [

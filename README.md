@@ -116,7 +116,7 @@ container.add_concrete(
 print(container.resolve(Clock).now())  # => now
 ```
 
-Decorator forms are available for concrete types and factories:
+Register factories directly:
 
 ```python
 from diwire import Container
@@ -124,10 +124,10 @@ from diwire import Container
 container = Container()
 
 
-@container.add_factory()
 def build_answer() -> int:
     return 42
 
+container.add_factory(build_answer)
 
 print(container.resolve(int))  # => 42
 ```

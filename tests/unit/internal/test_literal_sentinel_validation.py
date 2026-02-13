@@ -261,11 +261,10 @@ def test_policy_parameters_accept_enums_and_from_container_literal() -> None:
     assert callable(context.inject(dependency_registration_policy="from_container"))
 
 
-def test_container_add_concrete_decorator_accepts_non_class_provides_key() -> None:
+def test_container_add_concrete_accepts_non_class_provides_key() -> None:
     container = Container()
 
-    decorator = container.add_concrete(provides=cast("Any", "alias"))
-    decorator(_Service)
+    container.add_concrete(_Service, provides=cast("Any", "alias"))
 
     operation = container._providers_registrations.find_by_type("alias")
     assert operation is not None

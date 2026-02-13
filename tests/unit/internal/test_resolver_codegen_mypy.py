@@ -151,46 +151,11 @@ def test_generated_code_passes_mypy_with_method_replacement_ignored(tmp_path: Pa
         )
 
 
-def test_add_concrete_requires_keyword_provides_for_decorator_usage(tmp_path: Path) -> None:
+def test_add_concrete_decorator_usage_fails_but_direct_registration_passes(
+    tmp_path: Path,
+) -> None:
     invalid_module_path = tmp_path / "invalid_add_concrete_decorator.py"
     invalid_module_path.write_text(
-        """
-from __future__ import annotations
-from typing import Protocol
-
-from diwire import Container
-
-
-class IService(Protocol):
-    pass
-
-
-container = Container()
-
-
-@container.add_concrete(IService)
-class Service:
-    pass
-""".strip(),
-    )
-
-    stdout, stderr, exit_status = mypy_api.run(
-        [
-            "--config-file",
-            str(_PYPROJECT_PATH),
-            str(invalid_module_path),
-        ],
-    )
-    output = f"{stdout}\n{stderr}"
-    assert exit_status != 0
-    assert (
-        "decorator" in output.lower()
-        or "not callable" in output.lower()
-        or "none" in output.lower()
-    )
-
-    valid_module_path = tmp_path / "valid_add_concrete_decorator.py"
-    valid_module_path.write_text(
         """
 from __future__ import annotations
 from typing import Protocol
@@ -215,11 +180,49 @@ class Service:
         [
             "--config-file",
             str(_PYPROJECT_PATH),
+            str(invalid_module_path),
+        ],
+    )
+    output = f"{stdout}\n{stderr}"
+    assert exit_status != 0
+    assert (
+        "missing positional argument" in output.lower()
+        or "decorator" in output.lower()
+        or "not callable" in output.lower()
+        or "none" in output.lower()
+    )
+
+    valid_module_path = tmp_path / "valid_add_concrete_direct.py"
+    valid_module_path.write_text(
+        """
+from __future__ import annotations
+from typing import Protocol
+
+from diwire import Container
+
+
+class IService(Protocol):
+    pass
+
+
+class Service:
+    pass
+
+
+container = Container()
+container.add_concrete(Service, provides=IService)
+""".strip(),
+    )
+
+    stdout, stderr, exit_status = mypy_api.run(
+        [
+            "--config-file",
+            str(_PYPROJECT_PATH),
             str(valid_module_path),
         ],
     )
     assert exit_status == 0, (
-        f"Expected valid add_concrete decorator usage to pass mypy.\n{stdout}\n{stderr}"
+        f"Expected valid direct add_concrete usage to pass mypy.\n{stdout}\n{stderr}"
     )
 
 

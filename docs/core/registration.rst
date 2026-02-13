@@ -79,23 +79,6 @@ For deterministic cleanup, use:
 
 See :doc:`/howto/examples/scopes` for a runnable cleanup example.
 
-Decorator forms
----------------
-
-``add_concrete()``, ``add_factory()``, ``add_generator()``, and ``add_context_manager()``
-all support decorator usage:
-
-.. code-block:: python
-
-   from diwire import Container
-
-   container = Container()
-
-
-   @container.add_factory()
-   def build_value() -> int:
-       return 1
-
 Re-registering (overrides)
 --------------------------
 
@@ -106,4 +89,3 @@ Next
 ----
 
 Continue with :doc:`lifetimes` and :doc:`scopes` to control caching and cleanup.
-

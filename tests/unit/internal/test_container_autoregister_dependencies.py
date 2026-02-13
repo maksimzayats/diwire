@@ -348,19 +348,19 @@ def test_autoregistration_policy_skips_non_runtime_class_candidates() -> None:
     assert policy.is_eligible_concrete("not-a-class") is False
 
 
-def test_factory_decorator_can_set_dependency_registration_policy() -> None:
+def test_factory_registration_can_set_dependency_registration_policy() -> None:
     container = Container(
         dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE
     )
 
-    @container.add_factory(
-        provides=DecoratorService,
-        dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
-    )
     def build_service(dependency: DecoratorDependency) -> DecoratorService:
         return DecoratorService(dependency=dependency)
 
-    assert build_service is not None
+    container.add_factory(
+        build_service,
+        provides=DecoratorService,
+        dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
+    )
     dependency_spec = container._providers_registrations.find_by_type(DecoratorDependency)
     assert dependency_spec is not None
     assert dependency_spec.concrete_type is DecoratorDependency
