@@ -1,5 +1,5 @@
 .. meta::
-   :description: provider_context in diwire: ContextVar-backed resolver binding and fallback injection.
+   :description: provider_context in diwire: ContextVar-backed resolver binding and fallback resolution/injection.
 
 provider_context
 =================
@@ -11,7 +11,8 @@ What it is (and isn't)
 ----------------------
 
 - Resolver binding is **task/thread-safe** and uses ``contextvars``.
-- ``resolve`` / ``aresolve`` / ``enter_scope`` require a currently bound resolver context.
+- ``resolve`` / ``aresolve`` / ``enter_scope`` use the currently bound resolver first, and fall back
+  to the latest container configured for this ``ProviderContext``.
 - ``inject`` can use one of three resolver sources at call time:
   explicit ``diwire_resolver``, bound resolver from ``provider_context``, or fallback container compile.
 - Fallback container policy is **last container wins** per ``ProviderContext`` instance.
@@ -19,9 +20,9 @@ What it is (and isn't)
 Basic usage
 -----------
 
-1. Build/configure a container (this automatically registers fallback for ``provider_context.inject``).
+1. Build/configure a container (this automatically registers fallback for ``provider_context`` calls).
 2. Use ``@provider_context.inject`` for function wrappers.
-3. When needed, bind resolver context explicitly:
+3. Optionally bind resolver context explicitly when you need call-local precedence:
 
    .. code-block:: python
 

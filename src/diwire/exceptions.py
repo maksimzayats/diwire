@@ -53,11 +53,12 @@ class DIWireDependencyNotRegisteredError(DIWireError):
 
 
 class DIWireProviderNotSetError(DIWireError):
-    """Signal use of ``provider_context`` before a resolver is bound.
+    """Signal use of ``provider_context`` with no resolver source available.
 
     Raised by ``ProviderContext.resolve``, ``ProviderContext.aresolve``,
     ``ProviderContext.enter_scope``, and ``ProviderContext.inject`` call paths
-    that require an active resolver or fallback container.
+    when neither an active resolver context nor a fallback container can serve
+    the call.
 
     Typical fixes are entering a resolver context (``with container.compile():``)
     or passing an explicit resolver via ``diwire_resolver=...``.

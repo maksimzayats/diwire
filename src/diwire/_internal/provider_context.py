@@ -181,15 +181,37 @@ class ProviderContext:
     def _get_bound_resolver_or_none(self) -> ResolverProtocol | None:
         return self._current_resolver_var.get()
 
-    def _require_bound_resolver(self) -> ResolverProtocol:
+    def _require_context_or_fallback_resolver(self) -> ResolverProtocol:
         resolver = self._get_bound_resolver_or_none()
-        if resolver is None:
-            msg = (
-                "Provider is not set for provider_context. Enter a compiled resolver context "
-                "before using provider_context."
-            )
-            raise DIWireProviderNotSetError(msg)
-        return resolver
+        if resolver is not None:
+            return resolver
+
+        fallback_resolver = self._get_fallback_resolver_or_none()
+        if fallback_resolver is not None:
+            return fallback_resolver
+
+        msg = (
+            "Provider is not set for provider_context. Enter a compiled resolver context "
+            "before using provider_context."
+        )
+        raise DIWireProviderNotSetError(msg)
+
+    def _get_fallback_resolver_or_none(self) -> ResolverProtocol | None:
+        fallback_container = self._fallback_container
+        if fallback_container is None:
+            return None
+
+        fallback_resolver = fallback_container.compile()
+        fallback_resolver_any = cast("Any", fallback_resolver)
+        if isinstance(fallback_resolver_any, _ProviderBoundResolver):
+            return cast("ResolverProtocol", fallback_resolver_any)
+        return cast(
+            "ResolverProtocol",
+            _ProviderBoundResolver(
+                resolver=fallback_resolver,
+                provider_context=self,
+            ),
+        )
 
     @overload
     def resolve(self, dependency: type[T]) -> T: ...
@@ -198,7 +220,7 @@ class ProviderContext:
     def resolve(self, dependency: Any) -> Any: ...
 
     def resolve(self, dependency: Any) -> Any:
-        return self._require_bound_resolver().resolve(dependency)
+        return self._require_context_or_fallback_resolver().resolve(dependency)
 
     @overload
     async def aresolve(self, dependency: type[T]) -> T: ...
@@ -207,7 +229,7 @@ class ProviderContext:
     async def aresolve(self, dependency: Any) -> Any: ...
 
     async def aresolve(self, dependency: Any) -> Any:
-        return await self._require_bound_resolver().aresolve(dependency)
+        return await self._require_context_or_fallback_resolver().aresolve(dependency)
 
     def enter_scope(
         self,
@@ -215,7 +237,7 @@ class ProviderContext:
         *,
         context: Mapping[Any, Any] | None = None,
     ) -> ResolverProtocol:
-        return self._require_bound_resolver().enter_scope(scope, context=context)
+        return self._require_context_or_fallback_resolver().enter_scope(scope, context=context)
 
     @overload
     def inject(self, func: InjectableF) -> InjectableF: ...

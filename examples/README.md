@@ -2045,14 +2045,14 @@ Files:
 <a id="ex-10-provider-context--01-provider-context-py"></a>
 ### 01_provider_context.py ([ex_10_provider_context/01_provider_context.py](ex_10_provider_context/01_provider_context.py))
 
-ProviderContext: unbound errors, fallback injection, and bound resolver precedence.
+ProviderContext: unbound errors, fallback resolution/scope/injection, and bound precedence.
 
 ```python
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, Injected, ProviderContext
+from diwire import Container, Injected, ProviderContext, Scope
 from diwire.exceptions import DIWireProviderNotSetError
 
 
@@ -2074,6 +2074,14 @@ def main() -> None:
 
     second = Container(provider_context=context, autoregister_concrete_types=False)
     second.add_instance(Message("second"), provides=Message)
+
+    print(
+        f"fallback_resolve={context.resolve(Message).value == 'second'}"
+    )  # => fallback_resolve=True
+    with context.enter_scope(Scope.REQUEST) as request_scope:
+        print(
+            f"fallback_enter_scope={request_scope.resolve(Message).value == 'second'}"
+        )  # => fallback_enter_scope=True
 
     @context.inject
     def read_message(message: Injected[Message]) -> str:
