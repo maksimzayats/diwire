@@ -2515,6 +2515,10 @@ class Container:
     # endregion Compilation
 
     # region Resolution and Scope Management
+    def _get_context_bound_resolver_or_none(self) -> ResolverProtocol | None:
+        if not self._use_resolver_context:
+            return None
+        return self._resolver_context._get_bound_resolver_or_none()  # noqa: SLF001
 
     @overload
     def resolve(
@@ -2573,9 +2577,11 @@ class Container:
                 service = container.resolve(Service)
 
         """
-        resolver = self._root_resolver
+        resolver = self._get_context_bound_resolver_or_none()
         if resolver is None:
-            resolver = self.compile()
+            resolver = self._root_resolver
+            if resolver is None:
+                resolver = self.compile()
 
         resolved_on_missing = self._resolve_resolution_on_missing(
             on_missing=on_missing,
@@ -2661,9 +2667,11 @@ class Container:
                 client = await container.aresolve(Client)
 
         """
-        resolver = self._root_resolver
+        resolver = self._get_context_bound_resolver_or_none()
         if resolver is None:
-            resolver = self.compile()
+            resolver = self._root_resolver
+            if resolver is None:
+                resolver = self.compile()
 
         resolved_on_missing = self._resolve_resolution_on_missing(
             on_missing=on_missing,
@@ -2730,7 +2738,9 @@ class Container:
                     user_id = request_resolver.resolve(FromContext[int])
 
         """
-        resolver = self.compile()
+        resolver = self._get_context_bound_resolver_or_none()
+        if resolver is None:
+            resolver = self.compile()
         return resolver.enter_scope(scope, context=context)
 
     def __enter__(self) -> ResolverProtocol:

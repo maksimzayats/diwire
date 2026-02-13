@@ -239,7 +239,7 @@ Resolution/injection keys are still `Annotated[..., Component(...)]` at runtime.
 ## resolver_context (optional)
 
 If you can't (or don't want to) pass a resolver everywhere, use `resolver_context`.
-It is a `contextvars`-based helper used by `@resolver_context.inject` and `Container.resolve`.
+It is a `contextvars`-based helper used by `@resolver_context.inject` and (by default) by `Container` resolution methods.
 Inside `with container.enter_scope(...):`, injected callables resolve from the bound scope resolver; otherwise they fall
 back to the container registered as the `resolver_context` fallback (`Container(..., use_resolver_context=True)` is the
 default).
