@@ -88,9 +88,7 @@ implementations.
 from diwire import Container
 
 container = Container(
-    autoregister_concrete_types=False,
-    autoregister_dependencies=False,
-)
+    )
 ```
 
 ```python
@@ -108,7 +106,7 @@ class SystemClock:
         return "now"
 
 
-container = Container(autoregister_concrete_types=False)
+container = Container()
 container.add_concrete(
     SystemClock,
     provides=Clock,
@@ -123,7 +121,7 @@ Decorator forms are available for concrete types and factories:
 ```python
 from diwire import Container
 
-container = Container(autoregister_concrete_types=False)
+container = Container()
 
 
 @container.add_factory()
@@ -161,7 +159,7 @@ def session_factory() -> Generator[Session, None, None]:
         session.close()
 
 
-container = Container(autoregister_concrete_types=False)
+container = Container()
 container.add_generator(
     session_factory,
     provides=Session,
@@ -220,7 +218,7 @@ PrimaryCache: TypeAlias = Annotated[Cache, Component("primary")]
 FallbackCache: TypeAlias = Annotated[Cache, Component("fallback")]
 
 
-container = Container(autoregister_concrete_types=False)
+container = Container()
 container.add_instance(Cache(label="redis"), provides=Cache, component="primary")
 container.add_instance(Cache(label="memory"), provides=Cache, component="fallback")
 

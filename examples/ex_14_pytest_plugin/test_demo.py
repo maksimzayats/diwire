@@ -17,7 +17,7 @@ class ServiceImpl(Service):
 
 @pytest.fixture()
 def diwire_container() -> Container:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     container.add_concrete(
         ServiceImpl,
         provides=Service,

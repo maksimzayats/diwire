@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from diwire import Container, ResolverContext
+from diwire import Container, DependencyRegistrationPolicy, MissingPolicy, ResolverContext
 from diwire.exceptions import DIWireInvalidRegistrationError
 
 
@@ -69,9 +69,9 @@ def _context_manager() -> Generator[_Service, None, None]:
         (
             lambda container: container.add_concrete(
                 _Service,
-                autoregister_dependencies=cast("Any", None),
+                dependency_registration_policy=cast("Any", None),
             ),
-            "add_concrete\\(\\) parameter 'autoregister_dependencies'",
+            "add_concrete\\(\\) parameter 'dependency_registration_policy'",
         ),
         (
             lambda container: container.add_factory(cast("Any", None)),
@@ -105,9 +105,9 @@ def _context_manager() -> Generator[_Service, None, None]:
         (
             lambda container: container.add_factory(
                 _factory,
-                autoregister_dependencies=cast("Any", None),
+                dependency_registration_policy=cast("Any", None),
             ),
-            "add_factory\\(\\) parameter 'autoregister_dependencies'",
+            "add_factory\\(\\) parameter 'dependency_registration_policy'",
         ),
         (
             lambda container: container.add_generator(cast("Any", None)),
@@ -141,9 +141,9 @@ def _context_manager() -> Generator[_Service, None, None]:
         (
             lambda container: container.add_generator(
                 _generator,
-                autoregister_dependencies=cast("Any", None),
+                dependency_registration_policy=cast("Any", None),
             ),
-            "add_generator\\(\\) parameter 'autoregister_dependencies'",
+            "add_generator\\(\\) parameter 'dependency_registration_policy'",
         ),
         (
             lambda container: container.add_context_manager(
@@ -182,9 +182,9 @@ def _context_manager() -> Generator[_Service, None, None]:
         (
             lambda container: container.add_context_manager(
                 _context_manager,
-                autoregister_dependencies=cast("Any", None),
+                dependency_registration_policy=cast("Any", None),
             ),
-            "add_context_manager\\(\\) parameter 'autoregister_dependencies'",
+            "add_context_manager\\(\\) parameter 'dependency_registration_policy'",
         ),
     ],
 )
@@ -210,8 +210,8 @@ def test_container_rejects_none_for_literal_sentinel_parameters(
             "inject\\(\\) parameter 'scope'",
         ),
         (
-            lambda context: context.inject(autoregister_dependencies=cast("Any", None)),
-            "inject\\(\\) parameter 'autoregister_dependencies'",
+            lambda context: context.inject(dependency_registration_policy=cast("Any", None)),
+            "inject\\(\\) parameter 'dependency_registration_policy'",
         ),
     ],
 )
@@ -223,6 +223,42 @@ def test_resolver_context_rejects_none_for_literal_sentinel_parameters(
 
     with pytest.raises(DIWireInvalidRegistrationError, match=match):
         invoke(context)
+
+
+def test_container_constructor_rejects_invalid_policy_types() -> None:
+    with pytest.raises(
+        DIWireInvalidRegistrationError,
+        match="Container\\(\\) parameter 'missing_policy'",
+    ):
+        Container(missing_policy=cast("Any", "error"))
+
+    with pytest.raises(
+        DIWireInvalidRegistrationError,
+        match="Container\\(\\) parameter 'dependency_registration_policy'",
+    ):
+        Container(dependency_registration_policy=cast("Any", "ignore"))
+
+
+def test_policy_parameters_accept_enums_and_from_container_literal() -> None:
+    container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+    )
+    container.add_concrete(
+        _Service,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+    )
+    resolved = container.resolve(_Service, on_missing=MissingPolicy.ERROR)
+    assert isinstance(resolved, _Service)
+
+    container.resolve(_Service, on_missing="from_container")
+    container.add_factory(
+        _factory,
+        provides="_service_alias",
+        dependency_registration_policy="from_container",
+    )
+    context = ResolverContext()
+    assert callable(context.inject(dependency_registration_policy="from_container"))
 
 
 def test_container_add_concrete_decorator_accepts_non_class_provides_key() -> None:
@@ -247,3 +283,156 @@ def test_container_rejects_dependencies_mapping_with_non_parameter_value() -> No
             _factory,
             dependencies=cast("Any", {_Service: object()}),
         )
+
+
+@pytest.mark.parametrize(
+    ("invoke", "match"),
+    [
+        (
+            lambda container: container.resolve(
+                _Service,
+                on_missing=cast("Any", None),
+            ),
+            "resolve\\(\\) parameter 'on_missing'",
+        ),
+        (
+            lambda container: container.resolve(
+                _Service,
+                on_missing=cast("Any", "error"),
+            ),
+            "resolve\\(\\) parameter 'on_missing'",
+        ),
+    ],
+)
+def test_container_resolve_rejects_invalid_auto_register_parameters(
+    invoke: Callable[[Container], Any],
+    match: str,
+) -> None:
+    container = Container()
+
+    with pytest.raises(DIWireInvalidRegistrationError, match=match):
+        invoke(container)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("invoke", "match"),
+    [
+        (
+            lambda container: container.aresolve(
+                _Service,
+                on_missing=cast("Any", None),
+            ),
+            "aresolve\\(\\) parameter 'on_missing'",
+        ),
+        (
+            lambda container: container.aresolve(
+                _Service,
+                on_missing=cast("Any", "error"),
+            ),
+            "aresolve\\(\\) parameter 'on_missing'",
+        ),
+    ],
+)
+async def test_container_aresolve_rejects_invalid_auto_register_parameters(
+    invoke: Callable[[Container], Any],
+    match: str,
+) -> None:
+    container = Container()
+
+    with pytest.raises(DIWireInvalidRegistrationError, match=match):
+        await invoke(container)
+
+
+@pytest.mark.parametrize(
+    ("invoke", "match"),
+    [
+        (
+            lambda: cast("Any", Container)(auto_register_on_resolve=False),
+            "auto_register_on_resolve",
+        ),
+        (
+            lambda: cast("Any", Container)(auto_register_dependencies=False),
+            "auto_register_dependencies",
+        ),
+        (
+            lambda: cast("Any", Container)(autoregister_concrete_types=False),
+            "autoregister_concrete_types",
+        ),
+        (
+            lambda: cast("Any", Container)(autoregister_dependencies=False),
+            "autoregister_dependencies",
+        ),
+        (
+            lambda: cast("Any", Container)(auto_resolve=False),
+            "auto_resolve",
+        ),
+        (
+            lambda: cast("Any", Container)(auto_add_dependencies=False),
+            "auto_add_dependencies",
+        ),
+        (
+            lambda: cast("Any", Container()).add_concrete(
+                _Service,
+                register_dependencies=True,
+            ),
+            "register_dependencies",
+        ),
+        (
+            lambda: cast("Any", Container()).add_concrete(
+                _Service,
+                autoregister_dependencies=True,
+            ),
+            "autoregister_dependencies",
+        ),
+        (
+            lambda: cast("Any", Container()).add_concrete(
+                _Service,
+                add_dependencies=True,
+            ),
+            "add_dependencies",
+        ),
+        (
+            lambda: cast("Any", ResolverContext()).inject(register_dependencies=True),
+            "register_dependencies",
+        ),
+        (
+            lambda: cast("Any", ResolverContext()).inject(autoregister_dependencies=True),
+            "autoregister_dependencies",
+        ),
+        (
+            lambda: cast("Any", ResolverContext()).inject(add_dependencies=True),
+            "add_dependencies",
+        ),
+        (
+            lambda: cast("Any", Container()).resolve(_Service, register_if_missing=True),
+            "register_if_missing",
+        ),
+        (
+            lambda: cast("Any", Container()).resolve(_Service, register_dependencies=True),
+            "register_dependencies",
+        ),
+        (
+            lambda: cast("Any", Container()).resolve(_Service, auto_register_on_missing=True),
+            "auto_register_on_missing",
+        ),
+        (
+            lambda: cast("Any", Container()).aresolve(_Service, register_if_missing=True),
+            "register_if_missing",
+        ),
+        (
+            lambda: cast("Any", Container()).aresolve(_Service, register_dependencies=True),
+            "register_dependencies",
+        ),
+        (
+            lambda: cast("Any", Container()).aresolve(_Service, auto_register_on_missing=True),
+            "auto_register_on_missing",
+        ),
+    ],
+)
+def test_old_autoregister_keywords_are_rejected(
+    invoke: Callable[[], Any],
+    match: str,
+) -> None:
+    with pytest.raises(TypeError, match=match):
+        invoke()

@@ -4,7 +4,7 @@
 Auto-registration tuning
 ========================
 
-Auto-registration enables the “just write types, then resolve the root” experience. It is enabled by default.
+Auto-registration enables the “just write types, then resolve the root” experience.
 
 Strict mode (disable auto-registration)
 ---------------------------------------
@@ -15,7 +15,7 @@ Disable auto-registration when you want your app to fail fast if anything is mis
 
    from diwire import Container
 
-   container = Container(autoregister_concrete_types=False, autoregister_dependencies=False)
+   container = Container()
 
 In strict mode, resolving an unregistered dependency raises
 :class:`diwire.exceptions.DIWireDependencyNotRegisteredError`.
@@ -23,9 +23,11 @@ In strict mode, resolving an unregistered dependency raises
 Autoregister concrete types vs dependencies
 -------------------------------------------
 
-- ``autoregister_concrete_types`` controls whether unknown *resolved* concrete classes are automatically registered.
-- ``autoregister_dependencies`` controls whether provider dependencies are automatically registered as concrete types at
-  **registration time** (when diwire can infer a dependency list for a provider).
+- ``missing_policy`` controls resolve-time behavior for unknown concrete classes.
+- ``dependency_registration_policy`` controls container-level defaults for whether provider dependencies are
+  automatically registered as concrete types at **registration time**.
+- ``dependency_registration_policy`` is the call-level override on ``add_concrete``, ``add_factory``,
+  ``add_generator``, ``add_context_manager``, and ``resolver_context.inject``.
 
 Pydantic settings auto-registration
 -----------------------------------

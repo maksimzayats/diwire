@@ -389,7 +389,7 @@ def test_open_scoped_cache_works_when_entering_action_scope_directly() -> None:
 
 
 def test_resolving_open_generic_without_type_arguments_remains_unregistered() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     container.add_concrete(_Box, provides=_IBox)
 
     with pytest.raises(DIWireDependencyNotRegisteredError):

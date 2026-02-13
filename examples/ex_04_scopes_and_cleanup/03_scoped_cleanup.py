@@ -12,7 +12,7 @@ class ScopedResource:
 
 
 def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     state = {"closed": 0}
 
     def provide_resource() -> Generator[ScopedResource, None, None]:

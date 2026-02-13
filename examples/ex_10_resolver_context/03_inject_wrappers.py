@@ -13,7 +13,7 @@ class Message:
 
 
 def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     container.add_instance(Message(value="context-message"), provides=Message)
 
     @resolver_context.inject

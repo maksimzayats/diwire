@@ -32,7 +32,7 @@ def build_repo(model: type[T]) -> Repo[T]:
 
 
 def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     container.add_factory(build_repo, provides=Repo)
     container.decorate(provides=Repo, decorator=TimedRepo)
 

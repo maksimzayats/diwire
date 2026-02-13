@@ -12,7 +12,7 @@ class SingletonResource:
 
 
 def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     state = {"closed": 0}
 
     def provide_resource() -> Generator[SingletonResource, None, None]:

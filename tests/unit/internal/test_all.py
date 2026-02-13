@@ -41,13 +41,13 @@ class _AllConsumer:
 
 
 def test_all_resolves_empty_tuple_when_nothing_registered() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
 
     assert container.resolve(All[EventHandler]) == ()
 
 
 def test_all_resolves_base_and_components_in_slot_order() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
 
     container.add_factory(lambda: _Handler("logging"), provides=LoggingHandler)
     container.add_factory(lambda: _Handler("metrics"), provides=MetricsHandler)
@@ -62,7 +62,7 @@ def test_all_resolves_base_and_components_in_slot_order() -> None:
 
 
 def test_inject_can_inject_all_dependency() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     container.add_factory(lambda: _Handler("base"), provides=EventHandler)
     container.add_factory(lambda: _Handler("logging"), provides=LoggingHandler)
 
@@ -74,7 +74,7 @@ def test_inject_can_inject_all_dependency() -> None:
 
 
 def test_provider_dependency_supports_all_dependency() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     container.add_factory(lambda: _Handler("logging"), provides=LoggingHandler)
     container.add_factory(lambda: _Handler("base"), provides=EventHandler)
 
@@ -88,7 +88,7 @@ def test_provider_dependency_supports_all_dependency() -> None:
 
 
 def test_infer_scope_level_for_injected_all_auto_opens_deeper_scopes() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     container.add_factory(lambda: _Handler("base"), provides=EventHandler)
     container.add_factory(
         lambda: _Handler("request"),
@@ -105,7 +105,7 @@ def test_infer_scope_level_for_injected_all_auto_opens_deeper_scopes() -> None:
 
 
 def test_all_provider_dependency_receives_empty_tuple_when_no_implementations() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
 
     def build_consumer(handlers: All[EventHandler]) -> _AllConsumer:
         return _AllConsumer(handlers=handlers)
@@ -117,7 +117,7 @@ def test_all_provider_dependency_receives_empty_tuple_when_no_implementations() 
 
 
 def test_infer_dependency_scope_level_for_all_defaults_to_root_when_empty() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     dependency = All[EventHandler]
     cache: dict[Any, int] = {}
 
@@ -134,7 +134,7 @@ def test_infer_dependency_scope_level_for_all_defaults_to_root_when_empty() -> N
 def test_infer_dependency_scope_level_for_all_handles_components_without_base_registration() -> (
     None
 ):
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     container.add_factory(
         lambda: _Handler("request"),
         provides=RequestHandler,
@@ -152,7 +152,7 @@ def test_infer_dependency_scope_level_for_all_handles_components_without_base_re
 
 
 def test_infer_dependency_scope_level_for_all_cycle_guard_returns_root_level() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     dependency = All[EventHandler]
 
     inferred = container._infer_dependency_scope_level(
@@ -165,7 +165,7 @@ def test_infer_dependency_scope_level_for_all_cycle_guard_returns_root_level() -
 
 
 def test_all_provider_dependency_is_rejected_for_double_star_kwargs() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
 
     def build_consumer(**handlers: int) -> _AllConsumer:
         _ = handlers
@@ -188,7 +188,7 @@ def test_all_provider_dependency_is_rejected_for_double_star_kwargs() -> None:
 
 
 def test_codegen_all_dependency_covers_async_and_inline_root_branches() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     container.add_factory(lambda: _Handler("base"), provides=EventHandler)
 
     async def provide_value() -> int:

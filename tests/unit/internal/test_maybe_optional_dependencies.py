@@ -99,10 +99,7 @@ class _MaybeBoxImpl(_MaybeBox[T]):
 
 
 def _strict_container() -> Container:
-    return Container(
-        autoregister_concrete_types=False,
-        autoregister_dependencies=False,
-    )
+    return Container()
 
 
 def test_resolve_maybe_returns_none_for_unregistered_dependency_in_strict_mode() -> None:

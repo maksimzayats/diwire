@@ -10,7 +10,7 @@ Why it’s fast
 -------------
 
 - **Compiled resolver code paths**: ``compile()`` generates a resolver specialized to your registrations.
-- **Strict mode hot-path rebinding**: with ``autoregister_concrete_types=False``, container entrypoints can be rebound to
+- **Strict mode hot-path rebinding**: with ``missing_policy=MissingPolicy.ERROR``, container entrypoints can be rebound to
   the compiled resolver for lower overhead.
 - **Minimal overhead**: diwire has zero runtime dependencies.
 
@@ -43,7 +43,8 @@ Environment (from ``benchmark-results/raw-benchmark.json``):
 
 Methodology details for diwire in these benchmarks:
 
-- Strict mode container setup: ``autoregister_concrete_types=False`` and ``autoregister_dependencies=False``
+- Strict mode container setup: ``missing_policy=MissingPolicy.ERROR`` and
+  ``dependency_registration_policy=DependencyRegistrationPolicy.IGNORE``
 - All benchmark registrations are explicit.
 - ``container.compile()`` is called once after registration setup and before timed loops to measure compiled steady-state entrypoints.
 

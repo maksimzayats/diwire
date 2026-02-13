@@ -21,7 +21,7 @@ Minimal sketch
 
    from diwire import Container, Injected, Lifetime, Scope
 
-   container = Container(autoregister_concrete_types=False)
+   container = Container()
    request_var: ContextVar[HttpRequest] = ContextVar("request_var")
 
    container.add_factory(request_var.get, provides=HttpRequest,

@@ -16,7 +16,7 @@ class Consumer(msgspec.Struct):
 
 
 def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     dependency = Dependency()
     container.add_instance(dependency)
     container.add_concrete(Consumer)

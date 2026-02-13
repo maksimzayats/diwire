@@ -7,7 +7,7 @@ Autoregistration
 What you'll learn
 -----------------
 
-- How ``autoregister_concrete_types`` and ``autoregister_dependencies`` affect behavior.
+- How ``missing_policy`` and ``dependency_registration_policy`` affect behavior.
 
 Resolve-time chain
 ------------------

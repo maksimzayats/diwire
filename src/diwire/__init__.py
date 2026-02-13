@@ -9,6 +9,7 @@ from diwire._internal.markers import (
     Maybe,
     Provider,
 )
+from diwire._internal.policies import DependencyRegistrationPolicy, MissingPolicy
 from diwire._internal.providers import Lifetime
 from diwire._internal.resolver_context import ResolverContext, resolver_context
 from diwire._internal.resolvers.protocol import ResolverProtocol
@@ -20,11 +21,13 @@ __all__ = [
     "BaseScope",
     "Component",
     "Container",
+    "DependencyRegistrationPolicy",
     "FromContext",
     "Injected",
     "Lifetime",
     "LockMode",
     "Maybe",
+    "MissingPolicy",
     "Provider",
     "ResolverContext",
     "ResolverProtocol",

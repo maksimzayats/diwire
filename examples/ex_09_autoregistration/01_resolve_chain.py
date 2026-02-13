@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container
+from diwire import Container, DependencyRegistrationPolicy, MissingPolicy
 
 
 class Leaf:
@@ -22,7 +22,10 @@ class Root:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(
+        missing_policy=MissingPolicy.REGISTER_RECURSIVE,
+        dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
+    )
     resolved = container.resolve(Root)
     print(
         f"autoregister_chain={isinstance(resolved.branch.leaf, Leaf)}",

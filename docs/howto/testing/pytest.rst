@@ -41,7 +41,7 @@ configuration. Injected parameters are always resolved from this root container.
 
    @pytest.fixture()
    def diwire_container() -> Container:
-       container = Container(autoregister_concrete_types=False)
+       container = Container()
        container.add_concrete(FakeService, provides=Service,
            lifetime=Lifetime.SCOPED,
        )
@@ -84,7 +84,7 @@ This avoids ambient resolver state leaks between tests.
 
    @pytest.fixture
    def container() -> Container:
-       container = Container(autoregister_concrete_types=False)
+       container = Container()
        container.add_instance(Service(), provides=Service)
        return container
 

@@ -11,7 +11,7 @@ class RequestDependency:
 
 
 def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     container.add_concrete(
         RequestDependency,
         provides=RequestDependency,

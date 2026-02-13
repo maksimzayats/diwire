@@ -27,7 +27,7 @@ Decorator style
 
 - ``@resolver_context.inject``
 - ``@resolver_context.inject()``
-- ``@resolver_context.inject(scope=Scope.REQUEST, autoregister_dependencies=True)``
+- ``@resolver_context.inject(scope=Scope.REQUEST, dependency_registration_policy=True)``
 - ``@resolver_context.inject(scope=Scope.REQUEST, auto_open_scope=False)``
 
 Example:

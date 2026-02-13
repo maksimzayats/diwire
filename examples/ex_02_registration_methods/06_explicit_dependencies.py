@@ -19,7 +19,7 @@ class ExplicitService:
 
 
 def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     raw = UntypedDependency(value="raw")
     container.add_instance(raw, provides=UntypedDependency)
 

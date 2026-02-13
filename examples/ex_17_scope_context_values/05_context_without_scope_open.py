@@ -7,7 +7,7 @@ from diwire.exceptions import DIWireInvalidRegistrationError
 
 
 def main() -> None:
-    Container(autoregister_concrete_types=False)
+    Container()
 
     @resolver_context.inject(auto_open_scope=False)
     def handler(value: FromContext[int]) -> int:

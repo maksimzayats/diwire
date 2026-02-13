@@ -14,6 +14,7 @@ from diwire._internal.injection import (
     INJECT_WRAPPER_MARKER,
     InjectedCallableInspector,
 )
+from diwire._internal.policies import DependencyRegistrationPolicy
 from diwire._internal.resolvers.protocol import ResolverProtocol
 from diwire._internal.scope import BaseScope
 from diwire.exceptions import DIWireInvalidRegistrationError, DIWireResolverNotSetError
@@ -38,7 +39,7 @@ class _InjectInvocationState:
 class _InjectWrapperConfig:
     callable_obj: Callable[..., Any]
     scope: BaseScope | None
-    autoregister_dependencies: bool | None
+    dependency_registration_policy: DependencyRegistrationPolicy | None
     auto_open_scope: bool
 
 
@@ -300,7 +301,9 @@ class ResolverContext:
         func: Literal["from_decorator"] = "from_decorator",
         *,
         scope: BaseScope | Literal["infer"] = "infer",
-        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
+        dependency_registration_policy: (
+            DependencyRegistrationPolicy | Literal["from_container"]
+        ) = "from_container",
         auto_open_scope: bool = True,
     ) -> Callable[[InjectableF], InjectableF]: ...
 
@@ -309,7 +312,9 @@ class ResolverContext:
         func: InjectableF | Literal["from_decorator"] = "from_decorator",
         *,
         scope: BaseScope | Literal["infer"] = "infer",
-        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
+        dependency_registration_policy: (
+            DependencyRegistrationPolicy | Literal["from_container"]
+        ) = "from_container",
         auto_open_scope: bool = True,
     ) -> InjectableF | Callable[[InjectableF], InjectableF]:
         """Wrap callables so ``Injected[...]`` parameters resolve at invocation.
@@ -323,7 +328,7 @@ class ResolverContext:
                 as ``@resolver_context.inject(...)``.
             scope: Explicit scope for wrapper generation, or ``"infer"`` to
                 infer from injected dependencies.
-            autoregister_dependencies: Dependency autoregistration policy for
+            dependency_registration_policy: Dependency autoregistration policy for
                 wrapper generation, or ``"from_container"`` to inherit the
                 fallback container setting.
             auto_open_scope: Whether invocation should auto-enter scopes when
@@ -345,8 +350,10 @@ class ResolverContext:
 
         """
         resolved_scope = self._resolve_inject_scope(scope)
-        resolved_autoregister_dependencies = self._resolve_inject_autoregister_dependencies(
-            autoregister_dependencies=autoregister_dependencies,
+        resolved_dependency_registration_policy = (
+            self._resolve_inject_dependency_registration_policy(
+                dependency_registration_policy=dependency_registration_policy,
+            )
         )
 
         def decorator(callable_obj: InjectableF) -> InjectableF:
@@ -356,7 +363,7 @@ class ResolverContext:
             wrapper_config = _InjectWrapperConfig(
                 callable_obj=callable_obj,
                 scope=resolved_scope,
-                autoregister_dependencies=resolved_autoregister_dependencies,
+                dependency_registration_policy=resolved_dependency_registration_policy,
                 auto_open_scope=auto_open_scope,
             )
             fallback_container = self._fallback_container
@@ -399,17 +406,20 @@ class ResolverContext:
         msg = "inject() parameter 'scope' must be BaseScope or 'infer'."
         raise DIWireInvalidRegistrationError(msg)
 
-    def _resolve_inject_autoregister_dependencies(
+    def _resolve_inject_dependency_registration_policy(
         self,
         *,
-        autoregister_dependencies: bool | Literal["from_container"],
-    ) -> bool | None:
-        autoregister_dependencies_value = cast("Any", autoregister_dependencies)
-        if autoregister_dependencies_value == "from_container":
+        dependency_registration_policy: (DependencyRegistrationPolicy | Literal["from_container"]),
+    ) -> DependencyRegistrationPolicy | None:
+        dependency_registration_policy_value = cast("Any", dependency_registration_policy)
+        if dependency_registration_policy_value == "from_container":
             return None
-        if isinstance(autoregister_dependencies_value, bool):
-            return autoregister_dependencies_value
-        msg = "inject() parameter 'autoregister_dependencies' must be bool or 'from_container'."
+        if isinstance(dependency_registration_policy_value, DependencyRegistrationPolicy):
+            return dependency_registration_policy_value
+        msg = (
+            "inject() parameter 'dependency_registration_policy' must be "
+            "DependencyRegistrationPolicy or 'from_container'."
+        )
         raise DIWireInvalidRegistrationError(msg)
 
     def _validate_injected_callable_signature(self, callable_obj: Callable[..., Any]) -> None:
@@ -501,7 +511,7 @@ class ResolverContext:
         injected_callable = container._inject_callable(  # noqa: SLF001
             callable_obj=wrapper_config.callable_obj,
             scope=wrapper_config.scope,
-            autoregister_dependencies=wrapper_config.autoregister_dependencies,
+            dependency_registration_policy=wrapper_config.dependency_registration_policy,
             auto_open_scope=wrapper_config.auto_open_scope,
         )
         cache[container] = injected_callable

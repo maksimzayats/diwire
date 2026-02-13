@@ -20,7 +20,7 @@ from diwire._internal.resolvers.templates.renderer import (
 
 
 def _plan_for_renderer() -> ResolverGenerationPlan:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     container.add_instance(1, provides=int)
     return ResolverGenerationPlanner(
         root_scope=Scope.APP,

@@ -46,7 +46,7 @@ If you want full control, disable auto-registration:
 
    from diwire import Container
 
-   container = Container(autoregister_concrete_types=False, autoregister_dependencies=False)
+   container = Container()
 
 In this mode, resolving a dependency that is not registered raises
 :class:`diwire.exceptions.DIWireDependencyNotRegisteredError`.
@@ -66,4 +66,3 @@ Next
 ----
 
 Go to :doc:`registration` for the explicit registration APIs, and :doc:`scopes` for scope transitions and cleanup.
-

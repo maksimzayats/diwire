@@ -26,7 +26,7 @@ class DefaultModelBox(ModelBox[M]):
 
 
 def main() -> None:
-    container = Container(autoregister_concrete_types=False)
+    container = Container()
     container.add_concrete(DefaultModelBox, provides=ModelBox)
 
     invalid_key = cast("Any", ModelBox)[str]

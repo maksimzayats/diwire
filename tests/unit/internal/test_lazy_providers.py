@@ -5,7 +5,16 @@ from typing import Any, Generic, TypeVar, cast
 
 import pytest
 
-from diwire import AsyncProvider, Container, Injected, Lifetime, Provider, Scope, resolver_context
+from diwire import (
+    AsyncProvider,
+    Container,
+    DependencyRegistrationPolicy,
+    Injected,
+    Lifetime,
+    Provider,
+    Scope,
+    resolver_context,
+)
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
     DIWireInvalidProviderSpecError,
@@ -279,7 +288,9 @@ def test_provider_direct_resolve_supports_open_generic_dependencies() -> None:
 
 
 def test_autoregistration_unwraps_provider_dependency() -> None:
-    container = Container()
+    container = Container(
+        dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE
+    )
     container.add_concrete(_AutoregConsumer)
 
     assert container._providers_registrations.find_by_type(_AutoregDependency) is not None

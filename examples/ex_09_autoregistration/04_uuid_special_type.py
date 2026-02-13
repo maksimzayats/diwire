@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from diwire import Container
+from diwire import Container, MissingPolicy
 from diwire.exceptions import DIWireDependencyNotRegisteredError
 
 
@@ -15,7 +15,7 @@ class Root:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(missing_policy=MissingPolicy.REGISTER_ROOT)
 
     try:
         container.resolve(Root)

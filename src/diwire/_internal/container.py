@@ -48,6 +48,7 @@ from diwire._internal.open_generics import (
     OpenGenericResolver,
     canonicalize_open_key,
 )
+from diwire._internal.policies import DependencyRegistrationPolicy, MissingPolicy
 from diwire._internal.providers import (
     ContextManagerProvider,
     FactoryProvider,
@@ -116,17 +117,22 @@ class Container:
         default_lifetime: Lifetime = Lifetime.SCOPED,
         *,
         lock_mode: LockMode | Literal["auto"] = "auto",
-        autoregister_concrete_types: bool = True,
-        autoregister_dependencies: bool = True,
+        missing_policy: MissingPolicy = MissingPolicy.ERROR,
+        dependency_registration_policy: DependencyRegistrationPolicy = (
+            DependencyRegistrationPolicy.IGNORE
+        ),
         resolver_context: ResolverContext = default_resolver_context,
         use_resolver_context: bool = True,
     ) -> None:
         """Initialize a container and configure default registration behavior.
 
-        Choose strict mode by setting ``autoregister_concrete_types=False``.
-        Keep defaults for auto-wiring behavior. ``lock_mode="auto"`` selects
-        thread locks for sync-only cached paths and async locks when async
-        resolution paths are present.
+        Keep defaults for strict behavior with explicit registration.
+        Keep strict resolution behavior with ``missing_policy=MissingPolicy.ERROR``.
+        Enable recursive autoregistration with
+        ``missing_policy=MissingPolicy.REGISTER_RECURSIVE`` and
+        ``dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE``.
+        ``lock_mode="auto"`` selects thread locks for sync-only cached paths and
+        async locks when async resolution paths are present.
 
         Args:
             root_scope: Root scope for resolver ownership and root-scoped caches.
@@ -134,19 +140,18 @@ class Container:
                 ``lifetime``.
             lock_mode: Container default lock strategy for non-instance
                 registrations. Accepts ``LockMode`` or ``"auto"``.
-            autoregister_concrete_types: Enable on-demand concrete type
-                autoregistration during resolution.
-            autoregister_dependencies: Enable autoregistration of provider
-                dependencies discovered at registration time.
+            missing_policy: Default policy for resolve-time missing dependencies.
+            dependency_registration_policy: Default policy for dependency
+                autoregistration during registration/injection.
             resolver_context: Resolver context used by ``resolver_context.inject``
                 fallback behavior for this container.
             use_resolver_context: Wrap compiled resolvers so context-manager
                 entry binds into ``resolver_context``.
 
         Notes:
-            Common presets are: default mode (both autoregistration flags
-            enabled), strict mode (both disabled), and mixed mode (concrete
-            autoregistration enabled with dependency autoregistration disabled).
+            Common presets are: strict mode (default), full auto-wiring mode
+            (both recursive), and root-only resolve mode
+            (``missing_policy=MissingPolicy.REGISTER_ROOT``).
 
         Examples:
             .. code-block:: python
@@ -154,8 +159,8 @@ class Container:
                 container = Container()
 
                 strict_container = Container(
-                    autoregister_concrete_types=False,
-                    autoregister_dependencies=False,
+                    missing_policy=MissingPolicy.ERROR,
+                    dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
                 )
 
                 threaded_container = Container(lock_mode=LockMode.THREAD)
@@ -164,8 +169,12 @@ class Container:
         self._root_scope = root_scope
         self._default_lifetime = default_lifetime
         self._lock_mode = lock_mode
-        self._autoregister_concrete_types = autoregister_concrete_types
-        self._autoregister_dependencies = autoregister_dependencies
+        self._missing_policy = self._resolve_container_missing_policy(missing_policy)
+        self._dependency_registration_policy = (
+            self._resolve_container_dependency_registration_policy(
+                dependency_registration_policy,
+            )
+        )
         self._resolver_context = resolver_context
         self._use_resolver_context = use_resolver_context
 
@@ -276,7 +285,8 @@ class Container:
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
+        dependency_registration_policy: DependencyRegistrationPolicy
+        | Literal["from_container"] = "from_container",
     ) -> None: ...
 
     @overload
@@ -290,7 +300,8 @@ class Container:
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
+        dependency_registration_policy: DependencyRegistrationPolicy
+        | Literal["from_container"] = "from_container",
     ) -> Callable[[C], C]: ...
 
     def add_concrete(
@@ -303,7 +314,8 @@ class Container:
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
+        dependency_registration_policy: DependencyRegistrationPolicy
+        | Literal["from_container"] = "from_container",
     ) -> Callable[[C], C] | None:
         """Register a concrete type provider.
 
@@ -326,7 +338,7 @@ class Container:
                 provider parameter, or ``"infer"`` for annotation inference.
             lock_mode: Lock strategy, or ``"from_container"`` to inherit the
                 container lock mode.
-            autoregister_dependencies: Override dependency autoregistration for
+            dependency_registration_policy: Override dependency autoregistration for
                 this registration.
 
         Returns:
@@ -363,7 +375,7 @@ class Container:
             component=component,
             dependencies=dependencies,
             lock_mode=lock_mode,
-            autoregister_dependencies=autoregister_dependencies,
+            dependency_registration_policy=dependency_registration_policy,
         )
 
         if concrete_type == "from_decorator":
@@ -390,9 +402,11 @@ class Container:
             dependencies=dependencies,
             method_name="add_concrete",
         )
-        resolved_autoregister_dependencies = self._resolve_registration_autoregister_dependencies(
-            autoregister_dependencies=autoregister_dependencies,
-            method_name="add_concrete",
+        resolved_dependency_registration_policy = (
+            self._resolve_registration_dependency_registration_policy(
+                dependency_registration_policy=dependency_registration_policy,
+                method_name="add_concrete",
+            )
         )
 
         self._dependency_registration_validator.validate_concrete_type(
@@ -432,8 +446,8 @@ class Container:
                     dependencies=dependencies_for_provider,
                     scope=resolved_scope,
                     lifetime=resolved_lifetime,
-                    enabled=self._resolve_autoregister_dependencies(
-                        resolved_autoregister_dependencies,
+                    dependency_registration_policy=self._resolve_dependency_registration_policy(
+                        resolved_dependency_registration_policy,
                     ),
                 )
                 self._finalize_registration_after_binding(
@@ -474,8 +488,8 @@ class Container:
                     dependencies=dependencies_for_provider,
                     scope=resolved_scope,
                     lifetime=resolved_lifetime,
-                    enabled=self._resolve_autoregister_dependencies(
-                        resolved_autoregister_dependencies,
+                    dependency_registration_policy=self._resolve_dependency_registration_policy(
+                        resolved_dependency_registration_policy,
                     ),
                 )
                 self._finalize_registration_after_binding(
@@ -501,8 +515,8 @@ class Container:
                 dependencies=dependencies_for_provider,
                 scope=resolved_scope,
                 lifetime=resolved_lifetime,
-                enabled=self._resolve_autoregister_dependencies(
-                    resolved_autoregister_dependencies,
+                dependency_registration_policy=self._resolve_dependency_registration_policy(
+                    resolved_dependency_registration_policy,
                 ),
             )
             self._finalize_registration_after_binding(
@@ -523,7 +537,8 @@ class Container:
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
+        dependency_registration_policy: DependencyRegistrationPolicy
+        | Literal["from_container"] = "from_container",
     ) -> None: ...
 
     @overload
@@ -537,7 +552,8 @@ class Container:
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
+        dependency_registration_policy: DependencyRegistrationPolicy
+        | Literal["from_container"] = "from_container",
     ) -> Callable[[F], F]: ...
 
     def add_factory(
@@ -552,7 +568,8 @@ class Container:
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
+        dependency_registration_policy: DependencyRegistrationPolicy
+        | Literal["from_container"] = "from_container",
     ) -> Callable[[F], F] | None:
         """Register a factory provider.
 
@@ -570,7 +587,7 @@ class Container:
             lifetime: Provider lifetime, or ``"from_container"``.
             dependencies: Explicit dependency mapping, or ``"infer"``.
             lock_mode: Lock strategy, or ``"from_container"``.
-            autoregister_dependencies: Override dependency autoregistration for
+            dependency_registration_policy: Override dependency autoregistration for
                 this registration.
 
         Returns:
@@ -608,7 +625,7 @@ class Container:
             component=component,
             dependencies=dependencies,
             lock_mode=lock_mode,
-            autoregister_dependencies=autoregister_dependencies,
+            dependency_registration_policy=dependency_registration_policy,
         )
 
         factory_value = cast("Any", factory)
@@ -644,9 +661,11 @@ class Container:
             dependencies=dependencies,
             method_name="add_factory",
         )
-        resolved_autoregister_dependencies = self._resolve_registration_autoregister_dependencies(
-            autoregister_dependencies=autoregister_dependencies,
-            method_name="add_factory",
+        resolved_dependency_registration_policy = (
+            self._resolve_registration_dependency_registration_policy(
+                dependency_registration_policy=dependency_registration_policy,
+                method_name="add_factory",
+            )
         )
 
         dependencies_for_provider = self._resolve_factory_registration_dependencies(
@@ -672,7 +691,7 @@ class Container:
             is_any_dependency_async=is_any_dependency_async,
             needs_cleanup=False,
             dependencies=dependencies_for_provider,
-            resolved_autoregister_dependencies=resolved_autoregister_dependencies,
+            resolved_dependency_registration_policy=resolved_dependency_registration_policy,
         )
         return None
 
@@ -689,7 +708,8 @@ class Container:
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
+        dependency_registration_policy: DependencyRegistrationPolicy
+        | Literal["from_container"] = "from_container",
     ) -> None: ...
 
     @overload
@@ -703,7 +723,8 @@ class Container:
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
+        dependency_registration_policy: DependencyRegistrationPolicy
+        | Literal["from_container"] = "from_container",
     ) -> Callable[[F], F]: ...
 
     def add_generator(
@@ -720,7 +741,8 @@ class Container:
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
+        dependency_registration_policy: DependencyRegistrationPolicy
+        | Literal["from_container"] = "from_container",
     ) -> Callable[[F], F] | None:
         """Register a generator or async-generator provider with cleanup.
 
@@ -736,7 +758,7 @@ class Container:
             lifetime: Provider lifetime, or ``"from_container"``.
             dependencies: Explicit dependency mapping, or ``"infer"``.
             lock_mode: Lock strategy, or ``"from_container"``.
-            autoregister_dependencies: Override dependency autoregistration.
+            dependency_registration_policy: Override dependency autoregistration.
 
         Returns:
             ``None`` in direct mode or a decorator in decorator mode.
@@ -767,7 +789,7 @@ class Container:
             component=component,
             dependencies=dependencies,
             lock_mode=lock_mode,
-            autoregister_dependencies=autoregister_dependencies,
+            dependency_registration_policy=dependency_registration_policy,
         )
 
         generator_value = cast("Any", generator)
@@ -803,9 +825,11 @@ class Container:
             dependencies=dependencies,
             method_name="add_generator",
         )
-        resolved_autoregister_dependencies = self._resolve_registration_autoregister_dependencies(
-            autoregister_dependencies=autoregister_dependencies,
-            method_name="add_generator",
+        resolved_dependency_registration_policy = (
+            self._resolve_registration_dependency_registration_policy(
+                dependency_registration_policy=dependency_registration_policy,
+                method_name="add_generator",
+            )
         )
 
         dependencies_for_provider = self._resolve_generator_registration_dependencies(
@@ -831,7 +855,7 @@ class Container:
             is_any_dependency_async=is_any_dependency_async,
             needs_cleanup=True,
             dependencies=dependencies_for_provider,
-            resolved_autoregister_dependencies=resolved_autoregister_dependencies,
+            resolved_dependency_registration_policy=resolved_dependency_registration_policy,
         )
         return None
 
@@ -846,7 +870,8 @@ class Container:
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
+        dependency_registration_policy: DependencyRegistrationPolicy
+        | Literal["from_container"] = "from_container",
     ) -> None: ...
 
     @overload
@@ -860,7 +885,8 @@ class Container:
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
+        dependency_registration_policy: DependencyRegistrationPolicy
+        | Literal["from_container"] = "from_container",
     ) -> Callable[[F], F]: ...
 
     def add_context_manager(
@@ -873,7 +899,8 @@ class Container:
         lifetime: Lifetime | Literal["from_container"] = "from_container",
         dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
         lock_mode: LockMode | Literal["from_container"] = "from_container",
-        autoregister_dependencies: bool | Literal["from_container"] = "from_container",
+        dependency_registration_policy: DependencyRegistrationPolicy
+        | Literal["from_container"] = "from_container",
     ) -> Callable[[F], F] | None:
         """Register a context-manager or async-context-manager provider.
 
@@ -889,7 +916,7 @@ class Container:
             lifetime: Provider lifetime, or ``"from_container"``.
             dependencies: Explicit dependency mapping, or ``"infer"``.
             lock_mode: Lock strategy, or ``"from_container"``.
-            autoregister_dependencies: Override dependency autoregistration.
+            dependency_registration_policy: Override dependency autoregistration.
 
         Returns:
             ``None`` in direct mode or a decorator in decorator mode.
@@ -919,7 +946,7 @@ class Container:
             component=component,
             dependencies=dependencies,
             lock_mode=lock_mode,
-            autoregister_dependencies=autoregister_dependencies,
+            dependency_registration_policy=dependency_registration_policy,
         )
 
         context_manager_value = cast("Any", context_manager)
@@ -958,9 +985,11 @@ class Container:
             dependencies=dependencies,
             method_name="add_context_manager",
         )
-        resolved_autoregister_dependencies = self._resolve_registration_autoregister_dependencies(
-            autoregister_dependencies=autoregister_dependencies,
-            method_name="add_context_manager",
+        resolved_dependency_registration_policy = (
+            self._resolve_registration_dependency_registration_policy(
+                dependency_registration_policy=dependency_registration_policy,
+                method_name="add_context_manager",
+            )
         )
 
         dependencies_for_provider = self._resolve_context_manager_registration_dependencies(
@@ -988,7 +1017,7 @@ class Container:
             is_any_dependency_async=is_any_dependency_async,
             needs_cleanup=True,
             dependencies=dependencies_for_provider,
-            resolved_autoregister_dependencies=resolved_autoregister_dependencies,
+            resolved_dependency_registration_policy=resolved_dependency_registration_policy,
         )
         return None
 
@@ -1350,7 +1379,7 @@ class Container:
                 dependencies=dependencies,
                 scope=base_metadata.scope,
                 lifetime=base_metadata.lifetime,
-                enabled=self._resolve_autoregister_dependencies(None),
+                dependency_registration_policy=self._resolve_dependency_registration_policy(None),
             )
             inner_key = out_key
 
@@ -1618,21 +1647,21 @@ class Container:
 
         return resolved_dependencies
 
-    def _resolve_registration_autoregister_dependencies(
+    def _resolve_registration_dependency_registration_policy(
         self,
         *,
-        autoregister_dependencies: bool | Literal["from_container"],
+        dependency_registration_policy: DependencyRegistrationPolicy | Literal["from_container"],
         method_name: str,
-    ) -> bool | None:
-        autoregister_dependencies_value = cast("Any", autoregister_dependencies)
-        if autoregister_dependencies_value == "from_container":
+    ) -> DependencyRegistrationPolicy | None:
+        dependency_registration_policy_value = cast("Any", dependency_registration_policy)
+        if dependency_registration_policy_value == "from_container":
             return None
-        if isinstance(autoregister_dependencies_value, bool):
-            return autoregister_dependencies_value
+        if isinstance(dependency_registration_policy_value, DependencyRegistrationPolicy):
+            return dependency_registration_policy_value
 
         msg = (
-            f"{method_name}() parameter 'autoregister_dependencies' must be bool or "
-            "'from_container'."
+            f"{method_name}() parameter 'dependency_registration_policy' must be "
+            "DependencyRegistrationPolicy or 'from_container'."
         )
         raise DIWireInvalidRegistrationError(msg)
 
@@ -1650,7 +1679,7 @@ class Container:
         is_any_dependency_async: bool,
         needs_cleanup: bool,
         dependencies: list[ProviderDependency],
-        resolved_autoregister_dependencies: bool | None,
+        resolved_dependency_registration_policy: DependencyRegistrationPolicy | None,
     ) -> None:
         registration_provides, has_decoration_chain = self._resolve_registration_target_provides(
             provides,
@@ -1676,8 +1705,8 @@ class Container:
                     dependencies=dependencies,
                     scope=scope,
                     lifetime=lifetime,
-                    enabled=self._resolve_autoregister_dependencies(
-                        resolved_autoregister_dependencies,
+                    dependency_registration_policy=self._resolve_dependency_registration_policy(
+                        resolved_dependency_registration_policy,
                     ),
                 )
                 self._finalize_registration_after_binding(
@@ -1728,8 +1757,8 @@ class Container:
                 dependencies=dependencies,
                 scope=scope,
                 lifetime=lifetime,
-                enabled=self._resolve_autoregister_dependencies(
-                    resolved_autoregister_dependencies,
+                dependency_registration_policy=self._resolve_dependency_registration_policy(
+                    resolved_dependency_registration_policy,
                 ),
             )
             self._finalize_registration_after_binding(
@@ -1889,15 +1918,48 @@ class Container:
 
         return lock_mode
 
-    def _resolve_autoregister_dependencies(
+    def _resolve_dependency_registration_policy(
         self,
-        autoregister_dependencies: bool | None,
-    ) -> bool:
-        if not self._autoregister_concrete_types:
-            return False
-        if autoregister_dependencies is None:
-            return self._autoregister_dependencies
-        return autoregister_dependencies
+        dependency_registration_policy: DependencyRegistrationPolicy | None,
+    ) -> DependencyRegistrationPolicy:
+        if dependency_registration_policy is None:
+            return self._dependency_registration_policy
+        return dependency_registration_policy
+
+    def _resolve_container_missing_policy(
+        self,
+        missing_policy: Any,
+    ) -> MissingPolicy:
+        if isinstance(missing_policy, MissingPolicy):
+            return missing_policy
+        msg = "Container() parameter 'missing_policy' must be MissingPolicy."
+        raise DIWireInvalidRegistrationError(msg)
+
+    def _resolve_container_dependency_registration_policy(
+        self,
+        dependency_registration_policy: Any,
+    ) -> DependencyRegistrationPolicy:
+        if isinstance(dependency_registration_policy, DependencyRegistrationPolicy):
+            return dependency_registration_policy
+        msg = (
+            "Container() parameter 'dependency_registration_policy' must be "
+            "DependencyRegistrationPolicy."
+        )
+        raise DIWireInvalidRegistrationError(msg)
+
+    def _resolve_resolution_on_missing(
+        self,
+        *,
+        on_missing: MissingPolicy | Literal["from_container"],
+        method_name: str,
+    ) -> MissingPolicy:
+        on_missing_value = cast("Any", on_missing)
+        if on_missing_value == "from_container":
+            return self._missing_policy
+        if isinstance(on_missing_value, MissingPolicy):
+            return on_missing_value
+        msg = f"{method_name}() parameter 'on_missing' must be MissingPolicy or 'from_container'."
+        raise DIWireInvalidRegistrationError(msg)
 
     def _autoregister_provider_dependencies(
         self,
@@ -1905,9 +1967,9 @@ class Container:
         dependencies: list[ProviderDependency],
         scope: BaseScope,
         lifetime: Lifetime,
-        enabled: bool,
+        dependency_registration_policy: DependencyRegistrationPolicy,
     ) -> None:
-        if not enabled:
+        if dependency_registration_policy is DependencyRegistrationPolicy.IGNORE:
             return
 
         for dependency in dependencies:
@@ -1919,7 +1981,7 @@ class Container:
                     dependency=dependency_key,
                     scope=scope,
                     lifetime=lifetime,
-                    autoregister_dependencies=True,
+                    dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
                 )
 
     def _autoregister_dependency(
@@ -1928,7 +1990,7 @@ class Container:
         dependency: Any,
         scope: BaseScope,
         lifetime: Lifetime,
-        autoregister_dependencies: bool,
+        dependency_registration_policy: DependencyRegistrationPolicy,
     ) -> None:
         if is_pydantic_settings_subclass(dependency):
             # Settings are environment-backed configuration objects and should be
@@ -1938,7 +2000,7 @@ class Container:
                 provides=dependency,
                 scope=self._root_scope,
                 lifetime=Lifetime.SCOPED,
-                autoregister_dependencies=autoregister_dependencies,
+                dependency_registration_policy=dependency_registration_policy,
             )
             return
 
@@ -1949,11 +2011,17 @@ class Container:
             dependency,
             scope=scope,
             lifetime=lifetime,
-            autoregister_dependencies=autoregister_dependencies,
+            dependency_registration_policy=dependency_registration_policy,
         )
 
-    def _ensure_autoregistration(self, dependency: Any) -> None:
-        if not self._autoregister_concrete_types:
+    def _ensure_autoregistration(
+        self,
+        dependency: Any,
+        *,
+        on_missing: MissingPolicy | None = None,
+    ) -> None:
+        effective_on_missing = self._missing_policy if on_missing is None else on_missing
+        if effective_on_missing is MissingPolicy.ERROR:
             return
         dependency_key = self._unwrap_provider_dependency_key(dependency)
 
@@ -1962,11 +2030,17 @@ class Container:
         if self._open_generic_registry.has_match_for_dependency(dependency_key):
             return
 
+        effective_dependency_policy = (
+            DependencyRegistrationPolicy.REGISTER_RECURSIVE
+            if effective_on_missing is MissingPolicy.REGISTER_RECURSIVE
+            else DependencyRegistrationPolicy.IGNORE
+        )
+
         self._autoregister_dependency(
             dependency=dependency_key,
             scope=self._root_scope,
             lifetime=self._default_lifetime,
-            autoregister_dependencies=True,
+            dependency_registration_policy=effective_dependency_policy,
         )
 
     def _inject_callable(
@@ -1974,7 +2048,7 @@ class Container:
         *,
         callable_obj: InjectableF,
         scope: BaseScope | None,
-        autoregister_dependencies: bool | None,
+        dependency_registration_policy: DependencyRegistrationPolicy | None,
         auto_open_scope: bool,
     ) -> InjectableF:
         signature = inspect.signature(callable_obj)
@@ -1994,10 +2068,13 @@ class Container:
         inspected_callable = self._injected_callable_inspector.inspect_callable(callable_obj)
         injected_parameters = inspected_callable.injected_parameters
         context_parameters = inspected_callable.context_parameters
-        resolved_autoregister = self._resolve_autoregister_dependencies(
-            autoregister_dependencies,
+        resolved_dependency_registration_policy = self._resolve_dependency_registration_policy(
+            dependency_registration_policy,
         )
-        if resolved_autoregister:
+        if (
+            resolved_dependency_registration_policy
+            is DependencyRegistrationPolicy.REGISTER_RECURSIVE
+        ):
             self._autoregister_injected_dependencies(
                 injected_parameters=injected_parameters,
                 scope=scope,
@@ -2138,7 +2215,7 @@ class Container:
                     dependency=dependency_key,
                     scope=registration_scope,
                     lifetime=self._default_lifetime,
-                    autoregister_dependencies=True,
+                    dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
                 )
 
     def _infer_injected_scope_level(
@@ -2536,7 +2613,7 @@ class Container:
             if self._use_resolver_context:
                 root_resolver = self._resolver_context._wrap_resolver(root_resolver)  # noqa: SLF001
             self._root_resolver = root_resolver
-        if not self._autoregister_concrete_types and not self._use_resolver_context:
+        if self._missing_policy is MissingPolicy.ERROR and not self._use_resolver_context:
             self._bind_container_entrypoints(target=self._root_resolver)
 
         return self._root_resolver
@@ -2634,16 +2711,34 @@ class Container:
     # region Resolution and Scope Management
 
     @overload
-    def resolve(self, dependency: type[T]) -> T: ...
+    def resolve(
+        self,
+        dependency: type[T],
+        *,
+        on_missing: MissingPolicy | Literal["from_container"] = "from_container",
+    ) -> T: ...
 
     @overload
-    def resolve(self, dependency: Any) -> Any: ...
+    def resolve(
+        self,
+        dependency: Any,
+        *,
+        on_missing: MissingPolicy | Literal["from_container"] = "from_container",
+    ) -> Any: ...
 
-    def resolve(self, dependency: Any) -> Any:
+    def resolve(
+        self,
+        dependency: Any,
+        *,
+        on_missing: MissingPolicy | Literal["from_container"] = "from_container",
+    ) -> Any:
         """Resolve a dependency synchronously.
 
         Args:
             dependency: Dependency key to resolve.
+            on_missing: Resolve-time auto-registration policy
+                for missing concrete dependencies, or ``"from_container"`` to
+                inherit container defaults.
 
         Returns:
             Resolved dependency value.
@@ -2676,13 +2771,21 @@ class Container:
         if resolver is None:
             resolver = self.compile()
 
-        if not self._autoregister_concrete_types:
+        resolved_on_missing = self._resolve_resolution_on_missing(
+            on_missing=on_missing,
+            method_name="resolve",
+        )
+
+        if resolved_on_missing is MissingPolicy.ERROR:
             return resolver.resolve(dependency)
 
         provider_inner_dependency = self._extract_provider_inner_dependency_fast(dependency)
         if provider_inner_dependency is not None:
             graph_revision_before = self._graph_revision
-            self._ensure_autoregistration(provider_inner_dependency)
+            self._ensure_autoregistration(
+                provider_inner_dependency,
+                on_missing=resolved_on_missing,
+            )
             if self._graph_revision != graph_revision_before:
                 resolver = self.compile()
             return resolver.resolve(dependency)
@@ -2691,23 +2794,44 @@ class Container:
             return resolver.resolve(dependency)
         except DIWireDependencyNotRegisteredError:
             graph_revision_before = self._graph_revision
-            self._ensure_autoregistration(dependency)
+            self._ensure_autoregistration(
+                dependency,
+                on_missing=resolved_on_missing,
+            )
             if self._graph_revision == graph_revision_before:
                 raise
             resolver = self.compile()
             return resolver.resolve(dependency)
 
     @overload
-    async def aresolve(self, dependency: type[T]) -> T: ...
+    async def aresolve(
+        self,
+        dependency: type[T],
+        *,
+        on_missing: MissingPolicy | Literal["from_container"] = "from_container",
+    ) -> T: ...
 
     @overload
-    async def aresolve(self, dependency: Any) -> Any: ...
+    async def aresolve(
+        self,
+        dependency: Any,
+        *,
+        on_missing: MissingPolicy | Literal["from_container"] = "from_container",
+    ) -> Any: ...
 
-    async def aresolve(self, dependency: Any) -> Any:
+    async def aresolve(
+        self,
+        dependency: Any,
+        *,
+        on_missing: MissingPolicy | Literal["from_container"] = "from_container",
+    ) -> Any:
         """Resolve a dependency asynchronously.
 
         Args:
             dependency: Dependency key to resolve.
+            on_missing: Resolve-time auto-registration policy
+                for missing concrete dependencies, or ``"from_container"`` to
+                inherit container defaults.
 
         Returns:
             Resolved dependency value.
@@ -2735,13 +2859,21 @@ class Container:
         if resolver is None:
             resolver = self.compile()
 
-        if not self._autoregister_concrete_types:
+        resolved_on_missing = self._resolve_resolution_on_missing(
+            on_missing=on_missing,
+            method_name="aresolve",
+        )
+
+        if resolved_on_missing is MissingPolicy.ERROR:
             return await resolver.aresolve(dependency)
 
         provider_inner_dependency = self._extract_provider_inner_dependency_fast(dependency)
         if provider_inner_dependency is not None:
             graph_revision_before = self._graph_revision
-            self._ensure_autoregistration(provider_inner_dependency)
+            self._ensure_autoregistration(
+                provider_inner_dependency,
+                on_missing=resolved_on_missing,
+            )
             if self._graph_revision != graph_revision_before:
                 resolver = self.compile()
             return await resolver.aresolve(dependency)
@@ -2750,7 +2882,10 @@ class Container:
             return await resolver.aresolve(dependency)
         except DIWireDependencyNotRegisteredError:
             graph_revision_before = self._graph_revision
-            self._ensure_autoregistration(dependency)
+            self._ensure_autoregistration(
+                dependency,
+                on_missing=resolved_on_missing,
+            )
             if self._graph_revision == graph_revision_before:
                 raise
             resolver = self.compile()
@@ -2897,7 +3032,9 @@ class _ConcreteTypeRegistrationDecorator(Generic[T]):
     component: Component | Any | None = None
     dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
-    autoregister_dependencies: bool | Literal["from_container"] = "from_container"
+    dependency_registration_policy: DependencyRegistrationPolicy | Literal["from_container"] = (
+        "from_container"
+    )
 
     def __call__(self, concrete_type: C) -> C:
         """Register the concrete type provider in the container."""
@@ -2909,7 +3046,7 @@ class _ConcreteTypeRegistrationDecorator(Generic[T]):
             lifetime=self.lifetime,
             dependencies=self.dependencies,
             lock_mode=self.lock_mode,
-            autoregister_dependencies=self.autoregister_dependencies,
+            dependency_registration_policy=self.dependency_registration_policy,
         )
 
         return concrete_type
@@ -2926,7 +3063,9 @@ class _FactoryRegistrationDecorator(Generic[T]):
     component: Component | Any | None = None
     dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
-    autoregister_dependencies: bool | Literal["from_container"] = "from_container"
+    dependency_registration_policy: DependencyRegistrationPolicy | Literal["from_container"] = (
+        "from_container"
+    )
 
     def __call__(self, factory: F) -> F:
         """Register the factory provider in the container."""
@@ -2938,7 +3077,7 @@ class _FactoryRegistrationDecorator(Generic[T]):
             lifetime=self.lifetime,
             dependencies=self.dependencies,
             lock_mode=self.lock_mode,
-            autoregister_dependencies=self.autoregister_dependencies,
+            dependency_registration_policy=self.dependency_registration_policy,
         )
 
         return factory
@@ -2955,7 +3094,9 @@ class _GeneratorRegistrationDecorator(Generic[T]):
     component: Component | Any | None = None
     dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
-    autoregister_dependencies: bool | Literal["from_container"] = "from_container"
+    dependency_registration_policy: DependencyRegistrationPolicy | Literal["from_container"] = (
+        "from_container"
+    )
 
     def __call__(self, generator: F) -> F:
         """Register the generator provider in the container."""
@@ -2967,7 +3108,7 @@ class _GeneratorRegistrationDecorator(Generic[T]):
             lifetime=self.lifetime,
             dependencies=self.dependencies,
             lock_mode=self.lock_mode,
-            autoregister_dependencies=self.autoregister_dependencies,
+            dependency_registration_policy=self.dependency_registration_policy,
         )
 
         return generator
@@ -2984,7 +3125,9 @@ class _ContextManagerRegistrationDecorator(Generic[T]):
     component: Component | Any | None = None
     dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer"
     lock_mode: LockMode | Literal["from_container"] = "from_container"
-    autoregister_dependencies: bool | Literal["from_container"] = "from_container"
+    dependency_registration_policy: DependencyRegistrationPolicy | Literal["from_container"] = (
+        "from_container"
+    )
 
     def __call__(self, context_manager: F) -> F:
         """Register the context manager provider in the container."""
@@ -2996,7 +3139,7 @@ class _ContextManagerRegistrationDecorator(Generic[T]):
             lifetime=self.lifetime,
             dependencies=self.dependencies,
             lock_mode=self.lock_mode,
-            autoregister_dependencies=self.autoregister_dependencies,
+            dependency_registration_policy=self.dependency_registration_policy,
         )
 
         return context_manager

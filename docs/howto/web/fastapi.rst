@@ -25,7 +25,7 @@ closes it when the endpoint returns.
    from diwire import Container, Injected, Lifetime, Scope
 
    app = FastAPI()
-   container = Container(autoregister_concrete_types=False)
+   container = Container()
 
 
    class RequestService:
