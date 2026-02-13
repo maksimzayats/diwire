@@ -3,9 +3,12 @@ from __future__ import annotations
 import inspect
 import os
 import re
+import sys
 from pathlib import Path
 from types import ModuleType
 from typing import Any
+
+import pytest
 
 import diwire
 import diwire.exceptions as diwire_exceptions
@@ -17,6 +20,10 @@ _UPDATE_COMMAND = (
     "DIWIRE_UPDATE_API_SIGNATURES=1 uv run pytest tests/unit/public/test_public_api_signatures.py"
 )
 _ADDRESS_PATTERN = re.compile(r"0x[0-9a-fA-F]+")
+pytestmark = pytest.mark.skipif(
+    sys.version_info[:2] != (3, 14),
+    reason="Public API signature snapshot is maintained only on Python 3.14.",
+)
 
 
 def _normalize_snapshot_line(value: str) -> str:
