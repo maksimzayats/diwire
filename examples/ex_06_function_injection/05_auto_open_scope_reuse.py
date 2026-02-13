@@ -12,7 +12,7 @@ class RequestResource:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     cleanup_state = {"cleaned": False}
 
     def provide_request_resource() -> Generator[RequestResource, None, None]:

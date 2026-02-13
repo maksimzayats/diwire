@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from diwire import AutoregisterContainer
+from diwire import Container
 from diwire.exceptions import DIWireDependencyNotRegisteredError
 
 
@@ -15,7 +15,7 @@ class Root:
 
 
 def main() -> None:
-    container = AutoregisterContainer()
+    container = Container()
 
     try:
         container.resolve(Root)

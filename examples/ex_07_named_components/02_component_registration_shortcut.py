@@ -22,7 +22,7 @@ FallbackCache = Annotated[Cache, Component("fallback")]
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_instance(Cache(backend="redis"), provides=Cache, component="primary")
     container.add_instance(Cache(backend="memory"), provides=Cache, component=Component("fallback"))
 

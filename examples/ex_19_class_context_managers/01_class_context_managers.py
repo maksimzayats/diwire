@@ -34,7 +34,7 @@ class Service:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_context_manager(
         Service,
         scope=Scope.REQUEST,

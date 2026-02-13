@@ -41,7 +41,7 @@ Metrics: TypeAlias = Annotated[EventHandler, Component("metrics")]
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
 
     container.add_concrete(BaseHandler, provides=EventHandler)
     container.add_concrete(LoggingHandler, provides=Logging)

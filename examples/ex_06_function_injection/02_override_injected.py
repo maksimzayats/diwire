@@ -13,7 +13,7 @@ class User:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_instance(User(email="container@example.com"))
 
     @resolver_context.inject

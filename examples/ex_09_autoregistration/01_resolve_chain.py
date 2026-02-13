@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import AutoregisterContainer
+from diwire import Container
 
 
 class Leaf:
@@ -22,7 +22,7 @@ class Root:
 
 
 def main() -> None:
-    container = AutoregisterContainer()
+    container = Container()
     resolved = container.resolve(Root)
     print(
         f"autoregister_chain={isinstance(resolved.branch.leaf, Leaf)}",

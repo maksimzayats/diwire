@@ -1,4 +1,4 @@
-from diwire._internal.container import AutoregisterContainer, Container
+from diwire._internal.container import Container
 from diwire._internal.lock_mode import LockMode
 from diwire._internal.markers import (
     All,
@@ -17,7 +17,6 @@ from diwire._internal.scope import BaseScope, Scope
 __all__ = [
     "All",
     "AsyncProvider",
-    "AutoregisterContainer",
     "BaseScope",
     "Component",
     "Container",

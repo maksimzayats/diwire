@@ -18,7 +18,7 @@ class Root:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
 
     try:
         container.resolve(Root)

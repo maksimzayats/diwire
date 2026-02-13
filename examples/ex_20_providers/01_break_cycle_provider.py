@@ -19,7 +19,7 @@ class B:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(A)
     container.add_concrete(B)
 

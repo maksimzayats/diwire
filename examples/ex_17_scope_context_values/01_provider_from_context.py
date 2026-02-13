@@ -15,7 +15,7 @@ def build_request_value(value: FromContext[int]) -> RequestValue:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_factory(
         build_request_value,
         provides=RequestValue,

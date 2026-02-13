@@ -59,7 +59,7 @@ diwire builds the full dependency chain for you.
 ```python
 from __future__ import annotations
 
-from diwire import AutoregisterContainer
+from diwire import Container
 
 
 class Database:
@@ -78,7 +78,7 @@ class UserService:
 
 
 def main() -> None:
-    container = AutoregisterContainer()
+    container = Container()
     service = container.resolve(UserService)
 
     print(f"db_host={service.repository.database.host}")  # => db_host=localhost
@@ -125,7 +125,7 @@ class Config:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     config = Config(value="singleton")
     container.add_instance(config, provides=Config)
 
@@ -161,7 +161,7 @@ class Service:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(Dependency, provides=Dependency)
     container.add_concrete(Service, provides=Service)
 
@@ -194,7 +194,7 @@ class Service:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     build_state = {"count": 0}
 
     def build_service() -> Service:
@@ -235,7 +235,7 @@ class Resource:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     state = {"cleaned": False}
 
     def provide_resource() -> Generator[Resource, None, None]:
@@ -280,7 +280,7 @@ class Resource:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     state = {"cleaned": False}
 
     @contextmanager
@@ -332,7 +332,7 @@ class ExplicitService:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     raw = UntypedDependency(value="raw")
     container.add_instance(raw, provides=UntypedDependency)
 
@@ -372,7 +372,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import AutoregisterContainer
+from diwire import Container
 
 
 class Leaf:
@@ -390,7 +390,7 @@ class Root:
 
 
 def main() -> None:
-    container = AutoregisterContainer()
+    container = Container()
     resolved = container.resolve(Root)
     print(
         f"autoregister_chain={isinstance(resolved.branch.leaf, Leaf)}",
@@ -411,7 +411,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import AutoregisterContainer
+from diwire import Container
 
 
 class Dependency:
@@ -424,7 +424,7 @@ class Root:
 
 
 def main() -> None:
-    container = AutoregisterContainer(autoregister_dependencies=False)
+    container = Container(autoregister_dependencies=False)
     container.add_concrete(Root, autoregister_dependencies=True)
 
     resolved = container.resolve(Root)
@@ -462,7 +462,7 @@ class Root:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
 
     try:
         container.resolve(Root)
@@ -487,7 +487,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from diwire import AutoregisterContainer
+from diwire import Container
 from diwire.exceptions import DIWireDependencyNotRegisteredError
 
 
@@ -497,7 +497,7 @@ class Root:
 
 
 def main() -> None:
-    container = AutoregisterContainer()
+    container = Container()
 
     try:
         container.resolve(Root)
@@ -552,7 +552,7 @@ class ScopedService:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
 
     container.add_concrete(
         TransientService,
@@ -624,7 +624,7 @@ def _resolver_scope_name(resolver: object) -> str:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(
         RequestDependency,
         provides=RequestDependency,
@@ -665,7 +665,7 @@ class RequestDependency:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(
         RequestDependency,
         provides=RequestDependency,
@@ -702,7 +702,7 @@ class ScopedResource:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     state = {"closed": 0}
 
     def provide_resource() -> Generator[ScopedResource, None, None]:
@@ -750,7 +750,7 @@ class SingletonResource:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     state = {"closed": 0}
 
     def provide_resource() -> Generator[SingletonResource, None, None]:
@@ -809,7 +809,7 @@ def build_request_value(value: FromContext[int]) -> RequestValue:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_factory(
         build_request_value,
         provides=RequestValue,
@@ -839,7 +839,7 @@ from diwire import Container, FromContext, Scope
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
 
     with (
         container.enter_scope(Scope.REQUEST, context={int: 1, str: "parent"}) as request_scope,
@@ -873,7 +873,7 @@ from diwire import Container, FromContext, Scope, resolver_context
 
 
 def main() -> None:
-    Container()
+    Container(autoregister_concrete_types=False)
 
     @resolver_context.inject(scope=Scope.REQUEST)
     def handler(value: FromContext[int]) -> int:
@@ -915,7 +915,7 @@ def build_consumer(value: FromContext[ReplicaNumber]) -> ReplicaConsumer:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_factory(
         build_consumer,
         provides=ReplicaConsumer,
@@ -948,7 +948,7 @@ from diwire.exceptions import DIWireInvalidRegistrationError
 
 
 def main() -> None:
-    Container()
+    Container(autoregister_concrete_types=False)
 
     @resolver_context.inject(auto_open_scope=False)
     def handler(value: FromContext[int]) -> int:
@@ -999,7 +999,7 @@ class User:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_instance(User(email="user@example.com"))
 
     @resolver_context.inject
@@ -1033,7 +1033,7 @@ class User:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_instance(User(email="container@example.com"))
 
     @resolver_context.inject
@@ -1069,7 +1069,7 @@ class Resource:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     state = {"cleaned": False}
 
     def provide_resource() -> Generator[Resource, None, None]:
@@ -1126,7 +1126,7 @@ class OuterService:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(
         RequestDependency,
         provides=RequestDependency,
@@ -1188,7 +1188,7 @@ class RequestResource:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     cleanup_state = {"cleaned": False}
 
     def provide_request_resource() -> Generator[RequestResource, None, None]:
@@ -1257,7 +1257,7 @@ class AsyncUser:
 
 
 async def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_instance(AsyncUser(email="async@example.com"))
 
     @resolver_context.inject
@@ -1316,7 +1316,7 @@ FallbackStore = Annotated[UserStore, Component("fallback")]
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
 
     container.add_factory(lambda: UserStore(backend="redis"), provides=PrimaryStore)
     container.add_factory(lambda: UserStore(backend="memory"), provides=FallbackStore)
@@ -1364,7 +1364,7 @@ FallbackCache = Annotated[Cache, Component("fallback")]
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_instance(Cache(backend="redis"), provides=Cache, component="primary")
     container.add_instance(Cache(backend="memory"), provides=Cache, component=Component("fallback"))
 
@@ -1418,7 +1418,7 @@ class B:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(A)
     container.add_concrete(B)
 
@@ -1461,7 +1461,7 @@ class UsesExpensiveProvider:
 
 def main() -> None:
     Expensive.build_count = 0
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(Expensive)
     container.add_concrete(UsesExpensiveProvider)
 
@@ -1506,7 +1506,7 @@ class UsesExpensiveProvider:
 
 def _run_scenario(*, lifetime: Lifetime) -> tuple[int, bool]:
     Expensive.build_count = 0
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(
         Expensive,
         provides=Expensive,
@@ -1572,7 +1572,7 @@ class SecondService:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(FirstService, provides=FirstService)
 
     compiled_first = container.compile()
@@ -1630,7 +1630,7 @@ def build_box(type_arg: type[T]) -> IBox[T]:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_factory(build_box, provides=IBox)
 
     resolved = cast("Box[int]", container.resolve(IBox[int]))
@@ -1671,7 +1671,7 @@ class _SpecialIntBox(IBox[int]):
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(Box, provides=IBox)
     container.add_concrete(_SpecialIntBox, provides=IBox[int])
 
@@ -1715,7 +1715,7 @@ class ListRepo(Repo[list[U]]):
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(GenericRepo, provides=Repo)
     container.add_concrete(ListRepo, provides=Repo[list[U]])
 
@@ -1758,7 +1758,7 @@ def build_box(type_arg: type[T]) -> IBox[T]:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_factory(
         build_box,
         provides=IBox,
@@ -1810,7 +1810,7 @@ class ConstrainedBoxImpl(ConstrainedBox[Allowed]):
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(ConstrainedBoxImpl, provides=ConstrainedBox)
 
     valid_int = container.resolve(ConstrainedBox[int])
@@ -1891,7 +1891,7 @@ class Service:
 
 def main() -> None:
     context = ResolverContext()
-    container = Container(resolver_context=context)
+    container = Container(resolver_context=context, autoregister_concrete_types=False)
     container.add_instance(Service("bound"), provides=Service)
 
     with container.compile():
@@ -1922,7 +1922,7 @@ class Message:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_instance(Message(value="context-message"), provides=Message)
 
     @resolver_context.inject
@@ -1973,7 +1973,12 @@ def _bound_self(method: object) -> object | None:
 
 def main() -> None:
     context = ResolverContext()
-    container = Container(resolver_context=context, use_resolver_context=False)
+    container = Container(
+        resolver_context=context,
+        autoregister_concrete_types=False,
+        autoregister_dependencies=False,
+        use_resolver_context=False,
+    )
     container.add_instance(Message("legacy"), provides=Message)
 
     @context.inject(scope=Scope.REQUEST)
@@ -2175,7 +2180,7 @@ class AsyncService:
 
 
 async def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
 
     async def build_async_service() -> AsyncService:
         await asyncio.sleep(0)
@@ -2210,7 +2215,7 @@ class AsyncResource:
 
 
 async def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     state = {"closed": 0}
 
     async def provide_async_resource() -> AsyncGenerator[AsyncResource, None]:
@@ -2268,7 +2273,7 @@ class MissingDependency:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
 
     try:
         container.resolve(MissingDependency)
@@ -2299,7 +2304,7 @@ class RequestDependency:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(
         RequestDependency,
         provides=RequestDependency,
@@ -2339,7 +2344,7 @@ async def provide_async_dependency() -> AsyncDependency:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_factory(provide_async_dependency, provides=AsyncDependency)
 
     try:
@@ -2376,7 +2381,7 @@ def build_service(raw_value) -> Service:  # type: ignore[no-untyped-def]
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
 
     try:
         container.add_factory(build_service, provides=Service)
@@ -2422,7 +2427,7 @@ class DefaultModelBox(ModelBox[M]):
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(DefaultModelBox, provides=ModelBox)
 
     invalid_key = cast("Any", ModelBox)[str]
@@ -2519,7 +2524,7 @@ Metrics: TypeAlias = Annotated[EventHandler, Component("metrics")]
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
 
     container.add_concrete(BaseHandler, provides=EventHandler)
     container.add_concrete(LoggingHandler, provides=Logging)
@@ -2586,7 +2591,10 @@ class ServiceWithoutDefault:
 
 
 def strict_container() -> Container:
-    return Container()
+    return Container(
+        autoregister_concrete_types=False,
+        autoregister_dependencies=False,
+    )
 
 
 def main() -> None:
@@ -2701,7 +2709,7 @@ class CountingGreeter:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_instance("Hello", provides=str)
     tracer = Tracer(events=[])
     container.add_instance(tracer, provides=Tracer)
@@ -2803,7 +2811,7 @@ class AmbiguousDecorator(Repo):
 
 def main() -> None:
     # Pattern A: decorate first, register later.
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.decorate(
         provides=PrimaryRepo,
         decorator=CachedRepo,
@@ -2876,7 +2884,7 @@ def build_repo(model: type[T]) -> Repo[T]:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_factory(build_repo, provides=Repo)
     container.decorate(provides=Repo, decorator=TimedRepo)
 
@@ -2939,7 +2947,7 @@ class Service:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_context_manager(
         Service,
         scope=Scope.REQUEST,
@@ -2991,7 +2999,7 @@ class Consumer:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     dependency = Dependency(name="framework")
     container.add_instance(dependency)
     container.add_concrete(Consumer)
@@ -3027,7 +3035,7 @@ class Consumer(NamedTuple):
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     dependency = Dependency()
     container.add_instance(dependency)
     container.add_concrete(Consumer)
@@ -3064,7 +3072,7 @@ class Consumer:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     dependency = Dependency()
     container.add_instance(dependency)
     container.add_concrete(Consumer)
@@ -3099,7 +3107,7 @@ class Consumer(pydantic.BaseModel):
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     dependency = Dependency()
     container.add_instance(dependency)
     container.add_concrete(Consumer)
@@ -3135,7 +3143,7 @@ class Consumer(msgspec.Struct):
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     dependency = Dependency()
     container.add_instance(dependency)
     container.add_concrete(Consumer)
@@ -3169,7 +3177,7 @@ from __future__ import annotations
 
 from pydantic_settings import BaseSettings
 
-from diwire import AutoregisterContainer
+from diwire import Container
 
 
 class AppSettings(BaseSettings):
@@ -3177,7 +3185,7 @@ class AppSettings(BaseSettings):
 
 
 def main() -> None:
-    container = AutoregisterContainer()
+    container = Container()
 
     first = container.resolve(AppSettings)
     second = container.resolve(AppSettings)
@@ -3252,7 +3260,7 @@ class ServiceImpl(Service):
 
 @pytest.fixture()
 def diwire_container() -> Container:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(
         ServiceImpl,
         provides=Service,
@@ -3303,7 +3311,7 @@ class RequestResource:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     app = FastAPI()
     lifecycle = {"opened": 0, "closed": 0}
 

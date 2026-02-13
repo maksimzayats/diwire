@@ -13,7 +13,7 @@ class Service:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     build_state = {"count": 0}
 
     def build_service() -> Service:

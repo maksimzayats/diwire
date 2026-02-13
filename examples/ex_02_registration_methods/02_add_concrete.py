@@ -17,7 +17,7 @@ class Service:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(Dependency, provides=Dependency)
     container.add_concrete(Service, provides=Service)
 

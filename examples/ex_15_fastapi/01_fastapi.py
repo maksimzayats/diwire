@@ -25,7 +25,7 @@ class RequestResource:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     app = FastAPI()
     lifecycle = {"opened": 0, "closed": 0}
 

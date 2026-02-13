@@ -689,7 +689,10 @@ def test_planner_raises_for_missing_non_optional_dependency() -> None:
     def _build_service(_dependency: _MissingPlannerDependency) -> _Service:
         return _Service(config=_Config())
 
-    container = Container()
+    container = Container(
+        autoregister_concrete_types=False,
+        autoregister_dependencies=False,
+    )
     container.add_factory(
         _build_service,
         provides=_Service,

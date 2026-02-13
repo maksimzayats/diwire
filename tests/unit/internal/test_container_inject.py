@@ -8,16 +8,7 @@ from typing import Annotated, Any, Generic, NamedTuple, TypeVar, cast
 import pytest
 
 import diwire._internal.injection as injection_module
-from diwire import (
-    AutoregisterContainer,
-    Component,
-    Container,
-    FromContext,
-    Injected,
-    Lifetime,
-    Scope,
-    resolver_context,
-)
+from diwire import Component, Container, FromContext, Injected, Lifetime, Scope, resolver_context
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
     DIWireInvalidRegistrationError,
@@ -567,7 +558,7 @@ def test_inject_auto_open_scope_reraises_non_shallower_scope_mismatch() -> None:
 def test_inject_auto_open_scope_raises_when_inferred_scope_has_no_matching_scope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    container = Container()
+    container = Container(autoregister_dependencies=False)
 
     def _missing_scope(*, scope_level: int) -> None:
         _ = scope_level
@@ -695,7 +686,7 @@ def test_inject_rejects_explicit_scope_shallower_than_inferred() -> None:
 
 
 def test_inject_revalidates_explicit_scope_after_late_registration_sync() -> None:
-    container = Container()
+    container = Container(autoregister_dependencies=False)
 
     @resolver_context.inject(scope=Scope.SESSION)
     def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
@@ -715,7 +706,7 @@ def test_inject_revalidates_explicit_scope_after_late_registration_sync() -> Non
 
 @pytest.mark.asyncio
 async def test_inject_revalidates_explicit_scope_after_late_registration_async() -> None:
-    container = Container()
+    container = Container(autoregister_dependencies=False)
 
     @resolver_context.inject(scope=Scope.SESSION)
     async def handler(dep: Injected[_RequestDependency]) -> _RequestDependency:
@@ -776,7 +767,7 @@ def test_inject_revalidates_explicit_scope_on_registration_when_still_compatible
 
 
 def test_inject_autoregister_true_registers_missing_dependency_chain() -> None:
-    container = AutoregisterContainer(autoregister_dependencies=False)
+    container = Container()
 
     @resolver_context.inject(autoregister_dependencies=True)
     def handler(dep: Injected[_AutoRoot]) -> _AutoRoot:
@@ -792,7 +783,7 @@ def test_inject_autoregister_registers_pydantic_settings_as_singleton_factory() 
     if _pydantic_settings_base is None:
         pytest.skip("pydantic_settings is unavailable")
 
-    container = AutoregisterContainer()
+    container = Container()
 
     @resolver_context.inject(autoregister_dependencies=True)
     def handler(settings: Injected[_InjectedSettings]) -> _InjectedSettings:
@@ -811,7 +802,7 @@ def test_inject_autoregister_registers_pydantic_settings_as_singleton_factory() 
 
 
 def test_inject_autoregister_false_disables_default_autoregistration() -> None:
-    container = AutoregisterContainer()
+    container = Container()
 
     @resolver_context.inject(autoregister_dependencies=False)
     def handler(dep: Injected[_AutoRoot]) -> _AutoRoot:
@@ -829,7 +820,7 @@ def test_inject_autoregister_none_uses_container_default() -> None:
         return dep
 
     assert handler is not None
-    assert container._providers_registrations.find_by_type(_AutoRoot) is None
+    assert container._providers_registrations.find_by_type(_AutoRoot) is not None
 
 
 @pytest.mark.parametrize(
@@ -842,10 +833,7 @@ def test_inject_autoregister_none_uses_container_default() -> None:
 def test_inject_autoregister_none_respects_runtime_container_toggle_matrix(
     case: _AutoregisterCase,
 ) -> None:
-    if case.default_enabled:
-        container = AutoregisterContainer()
-    else:
-        container = AutoregisterContainer(autoregister_dependencies=False)
+    container = Container(autoregister_dependencies=case.default_enabled)
 
     @resolver_context.inject
     def handler(dep: Injected[_AutoRoot]) -> _AutoRoot:
@@ -857,7 +845,7 @@ def test_inject_autoregister_none_respects_runtime_container_toggle_matrix(
 
 
 def test_inject_autoregister_uses_explicit_scope_seed() -> None:
-    container = AutoregisterContainer()
+    container = Container()
 
     @resolver_context.inject(scope=Scope.REQUEST, autoregister_dependencies=True)
     def handler(dep: Injected[_AutoRoot]) -> _AutoRoot:
@@ -1236,7 +1224,10 @@ def test_inject_resolves_open_generic_dependency_via_wrapper_fallback() -> None:
 def test_is_registered_in_resolver_fallback_checks_container_and_open_generic_registrations() -> (
     None
 ):
-    container = Container()
+    container = Container(
+        autoregister_concrete_types=False,
+        autoregister_dependencies=False,
+    )
     resolver_without_registered_checker = cast("Any", object())
 
     assert (

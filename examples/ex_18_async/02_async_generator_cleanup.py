@@ -13,7 +13,7 @@ class AsyncResource:
 
 
 async def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     state = {"closed": 0}
 
     async def provide_async_resource() -> AsyncGenerator[AsyncResource, None]:

@@ -1,42 +1,31 @@
 .. meta::
-   :description: Tune diwire auto-registration using strict Container and explicit AutoregisterContainer.
+   :description: Tune diwire auto-registration: strict mode flags, dependency auto-registration during registration, and scope-safety behavior.
 
 Auto-registration tuning
 ========================
 
-Auto-registration enables the “just write types, then resolve the root” experience.
+Auto-registration enables the “just write types, then resolve the root” experience. It is enabled by default.
 
 Strict mode (disable auto-registration)
 ---------------------------------------
 
-Use :class:`diwire.Container` when you want your app to fail fast if anything is missing:
+Disable auto-registration when you want your app to fail fast if anything is missing:
 
 .. code-block:: python
 
    from diwire import Container
 
-   container = Container()
+   container = Container(autoregister_concrete_types=False, autoregister_dependencies=False)
 
 In strict mode, resolving an unregistered dependency raises
 :class:`diwire.exceptions.DIWireDependencyNotRegisteredError`.
 
-Opt-in autoregistration
------------------------
+Autoregister concrete types vs dependencies
+-------------------------------------------
 
-Use :class:`diwire.AutoregisterContainer` for explicit auto-wiring:
-
-.. code-block:: python
-
-   from diwire import AutoregisterContainer
-
-   container = AutoregisterContainer()
-
-Concrete types vs dependencies
-------------------------------
-
-- ``AutoregisterContainer`` always enables unknown *resolved* concrete class autoregistration.
-- ``AutoregisterContainer(autoregister_dependencies=False)`` disables registration-time dependency autoregistration
-  while keeping resolve-time concrete autoregistration enabled.
+- ``autoregister_concrete_types`` controls whether unknown *resolved* concrete classes are automatically registered.
+- ``autoregister_dependencies`` controls whether provider dependencies are automatically registered as concrete types at
+  **registration time** (when diwire can infer a dependency list for a provider).
 
 Pydantic settings auto-registration
 -----------------------------------

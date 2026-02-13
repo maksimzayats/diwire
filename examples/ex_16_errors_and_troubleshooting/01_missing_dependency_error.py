@@ -11,7 +11,7 @@ class MissingDependency:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
 
     try:
         container.resolve(MissingDependency)

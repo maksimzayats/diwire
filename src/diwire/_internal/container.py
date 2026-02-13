@@ -91,9 +91,10 @@ class Container:
     Closed generic keys are also supported when matching open-generic
     registrations.
 
-    ``Container`` is strict by default: dependencies must be explicitly
-    registered. Use ``AutoregisterContainer`` when you want opt-in
-    autoregistration for concrete types and inferred dependencies.
+    Use registrations for explicit control, or keep autoregistration enabled to
+    auto-wire eligible concrete classes and their dependencies. Disable
+    autoregistration for strict mode where every dependency must be registered
+    explicitly.
 
     Resolution happens through a compiled resolver graph. ``resolve`` runs sync
     graphs, ``aresolve`` runs async graphs, and ``enter_scope`` creates nested
@@ -115,14 +116,17 @@ class Container:
         default_lifetime: Lifetime = Lifetime.SCOPED,
         *,
         lock_mode: LockMode | Literal["auto"] = "auto",
+        autoregister_concrete_types: bool = True,
+        autoregister_dependencies: bool = True,
         resolver_context: ResolverContext = default_resolver_context,
         use_resolver_context: bool = True,
     ) -> None:
         """Initialize a container and configure default registration behavior.
 
-        ``Container`` is strict-only. ``lock_mode="auto"`` selects thread locks
-        for sync-only cached paths and async locks when async resolution paths
-        are present.
+        Choose strict mode by setting ``autoregister_concrete_types=False``.
+        Keep defaults for auto-wiring behavior. ``lock_mode="auto"`` selects
+        thread locks for sync-only cached paths and async locks when async
+        resolution paths are present.
 
         Args:
             root_scope: Root scope for resolver ownership and root-scoped caches.
@@ -130,18 +134,29 @@ class Container:
                 ``lifetime``.
             lock_mode: Container default lock strategy for non-instance
                 registrations. Accepts ``LockMode`` or ``"auto"``.
+            autoregister_concrete_types: Enable on-demand concrete type
+                autoregistration during resolution.
+            autoregister_dependencies: Enable autoregistration of provider
+                dependencies discovered at registration time.
             resolver_context: Resolver context used by ``resolver_context.inject``
                 fallback behavior for this container.
             use_resolver_context: Wrap compiled resolvers so context-manager
                 entry binds into ``resolver_context``.
 
         Notes:
-            For explicit auto-wiring behavior, use ``AutoregisterContainer``.
+            Common presets are: default mode (both autoregistration flags
+            enabled), strict mode (both disabled), and mixed mode (concrete
+            autoregistration enabled with dependency autoregistration disabled).
 
         Examples:
             .. code-block:: python
 
                 container = Container()
+
+                strict_container = Container(
+                    autoregister_concrete_types=False,
+                    autoregister_dependencies=False,
+                )
 
                 threaded_container = Container(lock_mode=LockMode.THREAD)
 
@@ -149,8 +164,8 @@ class Container:
         self._root_scope = root_scope
         self._default_lifetime = default_lifetime
         self._lock_mode = lock_mode
-        self._autoregister_concrete_types = False
-        self._autoregister_dependencies = False
+        self._autoregister_concrete_types = autoregister_concrete_types
+        self._autoregister_dependencies = autoregister_dependencies
         self._resolver_context = resolver_context
         self._use_resolver_context = use_resolver_context
 
@@ -2869,51 +2884,6 @@ class Container:
         return await self.__aexit__(exc_type, exc_value, traceback)
 
     # endregion Resolution and Scope Management
-
-
-class AutoregisterContainer(Container):
-    """Container variant with opt-in autoregistration enabled.
-
-    ``AutoregisterContainer`` enables concrete-type autoregistration during
-    resolution. Dependency autoregistration for inferred provider dependencies
-    is configurable through ``autoregister_dependencies``.
-    """
-
-    def __init__(
-        self,
-        root_scope: BaseScope = Scope.APP,
-        default_lifetime: Lifetime = Lifetime.SCOPED,
-        *,
-        lock_mode: LockMode | Literal["auto"] = "auto",
-        autoregister_dependencies: bool = True,
-        resolver_context: ResolverContext = default_resolver_context,
-        use_resolver_context: bool = True,
-    ) -> None:
-        """Initialize an auto-registering container.
-
-        Args:
-            root_scope: Root scope for resolver ownership and root-scoped caches.
-            default_lifetime: Default lifetime used by registrations that omit
-                ``lifetime``.
-            lock_mode: Container default lock strategy for non-instance
-                registrations. Accepts ``LockMode`` or ``"auto"``.
-            autoregister_dependencies: Enable autoregistration of provider
-                dependencies discovered at registration time.
-            resolver_context: Resolver context used by ``resolver_context.inject``
-                fallback behavior for this container.
-            use_resolver_context: Wrap compiled resolvers so context-manager
-                entry binds into ``resolver_context``.
-
-        """
-        super().__init__(
-            root_scope=root_scope,
-            default_lifetime=default_lifetime,
-            lock_mode=lock_mode,
-            resolver_context=resolver_context,
-            use_resolver_context=use_resolver_context,
-        )
-        self._autoregister_concrete_types = True
-        self._autoregister_dependencies = autoregister_dependencies
 
 
 @dataclass(slots=True, kw_only=True)

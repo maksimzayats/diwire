@@ -25,7 +25,7 @@ class ConstrainedBoxImpl(ConstrainedBox[Allowed]):
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(ConstrainedBoxImpl, provides=ConstrainedBox)
 
     valid_int = container.resolve(ConstrainedBox[int])

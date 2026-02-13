@@ -6,7 +6,7 @@ from diwire import Container, FromContext, Scope, resolver_context
 
 
 def main() -> None:
-    Container()
+    Container(autoregister_concrete_types=False)
 
     @resolver_context.inject(scope=Scope.REQUEST)
     def handler(value: FromContext[int]) -> int:

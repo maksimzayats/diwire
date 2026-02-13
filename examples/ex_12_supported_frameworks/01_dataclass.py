@@ -18,7 +18,7 @@ class Consumer:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     dependency = Dependency(name="framework")
     container.add_instance(dependency)
     container.add_concrete(Consumer)

@@ -25,7 +25,7 @@ Minimal sketch
 
    request_var: ContextVar[Request] = ContextVar("request_var")
    app = Starlette()
-   container = Container()
+   container = Container(autoregister_concrete_types=False)
 
 
    async def middleware(request: Request, call_next):

@@ -19,7 +19,7 @@ class SecondService:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(FirstService, provides=FirstService)
 
     compiled_first = container.compile()

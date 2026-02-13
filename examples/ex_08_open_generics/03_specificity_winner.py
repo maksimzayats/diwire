@@ -26,7 +26,7 @@ class ListRepo(Repo[list[U]]):
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(GenericRepo, provides=Repo)
     container.add_concrete(ListRepo, provides=Repo[list[U]])
 

@@ -54,7 +54,7 @@ Define your classes. Resolve the top-level one. diwire figures out the rest.
 ```python
 from dataclasses import dataclass
 
-from diwire import AutoregisterContainer
+from diwire import Container
 
 
 @dataclass
@@ -72,7 +72,7 @@ class UserService:
     repo: UserRepository
 
 
-container = AutoregisterContainer()
+container = Container()
 service = container.resolve(UserService)
 print(service.repo.db.host)  # => localhost
 ```
@@ -82,20 +82,15 @@ print(service.repo.db.host)  # => localhost
 Use explicit registrations when you need configuration objects, interfaces/protocols, cleanup, or multiple
 implementations.
 
-`Container` is strict by default (recommended for production):
+**Strict mode (recommended for production):**
 
 ```python
 from diwire import Container
 
-container = Container()
-```
-
-Use `AutoregisterContainer` when you want explicit opt-in auto-wiring:
-
-```python
-from diwire import AutoregisterContainer
-
-container = AutoregisterContainer()
+container = Container(
+    autoregister_concrete_types=False,
+    autoregister_dependencies=False,
+)
 ```
 
 ```python
@@ -113,7 +108,7 @@ class SystemClock:
         return "now"
 
 
-container = Container()
+container = Container(autoregister_concrete_types=False)
 container.add_concrete(
     SystemClock,
     provides=Clock,
@@ -128,7 +123,7 @@ Decorator forms are available for concrete types and factories:
 ```python
 from diwire import Container
 
-container = Container()
+container = Container(autoregister_concrete_types=False)
 
 
 @container.add_factory()
@@ -166,7 +161,7 @@ def session_factory() -> Generator[Session, None, None]:
         session.close()
 
 
-container = Container()
+container = Container(autoregister_concrete_types=False)
 container.add_generator(
     session_factory,
     provides=Session,
@@ -186,7 +181,7 @@ print(session.closed)  # => True
 Mark injected parameters as `Injected[T]` and wrap callables with `@container.inject`.
 
 ```python
-from diwire import AutoregisterContainer, Injected
+from diwire import Container, Injected
 
 
 class Service:
@@ -194,7 +189,7 @@ class Service:
         return "ok"
 
 
-container = AutoregisterContainer()
+container = Container()
 
 
 @container.inject
@@ -225,7 +220,7 @@ PrimaryCache: TypeAlias = Annotated[Cache, Component("primary")]
 FallbackCache: TypeAlias = Annotated[Cache, Component("fallback")]
 
 
-container = Container()
+container = Container(autoregister_concrete_types=False)
 container.add_instance(Cache(label="redis"), provides=Cache, component="primary")
 container.add_instance(Cache(label="memory"), provides=Cache, component="fallback")
 
@@ -245,7 +240,7 @@ instance). It also supports deferred replay: registrations made before binding a
 call `set_current(...)`.
 
 ```python
-from diwire import AutoregisterContainer, Injected, container_context
+from diwire import Container, Injected, container_context
 
 
 class Service:
@@ -258,7 +253,7 @@ def handler(service: Injected[Service]) -> str:
     return service.run()
 
 
-container = AutoregisterContainer()
+container = Container()
 container_context.set_current(container)
 
 print(handler())  # => ok

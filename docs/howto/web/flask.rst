@@ -24,7 +24,7 @@ Minimal sketch
    from diwire import Container, Injected, Lifetime, Scope
 
    app = Flask(__name__)
-   container = Container()
+   container = Container(autoregister_concrete_types=False)
 
    container.add_factory(lambda: request, provides=Request, scope=Scope.REQUEST)
 

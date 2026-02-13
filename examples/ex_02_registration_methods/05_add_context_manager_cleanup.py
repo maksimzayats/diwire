@@ -13,7 +13,7 @@ class Resource:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     state = {"cleaned": False}
 
     @contextmanager

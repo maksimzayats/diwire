@@ -16,7 +16,7 @@ class Consumer(NamedTuple):
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     dependency = Dependency()
     container.add_instance(dependency)
     container.add_concrete(Consumer)

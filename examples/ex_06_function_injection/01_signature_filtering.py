@@ -14,7 +14,7 @@ class User:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_instance(User(email="user@example.com"))
 
     @resolver_context.inject

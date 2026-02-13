@@ -7,7 +7,7 @@ Autoregistration
 What you'll learn
 -----------------
 
-- How strict ``Container`` and explicit ``AutoregisterContainer`` affect behavior.
+- How ``autoregister_concrete_types`` and ``autoregister_dependencies`` affect behavior.
 
 Resolve-time chain
 ------------------

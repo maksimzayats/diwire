@@ -14,7 +14,7 @@ class Service:
 
 def main() -> None:
     context = ResolverContext()
-    container = Container(resolver_context=context)
+    container = Container(resolver_context=context, autoregister_concrete_types=False)
     container.add_instance(Service("bound"), provides=Service)
 
     with container.compile():

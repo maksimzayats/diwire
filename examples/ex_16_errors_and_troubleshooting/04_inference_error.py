@@ -16,7 +16,7 @@ def build_service(raw_value) -> Service:  # type: ignore[no-untyped-def]
 
 
 def main() -> None:
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
 
     try:
         container.add_factory(build_service, provides=Service)

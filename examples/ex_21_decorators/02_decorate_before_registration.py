@@ -47,7 +47,7 @@ class AmbiguousDecorator(Repo):
 
 def main() -> None:
     # Pattern A: decorate first, register later.
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.decorate(
         provides=PrimaryRepo,
         decorator=CachedRepo,

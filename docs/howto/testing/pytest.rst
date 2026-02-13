@@ -29,8 +29,8 @@ Then annotate parameters:
 Customizing the container
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The plugin requires a ``diwire_container`` fixture override. The built-in fixture intentionally raises
-until you define your own container setup. Injected parameters are always resolved from this root container.
+The plugin uses a ``diwire_container`` fixture. Override it to register fakes and test-specific
+configuration. Injected parameters are always resolved from this root container.
 
 .. code-block:: python
 
@@ -41,7 +41,7 @@ until you define your own container setup. Injected parameters are always resolv
 
    @pytest.fixture()
    def diwire_container() -> Container:
-       container = Container()
+       container = Container(autoregister_concrete_types=False)
        container.add_concrete(FakeService, provides=Service,
            lifetime=Lifetime.SCOPED,
        )
@@ -84,7 +84,7 @@ This avoids ambient resolver state leaks between tests.
 
    @pytest.fixture
    def container() -> Container:
-       container = Container()
+       container = Container(autoregister_concrete_types=False)
        container.add_instance(Service(), provides=Service)
        return container
 

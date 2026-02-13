@@ -22,7 +22,7 @@ class UsesExpensiveProvider:
 
 def _run_scenario(*, lifetime: Lifetime) -> tuple[int, bool]:
     Expensive.build_count = 0
-    container = Container()
+    container = Container(autoregister_concrete_types=False)
     container.add_concrete(
         Expensive,
         provides=Expensive,
