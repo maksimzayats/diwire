@@ -11,12 +11,10 @@
 diwire is a dependency injection container for Python 3.10+ that builds your object graph from type hints. It supports
 scopes + deterministic cleanup, async resolution, open generics, fast steady-state resolution via compiled
 resolvers, and free-threaded Python (no-GIL) — all with zero runtime dependencies.
-The default registration lifetime is ``Lifetime.SCOPED`` (root-scoped caching by default).
 
 ## Why diwire
 
 - **Zero runtime dependencies**: easy to adopt anywhere. ([Why diwire](https://docs.diwire.dev/why-diwire/))
-- **Compiled resolver**: ``compile()`` generates a resolver specialized to your registrations. ([Compilation](https://docs.diwire.dev/core/compilation/))
 - **Scopes + deterministic cleanup**: generator/async-generator providers clean up on scope exit. ([Scopes](https://docs.diwire.dev/core/scopes/))
 - **Async resolution**: ``aresolve()`` mirrors ``resolve()`` and async providers are first-class. ([Async](https://docs.diwire.dev/core/async/))
 - **Open generics**: register once, resolve for many type parameters. ([Open generics](https://docs.diwire.dev/core/open-generics/))
