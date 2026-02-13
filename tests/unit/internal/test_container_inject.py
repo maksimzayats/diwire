@@ -519,6 +519,20 @@ def test_inject_auto_open_scope_swallow_scope_mismatch_for_deeper_resolver() -> 
         assert resolved is dependency
 
 
+def test_inject_auto_open_scope_reuses_deeper_resolver_context_values() -> None:
+    container = Container()
+
+    @resolver_context.inject(scope=Scope.SESSION, auto_open_scope=True)
+    def handler(value: FromContext[int]) -> int:
+        return value
+
+    injected_handler = cast("Any", handler)
+    with container.enter_scope(Scope.SESSION, context={int: 11}) as session_scope:
+        with session_scope.enter_scope(Scope.REQUEST, context={int: 22}) as request_scope:
+            resolved = injected_handler(diwire_resolver=request_scope)
+            assert resolved == 22
+
+
 def test_inject_auto_open_scope_reraises_non_shallower_scope_mismatch() -> None:
     container = Container()
     dependency = _InjectedSyncDependency("value")

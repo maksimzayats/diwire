@@ -326,8 +326,14 @@ class ResolverContext:
             autoregister_dependencies: Dependency autoregistration policy for
                 wrapper generation, or ``"from_container"`` to inherit the
                 fallback container setting.
-            auto_open_scope: Whether invocation should auto-enter deeper scopes
-                required by injected dependencies.
+            auto_open_scope: Whether invocation should auto-enter scopes when
+                needed. When ``True`` (default), scope entry is attempted only
+                when moving into a deeper target scope is valid and required.
+                If the target scope is already open, no additional scope is
+                entered. If the current resolver is already deeper than the
+                target scope, no additional scope is entered and resolution
+                proceeds from the current resolver (including its existing
+                scope-context chain).
 
         Raises:
             DIWireInvalidRegistrationError: If inject configuration values are

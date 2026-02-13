@@ -83,27 +83,43 @@ diwire raises ``DIWireInvalidRegistrationError`` with guidance.
 Auto-open scopes (default)
 --------------------------
 
-Injected callables may open scopes automatically. The wrapper opens a scope only when needed and
-closes it at the end of the call.
+Injected callables may open scopes automatically. With ``auto_open_scope=True`` (default), the
+wrapper:
+
+- opens a target scope only when entering a deeper scope is needed and valid
+- reuses the current resolver when the target scope is already open (no extra scope entry)
+- reuses the current resolver when it is already deeper than the target scope, including existing
+  scope context values used by ``FromContext[...]``
 
 .. code-block:: python
 
-   from diwire import Container, Injected, Lifetime, Scope, resolver_context
+   from diwire import Container, FromContext, Injected, Lifetime, Scope, resolver_context
 
    class RequestService:
        pass
 
    container = Container()
-   container.add_concrete(RequestService, provides=RequestService,
+   container.add_concrete(
+       RequestService,
+       provides=RequestService,
        scope=Scope.REQUEST,
        lifetime=Lifetime.SCOPED,
    )
 
    @resolver_context.inject(scope=Scope.REQUEST)
-   def handler(service: Injected[RequestService]) -> RequestService:
+   def use_request_scope(service: Injected[RequestService]) -> RequestService:
        return service
 
-   service = handler()
+   @resolver_context.inject(scope=Scope.SESSION)
+   def read_value(value: FromContext[int]) -> int:
+       return value
+
+   with container.enter_scope(Scope.REQUEST) as request_scope:
+       service = use_request_scope(diwire_resolver=request_scope)
+
+   with container.enter_scope(Scope.SESSION, context={int: 11}) as session_scope:
+       with session_scope.enter_scope(Scope.REQUEST, context={int: 22}) as request_scope:
+           value = read_value(diwire_resolver=request_scope)
 
 Naming note
 -----------
