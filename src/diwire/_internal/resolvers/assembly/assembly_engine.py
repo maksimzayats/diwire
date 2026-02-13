@@ -58,7 +58,7 @@ class Environment:
 
     def __init__(self, *, autoescape: bool = False) -> None:
         if autoescape:
-            msg = "autoescape=True is not supported by diwire mini_assembly."
+            msg = "autoescape=True is not supported by diwire assembly engine."
             raise ValueError(msg)
 
     def from_string(self, text: str) -> AssemblySnippet:

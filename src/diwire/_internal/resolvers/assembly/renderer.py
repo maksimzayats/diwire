@@ -11,6 +11,7 @@ from typing import Any
 from diwire._internal.injection import INJECT_CONTEXT_KWARG, INJECT_RESOLVER_KWARG
 from diwire._internal.lock_mode import LockMode
 from diwire._internal.providers import Lifetime, ProviderDependency, ProvidersRegistrations
+from diwire._internal.resolvers.assembly.assembly_engine import AssemblySnippet, Environment
 from diwire._internal.resolvers.assembly.assembly_fragments import (
     ASYNC_METHOD_ASSEMBLY_FRAGMENT,
     BUILD_FUNCTION_ASSEMBLY_FRAGMENT,
@@ -32,7 +33,6 @@ from diwire._internal.resolvers.assembly.assembly_fragments import (
     MODULE_ASSEMBLY_FRAGMENT,
     SYNC_METHOD_ASSEMBLY_FRAGMENT,
 )
-from diwire._internal.resolvers.assembly.mini_assembly import AssemblySnippet, Environment
 from diwire._internal.resolvers.assembly.planner import (
     ProviderDependencyPlan,
     ProviderWorkflowPlan,
