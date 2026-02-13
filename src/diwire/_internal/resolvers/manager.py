@@ -2,6 +2,7 @@ from typing import Any, cast
 
 from diwire._internal.providers import ProvidersRegistrations
 from diwire._internal.resolvers.protocol import BuildRootResolverFunctionProtocol, ResolverProtocol
+from diwire._internal.resolvers.templates.planner import validate_codegen_managed_scopes
 from diwire._internal.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire._internal.scope import BaseScope
 
@@ -26,17 +27,17 @@ class ResolversManager:
             registrations: Provider registrations used to build resolver instances or generated code.
 
         """
+        validate_codegen_managed_scopes(root_scope=root_scope)
         code = self._template_renderer.get_providers_code(
             root_scope=root_scope,
             registrations=registrations,
         )
+        managed_scopes = validate_codegen_managed_scopes(root_scope=root_scope)
 
         namespace: dict[str, Any] = {}
         exec(code, namespace)  # noqa: S102
 
-        for scope in root_scope.owner.__dict__.values():
-            if not isinstance(scope, BaseScope):
-                continue
+        for scope in managed_scopes:
             scope_binding_name = f"_scope_obj_{scope.level}"
             if scope_binding_name in namespace:
                 namespace[scope_binding_name] = scope

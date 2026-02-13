@@ -19,11 +19,14 @@ from diwire._internal.resolvers.templates.planner import (
     ResolverGenerationPlan,
     ResolverGenerationPlanner,
     ScopePlan,
+    _validate_codegen_scope,
+    _validate_codegen_scope_level,
 )
 from diwire._internal.resolvers.templates.renderer import (
     DependencyExpressionContext,
     ResolversTemplateRenderer,
 )
+from diwire._internal.scope import BaseScope
 from diwire.exceptions import DIWireDependencyNotRegisteredError, DIWireInvalidProviderSpecError
 
 
@@ -348,6 +351,68 @@ def test_planner_selects_async_effective_lock_mode_when_async_specs_exist() -> N
 
     assert plan.has_async_specs is True
     assert all(workflow.effective_lock_mode is LockMode.ASYNC for workflow in plan.workflows)
+
+
+def test_planner_rejects_non_identifier_scope_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    container = Container()
+    monkeypatch.setattr(Scope.APP, "scope_name", "bad.name")
+
+    with pytest.raises(DIWireInvalidProviderSpecError, match="scope_name"):
+        ResolverGenerationPlanner(
+            root_scope=Scope.APP,
+            registrations=container._providers_registrations,
+        )
+
+
+def test_planner_rejects_keyword_scope_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    container = Container()
+    monkeypatch.setattr(Scope.APP, "scope_name", "for")
+
+    with pytest.raises(DIWireInvalidProviderSpecError, match="keyword"):
+        ResolverGenerationPlanner(
+            root_scope=Scope.APP,
+            registrations=container._providers_registrations,
+        )
+
+
+def test_validate_codegen_scope_rejects_non_scope_member() -> None:
+    with pytest.raises(DIWireInvalidProviderSpecError, match="BaseScope member"):
+        _validate_codegen_scope(object())
+
+
+def test_validate_codegen_scope_rejects_missing_scope_name() -> None:
+    with pytest.raises(DIWireInvalidProviderSpecError, match="missing 'scope_name'"):
+        _validate_codegen_scope(BaseScope(2))
+
+
+def test_validate_codegen_scope_rejects_non_string_scope_name() -> None:
+    invalid_scope = BaseScope(2)
+    invalid_scope.scope_name = cast("Any", 10)
+
+    with pytest.raises(DIWireInvalidProviderSpecError, match="'scope_name' must be str"):
+        _validate_codegen_scope(invalid_scope)
+
+
+def test_validate_codegen_scope_level_rejects_missing_level() -> None:
+    invalid_scope = BaseScope(2)
+    invalid_scope.scope_name = "request"
+    del invalid_scope.level
+
+    with pytest.raises(DIWireInvalidProviderSpecError, match="missing 'level'"):
+        _validate_codegen_scope_level(scope=invalid_scope)
+
+
+def test_validate_codegen_scope_level_rejects_non_int_level() -> None:
+    invalid_scope = BaseScope(2)
+    invalid_scope.scope_name = "request"
+    invalid_scope.level = cast("Any", "two")
+
+    with pytest.raises(DIWireInvalidProviderSpecError, match="'level' must be int"):
+        _validate_codegen_scope_level(scope=invalid_scope)
 
 
 def test_renderer_includes_generator_context_helpers_for_generator_graphs() -> None:

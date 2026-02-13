@@ -25,12 +25,107 @@ from diwire._internal.providers import (
     ProviderSpec,
     ProvidersRegistrations,
 )
-from diwire._internal.scope import BaseScope
+from diwire._internal.scope import BaseScope, BaseScopes
 from diwire._internal.type_checks import is_runtime_class
 from diwire.exceptions import DIWireDependencyNotRegisteredError, DIWireInvalidProviderSpecError
 
 DispatchKind = Literal["identity", "equality_map"]
 DependencyPlanKind = Literal["provider", "context", "provider_handle", "all", "literal", "omit"]
+
+
+def validate_codegen_managed_scopes(*, root_scope: Any) -> tuple[BaseScope, ...]:
+    """Validate scope metadata used by resolver code generation.
+
+    Args:
+        root_scope: Root scope candidate that owns managed resolver scopes.
+
+    """
+    if not isinstance(root_scope, BaseScope):
+        msg = (
+            "Invalid root scope for resolver code generation: expected BaseScope, "
+            f"got {type(root_scope).__name__}."
+        )
+        raise DIWireInvalidProviderSpecError(msg)
+
+    owner = getattr(root_scope, "owner", None)
+    if owner is None:
+        msg = (
+            "Invalid root scope for resolver code generation: missing 'owner' attribute on "
+            "root scope."
+        )
+        raise DIWireInvalidProviderSpecError(msg)
+    if not isinstance(owner, type) or not issubclass(owner, BaseScopes):
+        msg = (
+            "Invalid root scope for resolver code generation: 'owner' must be a BaseScopes "
+            f"subclass, got {type(owner).__name__}."
+        )
+        raise DIWireInvalidProviderSpecError(msg)
+
+    try:
+        managed_scope_owner = owner()
+    except Exception as error:
+        msg = (
+            "Invalid root scope for resolver code generation: 'owner' must be callable and "
+            "instantiable for scope iteration."
+        )
+        raise DIWireInvalidProviderSpecError(msg) from error
+
+    root_scope_level = _validate_codegen_scope_level(scope=root_scope)
+    managed_scopes: list[BaseScope] = []
+    for scope in managed_scope_owner:
+        _validate_codegen_scope(scope=scope)
+        if scope.level >= root_scope_level:
+            managed_scopes.append(scope)
+
+    return tuple(managed_scopes)
+
+
+def _validate_codegen_scope(scope: Any) -> None:
+    if not isinstance(scope, BaseScope):
+        msg = (
+            "Invalid scope metadata for resolver code generation: expected BaseScope member, "
+            f"got {type(scope).__name__}."
+        )
+        raise DIWireInvalidProviderSpecError(msg)
+
+    scope_name = getattr(scope, "scope_name", None)
+    if scope_name is None:
+        msg = "Invalid scope metadata for resolver code generation: missing 'scope_name'."
+        raise DIWireInvalidProviderSpecError(msg)
+    if not isinstance(scope_name, str):
+        msg = (
+            "Invalid scope metadata for resolver code generation: 'scope_name' must be str, "
+            f"got {type(scope_name).__name__}."
+        )
+        raise DIWireInvalidProviderSpecError(msg)
+    if not scope_name.isidentifier():
+        msg = (
+            "Invalid scope metadata for resolver code generation: "
+            f"scope_name '{scope_name}' is not a valid identifier."
+        )
+        raise DIWireInvalidProviderSpecError(msg)
+    if keyword.iskeyword(scope_name):
+        msg = (
+            "Invalid scope metadata for resolver code generation: "
+            f"scope_name '{scope_name}' is a Python keyword."
+        )
+        raise DIWireInvalidProviderSpecError(msg)
+
+    _validate_codegen_scope_level(scope=scope)
+
+
+def _validate_codegen_scope_level(*, scope: Any) -> int:
+    scope_level = getattr(scope, "level", None)
+    if scope_level is None:
+        msg = "Invalid scope metadata for resolver code generation: missing 'level'."
+        raise DIWireInvalidProviderSpecError(msg)
+    if not isinstance(scope_level, int):
+        msg = (
+            "Invalid scope metadata for resolver code generation: 'level' must be int, "
+            f"got {type(scope_level).__name__}."
+        )
+        raise DIWireInvalidProviderSpecError(msg)
+    return scope_level
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +220,7 @@ class ResolverGenerationPlanner:
     ) -> None:
         self._root_scope = root_scope
         self._registrations = registrations
+        self._managed_scopes = validate_codegen_managed_scopes(root_scope=root_scope)
         self._work_specs = self._collect_specs()
         self._all_slots_by_key = self._build_all_slots_by_key()
         self._requires_async_by_slot = self._build_requires_async_by_slot()
@@ -190,9 +286,7 @@ class ResolverGenerationPlanner:
         return tuple(sorted(specs, key=lambda item: item.slot))
 
     def _build_scope_plans(self) -> tuple[ScopePlan, ...]:
-        scopes_owner = self._root_scope.owner()
-        managed_scopes = [scope for scope in scopes_owner if scope.level >= self._root_scope.level]
-        ordered_scopes = sorted(managed_scopes, key=lambda scope: scope.level)
+        ordered_scopes = sorted(self._managed_scopes, key=lambda scope: scope.level)
 
         plans: list[ScopePlan] = []
         for scope in ordered_scopes:
