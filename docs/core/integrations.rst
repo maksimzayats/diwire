@@ -1,58 +1,47 @@
 .. meta::
-   :description: Integrations and compatibility notes for diwire: dataclasses, namedtuple, pydantic, attrs, msgspec, pydantic-settings BaseSettings auto-registration, and an optional pytest plugin.
+   :description: Integrations and compatibility notes for diwire: supported constructor/field extraction, pydantic-settings, and the optional pytest plugin.
 
 Integrations
 ============
 
 diwire works best with libraries that expose dependencies via a generated ``__init__`` signature and type hints.
 
-Tested integrations
--------------------
+Supported constructor/field extraction
+--------------------------------------
 
 These work out of the box (no adapters required):
 
 - ``dataclasses`` (stdlib)
-- ``namedtuple`` (``typing.NamedTuple``)
-- Pydantic ``BaseModel`` and ``@pydantic.dataclasses.dataclass``
+- ``typing.NamedTuple``
 - ``attrs`` (``@attrs.define``)
-- ``msgspec`` (``msgspec.Struct``)
+- Pydantic ``BaseModel`` (v2)
+- ``msgspec.Struct``
 
-pydantic-settings (BaseSettings)
---------------------------------
+Runnable example: :doc:`/howto/examples/supported-frameworks`.
+
+pydantic-settings
+-----------------
 
 If you use ``pydantic-settings``, diwire includes a small integration:
 
-- subclasses of ``pydantic_settings.BaseSettings`` are auto-registered as **singletons**
-- the default factory is ``cls()`` (so values come from environment/.env, depending on your settings config)
+- subclasses of ``pydantic_settings.BaseSettings`` are auto-registered as root-scoped
+  ``Lifetime.SCOPED`` values (singleton behavior)
+- the default factory is ``cls()``
 
-Example:
+Runnable example: :doc:`/howto/examples/pydantic-settings`.
 
-.. code-block:: python
+pytest plugin
+-------------
 
-   from pydantic_settings import BaseSettings
+diwire ships with an optional pytest plugin that can resolve parameters annotated as ``Injected[T]`` directly in test
+functions from a root test container.
 
-   from diwire import Container
-
-
-   class Settings(BaseSettings):
-       database_url: str
-
-
-   container = Container()
-   settings = container.resolve(Settings)  # auto-registered singleton
-
-pytest
-------
-
-diwire includes an optional pytest plugin that can resolve parameters annotated as
-``Injected[T]`` directly in test functions.
-
-See :doc:`/howto/testing/pytest`.
+Runnable example: :doc:`/howto/examples/pytest-plugin`.
 
 FastAPI
 -------
 
-diwire includes an optional FastAPI integration that auto-wraps endpoints with
-``Injected`` parameters so FastAPI only sees request inputs.
+diwire does not require a dedicated FastAPI integration module. The recommended pattern is to decorate endpoints with
+``@resolver_context.inject(scope=Scope.REQUEST)``.
 
-See :doc:`/howto/web/fastapi`.
+See :doc:`/howto/web/fastapi` and the runnable script :doc:`/howto/examples/fastapi`.

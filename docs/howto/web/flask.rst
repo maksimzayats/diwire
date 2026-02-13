@@ -1,56 +1,49 @@
 .. meta::
-   :description: Pattern for using diwire with Flask/WSGI: create a request scope in before_request/teardown_request and inject services into view functions.
+   :description: Pattern for using diwire with Flask/WSGI: request scopes via @resolver_context.inject(scope=Scope.REQUEST) and request-bound dependencies.
 
 Flask (WSGI)
 ============
 
-Flask is synchronous and commonly runs view functions in worker threads/processes.
-diwire works well in this environment with an explicit per-request scope.
+Flask is synchronous and commonly runs view functions in worker threads/processes. diwire works well in this
+environment with per-request scopes.
 
 Recommended pattern
 -------------------
 
 1. Create a global container at app startup.
-2. Enter a ``Scope.REQUEST`` scope in ``before_request`` and close it in ``teardown_request``.
-3. Use ``container.resolve()`` (or ``container_context.resolve()``) to inject services into view functions.
+2. Register request-scoped providers with ``Lifetime.SCOPED`` and ``scope=Scope.REQUEST``.
+3. Decorate views with ``@resolver_context.inject(scope=Scope.REQUEST)`` (the wrapper opens/closes a request scope per call).
 
 Minimal sketch
 --------------
 
 .. code-block:: python
 
-   from flask import Flask, g
-   from typing import Annotated
+   from flask import Flask, Request, request
 
-   from diwire import Container, Injected, Lifetime, Scope
+   from diwire import Container, Injected, Lifetime, Scope, resolver_context
 
    app = Flask(__name__)
    container = Container()
 
-
-   @app.before_request
-   def _enter_request_scope() -> None:
-       g.diwire_scope = container.enter_scope(Scope.REQUEST)
-
-
-   @app.teardown_request
-   def _exit_request_scope(_exc) -> None:
-       scope = getattr(g, "diwire_scope", None)
-       if scope is not None:
-           scope.close()
+   container.add_factory(lambda: request, provides=Request, scope=Scope.REQUEST)
 
 
    class Service:
        ...
 
 
-   container.register(Service, lifetime=Lifetime.SCOPED, scope=Scope.REQUEST)
+   container.add(Service, provides=Service,
+       lifetime=Lifetime.SCOPED,
+       scope=Scope.REQUEST,
+   )
 
 
    @app.get("/health")
-   @container.resolve()  # uses the already-active scope from before_request
+   @resolver_context.inject(scope=Scope.REQUEST)
    def health(service: Injected[Service]) -> dict[str, bool]:
+       _ = service
        return {"ok": True}
 
-If you'd rather have the wrapper create the scope per call, pass ``scope=Scope.REQUEST`` to ``resolve()``, but the
-hook-based approach is usually a better match for Flask apps.
+If you prefer managing scopes manually (for example, in ``before_request``/``teardown_request``), resolve dependencies
+from the active resolver returned by ``enter_scope(...)`` rather than relying on injected wrappers.

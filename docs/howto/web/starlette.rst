@@ -1,14 +1,14 @@
 .. meta::
-   :description: Pattern for using diwire with Starlette/ASGI: request scopes, middleware, and contextvars for request-bound dependencies.
+   :description: Pattern for using diwire with Starlette/ASGI: request scopes, @resolver_context.inject, and contextvars for request-bound dependencies.
 
 Starlette (and other ASGI frameworks)
 =====================================
 
-There is no Starlette-specific integration in diwire (by design), but the pattern is the same as FastAPI:
+There is no Starlette-specific integration in diwire (by design). The recommended pattern is:
 
-1. Build a container at startup and make it globally accessible (often via :data:`diwire.container_context`).
-2. Create a request scope per incoming request.
-3. Put request-bound objects (Request, user, trace id, etc.) into a ``ContextVar`` and register them via factories.
+1. Build a container at startup.
+2. Use ``@resolver_context.inject(scope=Scope.REQUEST)`` for request handlers.
+3. Use ``contextvars`` only for request-bound objects (``Request``, user, trace id, ...), not for “current container”.
 
 Minimal sketch
 --------------
@@ -16,39 +16,48 @@ Minimal sketch
 .. code-block:: python
 
    from contextvars import ContextVar
-   from typing import Annotated
 
    from starlette.applications import Starlette
+   from starlette.middleware import Middleware
+   from starlette.middleware.base import BaseHTTPMiddleware
    from starlette.requests import Request
    from starlette.responses import JSONResponse
 
-   from diwire import Container, Injected, Scope, container_context
+   from diwire import Container, Injected, Scope, resolver_context
 
    request_var: ContextVar[Request] = ContextVar("request_var")
-   app = Starlette()
 
 
-   async def middleware(request: Request, call_next):
-       token = request_var.set(request)
-       try:
-           return await call_next(request)
-       finally:
-           request_var.reset(token)
+   class RequestVarMiddleware(BaseHTTPMiddleware):
+       async def dispatch(self, request: Request, call_next):
+           token = request_var.set(request)
+           try:
+               return await call_next(request)
+           finally:
+               request_var.reset(token)
 
 
-   app.middleware("http")(middleware)
-
+   app = Starlette(middleware=[Middleware(RequestVarMiddleware)])
    container = Container()
-   container_context.set_current(container)
 
-   container.register(Request, factory=request_var.get, scope=Scope.REQUEST)
+   container.add_factory(
+       lambda: request_var.get(),
+       provides=Request,
+       scope=Scope.REQUEST,
+   )
 
 
-   @container_context.resolve(scope=Scope.REQUEST)
-   async def handler(
-       request: Request,
-       service: Injected["Service"],
-   ) -> JSONResponse:
+   class Service:
+       ...
+
+
+   container.add(Service, provides=Service, scope=Scope.REQUEST)
+
+
+   @resolver_context.inject(scope=Scope.REQUEST)
+   async def handler(request: Request, service: Injected[Service]) -> JSONResponse:
+       _ = request
+       _ = service
        return JSONResponse({"ok": True})
 
-The exact routing API differs between frameworks, but the DI pieces stay the same.
+The exact routing API differs between ASGI frameworks, but the DI pieces stay the same.

@@ -6,23 +6,30 @@ Interfaces (Protocol/ABC)
 
 If your code depends on abstractions (Protocols/ABCs), you must tell diwire what concrete class to build.
 
-Two common ways:
+Use ``add(..., provides=...)``:
 
-1. ``concrete_class=...``:
+.. code-block:: python
 
-   .. code-block:: python
+   from typing import Protocol
 
-      container.register(Clock, concrete_class=SystemClock)
+   from diwire import Container, Lifetime
 
-2. Decorator:
 
-   .. code-block:: python
+   class Clock(Protocol):
+       def now(self) -> str: ...
 
-      @container.register(Clock, lifetime=Lifetime.SINGLETON)
-      class SystemClock:
-          ...
+
+   class SystemClock:
+       def now(self) -> str:
+           return "now"
+
+
+   container = Container()
+   container.add(SystemClock, provides=Clock,
+       lifetime=Lifetime.SCOPED,
+   )
 
 Example (runnable)
 ------------------
 
-See the runnable script in :doc:`../examples/patterns` (Interface registration section).
+See :doc:`../examples/registration-methods`.

@@ -1,123 +1,53 @@
 .. meta::
-   :description: How to use diwire with FastAPI: per-request scopes, Injected parameters, and container_context for clean endpoint signatures.
+   :description: How to use diwire with FastAPI: per-request scopes via @resolver_context.inject(scope=Scope.REQUEST) and Injected[T] parameters.
    :keywords: fastapi dependency injection, python dependency injection fastapi, request scope dependency injection
 
 FastAPI
 =======
 
-FastAPI already has its own dependency system, but diwire is still useful when you want:
+FastAPI already has its own dependency system, but diwire is useful when you want:
 
 - a single, typed object graph shared across your app
 - request/job scopes with deterministic cleanup
 - constructor injection for your domain/services
-- handler signatures that stay friendly for FastAPI (only request parameters are visible)
 
-Built-in integration (recommended)
-----------------------------------
+Recommended pattern: decorate endpoints
+------------------------------------------------
 
-The built-in FastAPI integration auto-wraps endpoints that use
-``Injected[T]`` parameters. FastAPI only sees request parameters, and diwire
-resolves the injected dependencies when the endpoint is called.
-
-1. Configure the container and install the integration (do this before registering routes that
-   use ``Injected``):
-
-   .. code-block:: python
-
-      from fastapi import FastAPI
-
-      from diwire import Container, Scope
-      from diwire.integrations.fastapi import setup_diwire
-
-      app = FastAPI()
-      container = Container()
-      setup_diwire(app, container=container, scope=Scope.REQUEST)
-
-2. Define routes normally (no explicit diwire decorator needed):
-
-   .. code-block:: python
-
-      from typing import Annotated
-
-      from diwire import Injected
-
-
-      @app.get("/health")
-      async def health(service: Injected["Service"]) -> dict[str, str]:
-          return {"status": service.ok()}
-
-3. Register request-scoped services (``Lifetime.SCOPED``, ``scope=Scope.REQUEST``) and any request-specific objects
-   (like ``fastapi.Request``) via factories/contextvars.
-
-Router-level control
---------------------
-
-You can also configure a router to use ``DIWireRoute``:
-
-.. code-block:: python
-
-   from diwire import Container, container_context
-   from fastapi import APIRouter
-
-   from diwire.integrations.fastapi import DIWireRoute
-
-   container = Container()
-   container_context.set_current(container)
-
-   router = APIRouter(route_class=DIWireRoute)
-
-Manual alternatives
--------------------
-
-If you prefer to be explicit (or want to avoid the integration), you can wrap endpoints manually:
+Decorate endpoints with :meth:`diwire.ResolverContext.inject` and use ``Injected[T]`` parameters for injected dependencies.
+With ``scope=Scope.REQUEST`` (and the default ``auto_open_scope=True``), the wrapper opens a request scope per call and
+closes it when the endpoint returns.
 
 .. code-block:: python
 
    from fastapi import FastAPI
 
-   from diwire import Container, Scope
+   from diwire import Container, Injected, Lifetime, Scope, resolver_context
 
    app = FastAPI()
    container = Container()
 
 
-   async def handler() -> dict: ...
+   class RequestService:
+       def run(self) -> str:
+           return "ok"
 
-   app.add_api_route(
-       "/path",
-       container.resolve(handler, scope=Scope.REQUEST),
-       methods=["GET"],
+
+   container.add(RequestService, provides=RequestService,
+       scope=Scope.REQUEST,
+       lifetime=Lifetime.SCOPED,
    )
 
-Or use decorator-based wrapping:
 
-.. code-block:: python
+   @app.get("/health")
+   @resolver_context.inject(scope=Scope.REQUEST)
+   def health(service: Injected[RequestService]) -> dict[str, str]:
+       return {"status": service.run()}
 
-   from diwire import Container, Scope
+Decorator order matters: apply ``@resolver_context.inject(...)`` *below* the FastAPI decorator so FastAPI sees the injected
+wrapper signature (Injected parameters are removed from the public signature).
 
-   container = Container()
+Runnable example
+----------------
 
-
-   @app.get("/path")
-   @container.resolve(scope=Scope.REQUEST)
-   async def handler() -> dict: ...
-
-For larger applications, ``container_context`` can be used to avoid passing the container
-everywhere:
-
-.. code-block:: python
-
-   from diwire import Scope, container_context
-
-   @app.get("/path")
-   @container_context.resolve(scope=Scope.REQUEST)
-   async def handler() -> dict: ...
-
-Runnable examples
------------------
-
-See :doc:`../examples/fastapi` for three progressively more advanced FastAPI examples:
-
-- built-in integration with ``setup_diwire``
-- decorator-based layering
-- ``container_context`` + middleware-managed request context
+See :doc:`../examples/fastapi`.

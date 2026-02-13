@@ -1,308 +1,103 @@
-"""Custom exceptions for the diwire dependency injection library."""
-
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from diwire.service_key import ServiceKey
-
-
 class DIWireError(Exception):
-    """Base exception for all diwire errors."""
+    """Represent a base class for all DIWire-specific failures.
+
+    Catch this type when you want to handle any DIWire error path without
+    matching each concrete exception class individually.
+    """
 
 
-class DIWireInjectedInstantiationError(DIWireError):
-    """Injected() was called instead of using Injected[T]."""
+class DIWireInvalidRegistrationError(DIWireError):
+    """Signal invalid registration or injection configuration.
 
-    def __init__(self) -> None:
-        super().__init__("Injected is not instantiable; use Injected[T].")
+    Raised by registration APIs such as ``Container.add``,
+    ``Container.add_factory``, ``Container.add_generator``,
+    ``Container.add_context_manager``, and by ``ResolverContext.inject`` when
+    arguments are invalid.
 
-
-class DIWireServiceNotRegisteredError(DIWireError):
-    """Service not registered and auto-registration disabled."""
-
-    def __init__(self, service_key: ServiceKey) -> None:
-        self.service_key = service_key
-        super().__init__(f"Service {service_key} is not registered.")
-
-
-class DIWireMissingDependenciesError(DIWireError):
-    """Service cannot be resolved due to missing dependencies."""
-
-    def __init__(self, service_key: ServiceKey, missing: list[ServiceKey]) -> None:
-        self.service_key = service_key
-        self.missing = missing
-        super().__init__(
-            f"Cannot resolve service {service_key} due to missing dependencies: {missing}",
-        )
+    Typical fixes include providing valid ``provides``/``scope``/``lifetime``
+    values, ensuring providers are callable with valid type annotations, and
+    avoiding reserved injection parameter names.
+    """
 
 
-class DIWireAutoRegistrationError(DIWireError):
-    """Base for auto-registration failures."""
+class DIWireInvalidProviderSpecError(DIWireError):
+    """Signal an invalid provider specification payload.
+
+    This error is raised while validating provider metadata before resolver
+    generation, for example when explicit dependencies do not match the
+    provider signature.
+    """
 
 
-class DIWireComponentSpecifiedError(DIWireAutoRegistrationError):
-    """Cannot auto-register service key with a component."""
+class DIWireProviderDependencyInferenceError(DIWireInvalidProviderSpecError):
+    """Signal that required provider dependencies cannot be inferred.
 
-    def __init__(self, service_key: ServiceKey) -> None:
-        self.service_key = service_key
-        super().__init__(
-            f"Cannot auto-register service key {service_key!r} which has a component specified.",
-        )
+    Common triggers are missing or unresolvable type annotations on required
+    provider parameters.
 
-
-class DIWireIgnoredServiceError(DIWireAutoRegistrationError):
-    """Cannot auto-register service in ignore list."""
-
-    def __init__(self, service_key: ServiceKey) -> None:
-        self.service_key = service_key
-        super().__init__(
-            f"Cannot auto-register service key {service_key!r} which is in the ignore list.",
-        )
+    Typical fixes include adding concrete parameter annotations or passing
+    explicit ``dependencies=...`` during registration.
+    """
 
 
-class DIWireNotAClassError(DIWireAutoRegistrationError):
-    """Cannot auto-register non-class value."""
+class DIWireDependencyNotRegisteredError(DIWireError):
+    """Signal that a dependency key has no provider.
 
-    def __init__(self, service_key: ServiceKey) -> None:
-        self.service_key = service_key
-        super().__init__(f"Cannot auto-register service key {service_key!r} which is not a class.")
+    Raised by ``resolve``/``aresolve`` when strict mode is used (autoregistration
+    disabled) or when no matching open-generic registration exists.
 
-
-class DIWireUnionTypeError(DIWireAutoRegistrationError):
-    """Cannot auto-register a union type."""
-
-    def __init__(self, service_key: ServiceKey) -> None:
-        self.service_key = service_key
-        super().__init__(
-            f"Cannot auto-register union type {service_key!r}. "
-            f"Union types must be explicitly registered with a factory.",
-        )
+    Typical fixes include registering the dependency explicitly, enabling
+    autoregistration for eligible concrete types, or registering an open-generic
+    provider for the requested closed generic key.
+    """
 
 
-class DIWireCircularDependencyError(DIWireError):
-    """Circular dependency detected during resolution."""
+class DIWireResolverNotSetError(DIWireError):
+    """Signal use of ``resolver_context`` with no resolver source available.
 
-    def __init__(self, service_key: ServiceKey, resolution_chain: list[ServiceKey]) -> None:
-        self.service_key = service_key
-        self.resolution_chain = resolution_chain
-        chain_str = " -> ".join(
-            str(sk.value.__name__ if hasattr(sk.value, "__name__") else sk.value)
-            for sk in resolution_chain
-        )
-        chain_str += f" -> {service_key.value.__name__ if hasattr(service_key.value, '__name__') else service_key.value}"
-        super().__init__(f"Circular dependency detected: {chain_str}")
+    Raised by ``ResolverContext.resolve``, ``ResolverContext.aresolve``,
+    ``ResolverContext.enter_scope``, and ``ResolverContext.inject`` call paths
+    when neither an active resolver context nor a fallback container can serve
+    the call. For ``ResolverContext.inject``, fallback injection is disabled
+    when the fallback container uses ``use_resolver_context=False``, so calls
+    must pass ``diwire_resolver=...`` explicitly (or run under a bound resolver
+    context).
+
+    Typical fixes are entering a resolver context (``with container.compile():``)
+    or passing an explicit resolver via ``diwire_resolver=...``.
+    """
 
 
 class DIWireScopeMismatchError(DIWireError):
-    """Service is being resolved outside its registered scope."""
+    """Signal scope transition or resolution at an invalid scope depth.
 
-    def __init__(
-        self,
-        service_key: ServiceKey,
-        registered_scope: str,
-        current_scope: str | None,
-    ) -> None:
-        self.service_key = service_key
-        self.registered_scope = registered_scope
-        self.current_scope = current_scope
-        current = current_scope or "no active scope"
-        super().__init__(
-            f"Service {service_key} is registered for scope '{registered_scope}' "
-            f"but is being resolved in '{current}'.",
-        )
+    Raised by ``enter_scope`` for invalid transitions and by ``resolve``/``aresolve``
+    when a dependency requires a deeper scope than the current resolver.
 
-
-class DIWireScopedWithoutScopeError(DIWireError):
-    """SCOPED registered without a scope."""
-
-    def __init__(self, service_key: ServiceKey) -> None:
-        self.service_key = service_key
-        super().__init__(
-            f"Service {service_key} is registered as SCOPED but no scope was provided. "
-            f"SCOPED requires a scope parameter.",
-        )
-
-
-class DIWireGeneratorFactoryWithoutScopeError(DIWireError):
-    """Factory returned a generator without an active scope."""
-
-    def __init__(self, service_key: ServiceKey) -> None:
-        self.service_key = service_key
-        super().__init__(
-            f"Factory for service {service_key} returned a generator, but no active scope exists. "
-            "Resolve the service within a scope (enter_scope) to ensure cleanup.",
-        )
-
-
-class DIWireGeneratorFactoryDidNotYieldError(DIWireError):
-    """Factory returned a generator that yielded no value."""
-
-    def __init__(self, service_key: ServiceKey) -> None:
-        self.service_key = service_key
-        super().__init__(
-            f"Factory for service {service_key} returned a generator that did not yield a value.",
-        )
-
-
-class DIWireGeneratorFactoryUnsupportedLifetimeError(DIWireError):
-    """Factory returned a generator for an unsupported lifetime."""
-
-    def __init__(self, service_key: ServiceKey) -> None:
-        self.service_key = service_key
-        super().__init__(
-            f"Factory for service {service_key} returned a generator, but generator factories "
-            "require scoped or transient lifetimes within an active scope.",
-        )
+    Typical fixes include entering the required scope (for example
+    ``with container.enter_scope(Scope.REQUEST): ...``) or adjusting provider
+    scopes/lifetimes.
+    """
 
 
 class DIWireAsyncDependencyInSyncContextError(DIWireError):
-    """Attempted to resolve an async dependency using synchronous resolve()."""
+    """Signal sync resolution of an async dependency chain.
 
-    def __init__(self, service_key: ServiceKey, async_dep: ServiceKey) -> None:
-        self.service_key = service_key
-        self.async_dep = async_dep
-        super().__init__(
-            f"Cannot resolve {service_key} synchronously because it depends on async dependency "
-            f"{async_dep}. Use 'await container.aresolve({service_key})' instead.",
-        )
+    Raised by ``Container.resolve`` or sync cleanup paths when the selected
+    provider graph requires asynchronous resolution/cleanup.
 
-
-class DIWireAsyncGeneratorFactoryWithoutScopeError(DIWireError):
-    """Async generator factory used without an active scope."""
-
-    def __init__(self, service_key: ServiceKey) -> None:
-        self.service_key = service_key
-        super().__init__(
-            f"Factory for service {service_key} is an async generator, but no active scope exists. "
-            "Resolve the service within an async scope (async with container.enter_scope()) "
-            "to ensure proper cleanup.",
-        )
-
-
-class DIWireAsyncGeneratorFactoryDidNotYieldError(DIWireError):
-    """Async generator factory did not yield a value."""
-
-    def __init__(self, service_key: ServiceKey) -> None:
-        self.service_key = service_key
-        super().__init__(
-            f"Async generator factory for service {service_key} did not yield a value.",
-        )
-
-
-class DIWireContainerNotSetError(DIWireError):
-    """No container set in current context."""
-
-    def __init__(self) -> None:
-        super().__init__(
-            "No container set in current context. "
-            "Call container_context.set_current(container) first.",
-        )
-
-
-class DIWireInitialScopeCloseError(DIWireError):
-    """Initial container scope cannot be closed explicitly."""
-
-    def __init__(self, scope_name: str) -> None:
-        super().__init__(
-            f"Initial scope '{scope_name}' cannot be closed explicitly. "
-            "Use container.close() or container.aclose() to close the container.",
-        )
-
-
-class DIWireDependencyExtractionError(DIWireError):
-    """Failed to extract dependencies from a type."""
-
-    def __init__(self, service_key: ServiceKey, cause: Exception) -> None:
-        self.service_key = service_key
-        self.cause = cause
-        super().__init__(f"Failed to extract dependencies from {service_key}: {cause}")
-
-
-class DIWireConcreteClassRequiresClassError(DIWireError):
-    """The 'concrete_class' parameter requires a class type."""
-
-    def __init__(self, concrete_class: object) -> None:
-        self.concrete_class = concrete_class
-        super().__init__(
-            f"'concrete_class' must be a class type, "
-            f"got {type(concrete_class).__name__}: {concrete_class}",
-        )
-
-
-class DIWireAsyncCleanupWithoutEventLoopError(DIWireError):
-    """Async cleanup required but no event loop is running."""
-
-    def __init__(self, scope_name: str | None) -> None:
-        self.scope_name = scope_name
-        scope_desc = f"'{scope_name}'" if scope_name else "anonymous scope"
-        super().__init__(
-            f"Scope {scope_desc} has async resources that need cleanup, but no event loop is "
-            "running. Use 'async with container.enter_scope()' instead of 'with' when resolving "
-            "async generators, or ensure an event loop is running when the scope exits.",
-        )
-
-
-class DIWireDecoratorFactoryMissingReturnAnnotationError(DIWireError):
-    """Raised when factory decorator cannot determine service type.
-
-    This happens when:
-    - No explicit key is given, AND
-    - The function has no return type annotation (or returns None)
+    Typical fix is switching to ``await container.aresolve(...)`` or using
+    ``async with`` for scoped cleanup.
     """
-
-    def __init__(self, factory: object) -> None:
-        self.factory = factory
-        factory_name = getattr(factory, "__name__", repr(factory))
-        super().__init__(
-            f"Factory '{factory_name}' has no return annotation. "
-            f"Either add a return type annotation or use @container.register(SomeType).",
-        )
-
-
-class DIWireOpenGenericRegistrationError(DIWireError):
-    """Open generic registration is invalid or unsupported."""
-
-    def __init__(self, service_key: ServiceKey, reason: str) -> None:
-        self.service_key = service_key
-        self.reason = reason
-        super().__init__(f"Invalid open generic registration for {service_key}: {reason}")
-
-
-class DIWireOpenGenericResolutionError(DIWireError):
-    """Cannot resolve an open or partially open generic."""
-
-    def __init__(self, service_key: ServiceKey, reason: str) -> None:
-        self.service_key = service_key
-        self.reason = reason
-        super().__init__(f"Cannot resolve generic {service_key}: {reason}")
 
 
 class DIWireInvalidGenericTypeArgumentError(DIWireError):
-    """Type argument does not satisfy TypeVar constraints or bounds."""
+    """Signal invalid closed-generic arguments for an open registration.
 
-    def __init__(self, service_key: ServiceKey, typevar: Any, arg: Any, reason: str) -> None:
-        self.service_key = service_key
-        self.typevar = typevar
-        self.arg = arg
-        self.reason = reason
-        typevar_name = getattr(typevar, "__name__", repr(typevar))
-        super().__init__(
-            f"Invalid type argument for {service_key}: {typevar_name}={arg!r}. {reason}",
-        )
+    Raised while matching open-generic registrations when a closed key violates
+    TypeVar bounds or constraints, or when unresolved TypeVars remain after
+    substitution.
 
-
-class DIWireContainerClosedError(DIWireError):
-    """Operation attempted on a closed container."""
-
-    def __init__(self) -> None:
-        super().__init__("Cannot perform operation on a closed container.")
-
-
-class DIWireInvalidScopeNameError(DIWireError):
-    """Scope name is empty or blank."""
-
-    def __init__(self, scope_name: str) -> None:
-        self.scope_name = scope_name
-        super().__init__(f"initial_scope must be a non-empty scope name, got {scope_name!r}.")
+    Typical fixes include resolving a compatible closed generic key or tightening
+    open-generic provider annotations to reflect valid constraints.
+    """

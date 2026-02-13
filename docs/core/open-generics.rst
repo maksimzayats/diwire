@@ -15,7 +15,7 @@ diwire also validates TypeVar bounds/constraints at runtime.
 Example
 -------
 
-See the runnable script in :doc:`/howto/examples/basics` (Open generics section).
+See the runnable script in :doc:`/howto/examples/open-generics`.
 
 How it works
 ------------

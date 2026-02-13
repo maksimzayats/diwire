@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
 import sys
+from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
 
@@ -14,15 +17,57 @@ sys.path.insert(0, str(_DOCS_DIR / "_extensions"))
 project = "diwire"
 author = "Maksim Zayats"
 
-try:
-    release = package_version("diwire")
-except PackageNotFoundError:
-    release = "0+unknown"
 
-# Used by Sphinx + templates. Keep `version` stable-ish (major.minor.patch) even when `release` includes dev/local info.
-version = (
-    release.split("+", maxsplit=1)[0].split(".post", maxsplit=1)[0].split(".dev", maxsplit=1)[0]
-)
+def _normalize_display_version(raw_release: str) -> str:
+    stable_release = raw_release
+    for marker in ("+", ".post", ".dev"):
+        stable_release = stable_release.split(marker, maxsplit=1)[0]
+    return stable_release
+
+
+def _resolve_metadata_release(package_name: str = "diwire") -> str:
+    try:
+        return package_version(package_name)
+    except PackageNotFoundError:
+        return "0+unknown"
+
+
+def _read_latest_tag(repo_root: Path) -> str | None:
+    git_binary = shutil.which("git")
+    if git_binary is None:
+        return None
+
+    try:
+        completed = subprocess.run(  # noqa: S603
+            [git_binary, "describe", "--tags", "--abbrev=0"],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=repo_root,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+    latest_tag = completed.stdout.strip()
+    if not latest_tag:
+        return None
+    return latest_tag.removeprefix("v")
+
+
+def _resolve_docs_versions(
+    metadata_release: str,
+    repo_root: Path,
+    git_tag_reader: Callable[[Path], str | None] = _read_latest_tag,
+) -> tuple[str, str]:
+    release = metadata_release
+    if metadata_release.startswith("0.0.0"):
+        latest_tag = git_tag_reader(repo_root)
+        release = latest_tag.removeprefix("v") if latest_tag else ""
+    version = _normalize_display_version(release)
+    return release, version
+
+
+release, version = _resolve_docs_versions(_resolve_metadata_release(), _ROOT)
 
 extensions: list[str] = [
     # Built-in Sphinx extensions
@@ -31,7 +76,6 @@ extensions: list[str] = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
-    "sphinx.ext.autosectionlabel",
     "sphinx_copybutton",
     "sphinx_pyodide_runner",
 ]
@@ -49,15 +93,17 @@ html_css_files: list[str] = ["custom.css"]
 templates_path: list[str] = ["_templates"]
 html_theme_options = {
     "source_repository": "https://github.com/maksimzayats/diwire",
-    "source_branch": os.environ.get("DIWIRE_DOCS_SOURCE_BRANCH", "main"),
+    "source_branch": (
+        os.environ.get("DIWIRE_DOCS_SOURCE_BRANCH") or os.environ.get("GITHUB_REF_NAME") or "main"
+    ).strip(),
     "source_directory": "docs",
     "top_of_page_buttons": ["view", "edit"],
 }
 
 # ---- Quality of life / navigation -------------------------------------------------
 
-autosectionlabel_prefix_document = True
 autosummary_generate = True
+autodoc_typehints = "none"
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),

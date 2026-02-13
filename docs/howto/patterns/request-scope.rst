@@ -16,9 +16,7 @@ The pattern
 Example (runnable)
 ------------------
 
-See the full script:
-
-See the runnable script in :doc:`../examples/patterns` (HTTP request handler pattern section).
+See :doc:`../examples/scopes` and :doc:`../examples/fastapi` for runnable request-scope examples.
 
 Notes
 -----

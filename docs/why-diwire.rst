@@ -1,5 +1,5 @@
 .. meta::
-   :description: Why diwire exists: a typed, type-hint driven dependency injection container for Python with zero runtime dependencies, scopes, async support, and cleanup.
+   :description: Why diwire exists: type-driven DI with a small API, deterministic cleanup, and fast steady-state resolution.
    :keywords: dependency injection python, type driven dependency injection, type hints dependency injection, ioc container python
 
 Why diwire
@@ -7,16 +7,25 @@ Why diwire
 
 diwire is built for teams that want dependency injection to feel like *Python with type hints*, not like a framework.
 
-Goals
------
+The goals
+---------
 
-- **Type-first wiring**: build the object graph from annotations, so you write fewer registrations.
+- **Type-first wiring**: dependencies come from annotations, so most graphs require little to no registration code.
 - **Small surface area**: one container, a few primitives (lifetimes, scopes, components), and predictable behavior.
-- **Async-first**: `aresolve()` mirrors `resolve()`, and async factories / async cleanup are first-class.
-- **Correct cleanup**: resource lifetimes map to scopes via generator/async-generator factories.
-- **Zero runtime dependencies**: keep the library easy to adopt in any environment.
+- **Correct cleanup**: resource lifetimes map to scopes via generator/async-generator providers.
+- **Async support**: ``aresolve()`` mirrors ``resolve()`` and async providers are first-class.
+- **Zero runtime dependencies**: easy to adopt in any environment.
+- **Fast steady-state**: compiled resolvers reduce overhead on hot paths.
 
-What "type-driven" means in practice
+Stability
+---------
+
+diwire targets a stable, small public API.
+
+- Backward-incompatible changes only happen in major releases.
+- Deprecations are announced first and kept for at least one minor release (when practical).
+
+What “type-driven” means in practice
 ------------------------------------
 
 If you can write this:
@@ -35,22 +44,18 @@ If you can write this:
    class Service:
        repo: Repo
 
-...then diwire can resolve ``Service`` by reading its type hints and resolving dependencies recursively.
+...then diwire can resolve ``Service`` by reading type hints and resolving dependencies recursively.
 
-When you *do* need explicit control, you still have it:
+When you need explicit control, you still have it:
 
-- register interfaces/protocols to concrete implementations
-- register instances (singletons) and factories (sync/async/generator)
-- pick lifetimes (`TRANSIENT`, `SINGLETON`, `SCOPED`) and scopes by name
-- create multiple named registrations via ``Component("name")``
-- precompute resolution via ``compile()`` for maximum throughput
+- interface/protocol bindings via ``add(..., provides=...)``
+- instances via ``add_instance(...)``
+- factories (sync/async/generator/context manager)
+- lifetimes (``TRANSIENT``, ``SCOPED``) and scope transitions (root-scoped ``SCOPED`` behaves like a singleton)
+- named registrations via ``Component(\"name\")``
+- open generics
 
-If you're new to DI
--------------------
+Benchmarks
+----------
 
-The recommended path is:
-
-1. :doc:`howto/examples/index` (run the tutorial examples in order)
-2. :doc:`core/index` (the mental model behind what you just ran)
-3. :doc:`howto/index` (frameworks, testing, and real-world patterns)
-4. :doc:`reference/index` (API reference)
+See :doc:`howto/advanced/performance` for benchmark methodology, reproducible commands, and results.

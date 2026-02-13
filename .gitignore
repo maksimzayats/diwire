@@ -151,5 +151,5 @@ staticfiles/
 
 .python-version
 
-# WIP
 /benchmarks
+/benchmark-results

@@ -2,5 +2,5 @@ Container
 =========
 
 .. autoclass:: diwire.Container
-   :members: __init__, register, resolve, aresolve, enter_scope, compile, close, aclose, close_scope, aclose_scope
+   :members: __init__, add, add_instance, add_factory, add_generator, add_context_manager, decorate, resolve, aresolve, enter_scope, compile, close, aclose
    :member-order: bysource

@@ -15,4 +15,4 @@ Typical setup
 Example (runnable)
 ------------------
 
-See the runnable script in :doc:`../examples/patterns` (Repository / unit-of-work pattern section).
+See :doc:`../examples/scopes` and :doc:`resources` for runnable scoped cleanup patterns.

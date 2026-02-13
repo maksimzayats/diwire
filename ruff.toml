@@ -10,6 +10,8 @@ ignore = [
     "D104", # Missing docstring in public package
     "D105", # Missing docstring in magic method
     "D107", # Missing docstring in __init__
+    "D203", # Conflicts with D211 (no blank line before class)
+    "D213", # Conflicts with D212 (multi-line summary at first line)
 
     # Type annotations (flake8-annotations)
     "ANN401", # Dynamically typed expressions (Any) disallowed
@@ -17,10 +19,17 @@ ignore = [
     # Line length (pycodestyle)
     "E501", # Line too long (handled by formatter)
 
+    # Formatter conflicts
+    "COM812", # Trailing comma conflicts with formatter
+
     # Type checking imports (flake8-type-checking)
     "TC001", # Move first-party import into TYPE_CHECKING block
     "TC002", # Move third-party import into TYPE_CHECKING block
     "TC003", # Move stdlib import into TYPE_CHECKING block
+
+    # TODO
+    "TD003",
+    "FIX002",
 ]
 
 [lint.per-file-ignores]
@@ -105,7 +114,7 @@ ignore = [
     "PLC0415", # Import outside top-level
     "SLF001", # Private member access
 ]
-"src/diwire/container.py" = [
+"src/diwire/_internal/container.py" = [
     # Complexity (DI container by design)
     "C901", # Too complex (McCabe)
     "PLR0911", # Too many return statements

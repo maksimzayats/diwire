@@ -1,60 +1,33 @@
 .. meta::
-   :description: Compilation in diwire: compile() precomputes providers to remove reflection/dict lookups on hot paths, and auto-compiles on first resolve by default.
+   :description: Compilation in diwire: compile() caching, invalidation on registration changes, and hot-path binding in strict mode.
 
 Compilation
 ===========
 
-diwire can precompute the dependency graph into specialized provider objects to reduce overhead on hot paths.
+``compile()`` builds and caches a root resolver for the current registration graph.
 
-The two knobs are:
-
-- :meth:`diwire.Container.compile` - compile explicitly after registration
-- ``Container(auto_compile=...)`` - auto-compile on first resolve (default: enabled)
-
-When to use it
---------------
-
-Compilation is most useful when:
-
-- you resolve the same graph many times (web requests, worker jobs)
-- you care about micro-latency and throughput
-
-Basic usage
+Why compile
 -----------
 
-.. code-block:: python
+- It removes most reflective work from steady-state resolution.
+- It makes repeated ``resolve()`` / ``enter_scope()`` calls faster on hot paths.
 
-   from dataclasses import dataclass
+Caching and invalidation
+------------------------
 
-   from diwire import Container, Lifetime
+The compiled resolver is cached on the container.
 
+Any registration mutation (calling ``add_*`` or ``decorate(...)``) invalidates the cached resolver. The next call to ``compile()``,
+``resolve()``, ``aresolve()``, or ``enter_scope()`` recompiles as needed.
 
-   @dataclass
-   class ServiceA:
-       ...
+Strict mode hot-path rebinding
+------------------------------
 
+In strict mode (``missing_policy=MissingPolicy.ERROR``), diwire can bind hot-path container entrypoints directly to the
+compiled resolver instance. This avoids container-level indirection for:
 
-   @dataclass
-   class ServiceB:
-       a: ServiceA
+- ``resolve()``
+- ``aresolve()``
+- ``enter_scope()``
 
-
-   container = Container(auto_compile=False)
-   container.register(ServiceA, lifetime=Lifetime.SINGLETON)
-   container.register(ServiceB, lifetime=Lifetime.TRANSIENT)
-
-   container.compile()
-   b = container.resolve(ServiceB)
-
-Runnable example
-----------------
-
-See the runnable script in :doc:`/howto/examples/basics` (Compilation section).
-
-Notes and limitations
----------------------
-
-- Not every registration can be compiled (for example: async factories, open generic registrations, and some function
-  factories). diwire will still resolve them correctly; they just won't use the fastest compiled path.
-- Auto-compilation happens when resolving outside of an active scope. Scoped graphs are compiled separately when
-  possible.
+Runnable example: :doc:`/howto/examples/compilation`.

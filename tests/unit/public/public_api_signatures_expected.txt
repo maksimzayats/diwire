@@ -1,0 +1,56 @@
+[diwire]
+diwire.All | class | ()
+diwire.AsyncProvider | class | ()
+diwire.BaseScope | class | (*args: 'Any', **_kwargs: 'Any') -> 'BaseScope'
+diwire.Component | class | (value: Any)
+diwire.Container | class | (root_scope: 'BaseScope' = Scope.APP(1, skippable=False), default_lifetime: 'Lifetime' = <Lifetime.SCOPED: 2>, *, lock_mode: "LockMode | Literal['auto']" = 'auto', missing_policy: 'MissingPolicy' = <MissingPolicy.ERROR: 'error'>, dependency_registration_policy: 'DependencyRegistrationPolicy' = <DependencyRegistrationPolicy.IGNORE: 'ignore'>, resolver_context: 'ResolverContext' = <diwire._internal.resolver_context.ResolverContext object at 0x<ADDR>>, use_resolver_context: 'bool' = True) -> 'None'
+diwire.Container.aclose | (self, exc_type: 'type[BaseException] | None' = None, exc_value: 'BaseException | None' = None, traceback: 'TracebackType | None' = None) -> 'None'
+diwire.Container.add | (self, concrete_type: 'type[Any]', *, provides: "Any | Literal['infer']" = 'infer', component: 'Component | Any | None' = None, scope: "BaseScope | Literal['from_container']" = 'from_container', lifetime: "Lifetime | Literal['from_container']" = 'from_container', dependencies: "Mapping[Any, inspect.Parameter] | Literal['infer']" = 'infer', lock_mode: "LockMode | Literal['from_container']" = 'from_container', dependency_registration_policy: "DependencyRegistrationPolicy | Literal['from_container']" = 'from_container') -> 'None'
+diwire.Container.add_context_manager | (self, context_manager: 'ContextManagerProvider[Any]', *, provides: "Any | Literal['infer']" = 'infer', component: 'Component | Any | None' = None, scope: "BaseScope | Literal['from_container']" = 'from_container', lifetime: "Lifetime | Literal['from_container']" = 'from_container', dependencies: "Mapping[Any, inspect.Parameter] | Literal['infer']" = 'infer', lock_mode: "LockMode | Literal['from_container']" = 'from_container', dependency_registration_policy: "DependencyRegistrationPolicy | Literal['from_container']" = 'from_container') -> 'None'
+diwire.Container.add_factory | (self, factory: 'Callable[..., Any] | Callable[..., Awaitable[Any]]', *, provides: "Any | Literal['infer']" = 'infer', component: 'Component | Any | None' = None, scope: "BaseScope | Literal['from_container']" = 'from_container', lifetime: "Lifetime | Literal['from_container']" = 'from_container', dependencies: "Mapping[Any, inspect.Parameter] | Literal['infer']" = 'infer', lock_mode: "LockMode | Literal['from_container']" = 'from_container', dependency_registration_policy: "DependencyRegistrationPolicy | Literal['from_container']" = 'from_container') -> 'None'
+diwire.Container.add_generator | (self, generator: 'Callable[..., Generator[Any, None, None]] | Callable[..., AsyncGenerator[Any, None]]', *, provides: "Any | Literal['infer']" = 'infer', component: 'Component | Any | None' = None, scope: "BaseScope | Literal['from_container']" = 'from_container', lifetime: "Lifetime | Literal['from_container']" = 'from_container', dependencies: "Mapping[Any, inspect.Parameter] | Literal['infer']" = 'infer', lock_mode: "LockMode | Literal['from_container']" = 'from_container', dependency_registration_policy: "DependencyRegistrationPolicy | Literal['from_container']" = 'from_container') -> 'None'
+diwire.Container.add_instance | (self, instance: 'T', *, provides: "Any | Literal['infer']" = 'infer', component: 'Component | Any | None' = None) -> 'None'
+diwire.Container.aresolve | (self, dependency: 'Any', *, on_missing: "MissingPolicy | Literal['from_container']" = 'from_container') -> 'Any'
+diwire.Container.close | (self, exc_type: 'type[BaseException] | None' = None, exc_value: 'BaseException | None' = None, traceback: 'TracebackType | None' = None) -> 'None'
+diwire.Container.compile | (self) -> 'ResolverProtocol'
+diwire.Container.decorate | (self, *, provides: 'Any', component: 'Component | Any | None' = None, decorator: 'Callable[..., Any]', inner_parameter: 'str | None' = None) -> 'None'
+diwire.Container.enter_scope | (self, scope: 'BaseScope | None' = None, *, context: 'Mapping[Any, Any] | None' = None) -> 'ResolverProtocol'
+diwire.Container.resolve | (self, dependency: 'Any', *, on_missing: "MissingPolicy | Literal['from_container']" = 'from_container') -> 'Any'
+diwire.DependencyRegistrationPolicy | class | (*values)
+diwire.FromContext | class | ()
+diwire.Injected | class | ()
+diwire.Lifetime | class | (*values)
+diwire.LockMode | class | (*values)
+diwire.Maybe | class | ()
+diwire.MissingPolicy | class | (*values)
+diwire.Provider | class | ()
+diwire.ResolverContext | class | () -> 'None'
+diwire.ResolverContext.aresolve | (self, dependency: 'Any') -> 'Any'
+diwire.ResolverContext.enter_scope | (self, scope: 'BaseScope | None' = None, *, context: 'Mapping[Any, Any] | None' = None) -> 'ResolverProtocol'
+diwire.ResolverContext.inject | (self, func: "InjectableF | Literal['from_decorator']" = 'from_decorator', *, scope: "BaseScope | Literal['infer']" = 'infer', dependency_registration_policy: "DependencyRegistrationPolicy | Literal['from_container']" = 'from_container', auto_open_scope: 'bool' = True) -> 'InjectableF | Callable[[InjectableF], InjectableF]'
+diwire.ResolverContext.resolve | (self, dependency: 'Any') -> 'Any'
+diwire.ResolverContext.set_fallback_container | (self, container: 'Container') -> 'None'
+diwire.ResolverProtocol | class | (*args, **kwargs)
+diwire.ResolverProtocol.aclose | (self, exc_type: 'type[BaseException] | None' = None, exc_value: 'BaseException | None' = None, traceback: 'TracebackType | None' = None) -> 'None'
+diwire.ResolverProtocol.aresolve | (self, dependency: 'Any') -> 'Any'
+diwire.ResolverProtocol.close | (self, exc_type: 'type[BaseException] | None' = None, exc_value: 'BaseException | None' = None, traceback: 'TracebackType | None' = None) -> 'None'
+diwire.ResolverProtocol.enter_scope | (self, scope: 'BaseScope | None' = None, *, context: 'Mapping[Any, Any] | None' = None) -> 'ResolverProtocol'
+diwire.ResolverProtocol.resolve | (self, dependency: 'Any') -> 'Any'
+diwire.Scope | object | <not-callable>
+diwire.resolver_context | object | <not-callable>
+
+[diwire.exceptions]
+diwire.exceptions.DIWireAsyncDependencyInSyncContextError | class | <no-signature>
+diwire.exceptions.DIWireDependencyNotRegisteredError | class | <no-signature>
+diwire.exceptions.DIWireError | class | <no-signature>
+diwire.exceptions.DIWireInvalidGenericTypeArgumentError | class | <no-signature>
+diwire.exceptions.DIWireInvalidProviderSpecError | class | <no-signature>
+diwire.exceptions.DIWireInvalidRegistrationError | class | <no-signature>
+diwire.exceptions.DIWireProviderDependencyInferenceError | class | <no-signature>
+diwire.exceptions.DIWireResolverNotSetError | class | <no-signature>
+diwire.exceptions.DIWireScopeMismatchError | class | <no-signature>
+
+[diwire.integrations.pytest_plugin]
+diwire.integrations.pytest_plugin.diwire_container | callable | () -> 'Container'
+diwire.integrations.pytest_plugin.pytest_pycollect_makeitem | callable | (collector: 'Any', name: 'str', obj: 'object') -> 'Any | None'
+diwire.integrations.pytest_plugin.pytest_pyfunc_call | callable | (pyfuncitem: 'pytest.Function') -> 'Iterator[None]'

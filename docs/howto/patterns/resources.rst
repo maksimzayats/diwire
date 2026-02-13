@@ -11,12 +11,12 @@ when you call ``container.close()`` or ``container.aclose()``.
 Sync cleanup (generator)
 ------------------------
 
-See the runnable script in :doc:`../examples/scopes` (Generator factories section).
+See :doc:`../examples/scopes`.
 
 Async cleanup (async generator)
 -------------------------------
 
-See the runnable script in :doc:`../examples/async` (Async generator cleanup section).
+See :doc:`../examples/async`.
 
 Important
 ---------

@@ -1,40 +1,36 @@
 .. meta::
-   :description: A step-by-step tutorial of runnable examples for diwire, from basics to scopes, async, and FastAPI integration.
+   :description: A step-by-step tutorial of runnable examples for diwire, sourced verbatim from the repository examples/ folder.
 
 Tutorial (runnable examples)
 ============================
 
-All examples below are self-contained scripts.
-You can:
+Each page below includes one or more focused, self-contained scripts sourced *verbatim* from
+``examples/`` via ``literalinclude``.
 
-- run most of them in your browser (click **Run** in the top-right of a code block)
-- copy a block into a local ``.py`` file and run it with ``python``
-
-The FastAPI examples are the main exception: they are not runnable in the browser.
-
-Follow this path (easy -> hard)
--------------------------------
-
-This tutorial is intentionally example-first. If you want the full mental model, use :doc:`../../core/index`
-alongside the examples.
-
-1. Basics (registration, lifetimes, constructor injection)
-2. Scopes (SCOPED, generator cleanup, nested scopes)
-3. Function injection (Injected marker)
-4. Components (multiple implementations by name)
-5. Patterns (request handlers, repositories, interfaces)
-6. Async
-7. FastAPI
-8. Errors (what failures look like)
+- Run locally with ``uv run python ...``.
+- For Pyodide-compatible scripts, use the **Run** button in the top-right of the code block.
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
-   basics
+   quickstart
+   registration-methods
+   autoregistration
+   lifetimes
    scopes
+   scope-context-values
    function-injection
-   components
-   patterns
+   named-components
+   providers
+   compilation
+   open-generics
+   resolver-context
+   lock-modes
    async
-   fastapi
    errors
+   all-components
+   maybe
+   supported-frameworks
+   pydantic-settings
+   pytest-plugin
+   fastapi

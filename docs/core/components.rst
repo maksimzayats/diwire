@@ -1,24 +1,62 @@
 .. meta::
-   :description: Named components in diwire: register and resolve multiple implementations of the same interface using typing.Annotated and Component(\"name\").
+   :description: Named components in diwire: multiple registrations for the same type via Annotated[T, Component(\"name\")].
 
-Named components
-================
+Components (named registrations)
+================================
 
-Sometimes you want **multiple registrations for the same interface**:
+Use ``Component(\"name\")`` when you want multiple registrations for the same base type.
 
-- primary vs replica DB
-- in-memory cache vs Redis cache
-- real service vs stub implementation
+The key idea is to use ``typing.Annotated`` as the dependency key:
 
-Use :class:`diwire.Component` with ``typing.Annotated`` to create distinct keys.
+.. code-block:: python
 
-Example
--------
+   from typing import Annotated, TypeAlias
 
-See the runnable script in :doc:`/howto/examples/components` (Named components section).
+   from diwire import Component
 
-Notes
------
+   class Cache: ...
 
-- Prefer resolving by the ``Annotated[...]`` type in application code.
-- :class:`diwire.service_key.ServiceKey` exists for low-level use, but most projects never need it directly.
+   PrimaryCache: TypeAlias = Annotated[Cache, Component("primary")]
+   FallbackCache: TypeAlias = Annotated[Cache, Component("fallback")]
+
+You register and resolve using the same ``Annotated[...]`` key.
+
+Runnable example: :doc:`/howto/examples/named-components`.
+
+
+Registration shortcut
+---------------------
+
+You can register component-qualified bindings without creating a ``TypeAlias``
+first by passing ``component=...``:
+
+.. code-block:: python
+
+   from diwire import Component, Container
+   from typing import Annotated
+
+   class Cache: ...
+
+   container = Container()
+   container.add_instance(Cache(), provides=Cache, component="primary")
+
+   # Runtime key is still Annotated[..., Component(...)]
+   primary_cache = container.resolve(Annotated[Cache, Component("primary")])
+
+The same shortcut is available on ``add``, ``add_factory``,
+``add_generator``, ``add_context_manager``, and ``decorate``.
+
+
+Resolve all components
+----------------------
+
+Use ``All[T]`` when you want to collect a tuple containing:
+
+- the plain registration for ``T`` (if present), and
+- all component registrations keyed as ``Annotated[T, Component(...)]``.
+
+``container.resolve(All[T])`` always returns ``tuple[T, ...]`` and returns an empty tuple ``()``
+when nothing matches. Ordering is deterministic by provider slot (registration order; last
+override wins).
+
+Runnable example: :doc:`/howto/examples/all-components`.

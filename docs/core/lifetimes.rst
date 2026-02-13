@@ -1,64 +1,44 @@
 .. meta::
-   :description: diwire lifetimes: transient, singleton, and scoped. Learn how instance sharing works in a typed dependency injection container.
+   :description: Lifetimes in diwire: TRANSIENT vs SCOPED, default_lifetime, and how lifetime affects caching and cleanup.
 
 Lifetimes
 =========
 
-Lifetimes control **how often** diwire creates an object.
+Lifetimes control when providers are called and whether results are cached.
 
-diwire supports three lifetimes:
+The built-in lifetimes are:
 
-- ``Lifetime.TRANSIENT``: create a new instance every time
-- ``Lifetime.SINGLETON``: one instance per container
-- ``Lifetime.SCOPED``: one instance per active scope (e.g. per request)
+- ``Lifetime.TRANSIENT``: provider runs on every resolution (no caching)
+- ``Lifetime.SCOPED``: cached per active scope (e.g. request)
 
-Transient vs singleton
-----------------------
+Root-scoped ``SCOPED`` behaves like a singleton
+-----------------------------------------------
 
-See the runnable script in :doc:`/howto/examples/basics` (Lifetimes section).
+When a provider uses ``Lifetime.SCOPED`` with the container root scope (for example ``Scope.APP``),
+the value is cached for the lifetime of the container.
 
-.. code-block:: python
+Default lifetime
+----------------
 
-   from diwire import Container, Lifetime
+``Container(default_lifetime=...)`` controls the lifetime used when a registration does not specify one.
+The default is ``Lifetime.SCOPED``.
 
+Runnable example: :doc:`/howto/examples/lifetimes`.
 
-   class TransientService:
-       pass
+When to use what
+----------------
 
+- Use root-scoped **SCOPED** for heavy clients (HTTP clients, connection pools).
+- Use **SCOPED** for per-request/per-job resources (DB session, unit-of-work).
+- Use **TRANSIENT** for lightweight value objects.
 
-   class SingletonService:
-       pass
+Cleanup and lifetimes
+---------------------
 
+Cleanup providers (generators/context managers) run their cleanup when the owning cache scope closes:
 
-   container = Container(autoregister=False)
-   container.register(TransientService, lifetime=Lifetime.TRANSIENT)
-   container.register(SingletonService, lifetime=Lifetime.SINGLETON)
+- ``SCOPED`` cleanup runs when its owning scope closes (``with container.enter_scope(...):``)
+- Root-scoped ``SCOPED`` cleanup runs when you close the container
+  (``container.close()`` / ``await container.aclose()``)
 
-   assert container.resolve(TransientService) is not container.resolve(TransientService)
-   assert container.resolve(SingletonService) is container.resolve(SingletonService)
-
-Scoped
-------
-
-Scoped lifetimes are covered in :doc:`scopes` because scopes also define *cleanup*.
-Generator factories without an explicit scope are attached to the initial app scope and
-cleaned up when you call ``container.close()`` or ``container.aclose()``.
-
-One important rule of thumb:
-
-- Use **SINGLETON** for pure, long-lived services (configuration, stateless clients).
-- Use **SCOPED** for per-request/per-job state (DB sessions, unit-of-work, request context).
-- Use **TRANSIENT** for lightweight objects and pure coordinators.
-
-Auto-registration lifetime
---------------------------
-
-Explicit ``register()`` defaults to transient (unless you pass a lifetime).
-
-Auto-registration uses the container's configuration:
-
-.. code-block:: python
-
-   from diwire import Container, Lifetime
-
-   container = Container(autoregister_default_lifetime=Lifetime.TRANSIENT)
+Runnable example: :doc:`/howto/examples/scopes`.

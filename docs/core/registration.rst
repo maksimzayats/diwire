@@ -1,85 +1,91 @@
 .. meta::
-   :description: How to register services in diwire: classes, factories, instances, decorators, interface/protocol bindings, and service keys.
+   :description: How to register providers in diwire: instances, concrete types, factories, generators/context managers, and protocol bindings.
 
 Registration
 ============
 
-You can use diwire with almost no registrations (auto-wiring), but real applications still need a few explicit ones:
+diwire can auto-wire many graphs with zero registrations, but real applications typically need explicit providers for:
 
-- configuration objects (singletons)
-- interfaces/protocols (bind to a concrete implementation)
-- resources (database sessions/clients with cleanup)
+- configuration objects (instances / singletons)
+- interfaces / protocols (bind to a concrete implementation)
+- resources (sessions/clients with cleanup)
 - multiple implementations (named components)
 
-Class / factory / instance
---------------------------
+Direct registration APIs
+------------------------
 
-The three direct registration forms:
+Add (concrete types)
+^^^^^^^^^^^^^^^^^^^^
 
-- **Class**: ``container.register(Logger)``
-- **Factory**: ``container.register(Database, factory=create_database)``
-- **Instance**: ``container.register(Config, instance=Config(...))``
+Use :meth:`diwire.Container.add` when you want to resolve ``provides`` but construct ``concrete_type``:
 
-Generator factories are supported for cleanup. If you omit a scope, the generator is
-attached to the initial app scope and cleaned up when you call ``container.close()``
-or ``container.aclose()``. Use ``Lifetime.SCOPED`` with a named scope to tie cleanup
-to a specific scope.
+.. code-block:: python
 
-Full runnable example:
+   from typing import Protocol
 
-See :doc:`/howto/examples/basics` (Registration methods section).
-
-Decorator registration
-----------------------
-
-``@container.register`` is a convenience API that works for:
-
-- classes (optionally with an explicit lifetime/scope)
-- factory functions (return type inferred from annotations)
-- staticmethod factories (same as regular functions)
-- interface bindings (``@container.register(Protocol, lifetime=...)``)
-
-Selected patterns (see the full example for more):
-
-See :doc:`/howto/examples/basics` (Decorator registration section).
-
-Interface/protocol binding
---------------------------
-
-You can bind a protocol/ABC to a concrete implementation in two main ways:
-
-1. Decorator:
-
-   .. code-block:: python
-
-      from typing import Protocol
-      from diwire import Container, Lifetime
+   from diwire import Container
 
 
-      class Clock(Protocol):
-          def now(self) -> str: ...
+   class Clock(Protocol):
+       def now(self) -> str: ...
 
 
-      container = Container()
+   class SystemClock:
+       def now(self) -> str:
+           return "now"
 
 
-      @container.register(Clock, lifetime=Lifetime.SINGLETON)
-      class SystemClock:
-          ...
+   container = Container()
+   container.add(SystemClock, provides=Clock)
 
-2. Direct registration:
+Instances
+^^^^^^^^^
 
-   .. code-block:: python
+Use :meth:`diwire.Container.add_instance` to bind an already-created object:
 
-      container.register(Clock, concrete_class=SystemClock, lifetime=Lifetime.SINGLETON)
+.. code-block:: python
+
+   from diwire import Container
+
+   class Config: ...
+
+   container = Container()
+   container.add_instance(Config())
+
+Factories
+^^^^^^^^^
+
+Use :meth:`diwire.Container.add_factory` for custom construction logic (sync or async factories are supported):
+
+.. code-block:: python
+
+   from diwire import Container
+
+   class Client: ...
+
+   def build_client() -> Client:
+       return Client()
+
+   container = Container()
+   container.add_factory(build_client, provides=Client)
+
+Cleanup providers
+^^^^^^^^^^^^^^^^^
+
+For deterministic cleanup, use:
+
+- :meth:`diwire.Container.add_generator` for generator/async-generator providers
+- :meth:`diwire.Container.add_context_manager` for (async) context manager providers
+
+See :doc:`/howto/examples/scopes` for a runnable cleanup example.
 
 Re-registering (overrides)
 --------------------------
 
-Registrations are replaceable. Calling ``register()`` again with the same key replaces the previous registration.
-This is intentionally useful for testing and for swapping implementations by environment.
+Registrations are replaceable. Registering a provider again for the same key replaces the previous provider. This is
+useful for tests and environment-based swapping.
 
 Next
 ----
 
-Continue with :doc:`lifetimes` and :doc:`scopes` - these determine how long objects live, and when cleanup happens.
+Continue with :doc:`lifetimes` and :doc:`scopes` to control caching and cleanup.

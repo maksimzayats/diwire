@@ -13,13 +13,13 @@ Recommended order
 
 1. :doc:`container` - auto-wiring, what gets resolved, and how keys work
 2. :doc:`registration` - explicit registration, decorators, and interfaces
-3. :doc:`lifetimes` - transient vs singleton vs scoped
+3. :doc:`lifetimes` - transient vs scoped (root-scoped scoped behaves like singleton)
 4. :doc:`scopes` - request-like scopes and deterministic cleanup
 5. :doc:`function-injection` - injecting into functions with ``Injected[T]``
 6. :doc:`components` - multiple implementations via ``Component("name")``
 7. :doc:`open-generics` - open generic registrations and type-safe resolution
 8. :doc:`async` - async factories, async cleanup, and ``aresolve()``
-9. :doc:`container-context` - global context container for framework integration
+9. :doc:`resolver-context` - global context container for framework integration
 10. :doc:`compilation` - precomputing the graph for speed
 11. :doc:`errors` - common error modes and how to debug them
 12. :doc:`integrations` - dataclasses/namedtuple/pydantic/attrs/msgspec notes
@@ -35,7 +35,7 @@ Recommended order
    components
    open-generics
    async
-   container-context
+   resolver-context
    compilation
    errors
    integrations

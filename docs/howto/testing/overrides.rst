@@ -21,7 +21,7 @@ Registrations are replaceable. In general, override **before** the first resolve
 
    from diwire import Container, Lifetime
 
-   container = Container(autoregister=False)
+   container = Container()
 
    class EmailClient(Protocol):
        def send(self, to: str, subject: str) -> None: ...
@@ -37,9 +37,13 @@ Registrations are replaceable. In general, override **before** the first resolve
            ...
 
 
-   container.register(EmailClient, concrete_class=RealEmailClient, lifetime=Lifetime.SINGLETON)
+   container.add(RealEmailClient, provides=EmailClient,
+       lifetime=Lifetime.SCOPED,
+   )
    # In tests: override BEFORE resolving anything that depends on it.
-   container.register(EmailClient, concrete_class=FakeEmailClient, lifetime=Lifetime.SINGLETON)
+   container.add(FakeEmailClient, provides=EmailClient,
+       lifetime=Lifetime.SCOPED,
+   )
 
 Override using an instance (force a singleton)
 ----------------------------------------------
@@ -49,6 +53,6 @@ Registering an instance is a great way to override something even if it was reso
 .. code-block:: python
 
    fake = FakeEmailClient()
-   container.register(EmailClient, instance=fake, lifetime=Lifetime.SINGLETON)
+   container.add_instance(fake, provides=EmailClient)
 
 Because the container uses the instance directly, subsequent resolves return exactly that object.

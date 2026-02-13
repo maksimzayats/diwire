@@ -11,7 +11,7 @@ The common pattern is:
 1. Build a :class:`diwire.Container` at app startup.
 2. Create a request/job scope per incoming request.
 3. Register request-specific objects (like the current request) via factories/contextvars.
-4. Use function injection (``Injected[T]``) or ``container_context`` to keep handlers clean.
+4. Use function injection (``Injected[T]``) or ``resolver_context`` to keep handlers clean.
 
 .. toctree::
    :maxdepth: 1

@@ -1,35 +1,33 @@
 .. meta::
-   :description: Async support in diwire: async factories, async generator cleanup, async scopes, and aresolve() with parallel dependency resolution.
+   :description: Async support in diwire: async factories, async generator cleanup, async scopes, and aresolve().
 
 Async
 =====
 
-diwire is async-first:
+diwire supports async providers and async resolution.
 
-- async factories are supported (auto-detected)
-- async generator factories provide deterministic async cleanup
-- :meth:`diwire.Container.aresolve` mirrors :meth:`diwire.Container.resolve`
+Async factories
+---------------
 
-Async factories + ``aresolve()``
----------------------------------
+``add_factory()`` accepts ``async def`` factories. Resolve them with ``await container.aresolve(...)``.
 
-If any dependency in the graph is async, you must resolve the root using ``aresolve()``.
+Async cleanup
+-------------
 
-See the runnable scripts in :doc:`/howto/examples/async` (Basic async factory section).
+``add_generator()`` supports async generators (``async def ...: yield ...``). Cleanup in the ``finally`` block runs
+when the owning scope exits.
 
-Async cleanup with async generators
------------------------------------
+Runnable example: :doc:`/howto/examples/async`.
 
-Use an **async generator** when you need to ``await`` cleanup (closing connections, sessions, etc.).
-The ``finally`` block runs when the scope exits.
-If you register an async generator factory without specifying a scope, it is attached to
-the initial app scope and cleaned up when you call ``container.aclose()``.
+Sync vs async resolution
+------------------------
 
-See the runnable scripts in :doc:`/howto/examples/async` (Async generator cleanup section).
+If a dependency chain requires an async provider, calling ``resolve()`` raises
+:class:`diwire.exceptions.DIWireAsyncDependencyInSyncContextError`. Use ``aresolve()`` for that chain.
 
-Parallel resolution
--------------------
+Concurrency note
+----------------
 
-Independent async dependencies are resolved in parallel via ``asyncio.gather()``.
+diwire does not automatically parallelize independent async dependencies. If you want concurrency (for example, multiple
+independent I/O calls), use ``asyncio.gather()`` in your application logic.
 
-See the runnable scripts in :doc:`/howto/examples/async` (Mixed sync/async + parallel resolution section).

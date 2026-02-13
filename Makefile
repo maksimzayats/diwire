@@ -1,4 +1,4 @@
-.PHONY: format lint test docs benchmark
+.PHONY: format lint test docs examples-readme benchmark benchmark-json benchmark-report benchmark-report-all benchmark-json-resolve benchmark-report-resolve
 
 format:
 	uv run ruff format .
@@ -21,10 +21,56 @@ docs:
 	rm -rf docs/_build
 	uv run sphinx-build -b html docs docs/_build/html
 
+examples-readme:
+	uv run python -m tools.generate_examples_readme
+
 # === Benchmark Commands ===
 
 benchmark:
-	uv run pytest tests/benchmarks/test_singleton_resolution.py --benchmark-only --benchmark-columns=ops -q
-	uv run pytest tests/benchmarks/test_wide_singleton_resolution.py --benchmark-only --benchmark-columns=ops -q
-	uv run pytest tests/benchmarks/test_transient_chain_resolution.py --benchmark-only --benchmark-columns=ops -q
-	uv run pytest tests/benchmarks/test_request_scoped_resolution.py --benchmark-only --benchmark-columns=ops -q
+	uv run pytest tests/benchmarks/test_enter_close_scope_no_resolve.py --benchmark-only --benchmark-columns=ops -q
+	uv run pytest tests/benchmarks/test_enter_close_scope_resolve_once.py --benchmark-only --benchmark-columns=ops -q
+	uv run pytest tests/benchmarks/test_enter_close_scope_resolve_100_instance.py --benchmark-only --benchmark-columns=ops -q
+	uv run pytest tests/benchmarks/test_enter_close_scope_resolve_scoped_100.py --benchmark-only --benchmark-columns=ops -q
+	uv run pytest tests/benchmarks/test_resolve_deep_transient_chain.py --benchmark-only --benchmark-columns=ops -q
+	uv run pytest tests/benchmarks/test_resolve_wide_transient_graph.py --benchmark-only --benchmark-columns=ops -q
+	uv run pytest tests/benchmarks/test_resolve_singleton.py --benchmark-only --benchmark-columns=ops -q
+	uv run pytest tests/benchmarks/test_resolve_transient.py --benchmark-only --benchmark-columns=ops -q
+	uv run pytest tests/benchmarks/test_resolve_scoped.py --benchmark-only --benchmark-columns=ops -q
+	uv run pytest tests/benchmarks/test_resolve_mixed_lifetimes.py --benchmark-only --benchmark-columns=ops -q
+
+benchmark-json:
+	mkdir -p benchmark-results
+	uv run pytest tests/benchmarks --benchmark-only -q --benchmark-json=benchmark-results/raw-benchmark.json
+
+benchmark-report: benchmark-json
+	uv run python -m tools.benchmark_reporting \
+		--input benchmark-results/raw-benchmark.json \
+		--markdown benchmark-results/benchmark-table.md \
+		--json benchmark-results/benchmark-table.json \
+		--comment benchmark-results/pr-comment.md \
+		--libraries diwire,rodi,dishka
+
+benchmark-report-all: benchmark-json
+	uv run python -m tools.benchmark_reporting \
+		--input benchmark-results/raw-benchmark.json \
+		--markdown benchmark-results/benchmark-table-all.md \
+		--json benchmark-results/benchmark-table-all.json \
+		--comment benchmark-results/pr-comment-all.md \
+		--libraries diwire,rodi,dishka,punq
+
+benchmark-json-resolve:
+	mkdir -p benchmark-results
+	uv run pytest \
+		tests/benchmarks/test_resolve_transient.py \
+		tests/benchmarks/test_resolve_singleton.py \
+		tests/benchmarks/test_resolve_deep_transient_chain.py \
+		tests/benchmarks/test_resolve_wide_transient_graph.py \
+		--benchmark-only -q --benchmark-json=benchmark-results/raw-benchmark-resolve.json
+
+benchmark-report-resolve: benchmark-json-resolve
+	uv run python -m tools.benchmark_reporting \
+		--input benchmark-results/raw-benchmark-resolve.json \
+		--markdown benchmark-results/benchmark-table-resolve.md \
+		--json benchmark-results/benchmark-table-resolve.json \
+		--comment benchmark-results/pr-comment-resolve.md \
+		--libraries diwire,rodi,dishka,punq
