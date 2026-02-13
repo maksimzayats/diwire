@@ -97,6 +97,12 @@ the current public API.
 - Use pytest fixtures from `tests/conftest.py` for shared setup.
 - Prefer small, focused tests over large integration tests.
 - Keep tests deterministic; avoid time-based assertions unless necessary.
+- Public API signatures are frozen by
+  `tests/unit/public/test_public_api_signatures.py` and the committed golden file
+  `tests/unit/public/public_api_signatures_expected.txt` to catch accidental
+  signature changes across user-visible exports.
+- Refresh the public API signatures snapshot intentionally with:
+  `DIWIRE_UPDATE_API_SIGNATURES=1 uv run pytest tests/unit/public/test_public_api_signatures.py`.
 
 ## Quality gates
 
