@@ -54,32 +54,32 @@ _Node = _TextNode | _VariableNode | _IfNode
 
 
 class Environment:
-    """Minimal environment with a Jinja-like interface used by resolver generation."""
+    """Minimal environment with a lightweight block-based interface used by resolver generation."""
 
     def __init__(self, *, autoescape: bool = False) -> None:
         if autoescape:
-            msg = "autoescape=True is not supported by diwire mini_jinja."
+            msg = "autoescape=True is not supported by diwire assembly engine."
             raise ValueError(msg)
 
-    def from_string(self, text: str) -> Template:
-        """Compile a template string into a renderable template object.
+    def from_string(self, text: str) -> AssemblySnippet:
+        """Compile an assembly string into a renderable assembly snippet object.
 
         Args:
-            text: Template source text to compile.
+            text: Assembly source text to compile.
 
         """
         parser = _Parser(tokens=_tokenize(text))
-        return Template(nodes=parser.parse())
+        return AssemblySnippet(nodes=parser.parse())
 
 
-class Template:
-    """Compiled mini template."""
+class AssemblySnippet:
+    """Compiled mini assembly snippet."""
 
     def __init__(self, *, nodes: tuple[_Node, ...]) -> None:
         self._nodes = nodes
 
     def render(self, **context: object) -> str:
-        """Render template with keyword-only context variables.
+        """Render an assembly snippet with keyword-only context variables.
 
         Args:
             context: Optional mapping of context values to bind in the entered scope.
@@ -159,7 +159,7 @@ class _Parser:
                 )
                 continue
 
-            msg = f"Unsupported template tag '{tag}'."
+            msg = f"Unsupported assembly tag '{tag}'."
             raise ValueError(msg)
 
         return nodes, None
@@ -267,7 +267,7 @@ def _render_nodes(*, nodes: tuple[_Node, ...], context: dict[str, object]) -> st
 
 def _resolve_context_value(*, context: dict[str, object], identifier: str) -> object:
     if identifier not in context:
-        msg = f"Missing template variable '{identifier}'."
+        msg = f"Missing assembly variable '{identifier}'."
         raise ValueError(msg)
     return context[identifier]
 

@@ -6,16 +6,16 @@ import pytest
 
 from diwire import Container, Scope
 from diwire._internal.providers import ProviderDependency
-from diwire._internal.resolvers.templates import renderer as renderer_module
-from diwire._internal.resolvers.templates.planner import (
+from diwire._internal.resolvers.assembly import renderer as renderer_module
+from diwire._internal.resolvers.assembly.planner import (
     ProviderDependencyPlan,
     ProviderWorkflowPlan,
     ResolverGenerationPlan,
     ResolverGenerationPlanner,
 )
-from diwire._internal.resolvers.templates.renderer import (
+from diwire._internal.resolvers.assembly.renderer import (
     DependencyExpressionContext,
-    ResolversTemplateRenderer,
+    ResolversAssemblyRenderer,
 )
 
 
@@ -33,7 +33,7 @@ def _workflow_by_slot(plan: ResolverGenerationPlan) -> dict[int, ProviderWorkflo
 
 
 def test_provider_handle_dependency_expression_raises_when_inner_slot_is_missing() -> None:
-    renderer = ResolversTemplateRenderer()
+    renderer = ResolversAssemblyRenderer()
     plan = _plan_for_renderer()
     workflow = plan.workflows[0]
     parameter = inspect.Parameter(
@@ -59,7 +59,7 @@ def test_provider_handle_dependency_expression_raises_when_inner_slot_is_missing
 
 
 def test_context_dependency_expression_raises_when_global_key_name_is_missing() -> None:
-    renderer = ResolversTemplateRenderer()
+    renderer = ResolversAssemblyRenderer()
     plan = _plan_for_renderer()
     workflow = plan.workflows[0]
     parameter = inspect.Parameter(
@@ -85,7 +85,7 @@ def test_context_dependency_expression_raises_when_global_key_name_is_missing() 
 
 
 def test_provider_dependency_expression_raises_when_dependency_slot_is_missing() -> None:
-    renderer = ResolversTemplateRenderer()
+    renderer = ResolversAssemblyRenderer()
     plan = _plan_for_renderer()
     workflow = plan.workflows[0]
     parameter = inspect.Parameter(
@@ -119,7 +119,7 @@ def test_provider_dependency_expression_raises_when_dependency_slot_is_missing()
 
 
 def test_all_dependency_expression_can_inline_root_cached_dependency() -> None:
-    renderer = ResolversTemplateRenderer()
+    renderer = ResolversAssemblyRenderer()
     plan = _plan_for_renderer()
     workflow = plan.workflows[0]
     parameter = inspect.Parameter(
@@ -154,7 +154,7 @@ def test_all_dependency_expression_can_inline_root_cached_dependency() -> None:
 
 
 def test_dependency_expression_for_plan_raises_for_omit_plan() -> None:
-    renderer = ResolversTemplateRenderer()
+    renderer = ResolversAssemblyRenderer()
     plan = _plan_for_renderer()
     workflow = plan.workflows[0]
     parameter = inspect.Parameter(
@@ -186,7 +186,7 @@ def test_dependency_expression_for_plan_raises_for_omit_plan() -> None:
 
 
 def test_dependency_expression_for_plan_raises_for_literal_plan_without_expression() -> None:
-    renderer = ResolversTemplateRenderer()
+    renderer = ResolversAssemblyRenderer()
     plan = _plan_for_renderer()
     workflow = plan.workflows[0]
     parameter = inspect.Parameter(
@@ -219,7 +219,7 @@ def test_dependency_expression_for_plan_raises_for_literal_plan_without_expressi
 
 
 def test_dependency_expression_for_plan_returns_literal_expression() -> None:
-    renderer = ResolversTemplateRenderer()
+    renderer = ResolversAssemblyRenderer()
     plan = _plan_for_renderer()
     workflow = plan.workflows[0]
     parameter = inspect.Parameter(
@@ -253,7 +253,7 @@ def test_dependency_expression_for_plan_returns_literal_expression() -> None:
 
 
 def test_inline_root_dependency_expression_for_plan_covers_all_new_plan_kinds() -> None:
-    renderer = ResolversTemplateRenderer()
+    renderer = ResolversAssemblyRenderer()
     plan = _plan_for_renderer()
     context = DependencyExpressionContext(
         class_scope_level=plan.scopes[0].scope_level,

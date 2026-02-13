@@ -44,6 +44,12 @@ the current public API.
 - Docs: `docs/`
 - Runnable examples (embedded in docs): `docs/howto/examples/`
 
+## Examples README generation
+
+- The section between `<!-- BEGIN: AUTO-GENERATED EXAMPLES -->` and `<!-- END: AUTO-GENERATED EXAMPLES -->` in `examples/README.md` is generated from Python files in `examples/ex_*`.
+- Do not edit that region by hand.
+- Regenerate it with: `uv run python -m tools.generate_examples_readme` or `make examples-readme`.
+
 ## Style and formatting
 
 - Line length: 100 (Ruff).

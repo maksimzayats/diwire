@@ -187,7 +187,7 @@ def test_all_provider_dependency_is_rejected_for_double_star_kwargs() -> None:
         container.compile()
 
 
-def test_codegen_all_dependency_covers_async_and_inline_root_branches() -> None:
+def test_assembly_all_dependency_covers_async_and_inline_root_branches() -> None:
     container = Container()
     container.add_factory(lambda: _Handler("base"), provides=EventHandler)
 

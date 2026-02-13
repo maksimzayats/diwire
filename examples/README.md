@@ -2,18 +2,6 @@
 
 Each topic lives in a grouped folder named `ex_XX_<topic>/`.
 
-The section between `<!-- BEGIN: AUTO-GENERATED EXAMPLES -->` and
-`<!-- END: AUTO-GENERATED EXAMPLES -->` is generated from Python files in
-`examples/ex_*`. Do not edit that region by hand.
-
-Regenerate it with:
-
-```bash
-uv run python -m tools.generate_examples_readme
-# or
-make examples-readme
-```
-
 <!-- BEGIN: AUTO-GENERATED EXAMPLES -->
 
 ### Table of Contents

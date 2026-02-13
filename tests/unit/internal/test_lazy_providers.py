@@ -123,7 +123,7 @@ class _AutoregConsumer:
 
 
 @pytest.mark.asyncio
-async def test_cycle_with_provider_breaks_codegen_cycle_and_resolves() -> None:
+async def test_cycle_with_provider_breaks_assembly_cycle_and_resolves() -> None:
     container = Container()
     container.add(_CycleA)
     container.add(_CycleB)

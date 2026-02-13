@@ -143,11 +143,11 @@ def substitute_typevars(value: Any, *, mapping: Mapping[TypeVar, Any]) -> Any:
     """Substitute TypeVars in a type expression using a resolved mapping.
 
     This is used during open-generic resolution to derive closed dependency keys
-    from templates declared in provider dependencies.
+    from declarations in provider dependencies.
 
     Args:
-        value: Type expression template that may contain TypeVars.
-        mapping: Mapping from template TypeVars to concrete type arguments.
+        value: Type expression pattern that may contain TypeVars.
+        mapping: Mapping from pattern TypeVars to concrete type arguments.
 
     Returns:
         The substituted type expression with available TypeVars replaced.
@@ -785,7 +785,7 @@ class _OpenGenericResolver:  # pragma: no cover
         resolved_dependency = substitute_typevars(binding.template, mapping=typevar_map)
         if contains_typevar(resolved_dependency):
             msg = (
-                f"Open generic dependency template {binding.template!r} still contains "
+                f"Open generic dependency pattern {binding.template!r} still contains "
                 "unresolved TypeVars after substitution."
             )
             raise DIWireInvalidGenericTypeArgumentError(msg)
@@ -806,7 +806,7 @@ class _OpenGenericResolver:  # pragma: no cover
         resolved_dependency = substitute_typevars(binding.template, mapping=typevar_map)
         if contains_typevar(resolved_dependency):
             msg = (
-                f"Open generic dependency template {binding.template!r} still contains "
+                f"Open generic dependency pattern {binding.template!r} still contains "
                 "unresolved TypeVars after substitution."
             )
             raise DIWireInvalidGenericTypeArgumentError(msg)

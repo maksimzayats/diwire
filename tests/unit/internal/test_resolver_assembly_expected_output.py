@@ -8,9 +8,9 @@ from pathlib import Path
 
 from diwire import BaseScope, Container, FromContext, Injected, Lifetime, Scope, resolver_context
 from diwire._internal.providers import ProviderSpec
-from diwire._internal.resolvers.templates.renderer import ResolversTemplateRenderer
+from diwire._internal.resolvers.assembly.renderer import ResolversAssemblyRenderer
 
-_EXPECTED_DIR = Path(__file__).with_name("codegen_expected")
+_EXPECTED_DIR = Path(__file__).with_name("assembly_expected")
 
 
 class _SnapshotSession:
@@ -191,7 +191,7 @@ def _build_snapshot_from_context_service(
     return _SnapshotFromContextService(value=value)
 
 
-def test_codegen_matches_expected_for_empty_app_root_graph() -> None:
+def test_assembly_matches_expected_for_empty_app_root_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
     generated = _render(container=container, root_scope=Scope.APP)
@@ -199,7 +199,7 @@ def test_codegen_matches_expected_for_empty_app_root_graph() -> None:
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 
-def test_codegen_matches_expected_for_scoped_graph() -> None:
+def test_assembly_matches_expected_for_scoped_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
     container.add(
@@ -219,7 +219,7 @@ def test_codegen_matches_expected_for_scoped_graph() -> None:
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 
-def test_codegen_matches_expected_for_async_graph() -> None:
+def test_assembly_matches_expected_for_async_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
     container.add_factory(
@@ -232,7 +232,7 @@ def test_codegen_matches_expected_for_async_graph() -> None:
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 
-def test_codegen_matches_expected_for_sync_generator_graph() -> None:
+def test_assembly_matches_expected_for_sync_generator_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
     container.add_generator(
@@ -246,7 +246,7 @@ def test_codegen_matches_expected_for_sync_generator_graph() -> None:
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 
-def test_codegen_matches_expected_for_async_context_manager_graph() -> None:
+def test_assembly_matches_expected_for_async_context_manager_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
     container.add_context_manager(
@@ -260,7 +260,7 @@ def test_codegen_matches_expected_for_async_context_manager_graph() -> None:
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 
-def test_codegen_matches_expected_for_mixed_dependency_shape_graph() -> None:
+def test_assembly_matches_expected_for_mixed_dependency_shape_graph() -> None:
     signature = inspect.signature(_build_snapshot_mixed_shape_service)
     positional_type = int
     values_type = tuple[int, ...]
@@ -285,7 +285,7 @@ def test_codegen_matches_expected_for_mixed_dependency_shape_graph() -> None:
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 
-def test_codegen_matches_expected_for_request_root_filtered_graph() -> None:
+def test_assembly_matches_expected_for_request_root_filtered_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
     container.add(
@@ -311,7 +311,7 @@ def test_codegen_matches_expected_for_request_root_filtered_graph() -> None:
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 
-def test_codegen_matches_expected_for_action_root_filtered_graph() -> None:
+def test_assembly_matches_expected_for_action_root_filtered_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
     container.add(
@@ -337,7 +337,7 @@ def test_codegen_matches_expected_for_action_root_filtered_graph() -> None:
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 
-def test_codegen_matches_expected_for_async_cleanup_mixed_signature_graph() -> None:
+def test_assembly_matches_expected_for_async_cleanup_mixed_signature_graph() -> None:
     signature = inspect.signature(_build_snapshot_async_cleanup_signature_service)
     values_type = tuple[int, ...]
     options_type = dict[str, int]
@@ -368,7 +368,7 @@ def test_codegen_matches_expected_for_async_cleanup_mixed_signature_graph() -> N
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 
-def test_codegen_matches_expected_for_inject_wrapper_provider_graph() -> None:
+def test_assembly_matches_expected_for_inject_wrapper_provider_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
     container.add_instance(
@@ -388,7 +388,7 @@ def test_codegen_matches_expected_for_inject_wrapper_provider_graph() -> None:
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 
-def test_codegen_matches_expected_for_async_inject_wrapper_provider_graph() -> None:
+def test_assembly_matches_expected_for_async_inject_wrapper_provider_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
     container.add_instance(
@@ -408,7 +408,7 @@ def test_codegen_matches_expected_for_async_inject_wrapper_provider_graph() -> N
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 
-def test_codegen_matches_expected_for_nested_inline_root_inject_wrapper_graph() -> None:
+def test_assembly_matches_expected_for_nested_inline_root_inject_wrapper_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
     container.add_instance(
@@ -434,7 +434,7 @@ def test_codegen_matches_expected_for_nested_inline_root_inject_wrapper_graph() 
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 
-def test_codegen_matches_expected_for_inject_wrapper_varkw_argument_order_graph() -> None:
+def test_assembly_matches_expected_for_inject_wrapper_varkw_argument_order_graph() -> None:
     signature = inspect.signature(_build_snapshot_inject_wrapper_varkw_service)
     options_type = dict[str, int]
 
@@ -458,7 +458,7 @@ def test_codegen_matches_expected_for_inject_wrapper_varkw_argument_order_graph(
     assert _normalize_dynamic_metadata(generated) == _normalize_dynamic_metadata(expected)
 
 
-def test_codegen_matches_expected_for_from_context_dependency_graph() -> None:
+def test_assembly_matches_expected_for_from_context_dependency_graph() -> None:
     ProviderSpec.SLOT_COUNTER = 0
     container = Container()
     container.add_factory(
@@ -490,7 +490,7 @@ def test_normalize_dynamic_metadata_normalizes_annotated_symbol_variants() -> No
 
 
 def _render(*, container: Container, root_scope: BaseScope) -> str:
-    renderer = ResolversTemplateRenderer()
+    renderer = ResolversAssemblyRenderer()
     return renderer.get_providers_code(
         root_scope=root_scope,
         registrations=container._providers_registrations,

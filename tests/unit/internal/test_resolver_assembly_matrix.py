@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 
 from diwire import Container, Lifetime, LockMode, Scope
-from diwire._internal.resolvers.templates.renderer import ResolversTemplateRenderer
+from diwire._internal.resolvers.assembly.renderer import ResolversAssemblyRenderer
 from diwire.exceptions import DIWireAsyncDependencyInSyncContextError, DIWireScopeMismatchError
 
 
@@ -35,7 +35,7 @@ def _build_resolver_with_cleanup_mode(
     container: Container,
     cleanup_enabled: bool,
 ) -> Any:
-    code = ResolversTemplateRenderer().get_providers_code(
+    code = ResolversAssemblyRenderer().get_providers_code(
         root_scope=Scope.APP,
         registrations=container._providers_registrations,
     )
@@ -58,7 +58,7 @@ def _build_resolver_with_cleanup_mode(
         ("factory", Lifetime.SCOPED, Scope.REQUEST, True, 1),
     ],
 )
-def test_codegen_matrix_caching_identity_by_kind_lifetime_scope(
+def test_assembly_matrix_caching_identity_by_kind_lifetime_scope(
     provider_kind: str,
     lifetime: Lifetime | None,
     scope: Scope,
@@ -109,7 +109,7 @@ def test_codegen_matrix_caching_identity_by_kind_lifetime_scope(
         assert calls == expect_call_count
 
 
-def test_codegen_matrix_scoped_cache_isolated_across_scope_instances() -> None:
+def test_assembly_matrix_scoped_cache_isolated_across_scope_instances() -> None:
     calls = 0
 
     def build_service() -> _MatrixService:
@@ -141,7 +141,7 @@ def test_codegen_matrix_scoped_cache_isolated_across_scope_instances() -> None:
 
 @pytest.mark.parametrize("provider_kind", ["generator", "context_manager"])
 @pytest.mark.parametrize("cleanup_enabled", [True, False])
-def test_codegen_matrix_cleanup_behavior_respects_cleanup_enabled(
+def test_assembly_matrix_cleanup_behavior_respects_cleanup_enabled(
     provider_kind: str,
     cleanup_enabled: Any,
 ) -> None:
@@ -208,7 +208,7 @@ def test_codegen_matrix_cleanup_behavior_respects_cleanup_enabled(
         assert "exit" in events
 
 
-def test_codegen_matrix_scope_mismatch_for_request_scoped_dependency_at_root() -> None:
+def test_assembly_matrix_scope_mismatch_for_request_scoped_dependency_at_root() -> None:
     container = Container()
     container.add_factory(
         _MatrixService,
@@ -222,7 +222,7 @@ def test_codegen_matrix_scope_mismatch_for_request_scoped_dependency_at_root() -
 
 
 @pytest.mark.asyncio
-async def test_codegen_matrix_async_dependency_chain_requires_aresolve() -> None:
+async def test_assembly_matrix_async_dependency_chain_requires_aresolve() -> None:
     async def provide_dependency() -> AsyncGenerator[_MatrixAsyncDependency, None]:
         yield _MatrixAsyncDependency()
 
@@ -264,7 +264,7 @@ async def test_codegen_matrix_async_dependency_chain_requires_aresolve() -> None
         (LockMode.NONE, False),
     ],
 )
-def test_codegen_matrix_cached_sync_path_lock_generation_follows_lock_mode(
+def test_assembly_matrix_cached_sync_path_lock_generation_follows_lock_mode(
     lock_mode: LockMode,
     has_thread_lock: Any,
 ) -> None:
@@ -277,7 +277,7 @@ def test_codegen_matrix_cached_sync_path_lock_generation_follows_lock_mode(
     )
     slot = container._providers_registrations.get_by_type(_MatrixService).slot
 
-    generated = ResolversTemplateRenderer().get_providers_code(
+    generated = ResolversAssemblyRenderer().get_providers_code(
         root_scope=Scope.APP,
         registrations=container._providers_registrations,
     )
@@ -286,7 +286,7 @@ def test_codegen_matrix_cached_sync_path_lock_generation_follows_lock_mode(
 
 
 @pytest.mark.parametrize("signature_kind", ["positional", "positional_only", "keyword_only"])
-def test_codegen_matrix_signature_wiring_for_required_parameters(signature_kind: str) -> None:
+def test_assembly_matrix_signature_wiring_for_required_parameters(signature_kind: str) -> None:
     def positional(value: int) -> _SignatureService:
         return _SignatureService(value)
 
@@ -320,7 +320,7 @@ def test_codegen_matrix_signature_wiring_for_required_parameters(signature_kind:
 
 
 @pytest.mark.parametrize("signature_kind", ["var_positional", "var_keyword"])
-def test_codegen_matrix_signature_wiring_for_variadic_parameters(signature_kind: str) -> None:
+def test_assembly_matrix_signature_wiring_for_variadic_parameters(signature_kind: str) -> None:
     def var_positional(*values: int) -> _SignatureService:
         return _SignatureService(tuple(values))
 
@@ -360,7 +360,7 @@ def test_codegen_matrix_signature_wiring_for_variadic_parameters(signature_kind:
 
 
 @pytest.mark.asyncio
-async def test_codegen_matrix_sync_only_graph_has_sync_async_parity() -> None:
+async def test_assembly_matrix_sync_only_graph_has_sync_async_parity() -> None:
     container = Container()
     container.add_factory(
         _sync_only_service,

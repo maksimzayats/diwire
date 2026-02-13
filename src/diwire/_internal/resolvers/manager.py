@@ -1,9 +1,9 @@
 from typing import Any, cast
 
 from diwire._internal.providers import ProvidersRegistrations
+from diwire._internal.resolvers.assembly.planner import validate_resolver_assembly_managed_scopes
+from diwire._internal.resolvers.assembly.renderer import ResolversAssemblyRenderer
 from diwire._internal.resolvers.protocol import BuildRootResolverFunctionProtocol, ResolverProtocol
-from diwire._internal.resolvers.templates.planner import validate_codegen_managed_scopes
-from diwire._internal.resolvers.templates.renderer import ResolversTemplateRenderer
 from diwire._internal.scope import BaseScope
 
 
@@ -11,7 +11,7 @@ class ResolversManager:
     """Manager for dependency resolvers."""
 
     def __init__(self) -> None:
-        self._template_renderer = ResolversTemplateRenderer()
+        self._assembly_renderer = ResolversAssemblyRenderer()
 
     def build_root_resolver(
         self,
@@ -27,12 +27,12 @@ class ResolversManager:
             registrations: Provider registrations used to build resolver instances or generated code.
 
         """
-        validate_codegen_managed_scopes(root_scope=root_scope)
-        code = self._template_renderer.get_providers_code(
+        validate_resolver_assembly_managed_scopes(root_scope=root_scope)
+        code = self._assembly_renderer.get_providers_code(
             root_scope=root_scope,
             registrations=registrations,
         )
-        managed_scopes = validate_codegen_managed_scopes(root_scope=root_scope)
+        managed_scopes = validate_resolver_assembly_managed_scopes(root_scope=root_scope)
 
         namespace: dict[str, Any] = {}
         exec(code, namespace)  # noqa: S102
