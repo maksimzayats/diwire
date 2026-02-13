@@ -166,9 +166,7 @@ def render_generated_markdown(topics: list[Topic]) -> str:
             relative_path_text = example_file.relative_path.as_posix()
             file_name = _topic_file_display_name(topic, example_file)
             buffer.write(f'<a id="{example_file.anchor}"></a>\n')
-            buffer.write(
-                f"### {file_name} ([{relative_path_text}]({relative_path_text}))\n\n",
-            )
+            buffer.write(f"### [{file_name}]({relative_path_text})\n\n")
             if example_file.docstring_markdown:
                 buffer.write(f"{example_file.docstring_markdown}\n\n")
             buffer.write("```python\n")
