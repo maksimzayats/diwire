@@ -327,9 +327,9 @@ class RootResolver:
         """
         Provider slot 3 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequestRootRequestService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotRequestRootRequestService
         Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequestRootRequestService
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotRequestRootRequestService
         Declared scope: request (level 3)
         Declared lifetime: singleton
         Cache policy: cached
@@ -367,9 +367,9 @@ class RootResolver:
         """
         Provider slot 3 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequestRootRequestService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotRequestRootRequestService
         Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequestRootRequestService
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotRequestRootRequestService
         Declared scope: request (level 3)
         Declared lifetime: singleton
         Cache policy: cached
@@ -636,9 +636,9 @@ class _ActionResolver:
         """
         Provider slot 3 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequestRootRequestService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotRequestRootRequestService
         Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequestRootRequestService
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotRequestRootRequestService
         Declared scope: request (level 3)
         Declared lifetime: singleton
         Cache policy: cached
@@ -662,9 +662,9 @@ class _ActionResolver:
         """
         Provider slot 3 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequestRootRequestService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotRequestRootRequestService
         Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequestRootRequestService
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotRequestRootRequestService
         Declared scope: request (level 3)
         Declared lifetime: singleton
         Cache policy: cached
@@ -909,9 +909,9 @@ class _StepResolver:
         """
         Provider slot 3 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequestRootRequestService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotRequestRootRequestService
         Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequestRootRequestService
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotRequestRootRequestService
         Declared scope: request (level 3)
         Declared lifetime: singleton
         Cache policy: cached
@@ -935,9 +935,9 @@ class _StepResolver:
         """
         Provider slot 3 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequestRootRequestService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotRequestRootRequestService
         Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequestRootRequestService
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotRequestRootRequestService
         Declared scope: request (level 3)
         Declared lifetime: singleton
         Cache policy: cached

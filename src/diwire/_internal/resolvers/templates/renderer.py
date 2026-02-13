@@ -158,7 +158,7 @@ class ResolversTemplateRenderer:
         effective_mode_counts = dict(plan.effective_mode_counts)
         logger.info(
             (
-                "Resolver codegen strategy: graph_has_async_specs=%s provider_count=%d "
+                "Resolver assembly strategy: graph_has_async_specs=%s provider_count=%d "
                 "cached_provider_count=%d mode_counts={thread:%d,async:%d,none:%d} "
                 "thread_lock_count=%d async_lock_count=%d"
             ),

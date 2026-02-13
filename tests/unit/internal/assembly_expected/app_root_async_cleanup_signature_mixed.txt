@@ -7,12 +7,12 @@ diwire version used for generation: 0.1.0.post109.dev0+cab17f0
 Generation configuration:
 - root scope level: 1
 - managed scopes: app:1, session:2, request:3, action:4, step:5
-- graph has async specs: False
-- cleanup support enabled in graph: False
+- graph has async specs: True
+- cleanup support enabled in graph: True
 - provider count: 4
 - cached provider count: 4
-- thread lock count: 1
-- async lock count: 0
+- thread lock count: 0
+- async lock count: 2
 - provider slots: 1, 2, 3, 4
 
 Examples:
@@ -25,8 +25,8 @@ Examples:
 
 from __future__ import annotations
 
+import asyncio
 
-import threading
 
 
 from types import TracebackType
@@ -74,7 +74,8 @@ _MISSING_DEP_SLOT: Any = object()
 _dep_eq_slot_by_key: dict[Any, int] = {}
 
 
-_dep_4_thread_lock = threading.Lock()
+_dep_1_async_lock = asyncio.Lock()
+_dep_4_async_lock = asyncio.Lock()
 
 class RootResolver:
 
@@ -83,7 +84,7 @@ class RootResolver:
 
     This class is generated and optimized for direct slot-based dependency resolution.
     All visible provider slots: 1, 2, 3, 4.
-    Providers declared in this exact scope: 1, 2, 3, 4.
+    Providers declared in this exact scope: 2, 3.
     """
 
 
@@ -92,21 +93,18 @@ class RootResolver:
         "_root_resolver",
         "_context",
         "_parent_context_resolver",
+        "_cleanup_enabled",
         "__dict__",
+        "_cleanup_callbacks",
         "_owned_scope_resolvers",
-        "_scope_resolver_2",
-        "_scope_resolver_3",
-        "_scope_resolver_4",
-        "_scope_resolver_5",
-        "_cache_1",
         "_cache_2",
         "_cache_3",
-        "_cache_4",
     )
 
 
     def __init__(
         self,
+        cleanup_enabled: bool = True,
         context: Any | None = None,
         parent_context_resolver: Any = None,
     ) -> None:
@@ -116,21 +114,17 @@ class RootResolver:
 
         The constructor wires scope ancestry references, cache slots, and optional cleanup state.
         Root scope class: RootResolver.
-        Stateless scope reuse enabled: True.
+        Stateless scope reuse enabled: False.
         """
 
+        self._cleanup_enabled = cleanup_enabled
         self._root_resolver = self
         self._context = context
         self._parent_context_resolver = parent_context_resolver
+        self._cleanup_callbacks: list[tuple[int, Any]] = []
         self._owned_scope_resolvers: tuple[Any, ...] = ()
-        self._scope_resolver_2 = _SessionResolver(self._root_resolver)
-        self._scope_resolver_3 = _RequestResolver(self._root_resolver)
-        self._scope_resolver_4 = _ActionResolver(self._root_resolver)
-        self._scope_resolver_5 = _StepResolver(self._root_resolver)
-        self._cache_1 = _MISSING_CACHE
         self._cache_2 = _MISSING_CACHE
         self._cache_3 = _MISSING_CACHE
-        self._cache_4 = _MISSING_CACHE
 
     def enter_scope(
         self,
@@ -149,18 +143,16 @@ class RootResolver:
         """
 
         if scope is _scope_obj_3 or scope == 3:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_3
             return _RequestResolver(
-                self._root_resolver,
+                self,
+                self._cleanup_enabled,
                 context,
                 self,
             )
         if scope is None:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_3
             return _RequestResolver(
-                self._root_resolver,
+                self,
+                self._cleanup_enabled,
                 context,
                 self,
             )
@@ -171,29 +163,51 @@ class RootResolver:
             msg = f"Cannot enter scope level {target_scope_level} from level 1."
             raise DIWireScopeMismatchError(msg)
         if target_scope_level is _scope_obj_2 or target_scope_level == 2:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_2
             return _SessionResolver(
-                self._root_resolver,
+                self,
+                self._cleanup_enabled,
                 context,
                 self,
             )
         if target_scope_level is _scope_obj_4 or target_scope_level == 4:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_4
-            return _ActionResolver(
-                self._root_resolver,
-                context,
+            request_resolver = _RequestResolver(
+                self,
+                self._cleanup_enabled,
+                None,
                 self,
             )
+            action_resolver = _ActionResolver(
+                request_resolver._root_resolver,
+                request_resolver._cleanup_enabled,
+                context,
+                request_resolver,
+                request_resolver,
+            )
+            action_resolver._owned_scope_resolvers = (request_resolver,)
+            return action_resolver
         if target_scope_level is _scope_obj_5 or target_scope_level == 5:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_5
-            return _StepResolver(
-                self._root_resolver,
-                context,
+            request_resolver = _RequestResolver(
+                self,
+                self._cleanup_enabled,
+                None,
                 self,
             )
+            action_resolver = _ActionResolver(
+                request_resolver._root_resolver,
+                request_resolver._cleanup_enabled,
+                None,
+                request_resolver,
+                request_resolver,
+            )
+            step_resolver = _StepResolver(
+                action_resolver._root_resolver,
+                action_resolver._cleanup_enabled,
+                context,
+                action_resolver,
+                request_resolver,
+            )
+            step_resolver._owned_scope_resolvers = (request_resolver, action_resolver)
+            return step_resolver
         msg = f"Scope level {target_scope_level} is not a valid next transition from level 1."
         raise DIWireScopeMismatchError(msg)
 
@@ -210,9 +224,9 @@ class RootResolver:
 
         # Fast path identity checks to avoid reflective dispatch.
         if dependency is _dep_1_type:
-            return self.resolve_1()
+            return RootResolver.resolve_1(self)
         if dependency is _dep_4_type:
-            return self.resolve_4()
+            return RootResolver.resolve_4(self)
         # Fallback map handles equality-based keys for non-class dependencies.
         slot = _dep_eq_slot_by_key.get(dependency, _MISSING_DEP_SLOT)
         if slot is not _MISSING_DEP_SLOT:
@@ -283,9 +297,9 @@ class RootResolver:
 
         # Fast path identity checks for asynchronous resolution.
         if dependency is _dep_1_type:
-            return await self.aresolve_1()
+            return await RootResolver.aresolve_1(self)
         if dependency is _dep_4_type:
-            return await self.aresolve_4()
+            return await RootResolver.aresolve_4(self)
         # Fallback map handles equality-based keys for non-class dependencies.
         slot = _dep_eq_slot_by_key.get(dependency, _MISSING_DEP_SLOT)
         if slot is not _MISSING_DEP_SLOT:
@@ -368,6 +382,27 @@ class RootResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    msg = "Cannot execute async cleanup in sync context. Use 'async with'."
+                    raise DIWireAsyncDependencyInSyncContextError(msg)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    owned_scope_resolver.__exit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     def close(
@@ -387,6 +422,26 @@ class RootResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    await cleanup(exc_type, exc_value, traceback)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    await owned_scope_resolver.__aexit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     async def aclose(
@@ -403,63 +458,54 @@ class RootResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: int
-        Provider spec kind: instance
-        Provider target: instance of int
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource
+        Provider spec kind: context_manager
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_async_context_resource
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache owner scope: 3
+        Declared lock mode: auto
+        Effective lock mode: async
         Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Async path async lock: True
+        Provider declared async: True
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: RootResolver
         Dependency wiring: none
-        Behavior: Builds the provider value in this resolver, enforcing scope guards and cache policy.
+        Behavior: This resolver cannot access the provider yet because the required scope is deeper than the current resolver scope.
         """
 
-        cached_value = self._cache_1
-        if cached_value is _MISSING_CACHE:
-            value = _provider_1
-            self._cache_1 = value
-            self.resolve_1 = lambda: value  # type: ignore[method-assign]
-
-            async def _cached() -> Any:
-                return value
-
-            self.aresolve_1 = _cached  # type: ignore[method-assign]
-            return value
-        return cached_value
+        msg = "Provider slot 1 requires opened scope level 3."
+        raise DIWireScopeMismatchError(msg)
 
     async def aresolve_1(self) -> Any:
 
         """
         Provider slot 1 resolver (async method).
 
-        Returns: int
-        Provider spec kind: instance
-        Provider target: instance of int
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource
+        Provider spec kind: context_manager
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_async_context_resource
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache owner scope: 3
+        Declared lock mode: auto
+        Effective lock mode: async
         Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Async path async lock: True
+        Provider declared async: True
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: RootResolver
         Dependency wiring: none
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
+        Behavior: This resolver cannot access the provider yet because the required scope is deeper than the current resolver scope.
         """
 
-        return self.resolve_1()
+        msg = "Provider slot 1 requires opened scope level 3."
+        raise DIWireScopeMismatchError(msg)
 
     def resolve_2(self) -> Any:
 
@@ -592,70 +638,54 @@ class RootResolver:
         """
         Provider slot 4 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotMixedShapeService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncCleanupSignatureService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_mixed_shape_service
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_cleanup_signature_service
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
+        Cache owner scope: 3
         Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
+        Effective lock mode: async
+        Sync path thread lock: False
+        Async path async lock: True
         Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: RootResolver
-        Dependency wiring: positional (positional_only) -> slot 1 [int]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
-        Behavior: Builds the provider value in this resolver, enforcing scope guards and cache policy.
+        Dependency wiring: dependency (positional_only) -> slot 1 [tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
+        Behavior: This resolver cannot access the provider yet because the required scope is deeper than the current resolver scope.
         """
 
-        cached_value = self._cache_4
-        if cached_value is not _MISSING_CACHE:
-            return cached_value
-        with _dep_4_thread_lock:
-            if (cached_value := self._cache_4) is not _MISSING_CACHE:
-                return cached_value
-            value = _provider_4(
-                self._cache_1 if self._cache_1 is not _MISSING_CACHE else self.resolve_1(),
-                *self._cache_2 if self._cache_2 is not _MISSING_CACHE else self.resolve_2(),
-                **self._cache_3 if self._cache_3 is not _MISSING_CACHE else self.resolve_3(),
-            )
-            self._cache_4 = value
-            self.resolve_4 = lambda: value  # type: ignore[method-assign]
-
-            async def _cached() -> Any:
-                return value
-
-            self.aresolve_4 = _cached  # type: ignore[method-assign]
-            return value
+        msg = "Provider slot 4 requires opened scope level 3."
+        raise DIWireScopeMismatchError(msg)
 
     async def aresolve_4(self) -> Any:
 
         """
         Provider slot 4 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotMixedShapeService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncCleanupSignatureService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_mixed_shape_service
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_cleanup_signature_service
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
+        Cache owner scope: 3
         Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
+        Effective lock mode: async
+        Sync path thread lock: False
+        Async path async lock: True
         Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: RootResolver
-        Dependency wiring: positional (positional_only) -> slot 1 [int]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
+        Dependency wiring: dependency (positional_only) -> slot 1 [tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
+        Behavior: This resolver cannot access the provider yet because the required scope is deeper than the current resolver scope.
         """
 
-        return self.resolve_4()
+        msg = "Provider slot 4 requires opened scope level 3."
+        raise DIWireScopeMismatchError(msg)
 
 
 class _SessionResolver:
@@ -674,6 +704,8 @@ class _SessionResolver:
         "_root_resolver",
         "_context",
         "_parent_context_resolver",
+        "_cleanup_enabled",
+        "_cleanup_callbacks",
         "_owned_scope_resolvers",
     )
 
@@ -681,6 +713,7 @@ class _SessionResolver:
     def __init__(
         self,
         root_resolver: RootResolver,
+        cleanup_enabled: bool = True,
         context: Any | None = None,
         parent_context_resolver: Any = None,
     ) -> None:
@@ -690,12 +723,14 @@ class _SessionResolver:
 
         The constructor wires scope ancestry references, cache slots, and optional cleanup state.
         Root scope class: RootResolver.
-        Stateless scope reuse enabled: True.
+        Stateless scope reuse enabled: False.
         """
 
+        self._cleanup_enabled = cleanup_enabled
         self._root_resolver = root_resolver
         self._context = context
         self._parent_context_resolver = parent_context_resolver
+        self._cleanup_callbacks: list[tuple[int, Any]] = []
         self._owned_scope_resolvers: tuple[Any, ...] = ()
 
     def enter_scope(
@@ -715,18 +750,16 @@ class _SessionResolver:
         """
 
         if scope is _scope_obj_3 or scope == 3:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_3
             return _RequestResolver(
                 self._root_resolver,
+                self._cleanup_enabled,
                 context,
                 self,
             )
         if scope is None:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_3
             return _RequestResolver(
                 self._root_resolver,
+                self._cleanup_enabled,
                 context,
                 self,
             )
@@ -737,21 +770,44 @@ class _SessionResolver:
             msg = f"Cannot enter scope level {target_scope_level} from level 2."
             raise DIWireScopeMismatchError(msg)
         if target_scope_level is _scope_obj_4 or target_scope_level == 4:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_4
-            return _ActionResolver(
+            request_resolver = _RequestResolver(
                 self._root_resolver,
-                context,
+                self._cleanup_enabled,
+                None,
                 self,
             )
+            action_resolver = _ActionResolver(
+                request_resolver._root_resolver,
+                request_resolver._cleanup_enabled,
+                context,
+                request_resolver,
+                request_resolver,
+            )
+            action_resolver._owned_scope_resolvers = (request_resolver,)
+            return action_resolver
         if target_scope_level is _scope_obj_5 or target_scope_level == 5:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_5
-            return _StepResolver(
+            request_resolver = _RequestResolver(
                 self._root_resolver,
-                context,
+                self._cleanup_enabled,
+                None,
                 self,
             )
+            action_resolver = _ActionResolver(
+                request_resolver._root_resolver,
+                request_resolver._cleanup_enabled,
+                None,
+                request_resolver,
+                request_resolver,
+            )
+            step_resolver = _StepResolver(
+                action_resolver._root_resolver,
+                action_resolver._cleanup_enabled,
+                context,
+                action_resolver,
+                request_resolver,
+            )
+            step_resolver._owned_scope_resolvers = (request_resolver, action_resolver)
+            return step_resolver
         msg = f"Scope level {target_scope_level} is not a valid next transition from level 2."
         raise DIWireScopeMismatchError(msg)
 
@@ -926,6 +982,27 @@ class _SessionResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    msg = "Cannot execute async cleanup in sync context. Use 'async with'."
+                    raise DIWireAsyncDependencyInSyncContextError(msg)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    owned_scope_resolver.__exit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     def close(
@@ -945,6 +1022,26 @@ class _SessionResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    await cleanup(exc_type, exc_value, traceback)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    await owned_scope_resolver.__aexit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     async def aclose(
@@ -961,52 +1058,54 @@ class _SessionResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: int
-        Provider spec kind: instance
-        Provider target: instance of int
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource
+        Provider spec kind: context_manager
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_async_context_resource
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache owner scope: 3
+        Declared lock mode: auto
+        Effective lock mode: async
         Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Async path async lock: True
+        Provider declared async: True
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: _SessionResolver
         Dependency wiring: none
-        Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
+        Behavior: This resolver cannot access the provider yet because the required scope is deeper than the current resolver scope.
         """
 
-        return self._root_resolver.resolve_1()
+        msg = "Provider slot 1 requires opened scope level 3."
+        raise DIWireScopeMismatchError(msg)
 
     async def aresolve_1(self) -> Any:
 
         """
         Provider slot 1 resolver (async method).
 
-        Returns: int
-        Provider spec kind: instance
-        Provider target: instance of int
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource
+        Provider spec kind: context_manager
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_async_context_resource
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache owner scope: 3
+        Declared lock mode: auto
+        Effective lock mode: async
         Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Async path async lock: True
+        Provider declared async: True
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: _SessionResolver
         Dependency wiring: none
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
+        Behavior: This resolver cannot access the provider yet because the required scope is deeper than the current resolver scope.
         """
 
-        return self.resolve_1()
+        msg = "Provider slot 1 requires opened scope level 3."
+        raise DIWireScopeMismatchError(msg)
 
     def resolve_2(self) -> Any:
 
@@ -1117,52 +1216,54 @@ class _SessionResolver:
         """
         Provider slot 4 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotMixedShapeService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncCleanupSignatureService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_mixed_shape_service
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_cleanup_signature_service
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
+        Cache owner scope: 3
         Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
+        Effective lock mode: async
+        Sync path thread lock: False
+        Async path async lock: True
         Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: _SessionResolver
-        Dependency wiring: positional (positional_only) -> slot 1 [int]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
-        Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
+        Dependency wiring: dependency (positional_only) -> slot 1 [tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
+        Behavior: This resolver cannot access the provider yet because the required scope is deeper than the current resolver scope.
         """
 
-        return self._root_resolver.resolve_4()
+        msg = "Provider slot 4 requires opened scope level 3."
+        raise DIWireScopeMismatchError(msg)
 
     async def aresolve_4(self) -> Any:
 
         """
         Provider slot 4 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotMixedShapeService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncCleanupSignatureService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_mixed_shape_service
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_cleanup_signature_service
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
+        Cache owner scope: 3
         Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
+        Effective lock mode: async
+        Sync path thread lock: False
+        Async path async lock: True
         Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: _SessionResolver
-        Dependency wiring: positional (positional_only) -> slot 1 [int]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
+        Dependency wiring: dependency (positional_only) -> slot 1 [tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
+        Behavior: This resolver cannot access the provider yet because the required scope is deeper than the current resolver scope.
         """
 
-        return self.resolve_4()
+        msg = "Provider slot 4 requires opened scope level 3."
+        raise DIWireScopeMismatchError(msg)
 
 
 class _RequestResolver:
@@ -1172,7 +1273,7 @@ class _RequestResolver:
 
     This class is generated and optimized for direct slot-based dependency resolution.
     All visible provider slots: 1, 2, 3, 4.
-    Providers declared in this exact scope: none.
+    Providers declared in this exact scope: 1, 4.
     """
 
 
@@ -1181,13 +1282,18 @@ class _RequestResolver:
         "_root_resolver",
         "_context",
         "_parent_context_resolver",
+        "_cleanup_enabled",
+        "_cleanup_callbacks",
         "_owned_scope_resolvers",
+        "_cache_1",
+        "_cache_4",
     )
 
 
     def __init__(
         self,
         root_resolver: RootResolver,
+        cleanup_enabled: bool = True,
         context: Any | None = None,
         parent_context_resolver: Any = None,
     ) -> None:
@@ -1197,13 +1303,17 @@ class _RequestResolver:
 
         The constructor wires scope ancestry references, cache slots, and optional cleanup state.
         Root scope class: RootResolver.
-        Stateless scope reuse enabled: True.
+        Stateless scope reuse enabled: False.
         """
 
+        self._cleanup_enabled = cleanup_enabled
         self._root_resolver = root_resolver
         self._context = context
         self._parent_context_resolver = parent_context_resolver
+        self._cleanup_callbacks: list[tuple[int, Any]] = []
         self._owned_scope_resolvers: tuple[Any, ...] = ()
+        self._cache_1 = _MISSING_CACHE
+        self._cache_4 = _MISSING_CACHE
 
     def enter_scope(
         self,
@@ -1222,19 +1332,19 @@ class _RequestResolver:
         """
 
         if scope is _scope_obj_4 or scope == 4:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_4
             return _ActionResolver(
                 self._root_resolver,
+                self._cleanup_enabled,
                 context,
+                self,
                 self,
             )
         if scope is None:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_4
             return _ActionResolver(
                 self._root_resolver,
+                self._cleanup_enabled,
                 context,
+                self,
                 self,
             )
         target_scope_level = scope
@@ -1244,13 +1354,22 @@ class _RequestResolver:
             msg = f"Cannot enter scope level {target_scope_level} from level 3."
             raise DIWireScopeMismatchError(msg)
         if target_scope_level is _scope_obj_5 or target_scope_level == 5:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_5
-            return _StepResolver(
+            action_resolver = _ActionResolver(
                 self._root_resolver,
-                context,
+                self._cleanup_enabled,
+                None,
+                self,
                 self,
             )
+            step_resolver = _StepResolver(
+                action_resolver._root_resolver,
+                action_resolver._cleanup_enabled,
+                context,
+                action_resolver,
+                action_resolver._request_resolver,
+            )
+            step_resolver._owned_scope_resolvers = (action_resolver,)
+            return step_resolver
         msg = f"Scope level {target_scope_level} is not a valid next transition from level 3."
         raise DIWireScopeMismatchError(msg)
 
@@ -1425,6 +1544,27 @@ class _RequestResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    msg = "Cannot execute async cleanup in sync context. Use 'async with'."
+                    raise DIWireAsyncDependencyInSyncContextError(msg)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    owned_scope_resolver.__exit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     def close(
@@ -1444,6 +1584,26 @@ class _RequestResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    await cleanup(exc_type, exc_value, traceback)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    await owned_scope_resolver.__aexit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     async def aclose(
@@ -1460,52 +1620,66 @@ class _RequestResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: int
-        Provider spec kind: instance
-        Provider target: instance of int
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource
+        Provider spec kind: context_manager
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_async_context_resource
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache owner scope: 3
+        Declared lock mode: auto
+        Effective lock mode: async
         Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Async path async lock: True
+        Provider declared async: True
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: _RequestResolver
         Dependency wiring: none
-        Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
+        Behavior: Synchronous access is blocked because the provider graph requires async resolution.
         """
 
-        return self._root_resolver.resolve_1()
+        provider_scope_resolver = self
+        msg = "Provider slot 1 requires asynchronous resolution."
+        raise DIWireAsyncDependencyInSyncContextError(msg)
 
     async def aresolve_1(self) -> Any:
 
         """
         Provider slot 1 resolver (async method).
 
-        Returns: int
-        Provider spec kind: instance
-        Provider target: instance of int
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource
+        Provider spec kind: context_manager
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_async_context_resource
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache owner scope: 3
+        Declared lock mode: auto
+        Effective lock mode: async
         Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Async path async lock: True
+        Provider declared async: True
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: _RequestResolver
         Dependency wiring: none
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
+        Behavior: Builds the provider value in this resolver, enforcing scope guards and cache policy.
         """
 
-        return self.resolve_1()
+        provider_scope_resolver = self
+        cached_value = self._cache_1
+        if cached_value is not _MISSING_CACHE:
+            return cached_value
+        async with _dep_1_async_lock:
+            if (cached_value := self._cache_1) is not _MISSING_CACHE:
+                return cached_value
+            _provider_cm = _provider_1()
+            value = await _provider_cm.__aenter__()
+            if self._cleanup_enabled:
+                provider_scope_resolver._cleanup_callbacks.append((1, _provider_cm.__aexit__))
+            self._cache_1 = value
+            return value
 
     def resolve_2(self) -> Any:
 
@@ -1616,52 +1790,66 @@ class _RequestResolver:
         """
         Provider slot 4 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotMixedShapeService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncCleanupSignatureService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_mixed_shape_service
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_cleanup_signature_service
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
+        Cache owner scope: 3
         Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
+        Effective lock mode: async
+        Sync path thread lock: False
+        Async path async lock: True
         Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: _RequestResolver
-        Dependency wiring: positional (positional_only) -> slot 1 [int]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
-        Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
+        Dependency wiring: dependency (positional_only) -> slot 1 [tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
+        Behavior: Synchronous access is blocked because the provider graph requires async resolution.
         """
 
-        return self._root_resolver.resolve_4()
+        msg = "Provider slot 4 requires asynchronous resolution."
+        raise DIWireAsyncDependencyInSyncContextError(msg)
 
     async def aresolve_4(self) -> Any:
 
         """
         Provider slot 4 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotMixedShapeService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncCleanupSignatureService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_mixed_shape_service
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_cleanup_signature_service
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
+        Cache owner scope: 3
         Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
+        Effective lock mode: async
+        Sync path thread lock: False
+        Async path async lock: True
         Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: _RequestResolver
-        Dependency wiring: positional (positional_only) -> slot 1 [int]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
+        Dependency wiring: dependency (positional_only) -> slot 1 [tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
+        Behavior: Builds the provider value in this resolver, enforcing scope guards and cache policy.
         """
 
-        return self.resolve_4()
+        cached_value = self._cache_4
+        if cached_value is not _MISSING_CACHE:
+            return cached_value
+        async with _dep_4_async_lock:
+            if (cached_value := self._cache_4) is not _MISSING_CACHE:
+                return cached_value
+            _root_resolver = self._root_resolver
+            value = _provider_4(
+                await self.aresolve_1(),
+                *_root_resolver._cache_2 if _root_resolver._cache_2 is not _MISSING_CACHE else _root_resolver.resolve_2(),
+                **_root_resolver._cache_3 if _root_resolver._cache_3 is not _MISSING_CACHE else _root_resolver.resolve_3(),
+            )
+            self._cache_4 = value
+            return value
 
 
 class _ActionResolver:
@@ -1680,15 +1868,20 @@ class _ActionResolver:
         "_root_resolver",
         "_context",
         "_parent_context_resolver",
+        "_cleanup_enabled",
+        "_cleanup_callbacks",
         "_owned_scope_resolvers",
+        "_request_resolver",
     )
 
 
     def __init__(
         self,
         root_resolver: RootResolver,
+        cleanup_enabled: bool = True,
         context: Any | None = None,
         parent_context_resolver: Any = None,
+        request_resolver: Any = _MISSING_RESOLVER,
     ) -> None:
 
         """
@@ -1696,13 +1889,16 @@ class _ActionResolver:
 
         The constructor wires scope ancestry references, cache slots, and optional cleanup state.
         Root scope class: RootResolver.
-        Stateless scope reuse enabled: True.
+        Stateless scope reuse enabled: False.
         """
 
+        self._cleanup_enabled = cleanup_enabled
         self._root_resolver = root_resolver
         self._context = context
         self._parent_context_resolver = parent_context_resolver
+        self._cleanup_callbacks: list[tuple[int, Any]] = []
         self._owned_scope_resolvers: tuple[Any, ...] = ()
+        self._request_resolver = request_resolver
 
     def enter_scope(
         self,
@@ -1721,20 +1917,20 @@ class _ActionResolver:
         """
 
         if scope is _scope_obj_5 or scope == 5:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_5
             return _StepResolver(
                 self._root_resolver,
+                self._cleanup_enabled,
                 context,
                 self,
+                self._request_resolver,
             )
         if scope is None:
-            if context is None and self._context is None and self._parent_context_resolver is None:
-                return self._root_resolver._scope_resolver_5
             return _StepResolver(
                 self._root_resolver,
+                self._cleanup_enabled,
                 context,
                 self,
+                self._request_resolver,
             )
         target_scope_level = scope
         if target_scope_level is _scope_obj_4 or target_scope_level == 4:
@@ -1916,6 +2112,27 @@ class _ActionResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    msg = "Cannot execute async cleanup in sync context. Use 'async with'."
+                    raise DIWireAsyncDependencyInSyncContextError(msg)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    owned_scope_resolver.__exit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     def close(
@@ -1935,6 +2152,26 @@ class _ActionResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    await cleanup(exc_type, exc_value, traceback)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    await owned_scope_resolver.__aexit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     async def aclose(
@@ -1951,52 +2188,60 @@ class _ActionResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: int
-        Provider spec kind: instance
-        Provider target: instance of int
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource
+        Provider spec kind: context_manager
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_async_context_resource
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache owner scope: 3
+        Declared lock mode: auto
+        Effective lock mode: async
         Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Async path async lock: True
+        Provider declared async: True
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: _ActionResolver
         Dependency wiring: none
         Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
         """
 
-        return self._root_resolver.resolve_1()
+        owner_resolver = self._request_resolver
+        if owner_resolver is _MISSING_RESOLVER:
+            msg = "Provider slot 1 requires opened scope level 3."
+            raise DIWireScopeMismatchError(msg)
+        return owner_resolver.resolve_1()
 
     async def aresolve_1(self) -> Any:
 
         """
         Provider slot 1 resolver (async method).
 
-        Returns: int
-        Provider spec kind: instance
-        Provider target: instance of int
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource
+        Provider spec kind: context_manager
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_async_context_resource
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache owner scope: 3
+        Declared lock mode: auto
+        Effective lock mode: async
         Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Async path async lock: True
+        Provider declared async: True
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: _ActionResolver
         Dependency wiring: none
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
+        Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
         """
 
-        return self.resolve_1()
+        owner_resolver = self._request_resolver
+        if owner_resolver is _MISSING_RESOLVER:
+            msg = "Provider slot 1 requires opened scope level 3."
+            raise DIWireScopeMismatchError(msg)
+        return await owner_resolver.aresolve_1()
 
     def resolve_2(self) -> Any:
 
@@ -2107,52 +2352,60 @@ class _ActionResolver:
         """
         Provider slot 4 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotMixedShapeService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncCleanupSignatureService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_mixed_shape_service
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_cleanup_signature_service
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
+        Cache owner scope: 3
         Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
+        Effective lock mode: async
+        Sync path thread lock: False
+        Async path async lock: True
         Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: _ActionResolver
-        Dependency wiring: positional (positional_only) -> slot 1 [int]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
+        Dependency wiring: dependency (positional_only) -> slot 1 [tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
         Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
         """
 
-        return self._root_resolver.resolve_4()
+        owner_resolver = self._request_resolver
+        if owner_resolver is _MISSING_RESOLVER:
+            msg = "Provider slot 4 requires opened scope level 3."
+            raise DIWireScopeMismatchError(msg)
+        return owner_resolver.resolve_4()
 
     async def aresolve_4(self) -> Any:
 
         """
         Provider slot 4 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotMixedShapeService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncCleanupSignatureService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_mixed_shape_service
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_cleanup_signature_service
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
+        Cache owner scope: 3
         Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
+        Effective lock mode: async
+        Sync path thread lock: False
+        Async path async lock: True
         Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: _ActionResolver
-        Dependency wiring: positional (positional_only) -> slot 1 [int]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
+        Dependency wiring: dependency (positional_only) -> slot 1 [tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
+        Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
         """
 
-        return self.resolve_4()
+        owner_resolver = self._request_resolver
+        if owner_resolver is _MISSING_RESOLVER:
+            msg = "Provider slot 4 requires opened scope level 3."
+            raise DIWireScopeMismatchError(msg)
+        return await owner_resolver.aresolve_4()
 
 
 class _StepResolver:
@@ -2171,15 +2424,20 @@ class _StepResolver:
         "_root_resolver",
         "_context",
         "_parent_context_resolver",
+        "_cleanup_enabled",
+        "_cleanup_callbacks",
         "_owned_scope_resolvers",
+        "_request_resolver",
     )
 
 
     def __init__(
         self,
         root_resolver: RootResolver,
+        cleanup_enabled: bool = True,
         context: Any | None = None,
         parent_context_resolver: Any = None,
+        request_resolver: Any = _MISSING_RESOLVER,
     ) -> None:
 
         """
@@ -2187,13 +2445,16 @@ class _StepResolver:
 
         The constructor wires scope ancestry references, cache slots, and optional cleanup state.
         Root scope class: RootResolver.
-        Stateless scope reuse enabled: True.
+        Stateless scope reuse enabled: False.
         """
 
+        self._cleanup_enabled = cleanup_enabled
         self._root_resolver = root_resolver
         self._context = context
         self._parent_context_resolver = parent_context_resolver
+        self._cleanup_callbacks: list[tuple[int, Any]] = []
         self._owned_scope_resolvers: tuple[Any, ...] = ()
+        self._request_resolver = request_resolver
 
     def enter_scope(
         self,
@@ -2385,6 +2646,27 @@ class _StepResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    msg = "Cannot execute async cleanup in sync context. Use 'async with'."
+                    raise DIWireAsyncDependencyInSyncContextError(msg)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    owned_scope_resolver.__exit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     def close(
@@ -2404,6 +2686,26 @@ class _StepResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    await cleanup(exc_type, exc_value, traceback)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    await owned_scope_resolver.__aexit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     async def aclose(
@@ -2420,52 +2722,60 @@ class _StepResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: int
-        Provider spec kind: instance
-        Provider target: instance of int
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource
+        Provider spec kind: context_manager
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_async_context_resource
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache owner scope: 3
+        Declared lock mode: auto
+        Effective lock mode: async
         Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Async path async lock: True
+        Provider declared async: True
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: _StepResolver
         Dependency wiring: none
         Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
         """
 
-        return self._root_resolver.resolve_1()
+        owner_resolver = self._request_resolver
+        if owner_resolver is _MISSING_RESOLVER:
+            msg = "Provider slot 1 requires opened scope level 3."
+            raise DIWireScopeMismatchError(msg)
+        return owner_resolver.resolve_1()
 
     async def aresolve_1(self) -> Any:
 
         """
         Provider slot 1 resolver (async method).
 
-        Returns: int
-        Provider spec kind: instance
-        Provider target: instance of int
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource
+        Provider spec kind: context_manager
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_async_context_resource
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
-        Declared lock mode: none
-        Effective lock mode: none
+        Cache owner scope: 3
+        Declared lock mode: auto
+        Effective lock mode: async
         Sync path thread lock: False
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Async path async lock: True
+        Provider declared async: True
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: _StepResolver
         Dependency wiring: none
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
+        Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
         """
 
-        return self.resolve_1()
+        owner_resolver = self._request_resolver
+        if owner_resolver is _MISSING_RESOLVER:
+            msg = "Provider slot 1 requires opened scope level 3."
+            raise DIWireScopeMismatchError(msg)
+        return await owner_resolver.aresolve_1()
 
     def resolve_2(self) -> Any:
 
@@ -2576,52 +2886,60 @@ class _StepResolver:
         """
         Provider slot 4 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotMixedShapeService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncCleanupSignatureService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_mixed_shape_service
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_cleanup_signature_service
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
+        Cache owner scope: 3
         Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
+        Effective lock mode: async
+        Sync path thread lock: False
+        Async path async lock: True
         Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: _StepResolver
-        Dependency wiring: positional (positional_only) -> slot 1 [int]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
+        Dependency wiring: dependency (positional_only) -> slot 1 [tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
         Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
         """
 
-        return self._root_resolver.resolve_4()
+        owner_resolver = self._request_resolver
+        if owner_resolver is _MISSING_RESOLVER:
+            msg = "Provider slot 4 requires opened scope level 3."
+            raise DIWireScopeMismatchError(msg)
+        return owner_resolver.resolve_4()
 
     async def aresolve_4(self) -> Any:
 
         """
         Provider slot 4 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotMixedShapeService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncCleanupSignatureService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_mixed_shape_service
-        Declared scope: app (level 1)
-        Declared lifetime: singleton
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_cleanup_signature_service
+        Declared scope: request (level 3)
+        Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 1
+        Cache owner scope: 3
         Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
+        Effective lock mode: async
+        Sync path thread lock: False
+        Async path async lock: True
         Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
+        Graph requires async: True
+        Cleanup callbacks required: True
         Resolver class handling this call: _StepResolver
-        Dependency wiring: positional (positional_only) -> slot 1 [int]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
+        Dependency wiring: dependency (positional_only) -> slot 1 [tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncContextResource]; values (var_positional) -> slot 2 [tuple]; options (var_keyword) -> slot 3 [dict]
+        Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
         """
 
-        return self.resolve_4()
+        owner_resolver = self._request_resolver
+        if owner_resolver is _MISSING_RESOLVER:
+            msg = "Provider slot 4 requires opened scope level 3."
+            raise DIWireScopeMismatchError(msg)
+        return await owner_resolver.aresolve_4()
 
 def build_root_resolver(
     registrations: ProvidersRegistrations,
@@ -2671,7 +2989,7 @@ def build_root_resolver(
     # Track dependency keys that are directly registered in this compiled graph.
     _dep_registered_keys.add(_dep_1_type)
     # Capture provider object (instance/type/factory/generator/context manager).
-    _provider_1 = registration_1.instance
+    _provider_1 = registration_1.context_manager
     # Index provider slot for All[...] dependency dispatch.
     component_base_1 = component_base_key(_dep_1_type)
     base_key_1 = component_base_1
@@ -2741,4 +3059,4 @@ def build_root_resolver(
     }
 
     # Construct a fresh root resolver configured with optional cleanup callbacks.
-    return RootResolver()
+    return RootResolver(cleanup_enabled)

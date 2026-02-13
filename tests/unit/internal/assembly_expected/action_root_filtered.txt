@@ -323,9 +323,9 @@ class RootResolver:
         """
         Provider slot 2 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotActionRootActionService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotActionRootActionService
         Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotActionRootActionService
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotActionRootActionService
         Declared scope: action (level 4)
         Declared lifetime: singleton
         Cache policy: cached
@@ -363,9 +363,9 @@ class RootResolver:
         """
         Provider slot 2 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotActionRootActionService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotActionRootActionService
         Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotActionRootActionService
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotActionRootActionService
         Declared scope: action (level 4)
         Declared lifetime: singleton
         Cache policy: cached
@@ -389,9 +389,9 @@ class RootResolver:
         """
         Provider slot 3 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotActionRootStepService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotActionRootStepService
         Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotActionRootStepService
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotActionRootStepService
         Declared scope: step (level 5)
         Declared lifetime: scoped
         Cache policy: cached
@@ -416,9 +416,9 @@ class RootResolver:
         """
         Provider slot 3 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotActionRootStepService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotActionRootStepService
         Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotActionRootStepService
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotActionRootStepService
         Declared scope: step (level 5)
         Declared lifetime: scoped
         Cache policy: cached
@@ -675,9 +675,9 @@ class _StepResolver:
         """
         Provider slot 2 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotActionRootActionService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotActionRootActionService
         Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotActionRootActionService
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotActionRootActionService
         Declared scope: action (level 4)
         Declared lifetime: singleton
         Cache policy: cached
@@ -701,9 +701,9 @@ class _StepResolver:
         """
         Provider slot 2 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotActionRootActionService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotActionRootActionService
         Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotActionRootActionService
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotActionRootActionService
         Declared scope: action (level 4)
         Declared lifetime: singleton
         Cache policy: cached
@@ -727,9 +727,9 @@ class _StepResolver:
         """
         Provider slot 3 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotActionRootStepService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotActionRootStepService
         Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotActionRootStepService
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotActionRootStepService
         Declared scope: step (level 5)
         Declared lifetime: scoped
         Cache policy: cached
@@ -761,9 +761,9 @@ class _StepResolver:
         """
         Provider slot 3 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotActionRootStepService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotActionRootStepService
         Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotActionRootStepService
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotActionRootStepService
         Declared scope: step (level 5)
         Declared lifetime: scoped
         Cache policy: cached

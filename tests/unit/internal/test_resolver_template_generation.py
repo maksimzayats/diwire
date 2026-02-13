@@ -26,8 +26,8 @@ from diwire._internal.resolvers.templates.planner import (
     ResolverGenerationPlan,
     ResolverGenerationPlanner,
     ScopePlan,
-    _validate_codegen_scope,
-    _validate_codegen_scope_level,
+    _validate_resolver_assembly_scope,
+    _validate_resolver_assembly_scope_level,
 )
 from diwire._internal.resolvers.templates.renderer import (
     DependencyExpressionContext,
@@ -337,7 +337,7 @@ def test_renderer_logs_lock_strategy_once_per_compile_cache_miss(
     container.compile()
 
     records = [
-        record for record in caplog.records if "Resolver codegen strategy:" in record.getMessage()
+        record for record in caplog.records if "Resolver assembly strategy:" in record.getMessage()
     ]
     assert len(records) == 1
 
@@ -386,40 +386,40 @@ def test_planner_rejects_keyword_scope_name(
         )
 
 
-def test_validate_codegen_scope_rejects_non_scope_member() -> None:
+def test_validate_resolver_assembly_scope_rejects_non_scope_member() -> None:
     with pytest.raises(DIWireInvalidProviderSpecError, match="BaseScope member"):
-        _validate_codegen_scope(object())
+        _validate_resolver_assembly_scope(object())
 
 
-def test_validate_codegen_scope_rejects_missing_scope_name() -> None:
+def test_validate_resolver_assembly_scope_rejects_missing_scope_name() -> None:
     with pytest.raises(DIWireInvalidProviderSpecError, match="missing 'scope_name'"):
-        _validate_codegen_scope(BaseScope(2))
+        _validate_resolver_assembly_scope(BaseScope(2))
 
 
-def test_validate_codegen_scope_rejects_non_string_scope_name() -> None:
+def test_validate_resolver_assembly_scope_rejects_non_string_scope_name() -> None:
     invalid_scope = BaseScope(2)
     invalid_scope.scope_name = cast("Any", 10)
 
     with pytest.raises(DIWireInvalidProviderSpecError, match="'scope_name' must be str"):
-        _validate_codegen_scope(invalid_scope)
+        _validate_resolver_assembly_scope(invalid_scope)
 
 
-def test_validate_codegen_scope_level_rejects_missing_level() -> None:
+def test_validate_resolver_assembly_scope_level_rejects_missing_level() -> None:
     invalid_scope = BaseScope(2)
     invalid_scope.scope_name = "request"
     del invalid_scope.level
 
     with pytest.raises(DIWireInvalidProviderSpecError, match="missing 'level'"):
-        _validate_codegen_scope_level(scope=invalid_scope)
+        _validate_resolver_assembly_scope_level(scope=invalid_scope)
 
 
-def test_validate_codegen_scope_level_rejects_non_int_level() -> None:
+def test_validate_resolver_assembly_scope_level_rejects_non_int_level() -> None:
     invalid_scope = BaseScope(2)
     invalid_scope.scope_name = "request"
     invalid_scope.level = cast("Any", "two")
 
     with pytest.raises(DIWireInvalidProviderSpecError, match="'level' must be int"):
-        _validate_codegen_scope_level(scope=invalid_scope)
+        _validate_resolver_assembly_scope_level(scope=invalid_scope)
 
 
 def test_renderer_includes_generator_context_helpers_for_generator_graphs() -> None:

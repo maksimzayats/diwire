@@ -347,9 +347,9 @@ class RootResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotFromContextService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_from_context_service
         Declared scope: request (level 3)
         Declared lifetime: transient
         Cache policy: transient
@@ -378,9 +378,9 @@ class RootResolver:
         """
         Provider slot 1 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotFromContextService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_from_context_service
         Declared scope: request (level 3)
         Declared lifetime: transient
         Cache policy: transient
@@ -677,9 +677,9 @@ class _SessionResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotFromContextService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_from_context_service
         Declared scope: request (level 3)
         Declared lifetime: transient
         Cache policy: transient
@@ -708,9 +708,9 @@ class _SessionResolver:
         """
         Provider slot 1 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotFromContextService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_from_context_service
         Declared scope: request (level 3)
         Declared lifetime: transient
         Cache policy: transient
@@ -990,9 +990,9 @@ class _RequestResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotFromContextService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_from_context_service
         Declared scope: request (level 3)
         Declared lifetime: transient
         Cache policy: transient
@@ -1019,9 +1019,9 @@ class _RequestResolver:
         """
         Provider slot 1 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotFromContextService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_from_context_service
         Declared scope: request (level 3)
         Declared lifetime: transient
         Cache policy: transient
@@ -1289,9 +1289,9 @@ class _ActionResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotFromContextService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_from_context_service
         Declared scope: request (level 3)
         Declared lifetime: transient
         Cache policy: transient
@@ -1319,9 +1319,9 @@ class _ActionResolver:
         """
         Provider slot 1 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotFromContextService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_from_context_service
         Declared scope: request (level 3)
         Declared lifetime: transient
         Cache policy: transient
@@ -1569,9 +1569,9 @@ class _StepResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotFromContextService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_from_context_service
         Declared scope: request (level 3)
         Declared lifetime: transient
         Cache policy: transient
@@ -1599,9 +1599,9 @@ class _StepResolver:
         """
         Provider slot 1 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotFromContextService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotFromContextService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_from_context_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_from_context_service
         Declared scope: request (level 3)
         Declared lifetime: transient
         Cache policy: transient

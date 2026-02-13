@@ -65,7 +65,7 @@ def _build_random_container(
 
 
 @pytest.mark.parametrize("seed", _SEEDS)
-def test_fuzz_codegen_is_deterministic_for_same_seed(seed: int) -> None:
+def test_fuzz_assembly_is_deterministic_for_same_seed(seed: int) -> None:
     slot_counter = ProviderSpec.SLOT_COUNTER
     try:
         ProviderSpec.SLOT_COUNTER = 0
@@ -106,7 +106,7 @@ def test_fuzz_resolution_consistency_matches_top_level_lifetime(seed: int) -> No
         assert async_resolved is first
 
 
-def test_fuzz_codegen_raises_for_cycle_graph() -> None:
+def test_fuzz_assembly_raises_for_cycle_graph() -> None:
     class _CycleA:
         pass
 

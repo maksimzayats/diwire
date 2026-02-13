@@ -356,9 +356,9 @@ class RootResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Provider spec kind: instance
-        Provider target: instance of tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Provider target: instance of tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Declared scope: app (level 1)
         Declared lifetime: singleton
         Cache policy: cached
@@ -393,9 +393,9 @@ class RootResolver:
         """
         Provider slot 1 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Provider spec kind: instance
-        Provider target: instance of tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Provider target: instance of tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Declared scope: app (level 1)
         Declared lifetime: singleton
         Cache policy: cached
@@ -419,9 +419,9 @@ class RootResolver:
         """
         Provider slot 2 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_async_inject_wrapper_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_inject_wrapper_service
         Declared scope: app (level 1)
         Declared lifetime: transient
         Cache policy: transient
@@ -446,9 +446,9 @@ class RootResolver:
         """
         Provider slot 2 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_async_inject_wrapper_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_inject_wrapper_service
         Declared scope: app (level 1)
         Declared lifetime: transient
         Cache policy: transient
@@ -745,9 +745,9 @@ class _SessionResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Provider spec kind: instance
-        Provider target: instance of tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Provider target: instance of tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Declared scope: app (level 1)
         Declared lifetime: singleton
         Cache policy: cached
@@ -771,9 +771,9 @@ class _SessionResolver:
         """
         Provider slot 1 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Provider spec kind: instance
-        Provider target: instance of tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Provider target: instance of tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Declared scope: app (level 1)
         Declared lifetime: singleton
         Cache policy: cached
@@ -797,9 +797,9 @@ class _SessionResolver:
         """
         Provider slot 2 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_async_inject_wrapper_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_inject_wrapper_service
         Declared scope: app (level 1)
         Declared lifetime: transient
         Cache policy: transient
@@ -823,9 +823,9 @@ class _SessionResolver:
         """
         Provider slot 2 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_async_inject_wrapper_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_inject_wrapper_service
         Declared scope: app (level 1)
         Declared lifetime: transient
         Cache policy: transient
@@ -1110,9 +1110,9 @@ class _RequestResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Provider spec kind: instance
-        Provider target: instance of tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Provider target: instance of tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Declared scope: app (level 1)
         Declared lifetime: singleton
         Cache policy: cached
@@ -1136,9 +1136,9 @@ class _RequestResolver:
         """
         Provider slot 1 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Provider spec kind: instance
-        Provider target: instance of tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Provider target: instance of tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Declared scope: app (level 1)
         Declared lifetime: singleton
         Cache policy: cached
@@ -1162,9 +1162,9 @@ class _RequestResolver:
         """
         Provider slot 2 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_async_inject_wrapper_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_inject_wrapper_service
         Declared scope: app (level 1)
         Declared lifetime: transient
         Cache policy: transient
@@ -1188,9 +1188,9 @@ class _RequestResolver:
         """
         Provider slot 2 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_async_inject_wrapper_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_inject_wrapper_service
         Declared scope: app (level 1)
         Declared lifetime: transient
         Cache policy: transient
@@ -1467,9 +1467,9 @@ class _ActionResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Provider spec kind: instance
-        Provider target: instance of tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Provider target: instance of tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Declared scope: app (level 1)
         Declared lifetime: singleton
         Cache policy: cached
@@ -1493,9 +1493,9 @@ class _ActionResolver:
         """
         Provider slot 1 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Provider spec kind: instance
-        Provider target: instance of tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Provider target: instance of tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Declared scope: app (level 1)
         Declared lifetime: singleton
         Cache policy: cached
@@ -1519,9 +1519,9 @@ class _ActionResolver:
         """
         Provider slot 2 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_async_inject_wrapper_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_inject_wrapper_service
         Declared scope: app (level 1)
         Declared lifetime: transient
         Cache policy: transient
@@ -1545,9 +1545,9 @@ class _ActionResolver:
         """
         Provider slot 2 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_async_inject_wrapper_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_inject_wrapper_service
         Declared scope: app (level 1)
         Declared lifetime: transient
         Cache policy: transient
@@ -1802,9 +1802,9 @@ class _StepResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Provider spec kind: instance
-        Provider target: instance of tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Provider target: instance of tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Declared scope: app (level 1)
         Declared lifetime: singleton
         Cache policy: cached
@@ -1828,9 +1828,9 @@ class _StepResolver:
         """
         Provider slot 1 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Provider spec kind: instance
-        Provider target: instance of tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperDependency
+        Provider target: instance of tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperDependency
         Declared scope: app (level 1)
         Declared lifetime: singleton
         Cache policy: cached
@@ -1854,9 +1854,9 @@ class _StepResolver:
         """
         Provider slot 2 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_async_inject_wrapper_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_inject_wrapper_service
         Declared scope: app (level 1)
         Declared lifetime: transient
         Cache policy: transient
@@ -1880,9 +1880,9 @@ class _StepResolver:
         """
         Provider slot 2 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotAsyncInjectWrapperService
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotAsyncInjectWrapperService
         Provider spec kind: factory
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._build_snapshot_async_inject_wrapper_service
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._build_snapshot_async_inject_wrapper_service
         Declared scope: app (level 1)
         Declared lifetime: transient
         Cache policy: transient

@@ -8,12 +8,12 @@ Generation configuration:
 - root scope level: 1
 - managed scopes: app:1, session:2, request:3, action:4, step:5
 - graph has async specs: False
-- cleanup support enabled in graph: False
-- provider count: 2
-- cached provider count: 2
-- thread lock count: 2
+- cleanup support enabled in graph: True
+- provider count: 1
+- cached provider count: 1
+- thread lock count: 1
 - async lock count: 0
-- provider slots: 1, 2
+- provider slots: 1
 
 Examples:
 >>> root = build_root_resolver(registrations)
@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import threading
 
+
+from contextlib import asynccontextmanager, contextmanager
 
 from types import TracebackType
 from typing import Any, NoReturn
@@ -64,12 +66,9 @@ _scope_obj_4: Any = 4
 _scope_obj_5: Any = 5
 _dep_1_type: Any = _MISSING_PROVIDER
 _provider_1: Any = _MISSING_PROVIDER
-_dep_2_type: Any = _MISSING_PROVIDER
-_provider_2: Any = _MISSING_PROVIDER
 
 
 _dep_1_thread_lock = threading.Lock()
-_dep_2_thread_lock = threading.Lock()
 
 class RootResolver:
 
@@ -77,7 +76,7 @@ class RootResolver:
     Generated resolver for scope 'app' (level 1).
 
     This class is generated and optimized for direct slot-based dependency resolution.
-    All visible provider slots: 1, 2.
+    All visible provider slots: 1.
     Providers declared in this exact scope: none.
     """
 
@@ -87,13 +86,16 @@ class RootResolver:
         "_root_resolver",
         "_context",
         "_parent_context_resolver",
+        "_cleanup_enabled",
         "__dict__",
+        "_cleanup_callbacks",
         "_owned_scope_resolvers",
     )
 
 
     def __init__(
         self,
+        cleanup_enabled: bool = True,
         context: Any | None = None,
         parent_context_resolver: Any = None,
     ) -> None:
@@ -106,9 +108,11 @@ class RootResolver:
         Stateless scope reuse enabled: False.
         """
 
+        self._cleanup_enabled = cleanup_enabled
         self._root_resolver = self
         self._context = context
         self._parent_context_resolver = parent_context_resolver
+        self._cleanup_callbacks: list[tuple[int, Any]] = []
         self._owned_scope_resolvers: tuple[Any, ...] = ()
 
     def enter_scope(
@@ -130,12 +134,14 @@ class RootResolver:
         if scope is _scope_obj_3 or scope == 3:
             return _RequestResolver(
                 self,
+                self._cleanup_enabled,
                 context,
                 self,
             )
         if scope is None:
             return _RequestResolver(
                 self,
+                self._cleanup_enabled,
                 context,
                 self,
             )
@@ -148,20 +154,22 @@ class RootResolver:
         if target_scope_level is _scope_obj_2 or target_scope_level == 2:
             return _SessionResolver(
                 self,
+                self._cleanup_enabled,
                 context,
                 self,
             )
         if target_scope_level is _scope_obj_4 or target_scope_level == 4:
             request_resolver = _RequestResolver(
                 self,
+                self._cleanup_enabled,
                 None,
                 self,
             )
             action_resolver = _ActionResolver(
                 request_resolver._root_resolver,
+                request_resolver._cleanup_enabled,
                 context,
                 request_resolver,
-                request_resolver._session_resolver,
                 request_resolver,
             )
             action_resolver._owned_scope_resolvers = (request_resolver,)
@@ -169,21 +177,22 @@ class RootResolver:
         if target_scope_level is _scope_obj_5 or target_scope_level == 5:
             request_resolver = _RequestResolver(
                 self,
+                self._cleanup_enabled,
                 None,
                 self,
             )
             action_resolver = _ActionResolver(
                 request_resolver._root_resolver,
+                request_resolver._cleanup_enabled,
                 None,
                 request_resolver,
-                request_resolver._session_resolver,
                 request_resolver,
             )
             step_resolver = _StepResolver(
                 action_resolver._root_resolver,
+                action_resolver._cleanup_enabled,
                 context,
                 action_resolver,
-                action_resolver._session_resolver,
                 request_resolver,
             )
             step_resolver._owned_scope_resolvers = (request_resolver, action_resolver)
@@ -196,15 +205,13 @@ class RootResolver:
         """
         Route a dependency token to a generated synchronous provider resolver method.
 
-        Known provider slots: 1, 2.
+        Known provider slots: 1.
         Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks to avoid reflective dispatch.
         if dependency is _dep_1_type:
             return RootResolver.resolve_1(self)
-        if dependency is _dep_2_type:
-            return RootResolver.resolve_2(self)
         if is_maybe_annotation(dependency):
             inner = strip_maybe_annotation(dependency)
             if is_provider_annotation(inner):
@@ -239,9 +246,6 @@ class RootResolver:
                 if slot == 1:
                     results.append(self.resolve_1())
                     continue
-                if slot == 2:
-                    results.append(self.resolve_2())
-                    continue
                 msg = f"Dependency {dependency!r} is not registered."
                 raise DIWireDependencyNotRegisteredError(msg)
             return tuple(results)
@@ -254,15 +258,13 @@ class RootResolver:
         """
         Route a dependency token to a generated asynchronous provider resolver method.
 
-        Known provider slots: 1, 2.
+        Known provider slots: 1.
         Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks for asynchronous resolution.
         if dependency is _dep_1_type:
             return await RootResolver.aresolve_1(self)
-        if dependency is _dep_2_type:
-            return await RootResolver.aresolve_2(self)
         if is_maybe_annotation(dependency):
             inner = strip_maybe_annotation(dependency)
             if is_provider_annotation(inner):
@@ -296,9 +298,6 @@ class RootResolver:
             for slot in slots:
                 if slot == 1:
                     results.append(await self.aresolve_1())
-                    continue
-                if slot == 2:
-                    results.append(await self.aresolve_2())
                     continue
                 msg = f"Dependency {dependency!r} is not registered."
                 raise DIWireDependencyNotRegisteredError(msg)
@@ -332,6 +331,27 @@ class RootResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    msg = "Cannot execute async cleanup in sync context. Use 'async with'."
+                    raise DIWireAsyncDependencyInSyncContextError(msg)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    owned_scope_resolver.__exit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     def close(
@@ -351,6 +371,26 @@ class RootResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    await cleanup(exc_type, exc_value, traceback)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    await owned_scope_resolver.__aexit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     async def aclose(
@@ -367,26 +407,26 @@ class RootResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Declared scope: session (level 2)
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotGeneratorResource
+        Provider spec kind: generator
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_sync_generator_resource
+        Declared scope: request (level 3)
         Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 2
+        Cache owner scope: 3
         Declared lock mode: auto
         Effective lock mode: thread
         Sync path thread lock: True
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
-        Cleanup callbacks required: False
+        Cleanup callbacks required: True
         Resolver class handling this call: RootResolver
         Dependency wiring: none
         Behavior: This resolver cannot access the provider yet because the required scope is deeper than the current resolver scope.
         """
 
-        msg = "Provider slot 1 requires opened scope level 2."
+        msg = "Provider slot 1 requires opened scope level 3."
         raise DIWireScopeMismatchError(msg)
 
     async def aresolve_1(self) -> Any:
@@ -394,79 +434,26 @@ class RootResolver:
         """
         Provider slot 1 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Declared scope: session (level 2)
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotGeneratorResource
+        Provider spec kind: generator
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_sync_generator_resource
+        Declared scope: request (level 3)
         Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 2
+        Cache owner scope: 3
         Declared lock mode: auto
         Effective lock mode: thread
         Sync path thread lock: True
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
-        Cleanup callbacks required: False
+        Cleanup callbacks required: True
         Resolver class handling this call: RootResolver
         Dependency wiring: none
         Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
         """
 
         return self.resolve_1()
-
-    def resolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (sync method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Declared scope: request (level 3)
-        Declared lifetime: scoped
-        Cache policy: cached
-        Cache owner scope: 3
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: RootResolver
-        Dependency wiring: session (positional_or_keyword) -> slot 1 [tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession]
-        Behavior: This resolver cannot access the provider yet because the required scope is deeper than the current resolver scope.
-        """
-
-        msg = "Provider slot 2 requires opened scope level 3."
-        raise DIWireScopeMismatchError(msg)
-
-    async def aresolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (async method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Declared scope: request (level 3)
-        Declared lifetime: scoped
-        Cache policy: cached
-        Cache owner scope: 3
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: RootResolver
-        Dependency wiring: session (positional_or_keyword) -> slot 1 [tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession]
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
-        """
-
-        return self.resolve_2()
 
 
 class _SessionResolver:
@@ -475,8 +462,8 @@ class _SessionResolver:
     Generated resolver for scope 'session' (level 2).
 
     This class is generated and optimized for direct slot-based dependency resolution.
-    All visible provider slots: 1, 2.
-    Providers declared in this exact scope: 1.
+    All visible provider slots: 1.
+    Providers declared in this exact scope: none.
     """
 
 
@@ -485,14 +472,16 @@ class _SessionResolver:
         "_root_resolver",
         "_context",
         "_parent_context_resolver",
+        "_cleanup_enabled",
+        "_cleanup_callbacks",
         "_owned_scope_resolvers",
-        "_cache_1",
     )
 
 
     def __init__(
         self,
         root_resolver: RootResolver,
+        cleanup_enabled: bool = True,
         context: Any | None = None,
         parent_context_resolver: Any = None,
     ) -> None:
@@ -505,11 +494,12 @@ class _SessionResolver:
         Stateless scope reuse enabled: False.
         """
 
+        self._cleanup_enabled = cleanup_enabled
         self._root_resolver = root_resolver
         self._context = context
         self._parent_context_resolver = parent_context_resolver
+        self._cleanup_callbacks: list[tuple[int, Any]] = []
         self._owned_scope_resolvers: tuple[Any, ...] = ()
-        self._cache_1 = _MISSING_CACHE
 
     def enter_scope(
         self,
@@ -530,15 +520,15 @@ class _SessionResolver:
         if scope is _scope_obj_3 or scope == 3:
             return _RequestResolver(
                 self._root_resolver,
+                self._cleanup_enabled,
                 context,
-                self,
                 self,
             )
         if scope is None:
             return _RequestResolver(
                 self._root_resolver,
+                self._cleanup_enabled,
                 context,
-                self,
                 self,
             )
         target_scope_level = scope
@@ -550,15 +540,15 @@ class _SessionResolver:
         if target_scope_level is _scope_obj_4 or target_scope_level == 4:
             request_resolver = _RequestResolver(
                 self._root_resolver,
+                self._cleanup_enabled,
                 None,
-                self,
                 self,
             )
             action_resolver = _ActionResolver(
                 request_resolver._root_resolver,
+                request_resolver._cleanup_enabled,
                 context,
                 request_resolver,
-                request_resolver._session_resolver,
                 request_resolver,
             )
             action_resolver._owned_scope_resolvers = (request_resolver,)
@@ -566,22 +556,22 @@ class _SessionResolver:
         if target_scope_level is _scope_obj_5 or target_scope_level == 5:
             request_resolver = _RequestResolver(
                 self._root_resolver,
+                self._cleanup_enabled,
                 None,
-                self,
                 self,
             )
             action_resolver = _ActionResolver(
                 request_resolver._root_resolver,
+                request_resolver._cleanup_enabled,
                 None,
                 request_resolver,
-                request_resolver._session_resolver,
                 request_resolver,
             )
             step_resolver = _StepResolver(
                 action_resolver._root_resolver,
+                action_resolver._cleanup_enabled,
                 context,
                 action_resolver,
-                action_resolver._session_resolver,
                 request_resolver,
             )
             step_resolver._owned_scope_resolvers = (request_resolver, action_resolver)
@@ -594,15 +584,13 @@ class _SessionResolver:
         """
         Route a dependency token to a generated synchronous provider resolver method.
 
-        Known provider slots: 1, 2.
+        Known provider slots: 1.
         Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks to avoid reflective dispatch.
         if dependency is _dep_1_type:
             return _SessionResolver.resolve_1(self)
-        if dependency is _dep_2_type:
-            return _SessionResolver.resolve_2(self)
         if is_maybe_annotation(dependency):
             inner = strip_maybe_annotation(dependency)
             if is_provider_annotation(inner):
@@ -637,9 +625,6 @@ class _SessionResolver:
                 if slot == 1:
                     results.append(self.resolve_1())
                     continue
-                if slot == 2:
-                    results.append(self.resolve_2())
-                    continue
                 msg = f"Dependency {dependency!r} is not registered."
                 raise DIWireDependencyNotRegisteredError(msg)
             return tuple(results)
@@ -652,15 +637,13 @@ class _SessionResolver:
         """
         Route a dependency token to a generated asynchronous provider resolver method.
 
-        Known provider slots: 1, 2.
+        Known provider slots: 1.
         Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks for asynchronous resolution.
         if dependency is _dep_1_type:
             return await _SessionResolver.aresolve_1(self)
-        if dependency is _dep_2_type:
-            return await _SessionResolver.aresolve_2(self)
         if is_maybe_annotation(dependency):
             inner = strip_maybe_annotation(dependency)
             if is_provider_annotation(inner):
@@ -695,9 +678,6 @@ class _SessionResolver:
                 if slot == 1:
                     results.append(await self.aresolve_1())
                     continue
-                if slot == 2:
-                    results.append(await self.aresolve_2())
-                    continue
                 msg = f"Dependency {dependency!r} is not registered."
                 raise DIWireDependencyNotRegisteredError(msg)
             return tuple(results)
@@ -730,6 +710,27 @@ class _SessionResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    msg = "Cannot execute async cleanup in sync context. Use 'async with'."
+                    raise DIWireAsyncDependencyInSyncContextError(msg)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    owned_scope_resolver.__exit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     def close(
@@ -749,6 +750,26 @@ class _SessionResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    await cleanup(exc_type, exc_value, traceback)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    await owned_scope_resolver.__aexit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     async def aclose(
@@ -765,113 +786,53 @@ class _SessionResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Declared scope: session (level 2)
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotGeneratorResource
+        Provider spec kind: generator
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_sync_generator_resource
+        Declared scope: request (level 3)
         Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 2
+        Cache owner scope: 3
         Declared lock mode: auto
         Effective lock mode: thread
         Sync path thread lock: True
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
-        Cleanup callbacks required: False
+        Cleanup callbacks required: True
         Resolver class handling this call: _SessionResolver
         Dependency wiring: none
-        Behavior: Builds the provider value in this resolver, enforcing scope guards and cache policy.
+        Behavior: This resolver cannot access the provider yet because the required scope is deeper than the current resolver scope.
         """
 
-        cached_value = self._cache_1
-        if cached_value is not _MISSING_CACHE:
-            return cached_value
-        with _dep_1_thread_lock:
-            if (cached_value := self._cache_1) is not _MISSING_CACHE:
-                return cached_value
-            value = _provider_1()
-            self._cache_1 = value
-            return value
+        msg = "Provider slot 1 requires opened scope level 3."
+        raise DIWireScopeMismatchError(msg)
 
     async def aresolve_1(self) -> Any:
 
         """
         Provider slot 1 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Declared scope: session (level 2)
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotGeneratorResource
+        Provider spec kind: generator
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_sync_generator_resource
+        Declared scope: request (level 3)
         Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 2
+        Cache owner scope: 3
         Declared lock mode: auto
         Effective lock mode: thread
         Sync path thread lock: True
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
-        Cleanup callbacks required: False
+        Cleanup callbacks required: True
         Resolver class handling this call: _SessionResolver
         Dependency wiring: none
         Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
         """
 
         return self.resolve_1()
-
-    def resolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (sync method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Declared scope: request (level 3)
-        Declared lifetime: scoped
-        Cache policy: cached
-        Cache owner scope: 3
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: _SessionResolver
-        Dependency wiring: session (positional_or_keyword) -> slot 1 [tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession]
-        Behavior: This resolver cannot access the provider yet because the required scope is deeper than the current resolver scope.
-        """
-
-        msg = "Provider slot 2 requires opened scope level 3."
-        raise DIWireScopeMismatchError(msg)
-
-    async def aresolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (async method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Declared scope: request (level 3)
-        Declared lifetime: scoped
-        Cache policy: cached
-        Cache owner scope: 3
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: _SessionResolver
-        Dependency wiring: session (positional_or_keyword) -> slot 1 [tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession]
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
-        """
-
-        return self.resolve_2()
 
 
 class _RequestResolver:
@@ -880,8 +841,8 @@ class _RequestResolver:
     Generated resolver for scope 'request' (level 3).
 
     This class is generated and optimized for direct slot-based dependency resolution.
-    All visible provider slots: 1, 2.
-    Providers declared in this exact scope: 2.
+    All visible provider slots: 1.
+    Providers declared in this exact scope: 1.
     """
 
 
@@ -890,18 +851,19 @@ class _RequestResolver:
         "_root_resolver",
         "_context",
         "_parent_context_resolver",
+        "_cleanup_enabled",
+        "_cleanup_callbacks",
         "_owned_scope_resolvers",
-        "_session_resolver",
-        "_cache_2",
+        "_cache_1",
     )
 
 
     def __init__(
         self,
         root_resolver: RootResolver,
+        cleanup_enabled: bool = True,
         context: Any | None = None,
         parent_context_resolver: Any = None,
-        session_resolver: Any = _MISSING_RESOLVER,
     ) -> None:
 
         """
@@ -912,12 +874,13 @@ class _RequestResolver:
         Stateless scope reuse enabled: False.
         """
 
+        self._cleanup_enabled = cleanup_enabled
         self._root_resolver = root_resolver
         self._context = context
         self._parent_context_resolver = parent_context_resolver
+        self._cleanup_callbacks: list[tuple[int, Any]] = []
         self._owned_scope_resolvers: tuple[Any, ...] = ()
-        self._session_resolver = session_resolver
-        self._cache_2 = _MISSING_CACHE
+        self._cache_1 = _MISSING_CACHE
 
     def enter_scope(
         self,
@@ -938,17 +901,17 @@ class _RequestResolver:
         if scope is _scope_obj_4 or scope == 4:
             return _ActionResolver(
                 self._root_resolver,
+                self._cleanup_enabled,
                 context,
                 self,
-                self._session_resolver,
                 self,
             )
         if scope is None:
             return _ActionResolver(
                 self._root_resolver,
+                self._cleanup_enabled,
                 context,
                 self,
-                self._session_resolver,
                 self,
             )
         target_scope_level = scope
@@ -960,16 +923,16 @@ class _RequestResolver:
         if target_scope_level is _scope_obj_5 or target_scope_level == 5:
             action_resolver = _ActionResolver(
                 self._root_resolver,
+                self._cleanup_enabled,
                 None,
                 self,
-                self._session_resolver,
                 self,
             )
             step_resolver = _StepResolver(
                 action_resolver._root_resolver,
+                action_resolver._cleanup_enabled,
                 context,
                 action_resolver,
-                action_resolver._session_resolver,
                 action_resolver._request_resolver,
             )
             step_resolver._owned_scope_resolvers = (action_resolver,)
@@ -982,13 +945,11 @@ class _RequestResolver:
         """
         Route a dependency token to a generated synchronous provider resolver method.
 
-        Known provider slots: 1, 2.
+        Known provider slots: 1.
         Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks to avoid reflective dispatch.
-        if dependency is _dep_2_type:
-            return _RequestResolver.resolve_2(self)
         if dependency is _dep_1_type:
             return _RequestResolver.resolve_1(self)
         if is_maybe_annotation(dependency):
@@ -1025,9 +986,6 @@ class _RequestResolver:
                 if slot == 1:
                     results.append(self.resolve_1())
                     continue
-                if slot == 2:
-                    results.append(self.resolve_2())
-                    continue
                 msg = f"Dependency {dependency!r} is not registered."
                 raise DIWireDependencyNotRegisteredError(msg)
             return tuple(results)
@@ -1040,13 +998,11 @@ class _RequestResolver:
         """
         Route a dependency token to a generated asynchronous provider resolver method.
 
-        Known provider slots: 1, 2.
+        Known provider slots: 1.
         Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks for asynchronous resolution.
-        if dependency is _dep_2_type:
-            return await _RequestResolver.aresolve_2(self)
         if dependency is _dep_1_type:
             return await _RequestResolver.aresolve_1(self)
         if is_maybe_annotation(dependency):
@@ -1083,9 +1039,6 @@ class _RequestResolver:
                 if slot == 1:
                     results.append(await self.aresolve_1())
                     continue
-                if slot == 2:
-                    results.append(await self.aresolve_2())
-                    continue
                 msg = f"Dependency {dependency!r} is not registered."
                 raise DIWireDependencyNotRegisteredError(msg)
             return tuple(results)
@@ -1118,6 +1071,27 @@ class _RequestResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    msg = "Cannot execute async cleanup in sync context. Use 'async with'."
+                    raise DIWireAsyncDependencyInSyncContextError(msg)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    owned_scope_resolver.__exit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     def close(
@@ -1137,6 +1111,26 @@ class _RequestResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    await cleanup(exc_type, exc_value, traceback)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    await owned_scope_resolver.__aexit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     async def aclose(
@@ -1153,118 +1147,67 @@ class _RequestResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Declared scope: session (level 2)
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotGeneratorResource
+        Provider spec kind: generator
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_sync_generator_resource
+        Declared scope: request (level 3)
         Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 2
+        Cache owner scope: 3
         Declared lock mode: auto
         Effective lock mode: thread
         Sync path thread lock: True
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
-        Cleanup callbacks required: False
+        Cleanup callbacks required: True
         Resolver class handling this call: _RequestResolver
         Dependency wiring: none
-        Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
+        Behavior: Builds the provider value in this resolver, enforcing scope guards and cache policy.
         """
 
-        owner_resolver = self._session_resolver
-        if owner_resolver is _MISSING_RESOLVER:
-            msg = "Provider slot 1 requires opened scope level 2."
-            raise DIWireScopeMismatchError(msg)
-        return owner_resolver.resolve_1()
+        provider_scope_resolver = self
+        cached_value = self._cache_1
+        if cached_value is not _MISSING_CACHE:
+            return cached_value
+        with _dep_1_thread_lock:
+            if (cached_value := self._cache_1) is not _MISSING_CACHE:
+                return cached_value
+            if self._cleanup_enabled:
+                _provider_cm = contextmanager(_provider_1)()
+                value = _provider_cm.__enter__()
+                provider_scope_resolver._cleanup_callbacks.append((0, _provider_cm.__exit__))
+            else:
+                _provider_gen = _provider_1()
+                value = next(_provider_gen)
+            self._cache_1 = value
+            return value
 
     async def aresolve_1(self) -> Any:
 
         """
         Provider slot 1 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Declared scope: session (level 2)
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotGeneratorResource
+        Provider spec kind: generator
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_sync_generator_resource
+        Declared scope: request (level 3)
         Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 2
+        Cache owner scope: 3
         Declared lock mode: auto
         Effective lock mode: thread
         Sync path thread lock: True
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
-        Cleanup callbacks required: False
+        Cleanup callbacks required: True
         Resolver class handling this call: _RequestResolver
         Dependency wiring: none
         Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
         """
 
         return self.resolve_1()
-
-    def resolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (sync method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Declared scope: request (level 3)
-        Declared lifetime: scoped
-        Cache policy: cached
-        Cache owner scope: 3
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: _RequestResolver
-        Dependency wiring: session (positional_or_keyword) -> slot 1 [tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession]
-        Behavior: Builds the provider value in this resolver, enforcing scope guards and cache policy.
-        """
-
-        cached_value = self._cache_2
-        if cached_value is not _MISSING_CACHE:
-            return cached_value
-        with _dep_2_thread_lock:
-            if (cached_value := self._cache_2) is not _MISSING_CACHE:
-                return cached_value
-            value = _provider_2(
-                self.resolve_1(),
-            )
-            self._cache_2 = value
-            return value
-
-    async def aresolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (async method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Declared scope: request (level 3)
-        Declared lifetime: scoped
-        Cache policy: cached
-        Cache owner scope: 3
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: _RequestResolver
-        Dependency wiring: session (positional_or_keyword) -> slot 1 [tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession]
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
-        """
-
-        return self.resolve_2()
 
 
 class _ActionResolver:
@@ -1273,7 +1216,7 @@ class _ActionResolver:
     Generated resolver for scope 'action' (level 4).
 
     This class is generated and optimized for direct slot-based dependency resolution.
-    All visible provider slots: 1, 2.
+    All visible provider slots: 1.
     Providers declared in this exact scope: none.
     """
 
@@ -1283,8 +1226,9 @@ class _ActionResolver:
         "_root_resolver",
         "_context",
         "_parent_context_resolver",
+        "_cleanup_enabled",
+        "_cleanup_callbacks",
         "_owned_scope_resolvers",
-        "_session_resolver",
         "_request_resolver",
     )
 
@@ -1292,9 +1236,9 @@ class _ActionResolver:
     def __init__(
         self,
         root_resolver: RootResolver,
+        cleanup_enabled: bool = True,
         context: Any | None = None,
         parent_context_resolver: Any = None,
-        session_resolver: Any = _MISSING_RESOLVER,
         request_resolver: Any = _MISSING_RESOLVER,
     ) -> None:
 
@@ -1306,11 +1250,12 @@ class _ActionResolver:
         Stateless scope reuse enabled: False.
         """
 
+        self._cleanup_enabled = cleanup_enabled
         self._root_resolver = root_resolver
         self._context = context
         self._parent_context_resolver = parent_context_resolver
+        self._cleanup_callbacks: list[tuple[int, Any]] = []
         self._owned_scope_resolvers: tuple[Any, ...] = ()
-        self._session_resolver = session_resolver
         self._request_resolver = request_resolver
 
     def enter_scope(
@@ -1332,17 +1277,17 @@ class _ActionResolver:
         if scope is _scope_obj_5 or scope == 5:
             return _StepResolver(
                 self._root_resolver,
+                self._cleanup_enabled,
                 context,
                 self,
-                self._session_resolver,
                 self._request_resolver,
             )
         if scope is None:
             return _StepResolver(
                 self._root_resolver,
+                self._cleanup_enabled,
                 context,
                 self,
-                self._session_resolver,
                 self._request_resolver,
             )
         target_scope_level = scope
@@ -1359,13 +1304,11 @@ class _ActionResolver:
         """
         Route a dependency token to a generated synchronous provider resolver method.
 
-        Known provider slots: 1, 2.
+        Known provider slots: 1.
         Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks to avoid reflective dispatch.
-        if dependency is _dep_2_type:
-            return _ActionResolver.resolve_2(self)
         if dependency is _dep_1_type:
             return _ActionResolver.resolve_1(self)
         if is_maybe_annotation(dependency):
@@ -1402,9 +1345,6 @@ class _ActionResolver:
                 if slot == 1:
                     results.append(self.resolve_1())
                     continue
-                if slot == 2:
-                    results.append(self.resolve_2())
-                    continue
                 msg = f"Dependency {dependency!r} is not registered."
                 raise DIWireDependencyNotRegisteredError(msg)
             return tuple(results)
@@ -1417,13 +1357,11 @@ class _ActionResolver:
         """
         Route a dependency token to a generated asynchronous provider resolver method.
 
-        Known provider slots: 1, 2.
+        Known provider slots: 1.
         Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks for asynchronous resolution.
-        if dependency is _dep_2_type:
-            return await _ActionResolver.aresolve_2(self)
         if dependency is _dep_1_type:
             return await _ActionResolver.aresolve_1(self)
         if is_maybe_annotation(dependency):
@@ -1460,9 +1398,6 @@ class _ActionResolver:
                 if slot == 1:
                     results.append(await self.aresolve_1())
                     continue
-                if slot == 2:
-                    results.append(await self.aresolve_2())
-                    continue
                 msg = f"Dependency {dependency!r} is not registered."
                 raise DIWireDependencyNotRegisteredError(msg)
             return tuple(results)
@@ -1495,6 +1430,27 @@ class _ActionResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    msg = "Cannot execute async cleanup in sync context. Use 'async with'."
+                    raise DIWireAsyncDependencyInSyncContextError(msg)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    owned_scope_resolver.__exit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     def close(
@@ -1514,6 +1470,26 @@ class _ActionResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    await cleanup(exc_type, exc_value, traceback)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    await owned_scope_resolver.__aexit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     async def aclose(
@@ -1530,28 +1506,28 @@ class _ActionResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Declared scope: session (level 2)
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotGeneratorResource
+        Provider spec kind: generator
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_sync_generator_resource
+        Declared scope: request (level 3)
         Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 2
+        Cache owner scope: 3
         Declared lock mode: auto
         Effective lock mode: thread
         Sync path thread lock: True
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
-        Cleanup callbacks required: False
+        Cleanup callbacks required: True
         Resolver class handling this call: _ActionResolver
         Dependency wiring: none
         Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
         """
 
-        owner_resolver = self._session_resolver
+        owner_resolver = self._request_resolver
         if owner_resolver is _MISSING_RESOLVER:
-            msg = "Provider slot 1 requires opened scope level 2."
+            msg = "Provider slot 1 requires opened scope level 3."
             raise DIWireScopeMismatchError(msg)
         return owner_resolver.resolve_1()
 
@@ -1560,82 +1536,26 @@ class _ActionResolver:
         """
         Provider slot 1 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Declared scope: session (level 2)
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotGeneratorResource
+        Provider spec kind: generator
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_sync_generator_resource
+        Declared scope: request (level 3)
         Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 2
+        Cache owner scope: 3
         Declared lock mode: auto
         Effective lock mode: thread
         Sync path thread lock: True
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
-        Cleanup callbacks required: False
+        Cleanup callbacks required: True
         Resolver class handling this call: _ActionResolver
         Dependency wiring: none
         Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
         """
 
         return self.resolve_1()
-
-    def resolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (sync method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Declared scope: request (level 3)
-        Declared lifetime: scoped
-        Cache policy: cached
-        Cache owner scope: 3
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: _ActionResolver
-        Dependency wiring: session (positional_or_keyword) -> slot 1 [tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession]
-        Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
-        """
-
-        owner_resolver = self._request_resolver
-        if owner_resolver is _MISSING_RESOLVER:
-            msg = "Provider slot 2 requires opened scope level 3."
-            raise DIWireScopeMismatchError(msg)
-        return owner_resolver.resolve_2()
-
-    async def aresolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (async method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Declared scope: request (level 3)
-        Declared lifetime: scoped
-        Cache policy: cached
-        Cache owner scope: 3
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: _ActionResolver
-        Dependency wiring: session (positional_or_keyword) -> slot 1 [tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession]
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
-        """
-
-        return self.resolve_2()
 
 
 class _StepResolver:
@@ -1644,7 +1564,7 @@ class _StepResolver:
     Generated resolver for scope 'step' (level 5).
 
     This class is generated and optimized for direct slot-based dependency resolution.
-    All visible provider slots: 1, 2.
+    All visible provider slots: 1.
     Providers declared in this exact scope: none.
     """
 
@@ -1654,8 +1574,9 @@ class _StepResolver:
         "_root_resolver",
         "_context",
         "_parent_context_resolver",
+        "_cleanup_enabled",
+        "_cleanup_callbacks",
         "_owned_scope_resolvers",
-        "_session_resolver",
         "_request_resolver",
     )
 
@@ -1663,9 +1584,9 @@ class _StepResolver:
     def __init__(
         self,
         root_resolver: RootResolver,
+        cleanup_enabled: bool = True,
         context: Any | None = None,
         parent_context_resolver: Any = None,
-        session_resolver: Any = _MISSING_RESOLVER,
         request_resolver: Any = _MISSING_RESOLVER,
     ) -> None:
 
@@ -1677,11 +1598,12 @@ class _StepResolver:
         Stateless scope reuse enabled: False.
         """
 
+        self._cleanup_enabled = cleanup_enabled
         self._root_resolver = root_resolver
         self._context = context
         self._parent_context_resolver = parent_context_resolver
+        self._cleanup_callbacks: list[tuple[int, Any]] = []
         self._owned_scope_resolvers: tuple[Any, ...] = ()
-        self._session_resolver = session_resolver
         self._request_resolver = request_resolver
 
     def enter_scope(
@@ -1708,13 +1630,11 @@ class _StepResolver:
         """
         Route a dependency token to a generated synchronous provider resolver method.
 
-        Known provider slots: 1, 2.
+        Known provider slots: 1.
         Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks to avoid reflective dispatch.
-        if dependency is _dep_2_type:
-            return _StepResolver.resolve_2(self)
         if dependency is _dep_1_type:
             return _StepResolver.resolve_1(self)
         if is_maybe_annotation(dependency):
@@ -1751,9 +1671,6 @@ class _StepResolver:
                 if slot == 1:
                     results.append(self.resolve_1())
                     continue
-                if slot == 2:
-                    results.append(self.resolve_2())
-                    continue
                 msg = f"Dependency {dependency!r} is not registered."
                 raise DIWireDependencyNotRegisteredError(msg)
             return tuple(results)
@@ -1766,13 +1683,11 @@ class _StepResolver:
         """
         Route a dependency token to a generated asynchronous provider resolver method.
 
-        Known provider slots: 1, 2.
+        Known provider slots: 1.
         Dispatch uses identity checks against module-level `_dep_<slot>_type` globals.
         """
 
         # Fast path identity checks for asynchronous resolution.
-        if dependency is _dep_2_type:
-            return await _StepResolver.aresolve_2(self)
         if dependency is _dep_1_type:
             return await _StepResolver.aresolve_1(self)
         if is_maybe_annotation(dependency):
@@ -1809,9 +1724,6 @@ class _StepResolver:
                 if slot == 1:
                     results.append(await self.aresolve_1())
                     continue
-                if slot == 2:
-                    results.append(await self.aresolve_2())
-                    continue
                 msg = f"Dependency {dependency!r} is not registered."
                 raise DIWireDependencyNotRegisteredError(msg)
             return tuple(results)
@@ -1844,6 +1756,27 @@ class _StepResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    msg = "Cannot execute async cleanup in sync context. Use 'async with'."
+                    raise DIWireAsyncDependencyInSyncContextError(msg)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    owned_scope_resolver.__exit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     def close(
@@ -1863,6 +1796,26 @@ class _StepResolver:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        cleanup_error: BaseException | None = None
+        while self._cleanup_callbacks:
+            cleanup_kind, cleanup = self._cleanup_callbacks.pop()
+            try:
+                if cleanup_kind == 0:
+                    cleanup(exc_type, exc_value, traceback)
+                else:
+                    await cleanup(exc_type, exc_value, traceback)
+            except BaseException as error:
+                if exc_type is None and cleanup_error is None:
+                    cleanup_error = error
+        if self._owned_scope_resolvers:
+            for owned_scope_resolver in reversed(self._owned_scope_resolvers):
+                try:
+                    await owned_scope_resolver.__aexit__(exc_type, exc_value, traceback)
+                except BaseException as error:
+                    if exc_type is None and cleanup_error is None:
+                        cleanup_error = error
+        if exc_type is None and cleanup_error is not None:
+            raise cleanup_error
         return None
 
     async def aclose(
@@ -1879,28 +1832,28 @@ class _StepResolver:
         """
         Provider slot 1 resolver (sync method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Declared scope: session (level 2)
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotGeneratorResource
+        Provider spec kind: generator
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_sync_generator_resource
+        Declared scope: request (level 3)
         Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 2
+        Cache owner scope: 3
         Declared lock mode: auto
         Effective lock mode: thread
         Sync path thread lock: True
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
-        Cleanup callbacks required: False
+        Cleanup callbacks required: True
         Resolver class handling this call: _StepResolver
         Dependency wiring: none
         Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
         """
 
-        owner_resolver = self._session_resolver
+        owner_resolver = self._request_resolver
         if owner_resolver is _MISSING_RESOLVER:
-            msg = "Provider slot 1 requires opened scope level 2."
+            msg = "Provider slot 1 requires opened scope level 3."
             raise DIWireScopeMismatchError(msg)
         return owner_resolver.resolve_1()
 
@@ -1909,82 +1862,26 @@ class _StepResolver:
         """
         Provider slot 1 resolver (async method).
 
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession
-        Declared scope: session (level 2)
+        Returns: tests.unit.internal.test_resolver_assembly_expected_output._SnapshotGeneratorResource
+        Provider spec kind: generator
+        Provider target: tests.unit.internal.test_resolver_assembly_expected_output._provide_sync_generator_resource
+        Declared scope: request (level 3)
         Declared lifetime: scoped
         Cache policy: cached
-        Cache owner scope: 2
+        Cache owner scope: 3
         Declared lock mode: auto
         Effective lock mode: thread
         Sync path thread lock: True
         Async path async lock: False
         Provider declared async: False
         Graph requires async: False
-        Cleanup callbacks required: False
+        Cleanup callbacks required: True
         Resolver class handling this call: _StepResolver
         Dependency wiring: none
         Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
         """
 
         return self.resolve_1()
-
-    def resolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (sync method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Declared scope: request (level 3)
-        Declared lifetime: scoped
-        Cache policy: cached
-        Cache owner scope: 3
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: _StepResolver
-        Dependency wiring: session (positional_or_keyword) -> slot 1 [tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession]
-        Behavior: This resolver delegates to the cache owner resolver so scoped caching remains consistent across nested resolvers.
-        """
-
-        owner_resolver = self._request_resolver
-        if owner_resolver is _MISSING_RESOLVER:
-            msg = "Provider slot 2 requires opened scope level 3."
-            raise DIWireScopeMismatchError(msg)
-        return owner_resolver.resolve_2()
-
-    async def aresolve_2(self) -> Any:
-
-        """
-        Provider slot 2 resolver (async method).
-
-        Returns: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Provider spec kind: concrete_type
-        Provider target: tests.unit.internal.test_resolver_codegen_expected_output._SnapshotRequest
-        Declared scope: request (level 3)
-        Declared lifetime: scoped
-        Cache policy: cached
-        Cache owner scope: 3
-        Declared lock mode: auto
-        Effective lock mode: thread
-        Sync path thread lock: True
-        Async path async lock: False
-        Provider declared async: False
-        Graph requires async: False
-        Cleanup callbacks required: False
-        Resolver class handling this call: _StepResolver
-        Dependency wiring: session (positional_or_keyword) -> slot 1 [tests.unit.internal.test_resolver_codegen_expected_output._SnapshotSession]
-        Behavior: Async variant delegates to sync resolution because this provider graph does not require awaitable operations.
-        """
-
-        return self.resolve_2()
 
 def build_root_resolver(
     registrations: ProvidersRegistrations,
@@ -1997,7 +1894,7 @@ def build_root_resolver(
 
     This function rebinds module-level provider globals for the supplied registrations.
     Global rebinding makes `resolve_<slot>` methods run without registration lookups.
-    Provider slots configured during bootstrap: 1, 2.
+    Provider slots configured during bootstrap: 1.
     Root resolver class: RootResolver.
 
     Examples:
@@ -2018,7 +1915,6 @@ def build_root_resolver(
     all_slots_by_key: dict[Any, list[int]] = {}
 
     global _dep_1_type, _provider_1
-    global _dep_2_type, _provider_2
 
     # --- Provider slot 1 bootstrap metadata ---
     # Read provider spec by stable slot id from registrations.
@@ -2028,7 +1924,7 @@ def build_root_resolver(
     # Track dependency keys that are directly registered in this compiled graph.
     _dep_registered_keys.add(_dep_1_type)
     # Capture provider object (instance/type/factory/generator/context manager).
-    _provider_1 = registration_1.concrete_type
+    _provider_1 = registration_1.generator
     # Index provider slot for All[...] dependency dispatch.
     component_base_1 = component_base_key(_dep_1_type)
     base_key_1 = component_base_1
@@ -2037,27 +1933,10 @@ def build_root_resolver(
     if base_key_1 is not None:
         all_slots_by_key.setdefault(base_key_1, []).append(1)
 
-    # --- Provider slot 2 bootstrap metadata ---
-    # Read provider spec by stable slot id from registrations.
-    registration_2 = registrations.get_by_slot(2)
-    # Capture dependency identity token used by `resolve`/`aresolve` dispatch.
-    _dep_2_type = registration_2.provides
-    # Track dependency keys that are directly registered in this compiled graph.
-    _dep_registered_keys.add(_dep_2_type)
-    # Capture provider object (instance/type/factory/generator/context manager).
-    _provider_2 = registration_2.concrete_type
-    # Index provider slot for All[...] dependency dispatch.
-    component_base_2 = component_base_key(_dep_2_type)
-    base_key_2 = component_base_2
-    if base_key_2 is None and not hasattr(_dep_2_type, '__metadata__'):
-        base_key_2 = _dep_2_type
-    if base_key_2 is not None:
-        all_slots_by_key.setdefault(base_key_2, []).append(2)
-
     # Freeze All[...] indexes for stable repr and to discourage mutation.
     _all_slots_by_key = {
         key: tuple(slots) for key, slots in all_slots_by_key.items()
     }
 
     # Construct a fresh root resolver configured with optional cleanup callbacks.
-    return RootResolver()
+    return RootResolver(cleanup_enabled)

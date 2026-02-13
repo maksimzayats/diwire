@@ -300,7 +300,7 @@ async def test_aresolve_auto_compiles_root_resolver_when_uncompiled() -> None:
     assert _bound_self(container.aresolve) is root_resolver
 
 
-def test_compile_wraps_codegen_resolver_when_open_generic_registry_present() -> None:
+def test_compile_wraps_assembly_resolver_when_open_generic_registry_present() -> None:
     container = Container()
     container.add(_OpenRuntimeServiceImpl, provides=_OpenRuntimeService)
 
@@ -652,7 +652,7 @@ def test_scope_resolver_can_directly_resolve_from_context_marker() -> None:
         assert request_scope.resolve(FromContext[int]) == 9
 
 
-def test_codegen_passes_resolver_to_inject_wrapped_provider_calls() -> None:
+def test_assembly_passes_resolver_to_inject_wrapped_provider_calls() -> None:
     container = Container()
     container.add(
         _InjectScopedDependency,
@@ -681,7 +681,7 @@ def test_codegen_passes_resolver_to_inject_wrapped_provider_calls() -> None:
 
 
 @pytest.mark.asyncio
-async def test_codegen_async_inject_wrapper_provider_receives_resolver() -> None:
+async def test_assembly_async_inject_wrapper_provider_receives_resolver() -> None:
     container = Container()
     container.add(
         _InjectScopedDependency,
@@ -711,7 +711,7 @@ async def test_codegen_async_inject_wrapper_provider_receives_resolver() -> None
     assert isinstance(resolved.dependency, _InjectScopedDependency)
 
 
-def test_codegen_nested_inject_wrappers_runtime_scope_consistency() -> None:
+def test_assembly_nested_inject_wrappers_runtime_scope_consistency() -> None:
     container = Container()
     container.add(
         _InjectScopedDependency,
@@ -753,7 +753,7 @@ def test_codegen_nested_inject_wrappers_runtime_scope_consistency() -> None:
     assert resolved.inner.dependency is resolved.dependency
 
 
-def test_codegen_inject_wrapper_singleton_thread_safe_stress() -> None:
+def test_assembly_inject_wrapper_singleton_thread_safe_stress() -> None:
     calls = 0
     workers = 32
 
@@ -784,7 +784,7 @@ def test_codegen_inject_wrapper_singleton_thread_safe_stress() -> None:
 
 
 @pytest.mark.asyncio
-async def test_codegen_inject_wrapper_singleton_async_stress() -> None:
+async def test_assembly_inject_wrapper_singleton_async_stress() -> None:
     calls = 0
     tasks = 128
     dependency = _Resource()
@@ -813,7 +813,7 @@ async def test_codegen_inject_wrapper_singleton_async_stress() -> None:
     assert len({id(result) for result in results}) == 1
 
 
-def test_codegen_inject_wrapper_unsafe_mode_stress_no_deadlock() -> None:
+def test_assembly_inject_wrapper_unsafe_mode_stress_no_deadlock() -> None:
     calls = 0
     workers = 32
     all_started = threading.Event()
@@ -914,7 +914,7 @@ async def test_generated_aresolve_resolves_equal_non_identical_generic_alias_key
     assert await container.aresolve(lookup_key) is instance
 
 
-def test_codegen_exec_handles_escaped_module_and_qualname_in_docstrings() -> None:
+def test_assembly_exec_handles_escaped_module_and_qualname_in_docstrings() -> None:
     bad_symbol = type('Bad"""Name', (), {"__module__": 'bad"""module'})
     bad_instance = bad_symbol()
     container = Container()

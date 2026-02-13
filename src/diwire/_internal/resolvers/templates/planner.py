@@ -33,7 +33,7 @@ DispatchKind = Literal["identity", "equality_map"]
 DependencyPlanKind = Literal["provider", "context", "provider_handle", "all", "literal", "omit"]
 
 
-def validate_codegen_managed_scopes(*, root_scope: Any) -> tuple[BaseScope, ...]:
+def validate_resolver_assembly_managed_scopes(*, root_scope: Any) -> tuple[BaseScope, ...]:
     """Validate scope metadata used by resolver code generation.
 
     Args:
@@ -70,17 +70,17 @@ def validate_codegen_managed_scopes(*, root_scope: Any) -> tuple[BaseScope, ...]
         )
         raise DIWireInvalidProviderSpecError(msg) from error
 
-    root_scope_level = _validate_codegen_scope_level(scope=root_scope)
+    root_scope_level = _validate_resolver_assembly_scope_level(scope=root_scope)
     managed_scopes: list[BaseScope] = []
     for scope in managed_scope_owner:
-        _validate_codegen_scope(scope=scope)
+        _validate_resolver_assembly_scope(scope=scope)
         if scope.level >= root_scope_level:
             managed_scopes.append(scope)
 
     return tuple(managed_scopes)
 
 
-def _validate_codegen_scope(scope: Any) -> None:
+def _validate_resolver_assembly_scope(scope: Any) -> None:
     if not isinstance(scope, BaseScope):
         msg = (
             "Invalid scope metadata for resolver code generation: expected BaseScope member, "
@@ -111,10 +111,10 @@ def _validate_codegen_scope(scope: Any) -> None:
         )
         raise DIWireInvalidProviderSpecError(msg)
 
-    _validate_codegen_scope_level(scope=scope)
+    _validate_resolver_assembly_scope_level(scope=scope)
 
 
-def _validate_codegen_scope_level(*, scope: Any) -> int:
+def _validate_resolver_assembly_scope_level(*, scope: Any) -> int:
     scope_level = getattr(scope, "level", None)
     if scope_level is None:
         msg = "Invalid scope metadata for resolver code generation: missing 'level'."
@@ -220,7 +220,7 @@ class ResolverGenerationPlanner:
     ) -> None:
         self._root_scope = root_scope
         self._registrations = registrations
-        self._managed_scopes = validate_codegen_managed_scopes(root_scope=root_scope)
+        self._managed_scopes = validate_resolver_assembly_managed_scopes(root_scope=root_scope)
         self._work_specs = self._collect_specs()
         self._all_slots_by_key = self._build_all_slots_by_key()
         self._requires_async_by_slot = self._build_requires_async_by_slot()
