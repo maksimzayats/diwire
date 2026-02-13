@@ -76,7 +76,6 @@ extensions: list[str] = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
-    "sphinx.ext.autosectionlabel",
     "sphinx_copybutton",
     "sphinx_pyodide_runner",
 ]
@@ -103,8 +102,8 @@ html_theme_options = {
 
 # ---- Quality of life / navigation -------------------------------------------------
 
-autosectionlabel_prefix_document = True
 autosummary_generate = True
+autodoc_typehints = "none"
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
