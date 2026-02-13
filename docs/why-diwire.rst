@@ -52,7 +52,7 @@ When you need explicit control, you still have it:
 - instances via ``add_instance(...)``
 - factories (sync/async/generator/context manager)
 - lifetimes (``TRANSIENT``, ``SCOPED``) and scope transitions (root-scoped ``SCOPED`` behaves like a singleton)
-- named registrations via ``Component(\"name\")``
+- named registrations via ``Component("name")``
 - open generics
 
 Benchmarks

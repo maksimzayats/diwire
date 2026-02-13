@@ -10,7 +10,14 @@ from typing import Any, Literal, cast
 
 import pytest
 
-from diwire import Container, Lifetime, LockMode, Scope
+from diwire import (
+    Container,
+    DependencyRegistrationPolicy,
+    Lifetime,
+    LockMode,
+    MissingPolicy,
+    Scope,
+)
 from diwire._internal.providers import ProviderDependency, ProviderSpec, ProvidersRegistrations
 from diwire._internal.resolvers.templates import renderer as renderer_module
 from diwire._internal.resolvers.templates.planner import (
@@ -689,7 +696,10 @@ def test_planner_raises_for_missing_non_optional_dependency() -> None:
     def _build_service(_dependency: _MissingPlannerDependency) -> _Service:
         return _Service(config=_Config())
 
-    container = Container()
+    container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+    )
     container.add_factory(
         _build_service,
         provides=_Service,

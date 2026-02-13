@@ -13,9 +13,12 @@ Disable auto-registration when you want your app to fail fast if anything is mis
 
 .. code-block:: python
 
-   from diwire import Container
+   from diwire import Container, DependencyRegistrationPolicy, MissingPolicy
 
-   container = Container()
+   container = Container(
+       missing_policy=MissingPolicy.ERROR,
+       dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+   )
 
 In strict mode, resolving an unregistered dependency raises
 :class:`diwire.exceptions.DIWireDependencyNotRegisteredError`.

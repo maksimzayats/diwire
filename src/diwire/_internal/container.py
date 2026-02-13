@@ -114,20 +114,20 @@ class Container:
         default_lifetime: Lifetime = Lifetime.SCOPED,
         *,
         lock_mode: LockMode | Literal["auto"] = "auto",
-        missing_policy: MissingPolicy = MissingPolicy.ERROR,
+        missing_policy: MissingPolicy = MissingPolicy.REGISTER_RECURSIVE,
         dependency_registration_policy: DependencyRegistrationPolicy = (
-            DependencyRegistrationPolicy.IGNORE
+            DependencyRegistrationPolicy.REGISTER_RECURSIVE
         ),
         resolver_context: ResolverContext = default_resolver_context,
         use_resolver_context: bool = True,
     ) -> None:
         """Initialize a container and configure default registration behavior.
 
-        Keep defaults for strict behavior with explicit registration.
-        Keep strict resolution behavior with ``missing_policy=MissingPolicy.ERROR``.
-        Enable recursive autoregistration with
-        ``missing_policy=MissingPolicy.REGISTER_RECURSIVE`` and
-        ``dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE``.
+        By default, the container recursively auto-registers eligible concrete
+        dependencies both at resolve time and while registering providers.
+        Use strict mode when you want full registration control by opting in to
+        ``missing_policy=MissingPolicy.ERROR`` and
+        ``dependency_registration_policy=DependencyRegistrationPolicy.IGNORE``.
         ``lock_mode="auto"`` selects thread locks for sync-only cached paths and
         async locks when async resolution paths are present.
 
@@ -146,8 +146,8 @@ class Container:
                 entry binds into ``resolver_context``.
 
         Notes:
-            Common presets are: strict mode (default), full auto-wiring mode
-            (both recursive), and root-only resolve mode
+            Common presets are: auto-wiring mode (default, both recursive),
+            strict mode (opt-in), and root-only resolve mode
             (``missing_policy=MissingPolicy.REGISTER_ROOT``).
 
         Examples:
@@ -2377,7 +2377,7 @@ class Container:
         """Compile and cache the root resolver for current registrations.
 
         Compilation is lazy and invalidated by any registration mutation. In
-        strict mode (autoregistration disabled) with
+        strict mode (opt-in, autoregistration disabled) with
         ``use_resolver_context=False``, hot-path entrypoints are rebound to the
         compiled resolver for lower call overhead.
 
@@ -2386,7 +2386,7 @@ class Container:
 
         Notes:
             Call this once after startup registrations when you want stable
-            strict-mode hot-path behavior. Any registration mutation invalidates
+            strict-mode (opt-in) hot-path behavior. Any registration mutation invalidates
             the compiled graph automatically.
 
         Examples:
@@ -2515,6 +2515,10 @@ class Container:
     # endregion Compilation
 
     # region Resolution and Scope Management
+    def _get_context_bound_resolver_or_none(self) -> ResolverProtocol | None:
+        if not self._use_resolver_context:
+            return None
+        return self._resolver_context._get_bound_resolver_or_none()  # noqa: SLF001
 
     @overload
     def resolve(
@@ -2573,9 +2577,11 @@ class Container:
                 service = container.resolve(Service)
 
         """
-        resolver = self._root_resolver
+        resolver = self._get_context_bound_resolver_or_none()
         if resolver is None:
-            resolver = self.compile()
+            resolver = self._root_resolver
+            if resolver is None:
+                resolver = self.compile()
 
         resolved_on_missing = self._resolve_resolution_on_missing(
             on_missing=on_missing,
@@ -2661,9 +2667,11 @@ class Container:
                 client = await container.aresolve(Client)
 
         """
-        resolver = self._root_resolver
+        resolver = self._get_context_bound_resolver_or_none()
         if resolver is None:
-            resolver = self.compile()
+            resolver = self._root_resolver
+            if resolver is None:
+                resolver = self.compile()
 
         resolved_on_missing = self._resolve_resolution_on_missing(
             on_missing=on_missing,
@@ -2730,7 +2738,9 @@ class Container:
                     user_id = request_resolver.resolve(FromContext[int])
 
         """
-        resolver = self.compile()
+        resolver = self._get_context_bound_resolver_or_none()
+        if resolver is None:
+            resolver = self.compile()
         return resolver.enter_scope(scope, context=context)
 
     def __enter__(self) -> ResolverProtocol:

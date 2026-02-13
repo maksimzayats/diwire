@@ -13,6 +13,7 @@ import pytest
 
 from diwire import (
     Container,
+    DependencyRegistrationPolicy,
     FromContext,
     Injected,
     Lifetime,
@@ -228,6 +229,8 @@ async def test_async_singleton_uses_async_cached_method_replacement() -> None:
 
 def test_compile_returns_cached_resolver_and_rebinds_entrypoints() -> None:
     container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
         use_resolver_context=False,
     )
     container.add_instance(_Resource(), provides=_Resource)
@@ -259,6 +262,8 @@ def test_compile_returns_cached_resolver_and_rebinds_entrypoints() -> None:
 def test_resolve_auto_compiles_root_resolver_when_uncompiled() -> None:
     resource = _Resource()
     container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
         use_resolver_context=False,
     )
     container.add_instance(resource, provides=_Resource)
@@ -278,6 +283,8 @@ def test_resolve_auto_compiles_root_resolver_when_uncompiled() -> None:
 async def test_aresolve_auto_compiles_root_resolver_when_uncompiled() -> None:
     resource = _Resource()
     container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
         use_resolver_context=False,
     )
     container.add_instance(resource, provides=_Resource)
@@ -309,6 +316,8 @@ def test_compile_wraps_codegen_resolver_when_open_generic_registry_present() -> 
 
 def test_enter_scope_auto_compiles_root_resolver_when_uncompiled() -> None:
     container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
         use_resolver_context=False,
     )
     container.add(
@@ -368,6 +377,8 @@ def test_registering_after_compile_invalidates_compilation_and_rebinds_lazy_entr
         return _ManagedContext()
 
     container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
         use_resolver_context=False,
     )
     previous_resolver = container.compile()

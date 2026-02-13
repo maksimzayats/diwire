@@ -10,8 +10,10 @@ Why it’s fast
 -------------
 
 - **Compiled resolver code paths**: ``compile()`` generates a resolver specialized to your registrations.
-- **Strict mode hot-path rebinding**: with ``missing_policy=MissingPolicy.ERROR``, container entrypoints can be rebound to
-  the compiled resolver for lower overhead.
+- **Strict mode hot-path rebinding**: in strict mode (opt-in via
+  ``missing_policy=MissingPolicy.ERROR`` and
+  ``dependency_registration_policy=DependencyRegistrationPolicy.IGNORE``),
+  container entrypoints can be rebound to the compiled resolver for lower overhead.
 - **Minimal overhead**: diwire has zero runtime dependencies.
 
 Benchmark methodology

@@ -7,10 +7,12 @@ import pytest
 
 from diwire import (
     Container,
+    DependencyRegistrationPolicy,
     FromContext,
     Injected,
     Lifetime,
     Maybe,
+    MissingPolicy,
     Provider,
     Scope,
     resolver_context,
@@ -99,7 +101,10 @@ class _MaybeBoxImpl(_MaybeBox[T]):
 
 
 def _strict_container() -> Container:
-    return Container()
+    return Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+    )
 
 
 def test_resolve_maybe_returns_none_for_unregistered_dependency_in_strict_mode() -> None:

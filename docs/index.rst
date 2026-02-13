@@ -34,7 +34,7 @@ Define your classes. Resolve the top-level one. diwire figures out the rest.
 
    from dataclasses import dataclass, field
 
-   from diwire import Container, DependencyRegistrationPolicy, MissingPolicy
+   from diwire import Container
 
 
    @dataclass
@@ -52,10 +52,7 @@ Define your classes. Resolve the top-level one. diwire figures out the rest.
        repo: UserRepository
 
 
-   container = Container(
-       missing_policy=MissingPolicy.REGISTER_RECURSIVE,
-       dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
-   )
+   container = Container()
    service = container.resolve(UserService)
    print(service.repo.db.host)  # => localhost
 

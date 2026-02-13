@@ -65,8 +65,8 @@ class Scopes(BaseScopes):
     Examples:
         .. code-block:: python
 
-            with container.enter_scope(Scope.REQUEST):
-                service = container.resolve(Service)
+            with container.enter_scope(Scope.REQUEST) as request_resolver:
+                service = request_resolver.resolve(Service)
 
             with container.enter_scope(
                 Scope.REQUEST,
@@ -89,6 +89,6 @@ Scope = Scopes()
 Examples:
     .. code-block:: python
 
-        with container.enter_scope(Scope.REQUEST, context={str: "tenant-a"}):
-            handler = container.resolve(Handler)
+        with container.enter_scope(Scope.REQUEST, context={str: "tenant-a"}) as request_resolver:
+            handler = request_resolver.resolve(Handler)
 """

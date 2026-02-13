@@ -202,12 +202,12 @@ class _TestMetaclass(type):
     pass
 
 
-def test_container_default_does_not_add_dependencies_during_registration() -> None:
+def test_container_default_autoregisters_dependencies_during_registration() -> None:
     container = Container()
 
     container.add(RootWithDirectDependency)
 
-    assert container._providers_registrations.find_by_type(DirectDependency) is None
+    assert container._providers_registrations.find_by_type(DirectDependency) is not None
 
 
 def test_registration_override_can_disable_dependency_autoregistration() -> None:
@@ -530,7 +530,10 @@ async def test_aresolve_autoregisters_on_miss_and_reraises_when_graph_unchanged(
 
 
 def test_ensure_autoregistration_short_circuits_for_disabled_and_open_generic() -> None:
-    strict_container = Container()
+    strict_container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+    )
 
     strict_container._ensure_autoregistration(DirectDependency)
 

@@ -20,11 +20,13 @@ The compiled resolver is cached on the container.
 Any registration mutation (calling ``add_*`` or ``decorate(...)``) invalidates the cached resolver. The next call to ``compile()``,
 ``resolve()``, ``aresolve()``, or ``enter_scope()`` recompiles as needed.
 
-Strict mode hot-path rebinding
-------------------------------
+Strict mode (opt-in) hot-path rebinding
+---------------------------------------
 
-In strict mode (``missing_policy=MissingPolicy.ERROR``), diwire can bind hot-path container entrypoints directly to the
-compiled resolver instance. This avoids container-level indirection for:
+In strict mode (opt-in via ``missing_policy=MissingPolicy.ERROR`` and
+``dependency_registration_policy=DependencyRegistrationPolicy.IGNORE``), diwire
+can bind hot-path container entrypoints directly to the compiled resolver
+instance. This avoids container-level indirection for:
 
 - ``resolve()``
 - ``aresolve()``

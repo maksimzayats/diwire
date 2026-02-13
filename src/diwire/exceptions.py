@@ -43,8 +43,11 @@ class DIWireProviderDependencyInferenceError(DIWireInvalidProviderSpecError):
 class DIWireDependencyNotRegisteredError(DIWireError):
     """Signal that a dependency key has no provider.
 
-    Raised by ``resolve``/``aresolve`` when strict mode is used (autoregistration
-    disabled) or when no matching open-generic registration exists.
+    Raised by ``resolve``/``aresolve`` when strict mode is explicitly configured
+    (``missing_policy=MissingPolicy.ERROR`` with
+    ``dependency_registration_policy=DependencyRegistrationPolicy.IGNORE``), when
+    a dependency cannot be auto-registered, or when no matching open-generic
+    registration exists.
 
     Typical fixes include registering the dependency explicitly, enabling
     autoregistration for eligible concrete types, or registering an open-generic

@@ -21,7 +21,7 @@ The default registration lifetime is ``Lifetime.SCOPED`` (root-scoped caching by
 - **Async resolution**: ``aresolve()`` mirrors ``resolve()`` and async providers are first-class. ([Async](https://docs.diwire.dev/core/async/))
 - **Open generics**: register once, resolve for many type parameters. ([Open generics](https://docs.diwire.dev/core/open-generics/))
 - **Function injection**: ``Injected[T]`` and ``FromContext[T]`` for ergonomic handlers. ([Function injection](https://docs.diwire.dev/core/function-injection/))
-- **Named components + collect-all**: ``Component(\"name\")`` and ``All[T]``. ([Components](https://docs.diwire.dev/core/components/))
+- **Named components + collect-all**: ``Component("name")`` and ``All[T]``. ([Components](https://docs.diwire.dev/core/components/))
 - **Concurrency + free-threaded builds**: configurable locking via ``LockMode``. ([Concurrency](https://docs.diwire.dev/howto/advanced/concurrency/))
 
 ## Performance (benchmarked)
@@ -52,14 +52,14 @@ pip install diwire
 Define your classes. Resolve the top-level one. diwire figures out the rest.
 
 ```python
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from diwire import Container
 
 
 @dataclass
 class Database:
-    host: str = "localhost"
+    host: str = field(default="localhost", init=False)
 
 
 @dataclass
@@ -71,7 +71,6 @@ class UserRepository:
 class UserService:
     repo: UserRepository
 
-
 container = Container()
 service = container.resolve(UserService)
 print(service.repo.db.host)  # => localhost
@@ -82,14 +81,19 @@ print(service.repo.db.host)  # => localhost
 Use explicit registrations when you need configuration objects, interfaces/protocols, cleanup, or multiple
 implementations.
 
-**Strict mode (recommended for production):**
+**Strict mode (opt-in):**
 
 ```python
-from diwire import Container
+from diwire import Container, DependencyRegistrationPolicy, MissingPolicy
 
 container = Container(
-    )
+    missing_policy=MissingPolicy.ERROR,
+    dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+)
 ```
+
+``Container()`` enables recursive auto-wiring by default. Use strict mode when you need full
+control over registration and want missing dependencies to fail fast.
 
 ```python
 from typing import Protocol
@@ -176,10 +180,10 @@ print(session.closed)  # => True
 
 ## Function injection
 
-Mark injected parameters as `Injected[T]` and wrap callables with `@container.inject`.
+Mark injected parameters as `Injected[T]` and wrap callables with `@resolver_context.inject`.
 
 ```python
-from diwire import Container, Injected
+from diwire import Container, Injected, resolver_context
 
 
 class Service:
@@ -188,9 +192,10 @@ class Service:
 
 
 container = Container()
+container.add(Service)
 
 
-@container.inject
+@resolver_context.inject
 def handler(service: Injected[Service]) -> str:
     return service.run()
 
@@ -229,32 +234,27 @@ print([cache.label for cache in container.resolve(All[Cache])])  # => ['redis', 
 
 Resolution/injection keys are still `Annotated[..., Component(...)]` at runtime.
 
-## container_context (optional)
+## resolver_context (optional)
 
-If you can't (or don't want to) pass a `Container` everywhere, use `container_context`.
-
-`container_context` stores one shared active container per `ContainerContext` instance (process-global for that
-instance). It also supports deferred replay: registrations made before binding are recorded and replayed when you later
-call `set_current(...)`.
+If you can't (or don't want to) pass a resolver everywhere, use `resolver_context`.
+It is a `contextvars`-based helper used by `@resolver_context.inject` and (by default) by `Container` resolution methods.
+Inside `with container.enter_scope(...):`, injected callables resolve from the bound scope resolver; otherwise they fall
+back to the container registered as the `resolver_context` fallback (`Container(..., use_resolver_context=True)` is the
+default).
 
 ```python
-from diwire import Container, Injected, container_context
-
-
-class Service:
-    def run(self) -> str:
-        return "ok"
-
-
-@container_context.inject
-def handler(service: Injected[Service]) -> str:
-    return service.run()
-
+from diwire import Container, FromContext, Scope, resolver_context
 
 container = Container()
-container_context.set_current(container)
 
-print(handler())  # => ok
+
+@resolver_context.inject(scope=Scope.REQUEST)
+def handler(value: FromContext[int]) -> int:
+    return value
+
+
+with container.enter_scope(Scope.REQUEST, context={int: 7}):
+    print(handler())  # => 7
 ```
 
 ## Stability
@@ -267,6 +267,7 @@ diwire targets a stable, small public API.
 ## Docs
 
 - [Tutorial (runnable examples)](https://docs.diwire.dev/howto/examples/)
+- [Examples (repo)](https://github.com/maksimzayats/diwire/blob/main/examples/README.md)
 - [Core concepts](https://docs.diwire.dev/core/)
 - [API reference](https://docs.diwire.dev/reference/)
 

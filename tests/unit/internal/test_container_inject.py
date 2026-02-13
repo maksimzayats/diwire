@@ -827,7 +827,7 @@ def test_inject_autoregister_false_disables_default_autoregistration() -> None:
     assert container._providers_registrations.find_by_type(_AutoRoot) is None
 
 
-def test_inject_autoregister_none_uses_container_default() -> None:
+def test_inject_autoregister_none_uses_container_default_autoregistration() -> None:
     container = Container()
 
     @resolver_context.inject
@@ -835,7 +835,7 @@ def test_inject_autoregister_none_uses_container_default() -> None:
         return dep
 
     assert handler is not None
-    assert container._providers_registrations.find_by_type(_AutoRoot) is None
+    assert container._providers_registrations.find_by_type(_AutoRoot) is not None
 
 
 @pytest.mark.parametrize(

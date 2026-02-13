@@ -49,7 +49,7 @@ Files:
 - [01_quickstart.py](#ex-01-quickstart--01-quickstart-py)
 
 <a id="ex-01-quickstart--01-quickstart-py"></a>
-### 01_quickstart.py ([ex_01_quickstart/01_quickstart.py](ex_01_quickstart/01_quickstart.py))
+### [01_quickstart.py](ex_01_quickstart/01_quickstart.py)
 
 Quickstart: automatic dependency wiring from type hints.
 
@@ -59,7 +59,7 @@ diwire builds the full dependency chain for you.
 ```python
 from __future__ import annotations
 
-from diwire import Container, DependencyRegistrationPolicy, MissingPolicy
+from diwire import Container
 
 
 class Database:
@@ -78,10 +78,7 @@ class UserService:
 
 
 def main() -> None:
-    container = Container(
-        missing_policy=MissingPolicy.REGISTER_RECURSIVE,
-        dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
-    )
+    container = Container()
     service = container.resolve(UserService)
 
     print(f"db_host={service.repository.database.host}")  # => db_host=localhost
@@ -110,7 +107,7 @@ Files:
 - [06_explicit_dependencies.py](#ex-02-registration-methods--06-explicit-dependencies-py)
 
 <a id="ex-02-registration-methods--01-add-py"></a>
-### 01_add.py ([ex_02_registration_methods/01_add.py](ex_02_registration_methods/01_add.py))
+### [01_add.py](ex_02_registration_methods/01_add.py)
 
 Focused example: ``add`` for constructor-based creation.
 
@@ -147,7 +144,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-02-registration-methods--02-add-instance-py"></a>
-### 02_add_instance.py ([ex_02_registration_methods/02_add_instance.py](ex_02_registration_methods/02_add_instance.py))
+### [02_add_instance.py](ex_02_registration_methods/02_add_instance.py)
 
 Focused example: ``add_instance`` for pre-built objects.
 
@@ -179,7 +176,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-02-registration-methods--03-add-factory-py"></a>
-### 03_add_factory.py ([ex_02_registration_methods/03_add_factory.py](ex_02_registration_methods/03_add_factory.py))
+### [03_add_factory.py](ex_02_registration_methods/03_add_factory.py)
 
 Focused example: ``add_factory`` for custom build logic.
 
@@ -221,7 +218,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-02-registration-methods--04-add-generator-cleanup-py"></a>
-### 04_add_generator_cleanup.py ([ex_02_registration_methods/04_add_generator_cleanup.py](ex_02_registration_methods/04_add_generator_cleanup.py))
+### [04_add_generator_cleanup.py](ex_02_registration_methods/04_add_generator_cleanup.py)
 
 Focused example: ``add_generator`` cleanup on scope exit.
 
@@ -265,7 +262,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-02-registration-methods--05-add-context-manager-cleanup-py"></a>
-### 05_add_context_manager_cleanup.py ([ex_02_registration_methods/05_add_context_manager_cleanup.py](ex_02_registration_methods/05_add_context_manager_cleanup.py))
+### [05_add_context_manager_cleanup.py](ex_02_registration_methods/05_add_context_manager_cleanup.py)
 
 Focused example: ``add_context_manager`` cleanup on scope exit.
 
@@ -311,7 +308,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-02-registration-methods--06-explicit-dependencies-py"></a>
-### 06_explicit_dependencies.py ([ex_02_registration_methods/06_explicit_dependencies.py](ex_02_registration_methods/06_explicit_dependencies.py))
+### [06_explicit_dependencies.py](ex_02_registration_methods/06_explicit_dependencies.py)
 
 Focused example: explicit dependency mapping.
 
@@ -366,7 +363,7 @@ Files:
 - [04_uuid_special_type.py](#ex-09-autoregistration--04-uuid-special-type-py)
 
 <a id="ex-09-autoregistration--01-resolve-chain-py"></a>
-### 01_resolve_chain.py ([ex_09_autoregistration/01_resolve_chain.py](ex_09_autoregistration/01_resolve_chain.py))
+### [01_resolve_chain.py](ex_09_autoregistration/01_resolve_chain.py)
 
 Focused example: resolve-time autoregistration of a dependency chain.
 
@@ -375,7 +372,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, DependencyRegistrationPolicy, MissingPolicy
+from diwire import Container
 
 
 class Leaf:
@@ -393,10 +390,7 @@ class Root:
 
 
 def main() -> None:
-    container = Container(
-        missing_policy=MissingPolicy.REGISTER_RECURSIVE,
-        dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
-    )
+    container = Container()
     resolved = container.resolve(Root)
     print(
         f"autoregister_chain={isinstance(resolved.branch.leaf, Leaf)}",
@@ -408,7 +402,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-09-autoregistration--02-add-dependency-autoregister-py"></a>
-### 02_add_dependency_autoregister.py ([ex_09_autoregistration/02_add_dependency_autoregister.py](ex_09_autoregistration/02_add_dependency_autoregister.py))
+### [02_add_dependency_autoregister.py](ex_09_autoregistration/02_add_dependency_autoregister.py)
 
 Focused example: registration-time dependency autoregistration.
 
@@ -417,7 +411,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, DependencyRegistrationPolicy
+from diwire import Container
 
 
 class Dependency:
@@ -431,10 +425,7 @@ class Root:
 
 def main() -> None:
     container = Container()
-    container.add(
-        Root,
-        dependency_registration_policy=DependencyRegistrationPolicy.REGISTER_RECURSIVE,
-    )
+    container.add(Root)
 
     resolved = container.resolve(Root)
     autoregistered = isinstance(resolved.dependency, Dependency)
@@ -448,7 +439,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-09-autoregistration--03-strict-mode-py"></a>
-### 03_strict_mode.py ([ex_09_autoregistration/03_strict_mode.py](ex_09_autoregistration/03_strict_mode.py))
+### [03_strict_mode.py](ex_09_autoregistration/03_strict_mode.py)
 
 Focused example: strict mode without concrete autoregistration.
 
@@ -457,7 +448,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container
+from diwire import Container, DependencyRegistrationPolicy, MissingPolicy
 from diwire.exceptions import DIWireDependencyNotRegisteredError
 
 
@@ -471,7 +462,10 @@ class Root:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+    )
 
     try:
         container.resolve(Root)
@@ -486,7 +480,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-09-autoregistration--04-uuid-special-type-py"></a>
-### 04_uuid_special_type.py ([ex_09_autoregistration/04_uuid_special_type.py](ex_09_autoregistration/04_uuid_special_type.py))
+### [04_uuid_special_type.py](ex_09_autoregistration/04_uuid_special_type.py)
 
 Focused example: ``uuid.UUID`` requires explicit registration.
 
@@ -535,7 +529,7 @@ Files:
 - [01_lifetimes.py](#ex-03-lifetimes--01-lifetimes-py)
 
 <a id="ex-03-lifetimes--01-lifetimes-py"></a>
-### 01_lifetimes.py ([ex_03_lifetimes/01_lifetimes.py](ex_03_lifetimes/01_lifetimes.py))
+### [01_lifetimes.py](ex_03_lifetimes/01_lifetimes.py)
 
 Lifetimes: ``TRANSIENT`` and ``SCOPED``.
 
@@ -613,7 +607,7 @@ Files:
 - [04_singleton_cleanup.py](#ex-04-scopes-and-cleanup--04-singleton-cleanup-py)
 
 <a id="ex-04-scopes-and-cleanup--01-scope-transitions-py"></a>
-### 01_scope_transitions.py ([ex_04_scopes_and_cleanup/01_scope_transitions.py](ex_04_scopes_and_cleanup/01_scope_transitions.py))
+### [01_scope_transitions.py](ex_04_scopes_and_cleanup/01_scope_transitions.py)
 
 Focused example: default and explicit scope transitions.
 
@@ -658,7 +652,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-04-scopes-and-cleanup--02-scope-mismatch-py"></a>
-### 02_scope_mismatch.py ([ex_04_scopes_and_cleanup/02_scope_mismatch.py](ex_04_scopes_and_cleanup/02_scope_mismatch.py))
+### [02_scope_mismatch.py](ex_04_scopes_and_cleanup/02_scope_mismatch.py)
 
 Focused example: ``DIWireScopeMismatchError`` from root resolution.
 
@@ -694,7 +688,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-04-scopes-and-cleanup--03-scoped-cleanup-py"></a>
-### 03_scoped_cleanup.py ([ex_04_scopes_and_cleanup/03_scoped_cleanup.py](ex_04_scopes_and_cleanup/03_scoped_cleanup.py))
+### [03_scoped_cleanup.py](ex_04_scopes_and_cleanup/03_scoped_cleanup.py)
 
 Focused example: scoped resource cleanup on scope exit.
 
@@ -742,7 +736,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-04-scopes-and-cleanup--04-singleton-cleanup-py"></a>
-### 04_singleton_cleanup.py ([ex_04_scopes_and_cleanup/04_singleton_cleanup.py](ex_04_scopes_and_cleanup/04_singleton_cleanup.py))
+### [04_singleton_cleanup.py](ex_04_scopes_and_cleanup/04_singleton_cleanup.py)
 
 Focused example: singleton generator cleanup on ``container.close()``.
 
@@ -798,7 +792,7 @@ Files:
 - [05_context_without_scope_open.py](#ex-17-scope-context-values--05-context-without-scope-open-py)
 
 <a id="ex-17-scope-context-values--01-provider-from-context-py"></a>
-### 01_provider_from_context.py ([ex_17_scope_context_values/01_provider_from_context.py](ex_17_scope_context_values/01_provider_from_context.py))
+### [01_provider_from_context.py](ex_17_scope_context_values/01_provider_from_context.py)
 
 Focused example: provider dependencies can read ``FromContext[T]`` values.
 
@@ -837,7 +831,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-17-scope-context-values--02-nested-scope-inheritance-py"></a>
-### 02_nested_scope_inheritance.py ([ex_17_scope_context_values/02_nested_scope_inheritance.py](ex_17_scope_context_values/02_nested_scope_inheritance.py))
+### [02_nested_scope_inheritance.py](ex_17_scope_context_values/02_nested_scope_inheritance.py)
 
 Focused example: nested scopes inherit context and child scopes can override keys.
 
@@ -871,7 +865,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-17-scope-context-values--03-injected-callable-context-py"></a>
-### 03_injected_callable_context.py ([ex_17_scope_context_values/03_injected_callable_context.py](ex_17_scope_context_values/03_injected_callable_context.py))
+### [03_injected_callable_context.py](ex_17_scope_context_values/03_injected_callable_context.py)
 
 Injected callables can consume FromContext values via diwire_context.
 
@@ -900,7 +894,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-17-scope-context-values--04-annotated-context-keys-py"></a>
-### 04_annotated_context_keys.py ([ex_17_scope_context_values/04_annotated_context_keys.py](ex_17_scope_context_values/04_annotated_context_keys.py))
+### [04_annotated_context_keys.py](ex_17_scope_context_values/04_annotated_context_keys.py)
 
 Annotated tokens can be used as scope context keys.
 
@@ -945,7 +939,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-17-scope-context-values--05-context-without-scope-open-py"></a>
-### 05_context_without_scope_open.py ([ex_17_scope_context_values/05_context_without_scope_open.py](ex_17_scope_context_values/05_context_without_scope_open.py))
+### [05_context_without_scope_open.py](ex_17_scope_context_values/05_context_without_scope_open.py)
 
 Passing diwire_context without opening a scope raises a clear error.
 
@@ -989,7 +983,7 @@ Files:
 - [06_function_injection_async_details.py](#ex-06-function-injection--06-function-injection-async-details-py)
 
 <a id="ex-06-function-injection--01-signature-filtering-py"></a>
-### 01_signature_filtering.py ([ex_06_function_injection/01_signature_filtering.py](ex_06_function_injection/01_signature_filtering.py))
+### [01_signature_filtering.py](ex_06_function_injection/01_signature_filtering.py)
 
 Focused example: ``Injected[T]`` and public signature filtering.
 
@@ -1024,7 +1018,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-06-function-injection--02-override-injected-py"></a>
-### 02_override_injected.py ([ex_06_function_injection/02_override_injected.py](ex_06_function_injection/02_override_injected.py))
+### [02_override_injected.py](ex_06_function_injection/02_override_injected.py)
 
 Focused example: caller override for injected parameters.
 
@@ -1061,7 +1055,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-06-function-injection--03-auto-open-scope-cleanup-py"></a>
-### 03_auto_open_scope_cleanup.py ([ex_06_function_injection/03_auto_open_scope_cleanup.py](ex_06_function_injection/03_auto_open_scope_cleanup.py))
+### [03_auto_open_scope_cleanup.py](ex_06_function_injection/03_auto_open_scope_cleanup.py)
 
 Focused example: ``auto_open_scope`` with scoped cleanup.
 
@@ -1107,7 +1101,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-06-function-injection--04-nested-wrappers-py"></a>
-### 04_nested_wrappers.py ([ex_06_function_injection/04_nested_wrappers.py](ex_06_function_injection/04_nested_wrappers.py))
+### [04_nested_wrappers.py](ex_06_function_injection/04_nested_wrappers.py)
 
 Focused example: nested injected wrappers share one active resolver.
 
@@ -1180,7 +1174,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-06-function-injection--05-auto-open-scope-reuse-py"></a>
-### 05_auto_open_scope_reuse.py ([ex_06_function_injection/05_auto_open_scope_reuse.py](ex_06_function_injection/05_auto_open_scope_reuse.py))
+### [05_auto_open_scope_reuse.py](ex_06_function_injection/05_auto_open_scope_reuse.py)
 
 Focused example: auto-open scope reuses already-open resolvers.
 
@@ -1244,7 +1238,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-06-function-injection--06-function-injection-async-details-py"></a>
-### 06_function_injection_async_details.py ([ex_06_function_injection/06_function_injection_async_details.py](ex_06_function_injection/06_function_injection_async_details.py))
+### [06_function_injection_async_details.py](ex_06_function_injection/06_function_injection_async_details.py)
 
 Async function-injection deep dive.
 
@@ -1296,7 +1290,7 @@ Files:
 - [02_component_registration_shortcut.py](#ex-07-named-components--02-component-registration-shortcut-py)
 
 <a id="ex-07-named-components--01-named-components-py"></a>
-### 01_named_components.py ([ex_07_named_components/01_named_components.py](ex_07_named_components/01_named_components.py))
+### [01_named_components.py](ex_07_named_components/01_named_components.py)
 
 Named components with ``Component("name")`` and ``Annotated`` keys.
 
@@ -1347,7 +1341,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-07-named-components--02-component-registration-shortcut-py"></a>
-### 02_component_registration_shortcut.py ([ex_07_named_components/02_component_registration_shortcut.py](ex_07_named_components/02_component_registration_shortcut.py))
+### [02_component_registration_shortcut.py](ex_07_named_components/02_component_registration_shortcut.py)
 
 Register components ergonomically with ``component=...``.
 
@@ -1403,7 +1397,7 @@ Files:
 - [03_provider_lifetime_semantics.py](#ex-20-providers--03-provider-lifetime-semantics-py)
 
 <a id="ex-20-providers--01-break-cycle-provider-py"></a>
-### 01_break_cycle_provider.py ([ex_20_providers/01_break_cycle_provider.py](ex_20_providers/01_break_cycle_provider.py))
+### [01_break_cycle_provider.py](ex_20_providers/01_break_cycle_provider.py)
 
 Focused example: break a cycle with ``Provider[T]``.
 
@@ -1443,7 +1437,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-20-providers--02-lazy-construction-provider-py"></a>
-### 02_lazy_construction_provider.py ([ex_20_providers/02_lazy_construction_provider.py](ex_20_providers/02_lazy_construction_provider.py))
+### [02_lazy_construction_provider.py](ex_20_providers/02_lazy_construction_provider.py)
 
 Focused example: ``Provider[T]`` defers expensive construction until called.
 
@@ -1488,7 +1482,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-20-providers--03-provider-lifetime-semantics-py"></a>
-### 03_provider_lifetime_semantics.py ([ex_20_providers/03_provider_lifetime_semantics.py](ex_20_providers/03_provider_lifetime_semantics.py))
+### [03_provider_lifetime_semantics.py](ex_20_providers/03_provider_lifetime_semantics.py)
 
 Focused example: provider calls follow scoped vs transient lifetime semantics.
 
@@ -1558,7 +1552,7 @@ Files:
 - [01_compilation.py](#ex-05-compilation--01-compilation-py)
 
 <a id="ex-05-compilation--01-compilation-py"></a>
-### 01_compilation.py ([ex_05_compilation/01_compilation.py](ex_05_compilation/01_compilation.py))
+### [01_compilation.py](ex_05_compilation/01_compilation.py)
 
 Compilation caching and invalidation.
 
@@ -1610,7 +1604,7 @@ Files:
 - [05_open_generics_constraints_details.py](#ex-08-open-generics--05-open-generics-constraints-details-py)
 
 <a id="ex-08-open-generics--01-factory-type-argument-py"></a>
-### 01_factory_type_argument.py ([ex_08_open_generics/01_factory_type_argument.py](ex_08_open_generics/01_factory_type_argument.py))
+### [01_factory_type_argument.py](ex_08_open_generics/01_factory_type_argument.py)
 
 Focused example: open generic factory with ``type[T]`` injection.
 
@@ -1651,7 +1645,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-08-open-generics--02-closed-override-py"></a>
-### 02_closed_override.py ([ex_08_open_generics/02_closed_override.py](ex_08_open_generics/02_closed_override.py))
+### [02_closed_override.py](ex_08_open_generics/02_closed_override.py)
 
 Focused example: closed generic override beats open template.
 
@@ -1693,7 +1687,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-08-open-generics--03-specificity-winner-py"></a>
-### 03_specificity_winner.py ([ex_08_open_generics/03_specificity_winner.py](ex_08_open_generics/03_specificity_winner.py))
+### [03_specificity_winner.py](ex_08_open_generics/03_specificity_winner.py)
 
 Focused example: most-specific open template selection.
 
@@ -1737,7 +1731,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-08-open-generics--04-scoped-open-generics-py"></a>
-### 04_scoped_open_generics.py ([ex_08_open_generics/04_scoped_open_generics.py](ex_08_open_generics/04_scoped_open_generics.py))
+### [04_scoped_open_generics.py](ex_08_open_generics/04_scoped_open_generics.py)
 
 Focused example: scoped open generics require an opened scope.
 
@@ -1790,7 +1784,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-08-open-generics--05-open-generics-constraints-details-py"></a>
-### 05_open_generics_constraints_details.py ([ex_08_open_generics/05_open_generics_constraints_details.py](ex_08_open_generics/05_open_generics_constraints_details.py))
+### [05_open_generics_constraints_details.py](ex_08_open_generics/05_open_generics_constraints_details.py)
 
 Open-generics constraints deep dive.
 
@@ -1856,7 +1850,7 @@ Files:
 - [04_use_resolver_context_false.py](#ex-10-resolver-context--04-use-resolver-context-false-py)
 
 <a id="ex-10-resolver-context--01-unbound-error-py"></a>
-### 01_unbound_error.py ([ex_10_resolver_context/01_unbound_error.py](ex_10_resolver_context/01_unbound_error.py))
+### [01_unbound_error.py](ex_10_resolver_context/01_unbound_error.py)
 
 Focused example: unbound ``ResolverContext`` usage error.
 
@@ -1881,7 +1875,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-10-resolver-context--02-bound-resolution-py"></a>
-### 02_bound_resolution.py ([ex_10_resolver_context/02_bound_resolution.py](ex_10_resolver_context/02_bound_resolution.py))
+### [02_bound_resolution.py](ex_10_resolver_context/02_bound_resolution.py)
 
 Focused example: bound resolver resolution through ResolverContext.
 
@@ -1913,7 +1907,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-10-resolver-context--03-inject-wrappers-py"></a>
-### 03_inject_wrappers.py ([ex_10_resolver_context/03_inject_wrappers.py](ex_10_resolver_context/03_inject_wrappers.py))
+### [03_inject_wrappers.py](ex_10_resolver_context/03_inject_wrappers.py)
 
 Focused example: ``@resolver_context.inject`` on function and method.
 
@@ -1958,7 +1952,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-10-resolver-context--04-use-resolver-context-false-py"></a>
-### 04_use_resolver_context_false.py ([ex_10_resolver_context/04_use_resolver_context_false.py](ex_10_resolver_context/04_use_resolver_context_false.py))
+### [04_use_resolver_context_false.py](ex_10_resolver_context/04_use_resolver_context_false.py)
 
 Focused example: ``use_resolver_context=False`` inject requires explicit resolver.
 
@@ -1967,7 +1961,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from diwire import Container, Injected, ResolverContext, Scope
+from diwire import (
+    Container,
+    DependencyRegistrationPolicy,
+    Injected,
+    MissingPolicy,
+    ResolverContext,
+    Scope,
+)
 from diwire.exceptions import DIWireResolverNotSetError
 
 
@@ -1983,6 +1984,8 @@ def _bound_self(method: object) -> object | None:
 def main() -> None:
     context = ResolverContext()
     container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
         resolver_context=context,
         use_resolver_context=False,
     )
@@ -2023,7 +2026,7 @@ Files:
 - [01_lock_modes.py](#ex-11-lock-modes--01-lock-modes-py)
 
 <a id="ex-11-lock-modes--01-lock-modes-py"></a>
-### 01_lock_modes.py ([ex_11_lock_modes/01_lock_modes.py](ex_11_lock_modes/01_lock_modes.py))
+### [01_lock_modes.py](ex_11_lock_modes/01_lock_modes.py)
 
 Lock mode defaults and per-provider overrides.
 
@@ -2169,7 +2172,7 @@ Files:
 - [02_async_generator_cleanup.py](#ex-18-async--02-async-generator-cleanup-py)
 
 <a id="ex-18-async--01-async-factory-aresolve-py"></a>
-### 01_async_factory_aresolve.py ([ex_18_async/01_async_factory_aresolve.py](ex_18_async/01_async_factory_aresolve.py))
+### [01_async_factory_aresolve.py](ex_18_async/01_async_factory_aresolve.py)
 
 Focused example: async factory registration with ``await container.aresolve(...)``.
 
@@ -2204,7 +2207,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-18-async--02-async-generator-cleanup-py"></a>
-### 02_async_generator_cleanup.py ([ex_18_async/02_async_generator_cleanup.py](ex_18_async/02_async_generator_cleanup.py))
+### [02_async_generator_cleanup.py](ex_18_async/02_async_generator_cleanup.py)
 
 Focused example: async-generator provider cleanup on async scope exit.
 
@@ -2264,14 +2267,14 @@ Files:
 - [06_invalid_registration_error.py](#ex-16-errors-and-troubleshooting--06-invalid-registration-error-py)
 
 <a id="ex-16-errors-and-troubleshooting--01-missing-dependency-error-py"></a>
-### 01_missing_dependency_error.py ([ex_16_errors_and_troubleshooting/01_missing_dependency_error.py](ex_16_errors_and_troubleshooting/01_missing_dependency_error.py))
+### [01_missing_dependency_error.py](ex_16_errors_and_troubleshooting/01_missing_dependency_error.py)
 
 Focused example: ``DIWireDependencyNotRegisteredError``.
 
 ```python
 from __future__ import annotations
 
-from diwire import Container
+from diwire import Container, DependencyRegistrationPolicy, MissingPolicy
 from diwire.exceptions import DIWireDependencyNotRegisteredError
 
 
@@ -2280,7 +2283,10 @@ class MissingDependency:
 
 
 def main() -> None:
-    container = Container()
+    container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+    )
 
     try:
         container.resolve(MissingDependency)
@@ -2295,7 +2301,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-16-errors-and-troubleshooting--02-scope-mismatch-error-py"></a>
-### 02_scope_mismatch_error.py ([ex_16_errors_and_troubleshooting/02_scope_mismatch_error.py](ex_16_errors_and_troubleshooting/02_scope_mismatch_error.py))
+### [02_scope_mismatch_error.py](ex_16_errors_and_troubleshooting/02_scope_mismatch_error.py)
 
 Focused example: ``DIWireScopeMismatchError``.
 
@@ -2331,7 +2337,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-16-errors-and-troubleshooting--03-async-in-sync-error-py"></a>
-### 03_async_in_sync_error.py ([ex_16_errors_and_troubleshooting/03_async_in_sync_error.py](ex_16_errors_and_troubleshooting/03_async_in_sync_error.py))
+### [03_async_in_sync_error.py](ex_16_errors_and_troubleshooting/03_async_in_sync_error.py)
 
 Focused example: ``DIWireAsyncDependencyInSyncContextError``.
 
@@ -2367,7 +2373,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-16-errors-and-troubleshooting--04-inference-error-py"></a>
-### 04_inference_error.py ([ex_16_errors_and_troubleshooting/04_inference_error.py](ex_16_errors_and_troubleshooting/04_inference_error.py))
+### [04_inference_error.py](ex_16_errors_and_troubleshooting/04_inference_error.py)
 
 Focused example: ``DIWireProviderDependencyInferenceError``.
 
@@ -2403,7 +2409,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-16-errors-and-troubleshooting--05-generic-error-py"></a>
-### 05_generic_error.py ([ex_16_errors_and_troubleshooting/05_generic_error.py](ex_16_errors_and_troubleshooting/05_generic_error.py))
+### [05_generic_error.py](ex_16_errors_and_troubleshooting/05_generic_error.py)
 
 Focused example: ``DIWireInvalidGenericTypeArgumentError``.
 
@@ -2451,7 +2457,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-16-errors-and-troubleshooting--06-invalid-registration-error-py"></a>
-### 06_invalid_registration_error.py ([ex_16_errors_and_troubleshooting/06_invalid_registration_error.py](ex_16_errors_and_troubleshooting/06_invalid_registration_error.py))
+### [06_invalid_registration_error.py](ex_16_errors_and_troubleshooting/06_invalid_registration_error.py)
 
 Focused example: ``DIWireInvalidRegistrationError``.
 
@@ -2486,7 +2492,7 @@ Files:
 - [01_all_components.py](#ex-22-all-components--01-all-components-py)
 
 <a id="ex-22-all-components--01-all-components-py"></a>
-### 01_all_components.py ([ex_22_all_components/01_all_components.py](ex_22_all_components/01_all_components.py))
+### [01_all_components.py](ex_22_all_components/01_all_components.py)
 
 Resolve all implementations with ``All[T]`` (base + components).
 
@@ -2560,7 +2566,7 @@ Files:
 - [01_maybe.py](#ex-23-maybe--01-maybe-py)
 
 <a id="ex-23-maybe--01-maybe-py"></a>
-### 01_maybe.py ([ex_23_maybe/01_maybe.py](ex_23_maybe/01_maybe.py))
+### [01_maybe.py](ex_23_maybe/01_maybe.py)
 
 Explicit optional dependencies with Maybe[T].
 
@@ -2575,7 +2581,7 @@ This topic demonstrates:
 ```python
 from __future__ import annotations
 
-from diwire import Container, Maybe
+from diwire import Container, DependencyRegistrationPolicy, Maybe, MissingPolicy
 from diwire.exceptions import DIWireDependencyNotRegisteredError
 
 
@@ -2598,7 +2604,10 @@ class ServiceWithoutDefault:
 
 
 def strict_container() -> Container:
-    return Container()
+    return Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+    )
 
 
 def main() -> None:
@@ -2645,7 +2654,7 @@ Files:
 - [03_open_generic_decorate.py](#ex-21-decorators--03-open-generic-decorate-py)
 
 <a id="ex-21-decorators--01-decorators-py"></a>
-### 01_decorators.py ([ex_21_decorators/01_decorators.py](ex_21_decorators/01_decorators.py))
+### [01_decorators.py](ex_21_decorators/01_decorators.py)
 
 Decorators: the easiest mental model.
 
@@ -2764,7 +2773,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-21-decorators--02-decorate-before-registration-py"></a>
-### 02_decorate_before_registration.py ([ex_21_decorators/02_decorate_before_registration.py](ex_21_decorators/02_decorate_before_registration.py))
+### [02_decorate_before_registration.py](ex_21_decorators/02_decorate_before_registration.py)
 
 Two readability-focused patterns.
 
@@ -2852,7 +2861,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-21-decorators--03-open-generic-decorate-py"></a>
-### 03_open_generic_decorate.py ([ex_21_decorators/03_open_generic_decorate.py](ex_21_decorators/03_open_generic_decorate.py))
+### [03_open_generic_decorate.py](ex_21_decorators/03_open_generic_decorate.py)
 
 Open-generic decoration in one screen.
 
@@ -2913,7 +2922,7 @@ Files:
 - [01_class_context_managers.py](#ex-19-class-context-managers--01-class-context-managers-py)
 
 <a id="ex-19-class-context-managers--01-class-context-managers-py"></a>
-### 01_class_context_managers.py ([ex_19_class_context_managers/01_class_context_managers.py](ex_19_class_context_managers/01_class_context_managers.py))
+### [01_class_context_managers.py](ex_19_class_context_managers/01_class_context_managers.py)
 
 Class-based context manager registration with inferred managed type.
 
@@ -2980,7 +2989,7 @@ Files:
 - [05_msgspec.py](#ex-12-supported-frameworks--05-msgspec-py)
 
 <a id="ex-12-supported-frameworks--01-dataclass-py"></a>
-### 01_dataclass.py ([ex_12_supported_frameworks/01_dataclass.py](ex_12_supported_frameworks/01_dataclass.py))
+### [01_dataclass.py](ex_12_supported_frameworks/01_dataclass.py)
 
 Focused example: dataclass constructor dependency extraction.
 
@@ -3018,7 +3027,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-12-supported-frameworks--02-namedtuple-py"></a>
-### 02_namedtuple.py ([ex_12_supported_frameworks/02_namedtuple.py](ex_12_supported_frameworks/02_namedtuple.py))
+### [02_namedtuple.py](ex_12_supported_frameworks/02_namedtuple.py)
 
 Focused example: ``NamedTuple`` dependency extraction.
 
@@ -3054,7 +3063,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-12-supported-frameworks--03-attrs-py"></a>
-### 03_attrs.py ([ex_12_supported_frameworks/03_attrs.py](ex_12_supported_frameworks/03_attrs.py))
+### [03_attrs.py](ex_12_supported_frameworks/03_attrs.py)
 
 Focused example: ``attrs.define`` dependency extraction.
 
@@ -3089,7 +3098,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-12-supported-frameworks--04-pydantic-py"></a>
-### 04_pydantic.py ([ex_12_supported_frameworks/04_pydantic.py](ex_12_supported_frameworks/04_pydantic.py))
+### [04_pydantic.py](ex_12_supported_frameworks/04_pydantic.py)
 
 Focused example: pydantic v2 model field dependency extraction.
 
@@ -3126,7 +3135,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-12-supported-frameworks--05-msgspec-py"></a>
-### 05_msgspec.py ([ex_12_supported_frameworks/05_msgspec.py](ex_12_supported_frameworks/05_msgspec.py))
+### [05_msgspec.py](ex_12_supported_frameworks/05_msgspec.py)
 
 Focused example: ``msgspec.Struct`` field dependency extraction.
 
@@ -3168,7 +3177,7 @@ Files:
 - [01_pydantic_settings.py](#ex-13-pydantic-settings--01-pydantic-settings-py)
 
 <a id="ex-13-pydantic-settings--01-pydantic-settings-py"></a>
-### 01_pydantic_settings.py ([ex_13_pydantic_settings/01_pydantic_settings.py](ex_13_pydantic_settings/01_pydantic_settings.py))
+### [01_pydantic_settings.py](ex_13_pydantic_settings/01_pydantic_settings.py)
 
 Pydantic settings auto-registration.
 
@@ -3210,7 +3219,7 @@ Files:
 - [test_demo.py](#ex-14-pytest-plugin--test-demo-py)
 
 <a id="ex-14-pytest-plugin--01-pytest-plugin-py"></a>
-### 01_pytest_plugin.py ([ex_14_pytest_plugin/01_pytest_plugin.py](ex_14_pytest_plugin/01_pytest_plugin.py))
+### [01_pytest_plugin.py](ex_14_pytest_plugin/01_pytest_plugin.py)
 
 Pytest plugin integration smoke test.
 
@@ -3242,7 +3251,7 @@ if __name__ == "__main__":
 ```
 
 <a id="ex-14-pytest-plugin--test-demo-py"></a>
-### test_demo.py ([ex_14_pytest_plugin/test_demo.py](ex_14_pytest_plugin/test_demo.py))
+### [test_demo.py](ex_14_pytest_plugin/test_demo.py)
 
 ```python
 from __future__ import annotations
@@ -3286,7 +3295,7 @@ Files:
 - [01_fastapi.py](#ex-15-fastapi--01-fastapi-py)
 
 <a id="ex-15-fastapi--01-fastapi-py"></a>
-### 01_fastapi.py ([ex_15_fastapi/01_fastapi.py](ex_15_fastapi/01_fastapi.py))
+### [01_fastapi.py](ex_15_fastapi/01_fastapi.py)
 
 FastAPI integration via ``@resolver_context.inject(scope=Scope.REQUEST)``.
 
