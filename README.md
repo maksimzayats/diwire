@@ -26,11 +26,13 @@ resolvers, and free-threaded Python (no-GIL) — all with zero runtime dependenc
 
 Benchmarks + methodology live in the docs: [Performance](https://docs.diwire.dev/howto/advanced/performance/).
 
-In this benchmark suite on CPython ``3.12.5`` (Apple M1 Pro, strict mode):
+In this benchmark suite on CPython ``3.14.2`` (Apple M1 Pro, strict mode):
 
-- Speedup over ``rodi`` ranges from **1.22×** to **2.19×**.
-- Speedup over ``dishka`` ranges from **1.81×** to **7.76×**.
-- Resolve-only comparisons (includes ``punq`` in non-scope scenarios): speedup ranges from **3.31×** to **268.84×**.
+- Speedup over ``rodi`` ranges from **1.28×** to **2.48×**.
+- Speedup over ``dishka`` ranges from **2.03×** to **7.62×**.
+- Speedup over ``wireup`` ranges from **1.06×** to **3.31×**.
+- Resolve-only comparisons (includes ``punq`` in non-scope scenarios): speedup over ``punq`` ranges from **2.47×** to **388.44×**.
+- Current benchmark totals: **10** full-suite scenarios and **4** resolve-only scenarios.
 
 Results vary by environment, Python version, and hardware. Re-run ``make benchmark-report`` and
 ``make benchmark-report-resolve`` on your target runtime before drawing final conclusions for production workloads.

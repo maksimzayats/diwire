@@ -5,12 +5,15 @@ from typing import Any
 import punq
 import rodi
 from dishka import Provider
+from wireup import injectable
 
 from diwire import Lifetime
 from tests.benchmarks.dishka_helpers import DishkaBenchmarkScope, make_dishka_benchmark_container
 from tests.benchmarks.helpers import make_diwire_benchmark_container, run_benchmark
+from tests.benchmarks.wireup_helpers import make_wireup_benchmark_container
 
 
+@injectable(lifetime="singleton")
 class _SingletonService:
     pass
 
@@ -55,6 +58,18 @@ def test_benchmark_dishka_resolve_singleton(benchmark: Any) -> None:
         _ = container.get(_SingletonService)
 
     run_benchmark(benchmark, bench_dishka_singleton)
+
+
+def test_benchmark_wireup_resolve_singleton(benchmark: Any) -> None:
+    container = make_wireup_benchmark_container(_SingletonService)
+    first = container.get(_SingletonService)
+    second = container.get(_SingletonService)
+    assert first is second
+
+    def bench_wireup_singleton() -> None:
+        _ = container.get(_SingletonService)
+
+    run_benchmark(benchmark, bench_wireup_singleton)
 
 
 def test_benchmark_punq_resolve_singleton(benchmark: Any) -> None:
