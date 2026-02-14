@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import inspect
 import keyword
 from collections import Counter
@@ -31,6 +32,11 @@ from diwire.exceptions import DIWireDependencyNotRegisteredError, DIWireInvalidP
 
 DispatchKind = Literal["identity", "equality_map"]
 DependencyPlanKind = Literal["provider", "context", "provider_handle", "all", "literal", "omit"]
+_DATACLASS_DEFAULT_FACTORY_SENTINEL: Any = getattr(
+    dataclasses,
+    "_HAS_DEFAULT_FACTORY",
+    object(),
+)
 
 
 def validate_resolver_assembly_managed_scopes(*, root_scope: Any) -> tuple[BaseScope, ...]:
@@ -577,6 +583,15 @@ class ResolverGenerationPlanner:
                 expression=literal_expression,
             )
             return literal_plan, None, False, argument, argument
+        if dependency_spec is None and self._is_dataclass_default_factory_parameter(
+            dependency.parameter,
+        ):
+            omit_plan = ProviderDependencyPlan(
+                kind="omit",
+                dependency=dependency,
+                dependency_index=dependency_index,
+            )
+            return omit_plan, None, False, "", ""
         if dependency_spec is None:
             dependency_spec = self._dependency_spec_or_error(
                 dependency_provides=dependency_key,
@@ -742,16 +757,22 @@ class ResolverGenerationPlanner:
         if is_all_annotation(dependency_key):
             inner = strip_all_annotation(dependency_key)
             return self._all_slots_by_key.get(inner, ())
-        if optional:
-            dependency_spec = self._registrations.find_by_type(dependency_key)
-            if dependency_spec is None:
-                return ()
+        dependency_spec = self._registrations.find_by_type(dependency_key)
+        if dependency_spec is not None:
             return (dependency_spec.slot,)
+        if optional or self._is_dataclass_default_factory_parameter(dependency.parameter):
+            return ()
         dependency_spec = self._dependency_spec_or_error(
             dependency_provides=dependency_key,
             requiring_provider=requiring_provider,
         )
         return (dependency_spec.slot,)
+
+    def _is_dataclass_default_factory_parameter(
+        self,
+        parameter: inspect.Parameter,
+    ) -> bool:
+        return parameter.default is _DATACLASS_DEFAULT_FACTORY_SENTINEL
 
     def _format_dependency_argument(
         self,
