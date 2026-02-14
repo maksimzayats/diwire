@@ -33,14 +33,15 @@ Resolve-only comparison table (includes ``punq``):
 
 Benchmarked library versions:
 
-- diwire: editable checkout at commit ``48a6519f831372da5d7d5ab98345ba69778dc3f0`` (branch ``v1``, dirty working tree)
-- dishka: ``1.7.2``
+- diwire: editable checkout at commit ``7d467211568d7955a92f929e613450521cc1b114`` (branch ``comparison-table``, dirty working tree)
+- dishka: ``1.8.0``
 - punq: ``0.7.0``
 - rodi: ``2.0.8``
+- wireup: ``2.7.0``
 
 Environment (from ``benchmark-results/raw-benchmark.json``):
 
-- Python: CPython ``3.12.5``
+- Python: CPython ``3.14.2``
 - OS/CPU: Darwin arm64 (Apple M1 Pro)
 
 Methodology details for diwire in these benchmarks:
@@ -50,8 +51,8 @@ Methodology details for diwire in these benchmarks:
 - All benchmark registrations are explicit.
 - ``container.compile()`` is called once after registration setup and before timed loops to measure compiled steady-state entrypoints.
 
-Results (diwire vs rodi and dishka)
------------------------------------
+Results (diwire vs rodi, dishka, and wireup)
+--------------------------------------------
 
 Source of truth: ``benchmark-results/benchmark-table.json`` (rendered to ``benchmark-results/benchmark-table.md``).
 
@@ -62,74 +63,97 @@ Source of truth: ``benchmark-results/benchmark-table.json`` (rendered to ``bench
      - diwire (ops/s)
      - rodi (ops/s)
      - dishka (ops/s)
+     - wireup (ops/s)
      - Speedup (diwire/rodi)
      - Speedup (diwire/dishka)
+     - Speedup (diwire/wireup)
    * - enter_close_scope_no_resolve
-     - 4890376
-     - 3404710
-     - 1000090
+     - 6518660
+     - 4524061
+     - 860796
+     - 1971905
      - 1.44×
-     - 4.89×
+     - 7.57×
+     - 3.31×
    * - enter_close_scope_resolve_100_instance
-     - 83981
-     - 54992
-     - 13274
-     - 1.53×
-     - 6.33×
+     - 87070
+     - 58303
+     - 11494
+     - 67470
+     - 1.49×
+     - 7.57×
+     - 1.29×
    * - enter_close_scope_resolve_once
-     - 3134287
-     - 2094023
-     - 403971
-     - 1.50×
-     - 7.76×
+     - 3676678
+     - 2510567
+     - 482201
+     - 1481135
+     - 1.46×
+     - 7.62×
+     - 2.48×
    * - enter_close_scope_resolve_scoped_100
-     - 95893
-     - 78328
-     - 40845
-     - 1.22×
-     - 2.35×
+     - 93662
+     - 72891
+     - 38950
+     - 67401
+     - 1.28×
+     - 2.40×
+     - 1.39×
    * - resolve_deep_transient_chain
-     - 1357614
-     - 710215
-     - 653016
-     - 1.91×
-     - 2.08×
+     - 1816309
+     - 733845
+     - 754110
+     - 915855
+     - 2.48×
+     - 2.41×
+     - 1.98×
    * - resolve_mixed_lifetimes
-     - 1590693
-     - 1001925
-     - 421357
-     - 1.59×
-     - 3.78×
+     - 2271693
+     - 1107436
+     - 382173
+     - 898465
+     - 2.05×
+     - 5.94×
+     - 2.53×
    * - resolve_scoped
-     - 2039077
-     - 1486316
-     - 692814
-     - 1.37×
-     - 2.94×
+     - 2840744
+     - 1840370
+     - 591232
+     - 1351828
+     - 1.54×
+     - 4.80×
+     - 2.10×
    * - resolve_singleton
-     - 6539556
-     - 3260371
-     - 3606062
-     - 2.01×
-     - 1.81×
+     - 6978367
+     - 3543417
+     - 3441938
+     - 5128950
+     - 1.97×
+     - 2.03×
+     - 1.36×
    * - resolve_transient
-     - 5232422
-     - 2514313
-     - 2390968
-     - 2.08×
+     - 5397358
+     - 2682653
+     - 2464092
+     - 5083800
+     - 2.01×
      - 2.19×
+     - 1.06×
    * - resolve_wide_transient_graph
-     - 1665818
-     - 761640
-     - 679907
-     - 2.19×
-     - 2.45×
+     - 1849443
+     - 832000
+     - 782193
+     - 1285315
+     - 2.22×
+     - 2.36×
+     - 1.44×
 
 Summary (computed from the table above):
 
 - diwire is the top ops/s implementation in all benchmark scenarios in this strict-mode run.
-- Speedup over rodi ranges from **1.22×** to **2.19×**.
-- Speedup over dishka ranges from **1.81×** to **7.76×**.
+- Speedup over rodi ranges from **1.28×** to **2.48×**.
+- Speedup over dishka ranges from **2.03×** to **7.62×**.
+- Speedup over wireup ranges from **1.06×** to **3.31×**.
 
 Results vary by environment, Python version, and hardware. Re-run ``make benchmark-report`` on your target runtime
 before drawing final conclusions for production workloads.
@@ -149,43 +173,54 @@ Source of truth: ``benchmark-results/benchmark-table-resolve.json`` (rendered to
      - diwire (ops/s)
      - rodi (ops/s)
      - dishka (ops/s)
+     - wireup (ops/s)
      - punq (ops/s)
      - Speedup (diwire/rodi)
      - Speedup (diwire/dishka)
+     - Speedup (diwire/wireup)
      - Speedup (diwire/punq)
    * - resolve_deep_transient_chain
-     - 1304305
-     - 711307
-     - 639173
-     - 12450
-     - 1.83×
-     - 2.04×
-     - 104.76×
+     - 1764124
+     - 722462
+     - 736488
+     - 892946
+     - 10730
+     - 2.44×
+     - 2.40×
+     - 1.98×
+     - 164.40×
    * - resolve_singleton
-     - 6636706
-     - 3212902
-     - 3593792
-     - 2004608
-     - 2.07×
-     - 1.85×
-     - 3.31×
+     - 5861293
+     - 3441404
+     - 3406823
+     - 5022682
+     - 2368448
+     - 1.70×
+     - 1.72×
+     - 1.17×
+     - 2.47×
    * - resolve_transient
-     - 5290168
-     - 2492831
-     - 2415740
-     - 34197
-     - 2.12×
-     - 2.19×
-     - 154.70×
+     - 5231024
+     - 2709566
+     - 2450974
+     - 4974766
+     - 23905
+     - 1.93×
+     - 2.13×
+     - 1.05×
+     - 218.82×
    * - resolve_wide_transient_graph
-     - 1659712
-     - 781090
-     - 662153
-     - 6174
-     - 2.12×
-     - 2.51×
-     - 268.84×
+     - 1911370
+     - 827975
+     - 767232
+     - 1278817
+     - 4921
+     - 2.31×
+     - 2.49×
+     - 1.49×
+     - 388.44×
 
 Summary (computed from the table above):
 
-- Speedup over punq ranges from **3.31×** to **268.84×** in these resolve-only scenarios.
+- Speedup over wireup ranges from **1.05×** to **1.98×** in these resolve-only scenarios.
+- Speedup over punq ranges from **2.47×** to **388.44×** in these resolve-only scenarios.

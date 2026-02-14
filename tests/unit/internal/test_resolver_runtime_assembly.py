@@ -6,6 +6,7 @@ import threading
 from collections.abc import AsyncGenerator, Callable, Generator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from dataclasses import dataclass, field
 from types import TracebackType
 from typing import Any, Generic, TypeVar, cast
 
@@ -134,6 +135,29 @@ class _MixedSyncConsumer:
 
 class _MixedAsyncGraphDependency:
     pass
+
+
+class _DataclassDefaultFactoryDependency:
+    pass
+
+
+@dataclass
+class _DataclassDefaultFactoryConsumer:
+    dependency: _DataclassDefaultFactoryDependency = field(
+        default_factory=_DataclassDefaultFactoryDependency,
+    )
+
+
+class _DataclassDefaultValueDependency:
+    pass
+
+
+_DATACLASS_DEFAULT_VALUE_DEPENDENCY = _DataclassDefaultValueDependency()
+
+
+@dataclass
+class _DataclassDefaultValueConsumer:
+    dependency: _DataclassDefaultValueDependency = _DATACLASS_DEFAULT_VALUE_DEPENDENCY
 
 
 Q = TypeVar("Q")
@@ -865,6 +889,52 @@ def test_generated_dispatch_raises_for_unknown_dependency_in_sync_and_async_path
 
     with pytest.raises(DIWireDependencyNotRegisteredError):
         asyncio.run(container.aresolve(_new_list_int_alias()))
+
+
+def test_missing_dataclass_default_factory_dependency_uses_default_factory() -> None:
+    container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+    )
+    container.add(
+        _DataclassDefaultFactoryConsumer,
+        provides=_DataclassDefaultFactoryConsumer,
+    )
+
+    resolved = container.resolve(_DataclassDefaultFactoryConsumer)
+
+    assert isinstance(resolved.dependency, _DataclassDefaultFactoryDependency)
+
+
+def test_registered_dataclass_default_factory_dependency_overrides_default_factory() -> None:
+    dependency = _DataclassDefaultFactoryDependency()
+    container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+    )
+    container.add_instance(dependency, provides=_DataclassDefaultFactoryDependency)
+    container.add(
+        _DataclassDefaultFactoryConsumer,
+        provides=_DataclassDefaultFactoryConsumer,
+    )
+
+    resolved = container.resolve(_DataclassDefaultFactoryConsumer)
+
+    assert resolved.dependency is dependency
+
+
+def test_missing_dataclass_default_value_dependency_still_errors() -> None:
+    container = Container(
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+    )
+    container.add(
+        _DataclassDefaultValueConsumer,
+        provides=_DataclassDefaultValueConsumer,
+    )
+
+    with pytest.raises(DIWireDependencyNotRegisteredError, match="is not registered"):
+        container.resolve(_DataclassDefaultValueConsumer)
 
 
 @pytest.mark.parametrize(

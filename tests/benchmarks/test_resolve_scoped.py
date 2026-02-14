@@ -4,12 +4,15 @@ from typing import Any
 
 import rodi
 from dishka import Provider
+from wireup import injectable
 
 from diwire import Lifetime, Scope
 from tests.benchmarks.dishka_helpers import DishkaBenchmarkScope, make_dishka_benchmark_container
 from tests.benchmarks.helpers import make_diwire_benchmark_container, run_benchmark
+from tests.benchmarks.wireup_helpers import make_wireup_benchmark_container
 
 
+@injectable(lifetime="scoped")
 class _ScopedService:
     pass
 
@@ -73,3 +76,20 @@ def test_benchmark_dishka_resolve_scoped(benchmark: Any) -> None:
             _ = scope.get(_ScopedService)
 
     run_benchmark(benchmark, bench_dishka_scoped)
+
+
+def test_benchmark_wireup_resolve_scoped(benchmark: Any) -> None:
+    container = make_wireup_benchmark_container(_ScopedService)
+    with container.enter_scope() as first_scope:
+        first = first_scope.get(_ScopedService)
+        second = first_scope.get(_ScopedService)
+    with container.enter_scope() as second_scope:
+        third = second_scope.get(_ScopedService)
+    assert first is second
+    assert first is not third
+
+    def bench_wireup_scoped() -> None:
+        with container.enter_scope() as scope:
+            _ = scope.get(_ScopedService)
+
+    run_benchmark(benchmark, bench_wireup_scoped)

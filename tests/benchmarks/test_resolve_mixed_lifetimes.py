@@ -4,21 +4,26 @@ from typing import Any
 
 import rodi
 from dishka import Provider
+from wireup import injectable
 
 from diwire import Lifetime, Scope
 from tests.benchmarks.dishka_helpers import DishkaBenchmarkScope, make_dishka_benchmark_container
 from tests.benchmarks.helpers import make_diwire_benchmark_container, run_benchmark
+from tests.benchmarks.wireup_helpers import make_wireup_benchmark_container
 
 
+@injectable(lifetime="singleton")
 class _SharedDependency:
     pass
 
 
+@injectable(lifetime="transient")
 class _PerResolveDependency:
     def __init__(self, shared: _SharedDependency) -> None:
         self.shared = shared
 
 
+@injectable(lifetime="scoped")
 class _RootScopedService:
     def __init__(self, dependency: _PerResolveDependency) -> None:
         self.dependency = dependency
@@ -98,3 +103,27 @@ def test_benchmark_dishka_resolve_mixed_lifetimes(benchmark: Any) -> None:
             _ = scope.get(_RootScopedService)
 
     run_benchmark(benchmark, bench_dishka_mixed_lifetimes)
+
+
+def test_benchmark_wireup_resolve_mixed_lifetimes(benchmark: Any) -> None:
+    container = make_wireup_benchmark_container(
+        _SharedDependency,
+        _PerResolveDependency,
+        _RootScopedService,
+    )
+    with container.enter_scope() as first_scope:
+        first = first_scope.get(_RootScopedService)
+        second = first_scope.get(_RootScopedService)
+    with container.enter_scope() as second_scope:
+        third = second_scope.get(_RootScopedService)
+    assert first is second
+    assert first is not third
+    assert first.dependency is second.dependency
+    assert first.dependency is not third.dependency
+    assert first.dependency.shared is third.dependency.shared
+
+    def bench_wireup_mixed_lifetimes() -> None:
+        with container.enter_scope() as scope:
+            _ = scope.get(_RootScopedService)
+
+    run_benchmark(benchmark, bench_wireup_mixed_lifetimes)

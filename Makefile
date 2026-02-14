@@ -48,7 +48,7 @@ benchmark-report: benchmark-json
 		--markdown benchmark-results/benchmark-table.md \
 		--json benchmark-results/benchmark-table.json \
 		--comment benchmark-results/pr-comment.md \
-		--libraries diwire,rodi,dishka
+		--libraries diwire,rodi,dishka,wireup
 
 benchmark-report-all: benchmark-json
 	uv run python -m tools.benchmark_reporting \
@@ -56,7 +56,7 @@ benchmark-report-all: benchmark-json
 		--markdown benchmark-results/benchmark-table-all.md \
 		--json benchmark-results/benchmark-table-all.json \
 		--comment benchmark-results/pr-comment-all.md \
-		--libraries diwire,rodi,dishka,punq
+		--libraries diwire,rodi,dishka,wireup,punq
 
 benchmark-json-resolve:
 	mkdir -p benchmark-results
@@ -73,4 +73,4 @@ benchmark-report-resolve: benchmark-json-resolve
 		--markdown benchmark-results/benchmark-table-resolve.md \
 		--json benchmark-results/benchmark-table-resolve.json \
 		--comment benchmark-results/pr-comment-resolve.md \
-		--libraries diwire,rodi,dishka,punq
+		--libraries diwire,rodi,dishka,wireup,punq

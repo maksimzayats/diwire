@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final, cast
 
-KNOWN_BENCHMARK_LIBRARIES: Final[tuple[str, ...]] = ("diwire", "rodi", "dishka", "punq")
-DEFAULT_BENCHMARK_LIBRARIES: Final[tuple[str, ...]] = ("diwire", "rodi", "dishka")
+KNOWN_BENCHMARK_LIBRARIES: Final[tuple[str, ...]] = ("diwire", "rodi", "dishka", "wireup", "punq")
+DEFAULT_BENCHMARK_LIBRARIES: Final[tuple[str, ...]] = ("diwire", "rodi", "dishka", "wireup")
 OPTIONAL_BENCHMARK_LIBRARIES: Final[tuple[str, ...]] = ("punq",)
 _BENCHMARK_NAME_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^test_benchmark_(?P<library>[a-z0-9]+)_",
@@ -66,7 +66,7 @@ class BenchmarkReport:
         }
 
         # Compatibility keys for the historically published schema.
-        for baseline in ("rodi", "dishka"):
+        for baseline in ("rodi", "dishka", "wireup"):
             if baseline in self.speedups:
                 normalized[f"speedup_diwire_over_{baseline}"] = {
                     scenario: value
@@ -238,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--libraries",
         default=",".join(DEFAULT_BENCHMARK_LIBRARIES),
-        help="Comma-separated list of libraries to include (default: diwire,rodi,dishka).",
+        help="Comma-separated list of libraries to include (default: diwire,rodi,dishka,wireup).",
     )
     parser.add_argument(
         "--scenarios",

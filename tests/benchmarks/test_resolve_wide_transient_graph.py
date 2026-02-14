@@ -5,32 +5,40 @@ from typing import Any
 import punq
 import rodi
 from dishka import Provider
+from wireup import injectable
 
 from diwire import Lifetime
 from tests.benchmarks.dishka_helpers import DishkaBenchmarkScope, make_dishka_benchmark_container
 from tests.benchmarks.helpers import make_diwire_benchmark_container, run_benchmark
+from tests.benchmarks.wireup_helpers import make_wireup_benchmark_container
 
 
+@injectable(lifetime="transient")
 class _DepA:
     pass
 
 
+@injectable(lifetime="transient")
 class _DepB:
     pass
 
 
+@injectable(lifetime="transient")
 class _DepC:
     pass
 
 
+@injectable(lifetime="transient")
 class _DepD:
     pass
 
 
+@injectable(lifetime="transient")
 class _DepE:
     pass
 
 
+@injectable(lifetime="transient")
 class _Root:
     def __init__(
         self,
@@ -117,6 +125,24 @@ def test_benchmark_dishka_resolve_wide_transient_graph(benchmark: Any) -> None:
         _ = container.get(_Root)
 
     run_benchmark(benchmark, bench_dishka_wide_graph, iterations=25_000)
+
+
+def test_benchmark_wireup_resolve_wide_transient_graph(benchmark: Any) -> None:
+    container = make_wireup_benchmark_container(_DepA, _DepB, _DepC, _DepD, _DepE, _Root)
+    with container.enter_scope() as scope:
+        first = scope.get(_Root)
+        second = scope.get(_Root)
+        assert first is not second
+        assert first.dep_a is not second.dep_a
+        assert first.dep_b is not second.dep_b
+        assert first.dep_c is not second.dep_c
+        assert first.dep_d is not second.dep_d
+        assert first.dep_e is not second.dep_e
+
+        def bench_wireup_wide_graph() -> None:
+            _ = scope.get(_Root)
+
+        run_benchmark(benchmark, bench_wireup_wide_graph, iterations=25_000)
 
 
 def test_benchmark_punq_resolve_wide_transient_graph(benchmark: Any) -> None:
