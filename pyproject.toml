@@ -66,6 +66,7 @@ dev = [
     "pyrefly>=0.51.2",
     "typing-extensions>=4.15.0",
     "wireup>=2.7.0",
+    "py-spy>=0.4.1",
 ]
 
 docs = [

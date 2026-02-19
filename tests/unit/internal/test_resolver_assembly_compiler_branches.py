@@ -174,6 +174,27 @@ def _runtime(
     cache_slots_by_owner_level = {
         level: tuple(slots) for level, slots in cache_slots_by_owner_level_mut.items()
     }
+    scope_obj_by_level = {scope.scope_level: scope.scope_level for scope in scopes}
+    next_scope_options_by_level: dict[
+        int,
+        tuple[ScopePlan | None, ScopePlan | None, tuple[ScopePlan, ...]],
+    ] = {}
+    for scope in scopes:
+        deeper_scopes = tuple(
+            candidate for candidate in scopes if candidate.scope_level > scope.scope_level
+        )
+        if not deeper_scopes:
+            next_scope_options_by_level[scope.scope_level] = (None, None, ())
+            continue
+        immediate_next = deeper_scopes[0]
+        default_next = next(
+            (candidate for candidate in deeper_scopes if not candidate.skippable), immediate_next
+        )
+        next_scope_options_by_level[scope.scope_level] = (
+            immediate_next,
+            default_next,
+            deeper_scopes,
+        )
     return compiler_module._ResolverRuntime(
         plan=plan,
         ordered_scopes=scopes,
@@ -182,6 +203,10 @@ def _runtime(
         class_by_level={},
         root_scope=scopes[0],
         root_scope_level=scopes[0].scope_level,
+        scope_obj_by_level=scope_obj_by_level,
+        scope_level_by_scope_id={
+            id(scope_obj): level for level, scope_obj in scope_obj_by_level.items()
+        },
         uses_stateless_scope_reuse=uses_stateless_scope_reuse,
         has_cleanup=True,
         dep_registered_keys=set(),
@@ -201,6 +226,7 @@ def _runtime(
             workflow.slot: asyncio.Lock() for workflow in workflows if workflow.uses_async_lock
         },
         cache_slots_by_owner_level=cache_slots_by_owner_level,
+        next_scope_options_by_level=next_scope_options_by_level,
     )
 
 
@@ -607,7 +633,9 @@ def test_bootstrap_runtime_handles_missing_context_key_name() -> None:
         workflows=(workflow,),
     )
 
-    runtime = compiler._bootstrap_runtime(plan=plan, registrations=registrations)
+    runtime = compiler._bootstrap_runtime(
+        plan=plan, registrations=registrations, root_scope=Scope.APP
+    )
     assert runtime.context_key_by_name == {}
 
 
@@ -1165,7 +1193,6 @@ def test_dependency_value_for_slot_sync_remaining_branches() -> None:
             runtime=runtime,
             resolver=resolver,
             dependency_workflow=workflow_root,
-            dependency_requires_async=False,
         )
         == "root"
     )
@@ -1174,7 +1201,6 @@ def test_dependency_value_for_slot_sync_remaining_branches() -> None:
             runtime=runtime,
             resolver=resolver,
             dependency_workflow=workflow_request,
-            dependency_requires_async=True,
         )
         == "async-needed"
     )
@@ -1263,6 +1289,7 @@ def test_bootstrap_runtime_handles_annotated_metadata_base_keys() -> None:
     runtime = compiler_module.ResolversAssemblyCompiler()._bootstrap_runtime(
         plan=plan,
         registrations=container._providers_registrations,
+        root_scope=Scope.APP,
     )
     assert key in runtime.dep_registered_keys
 
@@ -1417,7 +1444,6 @@ def test_dependency_value_for_slot_sync_fallthrough_return() -> None:
             runtime=runtime,
             resolver=resolver,
             dependency_workflow=workflow,
-            dependency_requires_async=False,
         )
         == "fallthrough"
     )
@@ -1543,3 +1569,966 @@ def test_build_argument_parts_omit_keyword_only_branch_paths() -> None:
         )
         == []
     )
+
+
+def test_optimized_sync_dependency_expression_additional_branches() -> None:
+    compiler = compiler_module.ResolversAssemblyCompiler()
+    root_scope = _scope_plan(level=1, name="app")
+    request_scope = _scope_plan(level=3, name="request")
+    action_scope = _scope_plan(level=4, name="action")
+    workflow_root = _workflow_plan(
+        slot=1,
+        scope_level=1,
+        is_cached=False,
+        max_required_scope_level=1,
+    )
+    workflow_request = _workflow_plan(
+        slot=2,
+        scope_level=3,
+        is_cached=False,
+        max_required_scope_level=3,
+    )
+    runtime = _runtime(
+        scopes=(root_scope, request_scope, action_scope),
+        workflows=(workflow_root, workflow_request),
+    )
+
+    dependency = _dependency()
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=action_scope,
+            dependency_plan=ProviderDependencyPlan(
+                kind="omit",
+                dependency=dependency,
+                dependency_index=0,
+            ),
+            resolver_expression="self",
+        )
+        is None
+    )
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=action_scope,
+            dependency_plan=ProviderDependencyPlan(
+                kind="literal",
+                dependency=dependency,
+                dependency_index=0,
+                literal_expression="None",
+            ),
+            resolver_expression="self",
+        )
+        == "None"
+    )
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=action_scope,
+            dependency_plan=ProviderDependencyPlan(
+                kind="provider_handle",
+                dependency=dependency,
+                dependency_index=0,
+                provider_inner_slot=None,
+            ),
+            resolver_expression="self",
+        )
+        is compiler_module._FALLBACK_ARGUMENT_EXPRESSION
+    )
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=action_scope,
+            dependency_plan=ProviderDependencyPlan(
+                kind="context",
+                dependency=dependency,
+                dependency_index=0,
+                ctx_key_global_name=None,
+            ),
+            resolver_expression="self",
+        )
+        is compiler_module._FALLBACK_ARGUMENT_EXPRESSION
+    )
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=action_scope,
+            dependency_plan=ProviderDependencyPlan(
+                kind="all",
+                dependency=dependency,
+                dependency_index=0,
+                all_slots=(),
+            ),
+            resolver_expression="self",
+        )
+        == "()"
+    )
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=action_scope,
+            dependency_plan=ProviderDependencyPlan(
+                kind="all",
+                dependency=dependency,
+                dependency_index=0,
+                all_slots=(1,),
+            ),
+            resolver_expression="self",
+        )
+        == "(self.resolve_1(),)"
+    )
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=action_scope,
+            dependency_plan=ProviderDependencyPlan(
+                kind="all",
+                dependency=dependency,
+                dependency_index=0,
+                all_slots=(1, 2),
+            ),
+            resolver_expression="self",
+        )
+        == "(self.resolve_1(), self.resolve_2())"
+    )
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=action_scope,
+            dependency_plan=ProviderDependencyPlan(
+                kind="provider",
+                dependency=dependency,
+                dependency_index=0,
+                dependency_slot=None,
+            ),
+            resolver_expression="self",
+        )
+        is compiler_module._FALLBACK_ARGUMENT_EXPRESSION
+    )
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=action_scope,
+            dependency_plan=ProviderDependencyPlan(
+                kind="provider",
+                dependency=dependency,
+                dependency_index=0,
+                dependency_slot=1,
+            ),
+            resolver_expression="self",
+        )
+        == "self._root_resolver.resolve_1()"
+    )
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=action_scope,
+            dependency_plan=ProviderDependencyPlan(
+                kind="provider",
+                dependency=dependency,
+                dependency_index=0,
+                dependency_slot=2,
+            ),
+            resolver_expression="self",
+        )
+        == "self._request_resolver.resolve_2()"
+    )
+
+
+def test_resolver_init_additional_branches() -> None:
+    root_scope = _scope_plan(level=1, name="app")
+    request_scope = _scope_plan(level=3, name="request")
+    tenant_scope = _scope_plan(level=2, name="tenant")
+    session_scope = _scope_plan(level=4, name="session")
+
+    workflow_root_cache = _workflow_plan(
+        slot=70,
+        scope_level=1,
+        is_cached=True,
+        cache_owner_scope_level=1,
+    )
+    root_runtime = _runtime(
+        scopes=(root_scope, request_scope),
+        workflows=(workflow_root_cache,),
+        uses_stateless_scope_reuse=True,
+    )
+
+    class _ScopeCtor:
+        def __init__(self, *args: Any) -> None:
+            self.args = args
+            self._active = True
+
+    root_runtime.class_by_level = {3: _ScopeCtor}
+
+    class _RootResolver:
+        _runtime = root_runtime
+        _class_plan = root_scope
+
+    root_resolver = _RootResolver()
+    root_resolver_any = cast("Any", root_resolver)
+    compiler_module._resolver_init(
+        root_resolver,
+        root_resolver=None,
+        cleanup_enabled=True,
+        context=None,
+        parent_context_resolver=None,
+    )
+    assert root_resolver_any._root_resolver is root_resolver
+    assert root_resolver_any._cache_70 is compiler_module._MISSING_CACHE
+    assert root_resolver_any._cleanup_callbacks == []
+    assert root_resolver_any._scope_resolver_3._active is False
+
+    no_cleanup_runtime = _runtime(
+        scopes=(root_scope, request_scope),
+        workflows=(),
+        uses_stateless_scope_reuse=False,
+    )
+    no_cleanup_runtime.has_cleanup = False
+    no_cleanup_runtime.class_by_level = {3: _ScopeCtor}
+
+    class _RootNoCleanupResolver:
+        _runtime = no_cleanup_runtime
+        _class_plan = root_scope
+
+    no_cleanup_resolver = _RootNoCleanupResolver()
+    no_cleanup_resolver_any = cast("Any", no_cleanup_resolver)
+    compiler_module._resolver_init(
+        no_cleanup_resolver,
+        root_resolver=None,
+        cleanup_enabled=False,
+        context=None,
+        parent_context_resolver=None,
+    )
+    assert no_cleanup_resolver_any._scope_resolver_3.args[0] is no_cleanup_resolver
+
+    workflow_request_cache = _workflow_plan(
+        slot=71,
+        scope_level=3,
+        is_cached=True,
+        cache_owner_scope_level=3,
+    )
+    non_root_runtime = _runtime(
+        scopes=(root_scope, tenant_scope, request_scope, session_scope),
+        workflows=(workflow_request_cache,),
+    )
+
+    class _RequestResolver:
+        _runtime = non_root_runtime
+        _class_plan = request_scope
+
+    parent_tenant_type = type(
+        "TenantResolver",
+        (),
+        {"_class_plan": tenant_scope},
+    )
+    parent_tenant = parent_tenant_type()
+
+    request_resolver = _RequestResolver()
+    request_resolver_any = cast("Any", request_resolver)
+    compiler_module._resolver_init(
+        request_resolver,
+        root_resolver="root",
+        cleanup_enabled=True,
+        context={"k": "v"},
+        parent_context_resolver=parent_tenant,
+    )
+    assert request_resolver_any._root_resolver == "root"
+    assert request_resolver_any._request_resolver is request_resolver
+    assert request_resolver_any._tenant_resolver is parent_tenant
+    assert request_resolver_any._cache_71 is compiler_module._MISSING_CACHE
+
+    parent_session_type = type(
+        "SessionResolver",
+        (),
+        {"_class_plan": session_scope, "_tenant_resolver": "tenant-owner"},
+    )
+    parent_session = parent_session_type()
+
+    request_resolver_2 = _RequestResolver()
+    request_resolver_2_any = cast("Any", request_resolver_2)
+    compiler_module._resolver_init(
+        request_resolver_2,
+        root_resolver="root",
+        cleanup_enabled=True,
+        context=None,
+        parent_context_resolver=parent_session,
+    )
+    assert request_resolver_2_any._tenant_resolver == "tenant-owner"
+
+    request_resolver_3 = _RequestResolver()
+    request_resolver_3_any = cast("Any", request_resolver_3)
+    compiler_module._resolver_init(
+        request_resolver_3,
+        root_resolver="root",
+        cleanup_enabled=True,
+        context=None,
+        parent_context_resolver=None,
+    )
+    assert request_resolver_3_any._tenant_resolver is compiler_module._MISSING_RESOLVER
+
+
+def test_resolver_enter_scope_and_transition_additional_branches() -> None:
+    root_scope = _scope_plan(level=1, name="app")
+    request_scope = _scope_plan(level=3, name="request")
+    session_scope = _scope_plan(level=4, name="session")
+
+    runtime = _runtime(
+        scopes=(root_scope, request_scope, session_scope),
+        workflows=(),
+        uses_stateless_scope_reuse=False,
+    )
+
+    class _Ctor:
+        def __init__(self, *args: Any) -> None:
+            self.args = args
+
+    runtime.class_by_level = {3: _Ctor, 4: _Ctor}
+
+    root_type = type("RootResolver", (), {"_runtime": runtime, "_class_plan": root_scope})
+    root_resolver = root_type()
+    root_resolver._root_resolver = root_resolver
+    root_resolver._context = None
+    root_resolver._parent_context_resolver = None
+    root_resolver._cleanup_enabled = True
+
+    assert isinstance(compiler_module._resolver_enter_scope(root_resolver, None, None), _Ctor)
+    assert isinstance(compiler_module._resolver_enter_scope(root_resolver, 3, None), _Ctor)
+
+    stateless_runtime = _runtime(
+        scopes=(root_scope, request_scope, session_scope),
+        workflows=(),
+        uses_stateless_scope_reuse=True,
+    )
+    stateless_runtime.class_by_level = {3: _Ctor, 4: _Ctor}
+    stateless_root_type = type(
+        "StatelessRootResolver",
+        (),
+        {"_runtime": stateless_runtime, "_class_plan": root_scope},
+    )
+    stateless_root = stateless_root_type()
+    stateless_root._root_resolver = stateless_root
+    stateless_root._context = None
+    stateless_root._parent_context_resolver = None
+    stateless_root._cleanup_enabled = True
+    stateless_root._scope_resolver_3 = "pooled-request"
+
+    created = compiler_module._resolver_enter_scope(stateless_root, 4, {"ctx": 1})
+    assert isinstance(created, _Ctor)
+    assert created.args[0] is stateless_root
+
+    assert (
+        compiler_module._instantiate_scope_transition(
+            runtime=stateless_runtime,
+            current_resolver=stateless_root,
+            target_scope=request_scope,
+            context=None,
+        )
+        == "pooled-request"
+    )
+
+
+def test_sync_slot_impl_delegation_and_async_required_branches() -> None:
+    root_scope = _scope_plan(level=1, name="app")
+    request_scope = _scope_plan(level=3, name="request")
+
+    delegated_workflow = _workflow_plan(
+        slot=61,
+        scope_level=1,
+        max_required_scope_level=1,
+        is_cached=False,
+        requires_async=False,
+    )
+    delegated_runtime = _runtime(
+        scopes=(root_scope, request_scope),
+        workflows=(delegated_workflow,),
+        provider_by_slot={61: object()},
+    )
+
+    delegated_type = type(
+        "DelegatedResolver",
+        (),
+        {"_runtime": delegated_runtime, "_class_plan": request_scope},
+    )
+    delegated_resolver = delegated_type()
+    delegated_resolver._root_resolver = SimpleNamespace(resolve_61=lambda: "delegated")
+    delegated_resolver._request_resolver = delegated_resolver
+    delegated_resolver._cleanup_enabled = True
+    delegated_resolver._context = None
+    delegated_resolver._parent_context_resolver = None
+    assert compiler_module._build_sync_slot_impl(workflow=delegated_workflow)(
+        delegated_resolver
+    ) == ("delegated")
+
+    async_workflow = _workflow_plan(
+        slot=62,
+        scope_level=3,
+        max_required_scope_level=3,
+        is_cached=False,
+        requires_async=True,
+    )
+    async_runtime = _runtime(
+        scopes=(root_scope, request_scope),
+        workflows=(async_workflow,),
+        provider_by_slot={62: object()},
+    )
+    async_type = type(
+        "AsyncRequiredResolver",
+        (),
+        {"_runtime": async_runtime, "_class_plan": request_scope},
+    )
+    async_resolver = async_type()
+    async_resolver._root_resolver = async_resolver
+    async_resolver._request_resolver = async_resolver
+    async_resolver._cleanup_enabled = True
+    async_resolver._context = None
+    async_resolver._parent_context_resolver = None
+    with pytest.raises(DIWireAsyncDependencyInSyncContextError):
+        compiler_module._build_sync_slot_impl(workflow=async_workflow)(async_resolver)
+
+
+def test_build_local_value_sync_argumented_branches() -> None:
+    dependency = _dependency(name="value")
+    dependency_plan = ProviderDependencyPlan(
+        kind="literal",
+        dependency=dependency,
+        dependency_index=0,
+        literal_expression="None",
+    )
+
+    class _SyncCM:
+        def __enter__(self) -> int:
+            return 23
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+    def _generator(_value: Any = None) -> Any:
+        yield 11
+
+    workflows = (
+        _workflow_plan(
+            slot=30,
+            provider_attribute="instance",
+            is_cached=False,
+            dependencies=(dependency,),
+            dependency_plans=(dependency_plan,),
+            dependency_slots=(None,),
+            dependency_requires_async=(False,),
+        ),
+        _workflow_plan(
+            slot=31,
+            provider_attribute="factory",
+            is_provider_async=True,
+            is_cached=False,
+            dependencies=(dependency,),
+            dependency_plans=(dependency_plan,),
+            dependency_slots=(None,),
+            dependency_requires_async=(False,),
+        ),
+        _workflow_plan(
+            slot=32,
+            provider_attribute="generator",
+            is_cached=False,
+            dependencies=(dependency,),
+            dependency_plans=(dependency_plan,),
+            dependency_slots=(None,),
+            dependency_requires_async=(False,),
+        ),
+        _workflow_plan(
+            slot=33,
+            provider_attribute="context_manager",
+            is_provider_async=True,
+            is_cached=False,
+            dependencies=(dependency,),
+            dependency_plans=(dependency_plan,),
+            dependency_slots=(None,),
+            dependency_requires_async=(False,),
+        ),
+        _workflow_plan(
+            slot=34,
+            provider_attribute="context_manager",
+            is_provider_async=False,
+            is_cached=False,
+            dependencies=(dependency,),
+            dependency_plans=(dependency_plan,),
+            dependency_slots=(None,),
+            dependency_requires_async=(False,),
+        ),
+        _workflow_plan(
+            slot=35,
+            provider_attribute="unsupported",
+            is_cached=False,
+            dependencies=(dependency,),
+            dependency_plans=(dependency_plan,),
+            dependency_slots=(None,),
+            dependency_requires_async=(False,),
+        ),
+        _workflow_plan(
+            slot=36,
+            provider_attribute="generator",
+            is_provider_async=True,
+            is_cached=False,
+            dependencies=(dependency,),
+            dependency_plans=(dependency_plan,),
+            dependency_slots=(None,),
+            dependency_requires_async=(False,),
+        ),
+    )
+    runtime = _runtime(
+        scopes=(_scope_plan(level=1, name="app"),),
+        workflows=workflows,
+        provider_by_slot={
+            30: "instance",
+            31: lambda _value=None: 17,
+            32: _generator,
+            33: lambda _value=None: object(),
+            34: lambda _value=None: _SyncCM(),
+            35: lambda _value=None: object(),
+            36: _generator,
+        },
+    )
+
+    cleanup_scope = SimpleNamespace(_cleanup_callbacks=[])
+    resolver_cleanup = SimpleNamespace(_cleanup_enabled=True)
+    resolver_no_cleanup = SimpleNamespace(_cleanup_enabled=False)
+
+    assert (
+        compiler_module._build_local_value_sync(
+            runtime=runtime,
+            resolver=resolver_cleanup,
+            workflow=workflows[0],
+            provider_scope_resolver=cleanup_scope,
+        )
+        == "instance"
+    )
+    assert (
+        compiler_module._build_local_value_sync(
+            runtime=runtime,
+            resolver=resolver_cleanup,
+            workflow=workflows[1],
+            provider_scope_resolver=cleanup_scope,
+        )
+        == 17
+    )
+    assert (
+        compiler_module._build_local_value_sync(
+            runtime=runtime,
+            resolver=resolver_cleanup,
+            workflow=workflows[2],
+            provider_scope_resolver=cleanup_scope,
+        )
+        == 11
+    )
+    assert cleanup_scope._cleanup_callbacks
+    assert (
+        compiler_module._build_local_value_sync(
+            runtime=runtime,
+            resolver=resolver_no_cleanup,
+            workflow=workflows[2],
+            provider_scope_resolver=cleanup_scope,
+        )
+        == 11
+    )
+    with pytest.raises(DIWireScopeMismatchError):
+        compiler_module._build_local_value_sync(
+            runtime=runtime,
+            resolver=resolver_cleanup,
+            workflow=workflows[2],
+            provider_scope_resolver=compiler_module._MISSING_RESOLVER,
+        )
+    with pytest.raises(DIWireAsyncDependencyInSyncContextError):
+        compiler_module._build_local_value_sync(
+            runtime=runtime,
+            resolver=resolver_cleanup,
+            workflow=workflows[6],
+            provider_scope_resolver=cleanup_scope,
+        )
+
+    with pytest.raises(DIWireScopeMismatchError):
+        compiler_module._build_local_value_sync(
+            runtime=runtime,
+            resolver=resolver_cleanup,
+            workflow=workflows[4],
+            provider_scope_resolver=compiler_module._MISSING_RESOLVER,
+        )
+    with pytest.raises(DIWireAsyncDependencyInSyncContextError):
+        compiler_module._build_local_value_sync(
+            runtime=runtime,
+            resolver=resolver_cleanup,
+            workflow=workflows[3],
+            provider_scope_resolver=cleanup_scope,
+        )
+    assert (
+        compiler_module._build_local_value_sync(
+            runtime=runtime,
+            resolver=resolver_cleanup,
+            workflow=workflows[4],
+            provider_scope_resolver=cleanup_scope,
+        )
+        == 23
+    )
+    assert (
+        compiler_module._build_local_value_sync(
+            runtime=runtime,
+            resolver=resolver_no_cleanup,
+            workflow=workflows[4],
+            provider_scope_resolver=cleanup_scope,
+        )
+        == 23
+    )
+    with pytest.raises(ValueError, match="Unsupported provider attribute"):
+        compiler_module._build_local_value_sync(
+            runtime=runtime,
+            resolver=resolver_cleanup,
+            workflow=workflows[5],
+            provider_scope_resolver=cleanup_scope,
+        )
+
+
+@pytest.mark.asyncio
+async def test_build_local_value_async_argumented_branches() -> None:
+    dependency = _dependency(name="value")
+    dependency_plan = ProviderDependencyPlan(
+        kind="literal",
+        dependency=dependency,
+        dependency_index=0,
+        literal_expression="None",
+    )
+
+    async def _async_generator(_value: Any = None) -> Any:
+        yield 31
+
+    def _sync_generator(_value: Any = None) -> Any:
+        yield 32
+
+    @asynccontextmanager
+    async def _async_cm(_value: Any = None) -> Any:
+        yield 33
+
+    class _SyncCM:
+        def __enter__(self) -> int:
+            return 34
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+    workflows = (
+        _workflow_plan(
+            slot=40,
+            provider_attribute="generator",
+            is_provider_async=True,
+            is_cached=False,
+            dependencies=(dependency,),
+            dependency_plans=(dependency_plan,),
+            dependency_slots=(None,),
+            dependency_requires_async=(False,),
+        ),
+        _workflow_plan(
+            slot=41,
+            provider_attribute="generator",
+            is_provider_async=False,
+            is_cached=False,
+            dependencies=(dependency,),
+            dependency_plans=(dependency_plan,),
+            dependency_slots=(None,),
+            dependency_requires_async=(False,),
+        ),
+        _workflow_plan(
+            slot=42,
+            provider_attribute="context_manager",
+            is_provider_async=True,
+            is_cached=False,
+            dependencies=(dependency,),
+            dependency_plans=(dependency_plan,),
+            dependency_slots=(None,),
+            dependency_requires_async=(False,),
+        ),
+        _workflow_plan(
+            slot=43,
+            provider_attribute="context_manager",
+            is_provider_async=False,
+            is_cached=False,
+            dependencies=(dependency,),
+            dependency_plans=(dependency_plan,),
+            dependency_slots=(None,),
+            dependency_requires_async=(False,),
+        ),
+        _workflow_plan(
+            slot=44,
+            provider_attribute="unsupported",
+            is_cached=False,
+            dependencies=(dependency,),
+            dependency_plans=(dependency_plan,),
+            dependency_slots=(None,),
+            dependency_requires_async=(False,),
+        ),
+    )
+    runtime = _runtime(
+        scopes=(_scope_plan(level=1, name="app"),),
+        workflows=workflows,
+        provider_by_slot={
+            40: _async_generator,
+            41: _sync_generator,
+            42: lambda _value=None: _async_cm(),
+            43: lambda _value=None: _SyncCM(),
+            44: lambda _value=None: object(),
+        },
+    )
+
+    cleanup_scope = SimpleNamespace(_cleanup_callbacks=[])
+    resolver_cleanup = SimpleNamespace(_cleanup_enabled=True)
+    resolver_no_cleanup = SimpleNamespace(_cleanup_enabled=False)
+
+    with pytest.raises(DIWireScopeMismatchError):
+        await compiler_module._build_local_value_async(
+            runtime=runtime,
+            resolver=resolver_cleanup,
+            workflow=workflows[0],
+            provider_scope_resolver=compiler_module._MISSING_RESOLVER,
+        )
+    assert (
+        await compiler_module._build_local_value_async(
+            runtime=runtime,
+            resolver=resolver_cleanup,
+            workflow=workflows[0],
+            provider_scope_resolver=cleanup_scope,
+        )
+        == 31
+    )
+    assert cleanup_scope._cleanup_callbacks
+    assert (
+        await compiler_module._build_local_value_async(
+            runtime=runtime,
+            resolver=resolver_no_cleanup,
+            workflow=workflows[0],
+            provider_scope_resolver=cleanup_scope,
+        )
+        == 31
+    )
+    assert (
+        await compiler_module._build_local_value_async(
+            runtime=runtime,
+            resolver=resolver_cleanup,
+            workflow=workflows[1],
+            provider_scope_resolver=cleanup_scope,
+        )
+        == 32
+    )
+    assert (
+        await compiler_module._build_local_value_async(
+            runtime=runtime,
+            resolver=resolver_no_cleanup,
+            workflow=workflows[1],
+            provider_scope_resolver=cleanup_scope,
+        )
+        == 32
+    )
+    with pytest.raises(DIWireScopeMismatchError):
+        await compiler_module._build_local_value_async(
+            runtime=runtime,
+            resolver=resolver_cleanup,
+            workflow=workflows[2],
+            provider_scope_resolver=compiler_module._MISSING_RESOLVER,
+        )
+    assert (
+        await compiler_module._build_local_value_async(
+            runtime=runtime,
+            resolver=resolver_cleanup,
+            workflow=workflows[2],
+            provider_scope_resolver=cleanup_scope,
+        )
+        == 33
+    )
+    assert (
+        await compiler_module._build_local_value_async(
+            runtime=runtime,
+            resolver=resolver_no_cleanup,
+            workflow=workflows[2],
+            provider_scope_resolver=cleanup_scope,
+        )
+        == 33
+    )
+    assert (
+        await compiler_module._build_local_value_async(
+            runtime=runtime,
+            resolver=resolver_cleanup,
+            workflow=workflows[3],
+            provider_scope_resolver=cleanup_scope,
+        )
+        == 34
+    )
+    assert (
+        await compiler_module._build_local_value_async(
+            runtime=runtime,
+            resolver=resolver_no_cleanup,
+            workflow=workflows[3],
+            provider_scope_resolver=cleanup_scope,
+        )
+        == 34
+    )
+    with pytest.raises(ValueError, match="Unsupported provider attribute"):
+        await compiler_module._build_local_value_async(
+            runtime=runtime,
+            resolver=resolver_cleanup,
+            workflow=workflows[4],
+            provider_scope_resolver=cleanup_scope,
+        )
+
+
+@pytest.mark.asyncio
+async def test_build_local_value_async_no_arguments_sync_factory_branch() -> None:
+    workflow = _workflow_plan(
+        slot=80,
+        provider_attribute="factory",
+        is_provider_async=False,
+        is_cached=False,
+    )
+    assert (
+        await compiler_module._build_local_value_async_no_arguments(
+            resolver=SimpleNamespace(_cleanup_enabled=False),
+            workflow=workflow,
+            provider_scope_resolver=SimpleNamespace(_cleanup_callbacks=[]),
+            provider=lambda: 123,
+        )
+        == 123
+    )
+
+
+def test_build_argument_parts_fallback_and_empty_branches() -> None:
+    dependency = _dependency(name="value")
+    dep_workflow_sync = _workflow_plan(slot=1, is_cached=False, scope_level=1)
+    fallback_workflow_sync = _workflow_plan(
+        slot=50,
+        is_cached=False,
+        dependencies=(dependency,),
+        dependency_slots=(1,),
+        dependency_requires_async=(False,),
+        dependency_plans=(),
+    )
+    empty_workflow_sync = _workflow_plan(
+        slot=51,
+        is_cached=False,
+        dependencies=(),
+        dependency_slots=(),
+        dependency_requires_async=(),
+        dependency_plans=(),
+        provider_is_inject_wrapper=False,
+    )
+    runtime_sync = _runtime(
+        scopes=(_scope_plan(level=1, name="app"),),
+        workflows=(dep_workflow_sync, fallback_workflow_sync, empty_workflow_sync),
+    )
+    sync_resolver_type = type(
+        "SyncResolver",
+        (),
+        {"_class_plan": SimpleNamespace(scope_level=1)},
+    )
+    resolver_sync = sync_resolver_type()
+    resolver_sync.resolve_1 = lambda: 5
+    parts_sync = compiler_module._build_argument_parts_sync(
+        runtime=runtime_sync,
+        resolver=resolver_sync,
+        workflow=fallback_workflow_sync,
+    )
+    assert parts_sync
+    assert parts_sync[0].value == 5
+    assert (
+        compiler_module._build_argument_parts_sync(
+            runtime=runtime_sync,
+            resolver=resolver_sync,
+            workflow=empty_workflow_sync,
+        )
+        == []
+    )
+
+    dep_workflow_async = _workflow_plan(
+        slot=2,
+        is_cached=False,
+        scope_level=1,
+        requires_async=True,
+    )
+    fallback_workflow_async = _workflow_plan(
+        slot=52,
+        is_cached=False,
+        dependencies=(dependency,),
+        dependency_slots=(2,),
+        dependency_requires_async=(True,),
+        dependency_plans=(),
+        requires_async=True,
+    )
+    empty_workflow_async = _workflow_plan(
+        slot=53,
+        is_cached=False,
+        dependencies=(),
+        dependency_slots=(),
+        dependency_requires_async=(),
+        dependency_plans=(),
+        provider_is_inject_wrapper=False,
+    )
+    runtime_async = _runtime(
+        scopes=(_scope_plan(level=1, name="app"),),
+        workflows=(dep_workflow_async, fallback_workflow_async, empty_workflow_async),
+    )
+
+    async def _aresolve_2() -> int:
+        return 6
+
+    async_resolver_type = type(
+        "AsyncResolver",
+        (),
+        {"_class_plan": SimpleNamespace(scope_level=1)},
+    )
+    resolver_async = async_resolver_type()
+    resolver_async.resolve_2 = lambda: 0
+    resolver_async.aresolve_2 = _aresolve_2
+    parts_async = asyncio.run(
+        cast(
+            "Any",
+            compiler_module._build_argument_parts_async(
+                runtime=runtime_async,
+                resolver=resolver_async,
+                workflow=fallback_workflow_async,
+            ),
+        ),
+    )
+    assert parts_async
+    assert parts_async[0].value == 6
+    assert (
+        asyncio.run(
+            cast(
+                "Any",
+                compiler_module._build_argument_parts_async(
+                    runtime=runtime_async,
+                    resolver=resolver_async,
+                    workflow=empty_workflow_async,
+                ),
+            ),
+        )
+        == []
+    )
+
+
+def test_resolve_dependency_value_sync_async_provider_handle_branch() -> None:
+    runtime = _runtime(scopes=(_scope_plan(level=1, name="app"),), workflows=())
+
+    async def _aresolve_1() -> int:
+        return 77
+
+    resolver = SimpleNamespace(aresolve_1=_aresolve_1, resolve_1=lambda: 1)
+    handle = compiler_module._resolve_dependency_value_sync(
+        runtime=runtime,
+        resolver=resolver,
+        dependency_plan=ProviderDependencyPlan(
+            kind="provider_handle",
+            dependency=_dependency(),
+            dependency_index=0,
+            provider_inner_slot=1,
+            provider_is_async=True,
+        ),
+    )
+    assert asyncio.run(cast("Any", handle)()) == 77
+
+
+def test_resolver_scope_level_branch() -> None:
+    resolver_type = type("ScopedResolver", (), {"_class_plan": SimpleNamespace(scope_level=9)})
+    assert compiler_module._resolver_scope_level(resolver_type()) == 9

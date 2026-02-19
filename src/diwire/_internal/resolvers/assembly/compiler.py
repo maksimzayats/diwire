@@ -35,6 +35,7 @@ from diwire._internal.resolvers.assembly.planner import (
     ResolverGenerationPlan,
     ResolverGenerationPlanner,
     ScopePlan,
+    validate_resolver_assembly_managed_scopes,
 )
 from diwire._internal.resolvers.protocol import ResolverProtocol
 from diwire._internal.scope import BaseScope
@@ -49,6 +50,7 @@ logger = logging.getLogger(__name__)
 _MISSING_RESOLVER: Final[Any] = object()
 _MISSING_CACHE: Final[Any] = object()
 _MISSING_DEP_SLOT: Final[Any] = object()
+_FALLBACK_ARGUMENT_EXPRESSION: Final[Any] = object()
 _OMIT_ARGUMENT: Final[Any] = object()
 _FILENAME: Final[str] = "<diwire-resolver>"
 
@@ -69,6 +71,8 @@ class _ResolverRuntime:
     class_by_level: dict[int, type[Any]]
     root_scope: ScopePlan
     root_scope_level: int
+    scope_obj_by_level: dict[int, Any]
+    scope_level_by_scope_id: dict[int, int]
     uses_stateless_scope_reuse: bool
     has_cleanup: bool
     dep_registered_keys: set[Any]
@@ -80,6 +84,9 @@ class _ResolverRuntime:
     thread_lock_by_slot: dict[int, threading.Lock]
     async_lock_by_slot: dict[int, asyncio.Lock]
     cache_slots_by_owner_level: dict[int, tuple[int, ...]]
+    next_scope_options_by_level: dict[
+        int, tuple[ScopePlan | None, ScopePlan | None, tuple[ScopePlan, ...]]
+    ]
 
 
 class ResolversAssemblyCompiler:
@@ -98,7 +105,11 @@ class ResolversAssemblyCompiler:
         ).build()
         self._log_plan_strategy(plan=plan)
 
-        runtime = self._bootstrap_runtime(plan=plan, registrations=registrations)
+        runtime = self._bootstrap_runtime(
+            plan=plan,
+            registrations=registrations,
+            root_scope=root_scope,
+        )
         generated_globals = self._build_generated_globals(runtime=runtime)
 
         classes_by_level = self._build_classes(runtime=runtime, generated_globals=generated_globals)
@@ -110,7 +121,10 @@ class ResolversAssemblyCompiler:
             resolver_class._class_plan = scope  # type: ignore[attr-defined]
 
         root_class = runtime.class_by_level[runtime.root_scope_level]
-        root_resolver = root_class(cleanup_enabled, None, None)
+        if runtime.has_cleanup:
+            root_resolver = root_class(cleanup_enabled, None, None)
+        else:
+            root_resolver = root_class(None, None)
         return cast("ResolverProtocol", root_resolver)
 
     def _log_plan_strategy(self, *, plan: ResolverGenerationPlan) -> None:
@@ -136,10 +150,11 @@ class ResolversAssemblyCompiler:
         *,
         plan: ResolverGenerationPlan,
         registrations: ProvidersRegistrations,
+        root_scope: BaseScope,
     ) -> _ResolverRuntime:
         ordered_scopes = tuple(sorted(plan.scopes, key=lambda scope: scope.scope_level))
         scopes_by_level = {scope.scope_level: scope for scope in ordered_scopes}
-        root_scope = ordered_scopes[0]
+        root_scope_plan = ordered_scopes[0]
         workflows_by_slot = {workflow.slot: workflow for workflow in plan.workflows}
 
         dep_registered_keys: set[Any] = set()
@@ -198,9 +213,38 @@ class ResolversAssemblyCompiler:
             level: tuple(sorted(slots)) for level, slots in cache_slots_by_owner_level_mut.items()
         }
 
+        next_scope_options_by_level: dict[
+            int,
+            tuple[ScopePlan | None, ScopePlan | None, tuple[ScopePlan, ...]],
+        ] = {}
+        for scope in ordered_scopes:
+            deeper_scopes = tuple(
+                candidate
+                for candidate in ordered_scopes
+                if candidate.scope_level > scope.scope_level
+            )
+            if not deeper_scopes:
+                next_scope_options_by_level[scope.scope_level] = (None, None, ())
+                continue
+            immediate_next = deeper_scopes[0]
+            default_next = next(
+                (candidate for candidate in deeper_scopes if not candidate.skippable),
+                immediate_next,
+            )
+            next_scope_options_by_level[scope.scope_level] = (
+                immediate_next,
+                default_next,
+                deeper_scopes,
+            )
+
         uses_stateless_scope_reuse = not any(
             workflow.scope_level > plan.root_scope_level for workflow in plan.workflows
         )
+        scope_obj_by_level = {
+            scope.level: scope
+            for scope in validate_resolver_assembly_managed_scopes(root_scope=root_scope)
+        }
+        scope_level_by_scope_id = {id(scope): level for level, scope in scope_obj_by_level.items()}
 
         return _ResolverRuntime(
             plan=plan,
@@ -208,8 +252,10 @@ class ResolversAssemblyCompiler:
             scopes_by_level=scopes_by_level,
             workflows_by_slot=workflows_by_slot,
             class_by_level={},
-            root_scope=root_scope,
+            root_scope=root_scope_plan,
             root_scope_level=plan.root_scope_level,
+            scope_obj_by_level=scope_obj_by_level,
+            scope_level_by_scope_id=scope_level_by_scope_id,
             uses_stateless_scope_reuse=uses_stateless_scope_reuse,
             has_cleanup=plan.has_cleanup,
             dep_registered_keys=dep_registered_keys,
@@ -221,11 +267,13 @@ class ResolversAssemblyCompiler:
             thread_lock_by_slot=thread_lock_by_slot,
             async_lock_by_slot=async_lock_by_slot,
             cache_slots_by_owner_level=cache_slots_by_owner_level,
+            next_scope_options_by_level=next_scope_options_by_level,
         )
 
     def _build_generated_globals(self, *, runtime: _ResolverRuntime) -> dict[str, Any]:
         generated_globals: dict[str, Any] = {
             "Any": Any,
+            "inspect": inspect,
             "_MISSING_RESOLVER": _MISSING_RESOLVER,
             "_MISSING_CACHE": _MISSING_CACHE,
             "_MISSING_DEP_SLOT": _MISSING_DEP_SLOT,
@@ -257,12 +305,20 @@ class ResolversAssemblyCompiler:
             generated_globals[f"_dep_{workflow.slot}_type"] = runtime.dep_type_by_slot[
                 workflow.slot
             ]
+            generated_globals[f"_provider_{workflow.slot}"] = runtime.provider_by_slot[
+                workflow.slot
+            ]
             generated_globals[f"_sync_slot_{workflow.slot}"] = _build_sync_slot_impl(
                 workflow=workflow,
             )
             generated_globals[f"_async_slot_{workflow.slot}"] = _build_async_slot_impl(
                 workflow=workflow,
             )
+
+        generated_globals.update(
+            {f"_scope_obj_{level}": scope for level, scope in runtime.scope_obj_by_level.items()},
+        )
+        generated_globals.update(runtime.context_key_by_name)
 
         return generated_globals
 
@@ -283,10 +339,13 @@ class ResolversAssemblyCompiler:
             }
 
             attrs["__init__"] = self._compile_init_method(
+                runtime=runtime,
                 class_plan=scope,
                 generated_globals=generated_globals,
             )
             attrs["enter_scope"] = self._compile_enter_scope_method(
+                runtime=runtime,
+                class_plan=scope,
                 generated_globals=generated_globals,
             )
             attrs["resolve"] = self._compile_dispatch_method(
@@ -349,12 +408,16 @@ class ResolversAssemblyCompiler:
                 is_async=True,
             )
             attrs["__exit__"] = self._compile_exit_method(
+                runtime=runtime,
                 generated_globals=generated_globals,
                 is_async=False,
+                has_cleanup=runtime.has_cleanup,
             )
             attrs["__aexit__"] = self._compile_exit_method(
+                runtime=runtime,
                 generated_globals=generated_globals,
                 is_async=True,
+                has_cleanup=runtime.has_cleanup,
             )
             attrs["close"] = self._compile_close_method(
                 generated_globals=generated_globals,
@@ -367,12 +430,14 @@ class ResolversAssemblyCompiler:
 
             for workflow in runtime.plan.workflows:
                 attrs[f"resolve_{workflow.slot}"] = self._compile_slot_method(
+                    runtime=runtime,
                     workflow=workflow,
                     class_plan=scope,
                     generated_globals=generated_globals,
                     is_async=False,
                 )
                 attrs[f"aresolve_{workflow.slot}"] = self._compile_slot_method(
+                    runtime=runtime,
                     workflow=workflow,
                     class_plan=scope,
                     generated_globals=generated_globals,
@@ -381,6 +446,11 @@ class ResolversAssemblyCompiler:
 
             resolver_class = type(scope.class_name, (), attrs)
             classes_by_level[scope.scope_level] = resolver_class
+
+        for resolver_class in classes_by_level.values():
+            enter_scope_method = resolver_class.enter_scope
+            for scope_level, scope_class in classes_by_level.items():
+                enter_scope_method.__globals__[f"_scope_ctor_{scope_level}"] = scope_class
 
         return classes_by_level
 
@@ -394,18 +464,23 @@ class ResolversAssemblyCompiler:
             "_root_resolver",
             "_context",
             "_parent_context_resolver",
-            "_cleanup_enabled",
-            "_cleanup_callbacks",
             "_owned_scope_resolvers",
+            "_active",
         ]
+        if runtime.has_cleanup:
+            slots.append("_cleanup_enabled")
+        if runtime.has_cleanup:
+            slots.append("_cleanup_callbacks")
         if class_plan.is_root:
             slots.append("__dict__")
 
         slots.extend(
-            scope.resolver_attr_name for scope in runtime.ordered_scopes if not scope.is_root
+            scope.resolver_attr_name
+            for scope in runtime.ordered_scopes
+            if (not scope.is_root and scope.scope_level <= class_plan.scope_level)
         )
 
-        if runtime.uses_stateless_scope_reuse and class_plan.is_root:
+        if class_plan.is_root and (runtime.uses_stateless_scope_reuse or not runtime.has_cleanup):
             slots.extend(
                 f"_scope_resolver_{scope.scope_level}"
                 for scope in runtime.ordered_scopes
@@ -452,9 +527,18 @@ class ResolversAssemblyCompiler:
     def _compile_init_method(
         self,
         *,
+        runtime: _ResolverRuntime,
         class_plan: ScopePlan,
         generated_globals: Mapping[str, Any],
     ) -> Callable[..., Any]:
+        specialized = self._compile_specialized_init_method(
+            runtime=runtime,
+            class_plan=class_plan,
+            generated_globals=generated_globals,
+        )
+        if specialized is not None:
+            return specialized
+
         arg_names: tuple[str, ...]
         defaults: tuple[Any, ...]
         body: list[ast.stmt]
@@ -519,19 +603,137 @@ class ResolversAssemblyCompiler:
             defaults=defaults,
         )
 
+    def _compile_specialized_init_method(
+        self,
+        *,
+        runtime: _ResolverRuntime,
+        class_plan: ScopePlan,
+        generated_globals: Mapping[str, Any],
+    ) -> Callable[..., Any] | None:
+        non_root_scopes = tuple(scope for scope in runtime.ordered_scopes if not scope.is_root)
+
+        body_lines: list[str] = [
+            f"self._root_resolver = {'self' if class_plan.is_root else 'root_resolver'}",
+            "self._context = context",
+            "self._parent_context_resolver = parent_context_resolver",
+            "self._owned_scope_resolvers = ()",
+            "self._active = True",
+        ]
+        if runtime.has_cleanup:
+            body_lines.append("self._cleanup_enabled = cleanup_enabled")
+        if runtime.has_cleanup:
+            body_lines.append("self._cleanup_callbacks = []")
+
+        if class_plan.is_root:
+            for non_root_scope in non_root_scopes:
+                body_lines.append(f"self.{non_root_scope.resolver_attr_name} = _MISSING_RESOLVER")
+        else:
+            body_lines.extend(
+                [
+                    (
+                        "parent_scope_level = ("
+                        "type(parent_context_resolver)._class_plan.scope_level "
+                        "if parent_context_resolver is not None else None)"
+                    ),
+                ],
+            )
+            for non_root_scope in non_root_scopes:
+                if non_root_scope.scope_level > class_plan.scope_level:
+                    continue
+                if non_root_scope.scope_level == class_plan.scope_level:
+                    body_lines.append(f"self.{non_root_scope.resolver_attr_name} = self")
+                    continue
+                body_lines.extend(
+                    [
+                        "if parent_scope_level is None:",
+                        f"    self.{non_root_scope.resolver_attr_name} = _MISSING_RESOLVER",
+                        f"elif parent_scope_level == {runtime.root_scope_level}:",
+                        f"    self.{non_root_scope.resolver_attr_name} = _MISSING_RESOLVER",
+                        f"elif parent_scope_level == {non_root_scope.scope_level}:",
+                        f"    self.{non_root_scope.resolver_attr_name} = parent_context_resolver",
+                        "else:",
+                        (
+                            f"    self.{non_root_scope.resolver_attr_name} = getattr("
+                            f"parent_context_resolver, '{non_root_scope.resolver_attr_name}', "
+                            "_MISSING_RESOLVER)"
+                        ),
+                    ],
+                )
+
+        for cache_slot in runtime.cache_slots_by_owner_level.get(class_plan.scope_level, ()):
+            body_lines.append(f"self._cache_{cache_slot} = _MISSING_CACHE")
+
+        if class_plan.is_root and (runtime.uses_stateless_scope_reuse or not runtime.has_cleanup):
+            for non_root_scope in non_root_scopes:
+                body_lines.extend(
+                    [
+                        f"_scope_class = type(self)._runtime.class_by_level[{non_root_scope.scope_level}]",
+                        (
+                            f"self._scope_resolver_{non_root_scope.scope_level} = _scope_class("
+                            + (
+                                "self, cleanup_enabled, None, None)"
+                                if runtime.has_cleanup
+                                else "self, None, None)"
+                            )
+                        ),
+                        f"self._scope_resolver_{non_root_scope.scope_level}._active = False",
+                    ],
+                )
+
+        if class_plan.is_root:
+            return _compile_function_from_source(
+                name="__init__",
+                arg_names=(
+                    ("self", "cleanup_enabled", "context", "parent_context_resolver")
+                    if runtime.has_cleanup
+                    else ("self", "context", "parent_context_resolver")
+                ),
+                body_lines=body_lines,
+                generated_globals=generated_globals,
+                defaults=((True, None, None) if runtime.has_cleanup else (None, None)),
+            )
+
+        return _compile_function_from_source(
+            name="__init__",
+            arg_names=(
+                (
+                    "self",
+                    "root_resolver",
+                    "cleanup_enabled",
+                    "context",
+                    "parent_context_resolver",
+                )
+                if runtime.has_cleanup
+                else ("self", "root_resolver", "context", "parent_context_resolver")
+            ),
+            body_lines=body_lines,
+            generated_globals=generated_globals,
+            defaults=((True, None, None) if runtime.has_cleanup else (None, None)),
+        )
+
     def _compile_enter_scope_method(
         self,
         *,
+        runtime: _ResolverRuntime,
+        class_plan: ScopePlan,
         generated_globals: Mapping[str, Any],
     ) -> Callable[..., Any]:
+        specialized = self._compile_specialized_enter_scope_method(
+            runtime=runtime,
+            class_plan=class_plan,
+            generated_globals=generated_globals,
+        )
+        if specialized is not None:
+            return specialized
+
         arguments = ast.arguments(
             posonlyargs=[],
-            args=[ast.arg(arg="self"), ast.arg(arg="scope")],
+            args=[ast.arg(arg="self"), ast.arg(arg="scope"), ast.arg(arg="context")],
             vararg=None,
-            kwonlyargs=[ast.arg(arg="context")],
-            kw_defaults=[ast.Constant(value=None)],
+            kwonlyargs=[],
+            kw_defaults=[],
             kwarg=None,
-            defaults=[ast.Constant(value=None)],
+            defaults=[ast.Constant(value=None), ast.Constant(value=None)],
         )
         body = [
             ast.Return(
@@ -551,8 +753,99 @@ class ResolversAssemblyCompiler:
             arguments=arguments,
             body=body,
             generated_globals=generated_globals,
-            defaults=(None,),
-            kwonly_defaults={"context": None},
+            defaults=(None, None),
+        )
+
+    def _compile_specialized_enter_scope_method(
+        self,
+        *,
+        runtime: _ResolverRuntime,
+        class_plan: ScopePlan,
+        generated_globals: Mapping[str, Any],
+    ) -> Callable[..., Any] | None:
+        _immediate_next, default_next, _explicit_candidates = (
+            runtime.next_scope_options_by_level.get(
+                class_plan.scope_level,
+                (None, None, ()),
+            )
+        )
+        if default_next is None:
+            return None
+
+        target_level = default_next.scope_level
+        root_resolver_expression = "self" if class_plan.is_root else "self._root_resolver"
+
+        transition_lines: list[str] = []
+        if runtime.uses_stateless_scope_reuse:
+            transition_lines.extend(
+                [
+                    "if context is None and self._context is None and self._parent_context_resolver is None:",
+                    f"    return self._root_resolver._scope_resolver_{target_level}",
+                ],
+            )
+        elif class_plan.is_root and not runtime.has_cleanup:
+            pooled_lines = [
+                "if context is None and self._context is None and self._parent_context_resolver is None:",
+                f"    _pooled = self._scope_resolver_{target_level}",
+                "    if not _pooled._active:",
+                "        _pooled._context = None",
+                "        _pooled._parent_context_resolver = self",
+                "        _pooled._owned_scope_resolvers = ()",
+            ]
+            for cache_slot in runtime.cache_slots_by_owner_level.get(target_level, ()):
+                pooled_lines.append(f"        _pooled._cache_{cache_slot} = _MISSING_CACHE")
+            pooled_lines.extend(
+                [
+                    "        _pooled._active = True",
+                    "        return _pooled",
+                ],
+            )
+            transition_lines.extend(pooled_lines)
+        transition_lines.extend(
+            [
+                (
+                    (
+                        f"return _scope_ctor_{target_level}("
+                        + (
+                            f"{root_resolver_expression}, self._cleanup_enabled, context, self)"
+                            if runtime.has_cleanup
+                            else f"{root_resolver_expression}, context, self)"
+                        )
+                    )
+                    if class_plan.is_root
+                    else (f"_scope_class = type(self)._runtime.class_by_level[{target_level}]")
+                ),
+                *(
+                    []
+                    if class_plan.is_root
+                    else [
+                        (
+                            "return _scope_class("
+                            + (
+                                f"{root_resolver_expression}, self._cleanup_enabled, context, self)"
+                                if runtime.has_cleanup
+                                else f"{root_resolver_expression}, context, self)"
+                            )
+                        ),
+                    ]
+                ),
+            ],
+        )
+
+        body_lines = [
+            f"if scope is _scope_obj_{target_level} or scope == {target_level}:",
+            *[f"    {line}" for line in transition_lines],
+            "if scope is None:",
+            *[f"    {line}" for line in transition_lines],
+            "return _resolver_enter_scope(self, scope, context)",
+        ]
+
+        return _compile_function_from_source(
+            name="enter_scope",
+            arg_names=("self", "scope", "context"),
+            body_lines=body_lines,
+            generated_globals=generated_globals,
+            defaults=(None, None),
         )
 
     def _compile_dispatch_method(
@@ -728,10 +1021,20 @@ class ResolversAssemblyCompiler:
     def _compile_exit_method(
         self,
         *,
+        runtime: _ResolverRuntime,
         generated_globals: Mapping[str, Any],
         is_async: bool,
+        has_cleanup: bool,
     ) -> Callable[..., Any]:
         name = "__aexit__" if is_async else "__exit__"
+        if not has_cleanup:
+            return self._compile_no_cleanup_exit_method(
+                runtime=runtime,
+                generated_globals=generated_globals,
+                is_async=is_async,
+                name=name,
+            )
+
         function_name = "_resolver_aexit" if is_async else "_resolver_exit"
         arguments = ast.arguments(
             posonlyargs=[],
@@ -762,6 +1065,55 @@ class ResolversAssemblyCompiler:
             name=name,
             arguments=arguments,
             body=body,
+            generated_globals=generated_globals,
+            is_async=is_async,
+        )
+
+    def _compile_no_cleanup_exit_method(
+        self,
+        *,
+        runtime: _ResolverRuntime,
+        generated_globals: Mapping[str, Any],
+        is_async: bool,
+        name: str,
+    ) -> Callable[..., Any]:
+        if runtime.uses_stateless_scope_reuse:
+            body_lines = [
+                "return None",
+            ]
+            return _compile_function_from_source(
+                name=name,
+                arg_names=("self", "exc_type", "exc_value", "traceback"),
+                body_lines=body_lines,
+                generated_globals=generated_globals,
+                is_async=is_async,
+            )
+
+        if is_async:
+            body_lines = [
+                "if not self._owned_scope_resolvers:",
+                "    self._active = False",
+                "    return None",
+                "for owned_scope_resolver in reversed(self._owned_scope_resolvers):",
+                "    await owned_scope_resolver.__aexit__(exc_type, exc_value, traceback)",
+                "self._active = False",
+                "return None",
+            ]
+        else:
+            body_lines = [
+                "if not self._owned_scope_resolvers:",
+                "    self._active = False",
+                "    return None",
+                "for owned_scope_resolver in reversed(self._owned_scope_resolvers):",
+                "    owned_scope_resolver.__exit__(exc_type, exc_value, traceback)",
+                "self._active = False",
+                "return None",
+            ]
+
+        return _compile_function_from_source(
+            name=name,
+            arg_names=("self", "exc_type", "exc_value", "traceback"),
+            body_lines=body_lines,
             generated_globals=generated_globals,
             is_async=is_async,
         )
@@ -816,11 +1168,22 @@ class ResolversAssemblyCompiler:
     def _compile_slot_method(
         self,
         *,
+        runtime: _ResolverRuntime,
         workflow: ProviderWorkflowPlan,
         class_plan: ScopePlan,
         generated_globals: Mapping[str, Any],
         is_async: bool,
     ) -> Callable[..., Any]:
+        if not is_async:
+            specialized_sync = self._compile_specialized_sync_slot_method(
+                runtime=runtime,
+                workflow=workflow,
+                class_plan=class_plan,
+                generated_globals=generated_globals,
+            )
+            if specialized_sync is not None:
+                return specialized_sync
+
         method_name = f"aresolve_{workflow.slot}" if is_async else f"resolve_{workflow.slot}"
         global_name = f"_async_slot_{workflow.slot}" if is_async else f"_sync_slot_{workflow.slot}"
         arguments = ast.arguments(
@@ -870,6 +1233,276 @@ class ResolversAssemblyCompiler:
             is_async=is_async,
         )
 
+    def _compile_specialized_sync_slot_method(
+        self,
+        *,
+        runtime: _ResolverRuntime,
+        workflow: ProviderWorkflowPlan,
+        class_plan: ScopePlan,
+        generated_globals: Mapping[str, Any],
+    ) -> Callable[..., Any] | None:
+        if workflow.uses_thread_lock:
+            return None
+        if workflow.provider_is_inject_wrapper:
+            return None
+
+        method_name = f"resolve_{workflow.slot}"
+        class_scope_level = class_plan.scope_level
+        lines: list[str] = []
+
+        owner_scope_level = workflow.cache_owner_scope_level
+        if (
+            workflow.is_cached
+            and owner_scope_level is not None
+            and owner_scope_level != class_scope_level
+        ):
+            if owner_scope_level > class_scope_level:
+                lines.extend(_scope_mismatch_lines_for_source(workflow=workflow))
+            else:
+                lines.extend(
+                    _delegate_scope_lines_for_source(
+                        runtime=runtime,
+                        workflow=workflow,
+                        scope_level=owner_scope_level,
+                    ),
+                )
+            return _compile_function_from_source(
+                name=method_name,
+                arg_names=("self",),
+                body_lines=lines,
+                generated_globals=generated_globals,
+            )
+
+        if workflow.scope_level > class_scope_level:
+            lines.extend(_scope_mismatch_lines_for_source(workflow=workflow))
+            return _compile_function_from_source(
+                name=method_name,
+                arg_names=("self",),
+                body_lines=lines,
+                generated_globals=generated_globals,
+            )
+
+        if (
+            workflow.scope_level < class_scope_level
+            and workflow.max_required_scope_level <= workflow.scope_level
+        ):
+            lines.extend(
+                _delegate_scope_lines_for_source(
+                    runtime=runtime,
+                    workflow=workflow,
+                    scope_level=workflow.scope_level,
+                ),
+            )
+            return _compile_function_from_source(
+                name=method_name,
+                arg_names=("self",),
+                body_lines=lines,
+                generated_globals=generated_globals,
+            )
+
+        if workflow.scope_level != class_scope_level:
+            return None
+
+        if workflow.requires_async:
+            lines.extend(
+                [
+                    f'msg = "Provider slot {workflow.slot} requires asynchronous resolution."',
+                    "raise DIWireAsyncDependencyInSyncContextError(msg)",
+                ],
+            )
+            return _compile_function_from_source(
+                name=method_name,
+                arg_names=("self",),
+                body_lines=lines,
+                generated_globals=generated_globals,
+            )
+
+        if workflow.provider_attribute not in {"instance", "concrete_type", "factory"}:
+            return None
+
+        if workflow.is_cached:
+            lines.extend(
+                [
+                    f"cached_value = self._cache_{workflow.slot}",
+                    "if cached_value is not _MISSING_CACHE:",
+                    "    return cached_value",
+                ],
+            )
+
+        value_expression: str
+        if workflow.provider_attribute == "instance":
+            value_expression = f"_provider_{workflow.slot}"
+        else:
+            optimized_arguments = self._optimized_sync_arguments(
+                runtime=runtime,
+                class_plan=class_plan,
+                workflow=workflow,
+            )
+            arguments = ", ".join(argument for argument in optimized_arguments if argument)
+            value_expression = (
+                f"_provider_{workflow.slot}({arguments})"
+                if arguments
+                else f"_provider_{workflow.slot}()"
+            )
+        lines.append(f"value = {value_expression}")
+
+        if workflow.is_provider_async:
+            lines.extend(
+                [
+                    "if inspect.isawaitable(value):",
+                    f'    msg = "Provider slot {workflow.slot} requires asynchronous resolution."',
+                    "    raise DIWireAsyncDependencyInSyncContextError(msg)",
+                ],
+            )
+
+        if workflow.is_cached:
+            lines.append(f"self._cache_{workflow.slot} = value")
+            if workflow.cache_owner_scope_level == runtime.root_scope_level:
+                lines.append(f"self.resolve_{workflow.slot} = lambda: value")
+
+        lines.append("return value")
+        return _compile_function_from_source(
+            name=method_name,
+            arg_names=("self",),
+            body_lines=lines,
+            generated_globals=generated_globals,
+        )
+
+    def _optimized_sync_arguments(
+        self,
+        *,
+        runtime: _ResolverRuntime,
+        class_plan: ScopePlan,
+        workflow: ProviderWorkflowPlan,
+    ) -> tuple[str, ...]:
+        dependency_plans = workflow.dependency_plans
+        if not dependency_plans:
+            return ()
+
+        resolver_expression = (
+            "self" if class_plan.scope_level == runtime.root_scope_level else "self._root_resolver"
+        )
+        optimized_arguments: list[str] = []
+        prefer_positional = workflow.dependency_order_is_signature_order
+        skip_positional_only = False
+
+        for dependency_plan in dependency_plans:
+            dependency = dependency_plan.dependency
+            parameter_kind = dependency.parameter.kind
+
+            if skip_positional_only and parameter_kind is inspect.Parameter.POSITIONAL_ONLY:
+                continue
+
+            expression = self._optimized_sync_dependency_expression(
+                runtime=runtime,
+                class_plan=class_plan,
+                dependency_plan=dependency_plan,
+                resolver_expression=resolver_expression,
+            )
+            if expression is _FALLBACK_ARGUMENT_EXPRESSION:
+                return workflow.sync_arguments
+            if expression is not None and not isinstance(expression, str):
+                return workflow.sync_arguments
+
+            if expression is None or expression == "":
+                if parameter_kind in {
+                    inspect.Parameter.POSITIONAL_ONLY,
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                }:
+                    prefer_positional = False
+                if parameter_kind is inspect.Parameter.POSITIONAL_ONLY:
+                    skip_positional_only = True
+                continue
+
+            if parameter_kind is inspect.Parameter.POSITIONAL_ONLY:
+                optimized_arguments.append(expression)
+                continue
+            if parameter_kind is inspect.Parameter.POSITIONAL_OR_KEYWORD and prefer_positional:
+                optimized_arguments.append(expression)
+                continue
+            if parameter_kind is inspect.Parameter.VAR_POSITIONAL:
+                optimized_arguments.append(f"*{expression}")
+                continue
+            if parameter_kind is inspect.Parameter.VAR_KEYWORD:
+                optimized_arguments.append(f"**{expression}")
+                continue
+
+            parameter_name = dependency.parameter.name
+            if not parameter_name.isidentifier() or keyword.iskeyword(parameter_name):
+                return workflow.sync_arguments
+            optimized_arguments.append(f"{parameter_name}={expression}")
+
+        if workflow.provider_is_inject_wrapper:
+            resolver_kwarg = f"{INJECT_RESOLVER_KWARG}=self"
+            for index, argument in enumerate(optimized_arguments):
+                if argument.startswith("**"):
+                    optimized_arguments.insert(index, resolver_kwarg)
+                    break
+            else:
+                optimized_arguments.append(resolver_kwarg)
+
+        return tuple(optimized_arguments)
+
+    def _optimized_sync_dependency_expression(
+        self,
+        *,
+        runtime: _ResolverRuntime,
+        class_plan: ScopePlan,
+        dependency_plan: ProviderDependencyPlan,
+        resolver_expression: str,
+    ) -> str | None | object:
+        if dependency_plan.kind == "omit":
+            return None
+        if dependency_plan.kind == "literal":
+            return dependency_plan.literal_expression
+        if dependency_plan.kind == "provider_handle":
+            provider_inner_slot = dependency_plan.provider_inner_slot
+            if provider_inner_slot is None:
+                return _FALLBACK_ARGUMENT_EXPRESSION
+            return (
+                f"lambda: self.aresolve_{provider_inner_slot}()"
+                if dependency_plan.provider_is_async
+                else f"lambda: self.resolve_{provider_inner_slot}()"
+            )
+        if dependency_plan.kind == "context":
+            context_key_name = dependency_plan.ctx_key_global_name
+            if context_key_name is None:
+                return _FALLBACK_ARGUMENT_EXPRESSION
+            return f"self._resolve_from_context({context_key_name})"
+        if dependency_plan.kind == "all":
+            slots = dependency_plan.all_slots
+            if not slots:
+                return "()"
+            if len(slots) == 1:
+                return f"(self.resolve_{slots[0]}(),)"
+            return "(" + ", ".join(f"self.resolve_{slot}()" for slot in slots) + ")"
+
+        dependency_slot = dependency_plan.dependency_slot
+        if dependency_slot is None:
+            return _FALLBACK_ARGUMENT_EXPRESSION
+        dependency_workflow = runtime.workflows_by_slot[dependency_slot]
+        expression = f"self.resolve_{dependency_slot}()"
+        if (
+            class_plan.scope_level > dependency_workflow.scope_level
+            and dependency_workflow.max_required_scope_level <= dependency_workflow.scope_level
+        ):
+            if dependency_workflow.scope_level == runtime.root_scope_level:
+                expression = f"self._root_resolver.resolve_{dependency_slot}()"
+            else:
+                owner_scope = runtime.scopes_by_level[dependency_workflow.scope_level]
+                expression = f"self.{owner_scope.resolver_attr_name}.resolve_{dependency_slot}()"
+
+        if (
+            dependency_workflow.is_cached
+            and dependency_workflow.cache_owner_scope_level == runtime.root_scope_level
+        ):
+            expression = (
+                f"({resolver_expression}._cache_{dependency_slot} if "
+                f"{resolver_expression}._cache_{dependency_slot} is not _MISSING_CACHE else "
+                f"{resolver_expression}.resolve_{dependency_slot}())"
+            )
+        return expression
+
 
 def _compile_function(
     *,
@@ -913,6 +1546,35 @@ def _compile_function(
     return function
 
 
+def _compile_function_from_source(
+    *,
+    name: str,
+    arg_names: tuple[str, ...],
+    kwonly_arg_names: tuple[str, ...] = (),
+    body_lines: Sequence[str],
+    generated_globals: Mapping[str, Any],
+    is_async: bool = False,
+    defaults: tuple[Any, ...] = (),
+    kwonly_defaults: dict[str, Any] | None = None,
+) -> Callable[..., Any]:
+    signature_parts = [", ".join(arg_names)] if arg_names else []
+    if kwonly_arg_names:
+        signature_parts.append("*")
+        signature_parts.extend(kwonly_arg_names)
+    signature = ", ".join(part for part in signature_parts if part)
+    function_keyword = "async def" if is_async else "def"
+    rendered_body = "\n".join(f"    {line}" for line in body_lines) if body_lines else "    pass"
+    source = f"{function_keyword} {name}({signature}):\n{rendered_body}\n"
+    module_code = compile(source, filename=_FILENAME, mode="exec")
+    function_code = _extract_function_code(module_code=module_code, name=name)
+    function = types.FunctionType(function_code, dict(generated_globals), name=name)
+    if defaults:
+        function.__defaults__ = defaults
+    if kwonly_defaults is not None:
+        function.__kwdefaults__ = kwonly_defaults
+    return function
+
+
 def _extract_function_code(*, module_code: CodeType, name: str) -> CodeType:
     stack = [module_code]
     while stack:
@@ -926,6 +1588,32 @@ def _extract_function_code(*, module_code: CodeType, name: str) -> CodeType:
     raise RuntimeError(msg)
 
 
+def _scope_mismatch_lines_for_source(*, workflow: ProviderWorkflowPlan) -> list[str]:
+    return [
+        f'msg = "Provider slot {workflow.slot} requires opened scope level {workflow.scope_level}."',
+        "raise DIWireScopeMismatchError(msg)",
+    ]
+
+
+def _delegate_scope_lines_for_source(
+    *,
+    runtime: _ResolverRuntime,
+    workflow: ProviderWorkflowPlan,
+    scope_level: int,
+) -> list[str]:
+    scope = runtime.scopes_by_level[scope_level]
+    if scope.is_root:
+        return [f"return self.{scope.resolver_attr_name}.resolve_{workflow.slot}()"]
+
+    return [
+        f"owner_resolver = self.{scope.resolver_attr_name}",
+        "if owner_resolver is _MISSING_RESOLVER:",
+        f'    msg = "Provider slot {workflow.slot} requires opened scope level {workflow.scope_level}."',
+        "    raise DIWireScopeMismatchError(msg)",
+        f"return owner_resolver.resolve_{workflow.slot}()",
+    ]
+
+
 def _resolver_init(
     self: Any,
     root_resolver: Any,
@@ -933,8 +1621,8 @@ def _resolver_init(
     context: Any | None,
     parent_context_resolver: Any,
 ) -> None:
-    runtime = cast("_ResolverRuntime", type(self)._runtime)
-    class_plan = cast("ScopePlan", type(self)._class_plan)
+    runtime = type(self)._runtime
+    class_plan = type(self)._class_plan
 
     if class_plan.is_root:
         self._root_resolver = self
@@ -943,8 +1631,10 @@ def _resolver_init(
 
     self._context = context
     self._parent_context_resolver = parent_context_resolver
-    self._cleanup_enabled = cleanup_enabled
-    self._cleanup_callbacks = []
+    self._active = True
+    if runtime.has_cleanup:
+        self._cleanup_enabled = cleanup_enabled
+        self._cleanup_callbacks = []
     self._owned_scope_resolvers = ()
 
     for scope in runtime.ordered_scopes:
@@ -953,7 +1643,6 @@ def _resolver_init(
 
         attr_name = scope.resolver_attr_name
         if class_plan.is_root:
-            setattr(self, attr_name, _MISSING_RESOLVER)
             continue
 
         if scope.scope_level == class_plan.scope_level:
@@ -961,7 +1650,6 @@ def _resolver_init(
             continue
 
         if scope.scope_level > class_plan.scope_level:
-            setattr(self, attr_name, _MISSING_RESOLVER)
             continue
 
         ancestor_resolver = _MISSING_RESOLVER
@@ -980,17 +1668,25 @@ def _resolver_init(
     for cache_slot in runtime.cache_slots_by_owner_level.get(class_plan.scope_level, ()):
         setattr(self, f"_cache_{cache_slot}", _MISSING_CACHE)
 
-    if runtime.uses_stateless_scope_reuse and class_plan.is_root:
+    if class_plan.is_root and (runtime.uses_stateless_scope_reuse or not runtime.has_cleanup):
         for scope in runtime.ordered_scopes:
             if scope.is_root:
                 continue
             scope_class = runtime.class_by_level[scope.scope_level]
-            scope_resolver = scope_class(
-                self,
-                cleanup_enabled,
-                None,
-                None,
-            )
+            if runtime.has_cleanup:
+                scope_resolver = scope_class(
+                    self,
+                    cleanup_enabled,
+                    None,
+                    None,
+                )
+            else:
+                scope_resolver = scope_class(
+                    self,
+                    None,
+                    None,
+                )
+            scope_resolver._active = False
             setattr(self, f"_scope_resolver_{scope.scope_level}", scope_resolver)
 
 
@@ -999,8 +1695,8 @@ def _resolver_enter_scope(
     scope: Any | None,
     context: Mapping[Any, Any] | None,
 ) -> Any:
-    runtime = cast("_ResolverRuntime", type(self)._runtime)
-    class_plan = cast("ScopePlan", type(self)._class_plan)
+    runtime = type(self)._runtime
+    class_plan = type(self)._class_plan
 
     immediate_next, default_next, explicit_candidates = _next_scope_options(
         runtime=runtime,
@@ -1018,7 +1714,8 @@ def _resolver_enter_scope(
             context=context,
         )
 
-    if scope == default_next.scope_level:
+    default_scope_obj = runtime.scope_obj_by_level.get(default_next.scope_level)
+    if scope is default_scope_obj or scope == default_next.scope_level:
         return _instantiate_scope_transition(
             runtime=runtime,
             current_resolver=self,
@@ -1026,7 +1723,7 @@ def _resolver_enter_scope(
             context=context,
         )
 
-    target_scope_level = scope
+    target_scope_level = runtime.scope_level_by_scope_id.get(id(scope), scope)
 
     if target_scope_level is class_plan.scope_level or target_scope_level == class_plan.scope_level:
         return self
@@ -1049,9 +1746,15 @@ def _resolver_enter_scope(
             return getattr(self._root_resolver, f"_scope_resolver_{target_level}")
 
         target_class = runtime.class_by_level[target_level]
+        if runtime.has_cleanup:
+            return target_class(
+                self._root_resolver,
+                self._cleanup_enabled,
+                context,
+                self,
+            )
         return target_class(
             self._root_resolver,
-            self._cleanup_enabled,
             context,
             self,
         )
@@ -1073,17 +1776,24 @@ def _resolver_enter_scope(
     root_resolver = self if class_plan.is_root else self._root_resolver
     current_resolver = self
     created_resolvers: list[Any] = []
-    cleanup_enabled = self._cleanup_enabled
+    cleanup_enabled = getattr(self, "_cleanup_enabled", True)
 
     for index, scope_plan in enumerate(transition_plan):
         target_class = runtime.class_by_level[scope_plan.scope_level]
         nested_context = context if index == len(transition_plan) - 1 else None
-        next_resolver = target_class(
-            root_resolver,
-            cleanup_enabled,
-            nested_context,
-            current_resolver,
-        )
+        if runtime.has_cleanup:
+            next_resolver = target_class(
+                root_resolver,
+                cleanup_enabled,
+                nested_context,
+                current_resolver,
+            )
+        else:
+            next_resolver = target_class(
+                root_resolver,
+                nested_context,
+                current_resolver,
+            )
         created_resolvers.append(next_resolver)
         current_resolver = next_resolver
 
@@ -1099,14 +1809,31 @@ def _instantiate_scope_transition(
     target_scope: ScopePlan,
     context: Mapping[Any, Any] | None,
 ) -> Any:
+    if (
+        runtime.uses_stateless_scope_reuse
+        and context is None
+        and current_resolver._context is None
+        and current_resolver._parent_context_resolver is None
+    ):
+        return getattr(
+            current_resolver._root_resolver,
+            f"_scope_resolver_{target_scope.scope_level}",
+        )
+
     target_class = runtime.class_by_level[target_scope.scope_level]
-    current_scope_plan = cast("ScopePlan", type(current_resolver)._class_plan)
+    current_scope_plan = type(current_resolver)._class_plan
     root_resolver = (
         current_resolver if current_scope_plan.is_root else current_resolver._root_resolver
     )
+    if runtime.has_cleanup:
+        return target_class(
+            root_resolver,
+            current_resolver._cleanup_enabled,
+            context,
+            current_resolver,
+        )
     return target_class(
         root_resolver,
-        current_resolver._cleanup_enabled,
         context,
         current_resolver,
     )
@@ -1117,15 +1844,7 @@ def _next_scope_options(
     runtime: _ResolverRuntime,
     class_scope_level: int,
 ) -> tuple[ScopePlan | None, ScopePlan | None, tuple[ScopePlan, ...]]:
-    deeper_scopes = [
-        scope for scope in runtime.ordered_scopes if scope.scope_level > class_scope_level
-    ]
-    if not deeper_scopes:
-        return None, None, ()
-
-    immediate_next = deeper_scopes[0]
-    default_next = next((scope for scope in deeper_scopes if not scope.skippable), immediate_next)
-    return immediate_next, default_next, tuple(deeper_scopes)
+    return runtime.next_scope_options_by_level.get(class_scope_level, (None, None, ()))
 
 
 def _build_transition_plan_to_target(
@@ -1184,7 +1903,7 @@ def _resolver_resolve_from_context(self: Any, key: Any) -> Any:
 
 
 def _resolver_is_registered_dependency(self: Any, dependency: Any) -> bool:
-    runtime = cast("_ResolverRuntime", type(self)._runtime)
+    runtime = type(self)._runtime
     return dependency in runtime.dep_registered_keys
 
 
@@ -1216,6 +1935,7 @@ def _resolver_exit(
                 if exc_type is None and cleanup_error is None:
                     cleanup_error = error
 
+    self._active = False
     if exc_type is None and cleanup_error is not None:
         raise cleanup_error
 
@@ -1248,6 +1968,7 @@ def _resolver_aexit(
                     if exc_type is None and cleanup_error is None:
                         cleanup_error = error
 
+        self._active = False
         if exc_type is None and cleanup_error is not None:
             raise cleanup_error
 
@@ -1285,7 +2006,7 @@ def _resolve_dispatch_fallback_sync(self: Any, dependency: Any) -> Any:
         return self._resolve_from_context(key)
 
     if is_all_annotation(dependency):
-        runtime = cast("_ResolverRuntime", type(self)._runtime)
+        runtime = type(self)._runtime
         inner = strip_all_annotation(dependency)
         slots = runtime.all_slots_by_key.get(inner, ())
         if not slots:
@@ -1332,7 +2053,7 @@ def _resolve_dispatch_fallback_async(self: Any, dependency: Any) -> Awaitable[An
             return self._resolve_from_context(key)
 
         if is_all_annotation(dependency):
-            runtime = cast("_ResolverRuntime", type(self)._runtime)
+            runtime = type(self)._runtime
             inner = strip_all_annotation(dependency)
             slots = runtime.all_slots_by_key.get(inner, ())
             if not slots:
@@ -1351,8 +2072,8 @@ def _resolve_dispatch_fallback_async(self: Any, dependency: Any) -> Awaitable[An
 
 def _build_sync_slot_impl(*, workflow: ProviderWorkflowPlan) -> Callable[[Any], Any]:
     def _impl(self: Any) -> Any:
-        runtime = cast("_ResolverRuntime", type(self)._runtime)
-        class_scope_level = _resolver_scope_level(self)
+        runtime = type(self)._runtime
+        class_scope_level = type(self)._class_plan.scope_level
 
         owner_scope_level = workflow.cache_owner_scope_level
         if (
@@ -1457,8 +2178,8 @@ def _build_sync_slot_impl(*, workflow: ProviderWorkflowPlan) -> Callable[[Any], 
 
 def _build_async_slot_impl(*, workflow: ProviderWorkflowPlan) -> Callable[[Any], Awaitable[Any]]:
     async def _impl(self: Any) -> Any:
-        runtime = cast("_ResolverRuntime", type(self)._runtime)
-        class_scope_level = _resolver_scope_level(self)
+        runtime = type(self)._runtime
+        class_scope_level = type(self)._class_plan.scope_level
 
         if not workflow.requires_async:
             return getattr(self, f"resolve_{workflow.slot}")()
@@ -1572,6 +2293,18 @@ def _build_local_value_sync(
     if workflow.provider_attribute == "instance":
         return provider
 
+    if (
+        not workflow.dependency_plans
+        and not workflow.dependencies
+        and not workflow.provider_is_inject_wrapper
+    ):
+        return _build_local_value_sync_no_arguments(
+            resolver=resolver,
+            workflow=workflow,
+            provider_scope_resolver=provider_scope_resolver,
+            provider=provider,
+        )
+
     argument_parts = _build_argument_parts_sync(
         runtime=runtime,
         resolver=resolver,
@@ -1636,6 +2369,18 @@ def _build_local_value_async(
 
         if workflow.provider_attribute == "instance":
             return provider
+
+        if (
+            not workflow.dependency_plans
+            and not workflow.dependencies
+            and not workflow.provider_is_inject_wrapper
+        ):
+            return await _build_local_value_async_no_arguments(
+                resolver=resolver,
+                workflow=workflow,
+                provider_scope_resolver=provider_scope_resolver,
+                provider=provider,
+            )
 
         argument_parts = await _build_argument_parts_async(
             runtime=runtime,
@@ -1707,17 +2452,131 @@ def _awaitable_in_sync(*, value: Any, slot: int) -> Any:
     return value
 
 
+def _build_local_value_sync_no_arguments(
+    *,
+    resolver: Any,
+    workflow: ProviderWorkflowPlan,
+    provider_scope_resolver: Any,
+    provider: Any,
+) -> Any:
+    if workflow.provider_attribute in {"concrete_type", "factory"}:
+        value = provider()
+        if workflow.is_provider_async:
+            value = _awaitable_in_sync(value=value, slot=workflow.slot)
+        return value
+
+    if workflow.provider_attribute == "generator":
+        if workflow.is_provider_async:
+            msg = f"Async generator provider slot {workflow.slot} cannot be resolved synchronously."
+            raise DIWireAsyncDependencyInSyncContextError(msg)
+        if provider_scope_resolver is _MISSING_RESOLVER:
+            _raise_scope_mismatch(workflow=workflow)
+
+        if resolver._cleanup_enabled:
+            provider_cm = contextmanager(provider)()
+            value = provider_cm.__enter__()
+            provider_scope_resolver._cleanup_callbacks.append((0, provider_cm.__exit__))
+            return value
+
+        provider_gen = provider()
+        return next(provider_gen)
+
+    if workflow.provider_attribute == "context_manager":
+        if provider_scope_resolver is _MISSING_RESOLVER:
+            _raise_scope_mismatch(workflow=workflow)
+        provider_cm = provider()
+        if workflow.is_provider_async:
+            msg = (
+                f"Async context-manager provider slot {workflow.slot} cannot be resolved "
+                "synchronously."
+            )
+            raise DIWireAsyncDependencyInSyncContextError(msg)
+        value = provider_cm.__enter__()
+        if resolver._cleanup_enabled:
+            provider_scope_resolver._cleanup_callbacks.append((0, provider_cm.__exit__))
+        return value
+
+    msg = f"Unsupported provider attribute {workflow.provider_attribute!r}."
+    raise ValueError(msg)
+
+
+def _build_local_value_async_no_arguments(
+    *,
+    resolver: Any,
+    workflow: ProviderWorkflowPlan,
+    provider_scope_resolver: Any,
+    provider: Any,
+) -> Awaitable[Any]:
+    async def _run() -> Any:
+        if workflow.provider_attribute in {"concrete_type", "factory"}:
+            value = provider()
+            if workflow.is_provider_async:
+                return await cast("Awaitable[Any]", value)
+            return value
+
+        if workflow.provider_attribute == "generator":
+            if provider_scope_resolver is _MISSING_RESOLVER:
+                _raise_scope_mismatch(workflow=workflow)
+
+            if workflow.is_provider_async:
+                if resolver._cleanup_enabled:
+                    provider_async_cm = asynccontextmanager(provider)()
+                    value = await provider_async_cm.__aenter__()
+                    provider_scope_resolver._cleanup_callbacks.append(
+                        (1, provider_async_cm.__aexit__)
+                    )
+                    return value
+                provider_async_gen = provider()
+                return await anext(provider_async_gen)
+
+            if resolver._cleanup_enabled:
+                provider_sync_cm = contextmanager(provider)()
+                value = provider_sync_cm.__enter__()
+                provider_scope_resolver._cleanup_callbacks.append((0, provider_sync_cm.__exit__))
+                return value
+
+            provider_sync_gen = provider()
+            return next(provider_sync_gen)
+
+        if workflow.provider_attribute == "context_manager":
+            if provider_scope_resolver is _MISSING_RESOLVER:
+                _raise_scope_mismatch(workflow=workflow)
+
+            provider_cm = provider()
+            if workflow.is_provider_async:
+                value = await provider_cm.__aenter__()
+                if resolver._cleanup_enabled:
+                    provider_scope_resolver._cleanup_callbacks.append((1, provider_cm.__aexit__))
+                return value
+
+            value = provider_cm.__enter__()
+            if resolver._cleanup_enabled:
+                provider_scope_resolver._cleanup_callbacks.append((0, provider_cm.__exit__))
+            return value
+
+        msg = f"Unsupported provider attribute {workflow.provider_attribute!r}."
+        raise ValueError(msg)
+
+    return _run()
+
+
 def _build_argument_parts_sync(
     *,
     runtime: _ResolverRuntime,
     resolver: Any,
     workflow: ProviderWorkflowPlan,
 ) -> list[_ArgumentPart]:
+    dependency_plans = workflow.dependency_plans
+    if not dependency_plans and workflow.dependencies:
+        dependency_plans = _dependency_plans_for_workflow(workflow=workflow)
+    if not dependency_plans and not workflow.provider_is_inject_wrapper:
+        return []
+
     argument_parts: list[_ArgumentPart] = []
     prefer_positional = workflow.dependency_order_is_signature_order
     skip_positional_only = False
 
-    for dependency_plan in _dependency_plans_for_workflow(workflow=workflow):
+    for dependency_plan in dependency_plans:
         dependency = dependency_plan.dependency
         parameter_kind = dependency.parameter.kind
 
@@ -1762,12 +2621,22 @@ def _build_argument_parts_async(
     resolver: Any,
     workflow: ProviderWorkflowPlan,
 ) -> Awaitable[list[_ArgumentPart]]:
+    dependency_plans = workflow.dependency_plans
+    if not dependency_plans and workflow.dependencies:
+        dependency_plans = _dependency_plans_for_workflow(workflow=workflow)
+    if not dependency_plans and not workflow.provider_is_inject_wrapper:
+
+        async def _empty() -> list[_ArgumentPart]:
+            return []
+
+        return _empty()
+
     async def _run() -> list[_ArgumentPart]:
         argument_parts: list[_ArgumentPart] = []
         prefer_positional = workflow.dependency_order_is_signature_order
         skip_positional_only = False
 
-        for dependency_plan in _dependency_plans_for_workflow(workflow=workflow):
+        for dependency_plan in dependency_plans:
             dependency = dependency_plan.dependency
             parameter_kind = dependency.parameter.kind
 
@@ -1849,7 +2718,6 @@ def _resolve_dependency_value_sync(
                 runtime=runtime,
                 resolver=resolver,
                 dependency_workflow=dependency_workflow,
-                dependency_requires_async=dependency_workflow.requires_async,
             )
             values.append(value)
         return tuple(values)
@@ -1864,7 +2732,6 @@ def _resolve_dependency_value_sync(
         runtime=runtime,
         resolver=resolver,
         dependency_workflow=dependency_workflow,
-        dependency_requires_async=dependency_plan.dependency_requires_async,
     )
 
 
@@ -1934,9 +2801,8 @@ def _dependency_value_for_slot_sync(
     runtime: _ResolverRuntime,
     resolver: Any,
     dependency_workflow: ProviderWorkflowPlan,
-    dependency_requires_async: bool,
 ) -> Any:
-    class_scope_level = _resolver_scope_level(resolver)
+    class_scope_level = type(resolver)._class_plan.scope_level
     dependency_slot = dependency_workflow.slot
 
     if (
@@ -1958,9 +2824,6 @@ def _dependency_value_for_slot_sync(
             resolver if class_scope_level == runtime.root_scope_level else resolver._root_resolver
         )
         return getattr(root_resolver, f"resolve_{dependency_slot}")()
-
-    if dependency_requires_async:
-        return getattr(resolver, f"resolve_{dependency_slot}")()
 
     return getattr(resolver, f"resolve_{dependency_slot}")()
 
@@ -2183,7 +3046,7 @@ def _raise_scope_mismatch(*, workflow: ProviderWorkflowPlan) -> None:
 
 
 def _resolver_scope_level(resolver: Any) -> int:
-    return cast("int", type(resolver)._class_plan.scope_level)
+    return type(resolver)._class_plan.scope_level
 
 
 def _dependency_plans_for_workflow(
