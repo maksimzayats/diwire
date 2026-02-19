@@ -1580,6 +1580,7 @@ def test_optimized_sync_dependency_expression_additional_branches() -> None:
         slot=1,
         scope_level=1,
         is_cached=False,
+        provider_attribute="factory",
         max_required_scope_level=1,
     )
     workflow_request = _workflow_plan(
@@ -1733,6 +1734,20 @@ def test_optimized_sync_dependency_expression_additional_branches() -> None:
         )
         == "self._request_resolver.resolve_2()"
     )
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=root_scope,
+            dependency_plan=ProviderDependencyPlan(
+                kind="provider",
+                dependency=dependency,
+                dependency_index=0,
+                dependency_slot=1,
+            ),
+            resolver_expression="self",
+        )
+        == "_provider_1()"
+    )
 
 
 def test_resolver_init_additional_branches() -> None:
@@ -1763,6 +1778,10 @@ def test_resolver_init_additional_branches() -> None:
     class _RootResolver:
         _runtime = root_runtime
         _class_plan = root_scope
+        _last_sync_dependency = compiler_module._MISSING_DEP_SLOT
+        _last_sync_method: Any | None = None
+        _last_async_dependency = compiler_module._MISSING_DEP_SLOT
+        _last_async_method: Any | None = None
 
     root_resolver = _RootResolver()
     root_resolver_any = cast("Any", root_resolver)
@@ -1775,6 +1794,10 @@ def test_resolver_init_additional_branches() -> None:
     )
     assert root_resolver_any._root_resolver is root_resolver
     assert root_resolver_any._cache_70 is compiler_module._MISSING_CACHE
+    assert root_resolver_any._last_sync_dependency is compiler_module._MISSING_DEP_SLOT
+    assert root_resolver_any._last_sync_method is None
+    assert root_resolver_any._last_async_dependency is compiler_module._MISSING_DEP_SLOT
+    assert root_resolver_any._last_async_method is None
     assert root_resolver_any._cleanup_callbacks == []
     assert root_resolver_any._scope_resolver_3._active is False
 

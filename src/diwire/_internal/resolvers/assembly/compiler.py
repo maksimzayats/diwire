@@ -53,6 +53,7 @@ _MISSING_DEP_SLOT: Final[Any] = object()
 _FALLBACK_ARGUMENT_EXPRESSION: Final[Any] = object()
 _OMIT_ARGUMENT: Final[Any] = object()
 _FILENAME: Final[str] = "<diwire-resolver>"
+_DISPATCH_CACHE_WORKFLOW_THRESHOLD: Final[int] = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -467,6 +468,15 @@ class ResolversAssemblyCompiler:
             "_owned_scope_resolvers",
             "_active",
         ]
+        if _dispatch_cache_enabled_for_class(plan=runtime.plan, class_plan=class_plan):
+            slots.extend(
+                (
+                    "_last_sync_dependency",
+                    "_last_sync_method",
+                    "_last_async_dependency",
+                    "_last_async_method",
+                ),
+            )
         if runtime.has_cleanup:
             slots.append("_cleanup_enabled")
         if runtime.has_cleanup:
@@ -611,6 +621,10 @@ class ResolversAssemblyCompiler:
         generated_globals: Mapping[str, Any],
     ) -> Callable[..., Any] | None:
         non_root_scopes = tuple(scope for scope in runtime.ordered_scopes if not scope.is_root)
+        enable_dispatch_cache = _dispatch_cache_enabled_for_class(
+            plan=runtime.plan,
+            class_plan=class_plan,
+        )
 
         body_lines: list[str] = [
             f"self._root_resolver = {'self' if class_plan.is_root else 'root_resolver'}",
@@ -619,6 +633,15 @@ class ResolversAssemblyCompiler:
             "self._owned_scope_resolvers = ()",
             "self._active = True",
         ]
+        if enable_dispatch_cache:
+            body_lines.extend(
+                [
+                    "self._last_sync_dependency = _MISSING_DEP_SLOT",
+                    "self._last_sync_method = None",
+                    "self._last_async_dependency = _MISSING_DEP_SLOT",
+                    "self._last_async_method = None",
+                ],
+            )
         if runtime.has_cleanup:
             body_lines.append("self._cleanup_enabled = cleanup_enabled")
         if runtime.has_cleanup:
@@ -858,10 +881,15 @@ class ResolversAssemblyCompiler:
     ) -> Callable[..., Any]:
         method_name = "aresolve" if is_async else "resolve"
         call_prefix = "aresolve" if is_async else "resolve"
+        cache_dependency_attr_name = (
+            "_last_async_dependency" if is_async else "_last_sync_dependency"
+        )
+        cache_method_attr_name = "_last_async_method" if is_async else "_last_sync_method"
         dispatch_workflows = _dispatch_workflows(
             plan=runtime.plan,
             class_plan=class_plan,
         )
+        enable_dispatch_cache = len(dispatch_workflows) >= _DISPATCH_CACHE_WORKFLOW_THRESHOLD
         identity_workflows = tuple(
             workflow for workflow in dispatch_workflows if workflow.dispatch_kind == "identity"
         )
@@ -870,6 +898,171 @@ class ResolversAssemblyCompiler:
         )
 
         body: list[ast.stmt] = []
+        if enable_dispatch_cache:
+            body.extend(
+                [
+                    ast.If(
+                        test=ast.Compare(
+                            left=ast.Name(id="dependency", ctx=ast.Load()),
+                            ops=[ast.Is()],
+                            comparators=[
+                                ast.Attribute(
+                                    value=ast.Name(id="self", ctx=ast.Load()),
+                                    attr=cache_dependency_attr_name,
+                                    ctx=ast.Load(),
+                                ),
+                            ],
+                        ),
+                        body=[
+                            ast.Return(
+                                value=(
+                                    ast.Await(
+                                        value=ast.Call(
+                                            func=ast.Attribute(
+                                                value=ast.Name(id="self", ctx=ast.Load()),
+                                                attr=cache_method_attr_name,
+                                                ctx=ast.Load(),
+                                            ),
+                                            args=[],
+                                            keywords=[],
+                                        ),
+                                    )
+                                    if is_async
+                                    else ast.Call(
+                                        func=ast.Attribute(
+                                            value=ast.Name(id="self", ctx=ast.Load()),
+                                            attr=cache_method_attr_name,
+                                            ctx=ast.Load(),
+                                        ),
+                                        args=[],
+                                        keywords=[],
+                                    )
+                                ),
+                            ),
+                        ],
+                        orelse=[],
+                    ),
+                ],
+            )
+
+        def _dispatch_return_body(
+            *,
+            workflow: ProviderWorkflowPlan,
+            cache_dependency: ast.expr,
+        ) -> list[ast.stmt]:
+            slot = workflow.slot
+
+            call_expr = ast.Call(
+                func=ast.Attribute(
+                    value=ast.Name(id="self", ctx=ast.Load()),
+                    attr=f"{call_prefix}_{slot}",
+                    ctx=ast.Load(),
+                ),
+                args=[],
+                keywords=[],
+            )
+            if is_async:
+                return_expr: ast.expr = ast.Await(value=call_expr)
+            else:
+                return_expr = call_expr
+
+            inline_return_expr: ast.expr | None = None
+            if (
+                not is_async
+                and not workflow.requires_async
+                and not workflow.provider_is_inject_wrapper
+            ):
+                if workflow.provider_attribute == "instance":
+                    inline_return_expr = ast.Name(id=f"_provider_{slot}", ctx=ast.Load())
+                elif (
+                    workflow.scope_level == class_plan.scope_level
+                    and not workflow.is_cached
+                    and workflow.provider_attribute in {"concrete_type", "factory"}
+                    and not workflow.dependencies
+                    and not workflow.dependency_plans
+                ):
+                    inline_return_expr = ast.Call(
+                        func=ast.Name(id=f"_provider_{slot}", ctx=ast.Load()),
+                        args=[],
+                        keywords=[],
+                    )
+
+            precheck_body: list[ast.stmt] = []
+            if (
+                workflow.is_cached
+                and workflow.cache_owner_scope_level == class_plan.scope_level
+                and workflow.cache_owner_scope_level == runtime.root_scope_level
+            ):
+                precheck_body = [
+                    ast.Assign(
+                        targets=[ast.Name(id="cached_value", ctx=ast.Store())],
+                        value=ast.Attribute(
+                            value=ast.Name(id="self", ctx=ast.Load()),
+                            attr=f"_cache_{slot}",
+                            ctx=ast.Load(),
+                        ),
+                    ),
+                    ast.If(
+                        test=ast.Compare(
+                            left=ast.Name(id="cached_value", ctx=ast.Load()),
+                            ops=[ast.IsNot()],
+                            comparators=[ast.Name(id="_MISSING_CACHE", ctx=ast.Load())],
+                        ),
+                        body=[
+                            ast.Return(
+                                value=ast.Name(id="cached_value", ctx=ast.Load()),
+                            ),
+                        ],
+                        orelse=[],
+                    ),
+                ]
+
+            if not enable_dispatch_cache or workflow.is_cached:
+                resolved_return_expr = inline_return_expr or return_expr
+                return [
+                    *precheck_body,
+                    ast.Return(value=resolved_return_expr),
+                ]
+
+            cached_method_call = ast.Call(
+                func=ast.Name(id="cached_method", ctx=ast.Load()),
+                args=[],
+                keywords=[],
+            )
+            return [
+                *precheck_body,
+                ast.Assign(
+                    targets=[ast.Name(id="cached_method", ctx=ast.Store())],
+                    value=ast.Attribute(
+                        value=ast.Name(id="self", ctx=ast.Load()),
+                        attr=f"{call_prefix}_{workflow.slot}",
+                        ctx=ast.Load(),
+                    ),
+                ),
+                ast.Assign(
+                    targets=[
+                        ast.Attribute(
+                            value=ast.Name(id="self", ctx=ast.Load()),
+                            attr=cache_dependency_attr_name,
+                            ctx=ast.Store(),
+                        ),
+                    ],
+                    value=cache_dependency,
+                ),
+                ast.Assign(
+                    targets=[
+                        ast.Attribute(
+                            value=ast.Name(id="self", ctx=ast.Load()),
+                            attr=cache_method_attr_name,
+                            ctx=ast.Store(),
+                        ),
+                    ],
+                    value=ast.Name(id="cached_method", ctx=ast.Load()),
+                ),
+                ast.Return(
+                    value=ast.Await(value=cached_method_call) if is_async else cached_method_call,
+                ),
+            ]
 
         for workflow in identity_workflows:
             body.append(
@@ -879,33 +1072,13 @@ class ResolversAssemblyCompiler:
                         ops=[ast.Is()],
                         comparators=[ast.Name(id=f"_dep_{workflow.slot}_type", ctx=ast.Load())],
                     ),
-                    body=[
-                        ast.Return(
-                            value=(
-                                ast.Await(
-                                    value=ast.Call(
-                                        func=ast.Attribute(
-                                            value=ast.Name(id="self", ctx=ast.Load()),
-                                            attr=f"{call_prefix}_{workflow.slot}",
-                                            ctx=ast.Load(),
-                                        ),
-                                        args=[],
-                                        keywords=[],
-                                    ),
-                                )
-                                if is_async
-                                else ast.Call(
-                                    func=ast.Attribute(
-                                        value=ast.Name(id="self", ctx=ast.Load()),
-                                        attr=f"{call_prefix}_{workflow.slot}",
-                                        ctx=ast.Load(),
-                                    ),
-                                    args=[],
-                                    keywords=[],
-                                )
-                            ),
+                    body=_dispatch_return_body(
+                        workflow=workflow,
+                        cache_dependency=ast.Name(
+                            id=f"_dep_{workflow.slot}_type",
+                            ctx=ast.Load(),
                         ),
-                    ],
+                    ),
                     orelse=[],
                 ),
             )
@@ -939,33 +1112,10 @@ class ResolversAssemblyCompiler:
                 switch_body.append(
                     ast.If(
                         test=compare,
-                        body=[
-                            ast.Return(
-                                value=(
-                                    ast.Await(
-                                        value=ast.Call(
-                                            func=ast.Attribute(
-                                                value=ast.Name(id="self", ctx=ast.Load()),
-                                                attr=f"{call_prefix}_{workflow.slot}",
-                                                ctx=ast.Load(),
-                                            ),
-                                            args=[],
-                                            keywords=[],
-                                        ),
-                                    )
-                                    if is_async
-                                    else ast.Call(
-                                        func=ast.Attribute(
-                                            value=ast.Name(id="self", ctx=ast.Load()),
-                                            attr=f"{call_prefix}_{workflow.slot}",
-                                            ctx=ast.Load(),
-                                        ),
-                                        args=[],
-                                        keywords=[],
-                                    )
-                                ),
-                            ),
-                        ],
+                        body=_dispatch_return_body(
+                            workflow=workflow,
+                            cache_dependency=ast.Name(id="dependency", ctx=ast.Load()),
+                        ),
                         orelse=[],
                     ),
                 )
@@ -1493,6 +1643,17 @@ class ResolversAssemblyCompiler:
                 expression = f"self.{owner_scope.resolver_attr_name}.resolve_{dependency_slot}()"
 
         if (
+            dependency_workflow.scope_level == class_plan.scope_level
+            and not dependency_workflow.is_cached
+            and not dependency_workflow.requires_async
+            and dependency_workflow.provider_attribute in {"concrete_type", "factory"}
+            and not dependency_workflow.provider_is_inject_wrapper
+            and not dependency_workflow.dependencies
+            and not dependency_workflow.dependency_plans
+        ):
+            expression = f"_provider_{dependency_slot}()"
+
+        if (
             dependency_workflow.is_cached
             and dependency_workflow.cache_owner_scope_level == runtime.root_scope_level
         ):
@@ -1632,6 +1793,11 @@ def _resolver_init(
     self._context = context
     self._parent_context_resolver = parent_context_resolver
     self._active = True
+    if hasattr(self, "_last_sync_dependency"):
+        self._last_sync_dependency = _MISSING_DEP_SLOT
+        self._last_sync_method = None
+        self._last_async_dependency = _MISSING_DEP_SLOT
+        self._last_async_method = None
     if runtime.has_cleanup:
         self._cleanup_enabled = cleanup_enabled
         self._cleanup_callbacks = []
@@ -3092,6 +3258,17 @@ def _dispatch_workflows(
                 workflow.slot,
             ),
         ),
+    )
+
+
+def _dispatch_cache_enabled_for_class(
+    *,
+    plan: ResolverGenerationPlan,
+    class_plan: ScopePlan,
+) -> bool:
+    return (
+        len(_dispatch_workflows(plan=plan, class_plan=class_plan))
+        >= _DISPATCH_CACHE_WORKFLOW_THRESHOLD
     )
 
 
