@@ -33,7 +33,7 @@ Resolve-only comparison table (includes ``punq``):
 
 Benchmarked library versions:
 
-- diwire: editable checkout at commit ``6522c9737e1564239e15642a701cdf70407e455d`` (branch ``update-assembly``)
+- diwire: editable checkout at commit ``4d99b2cf48a1dc51af0f13a158a13073693fa71b`` (branch ``main``)
 - dishka: ``1.8.0``
 - punq: ``0.7.0``
 - rodi: ``2.0.8``
