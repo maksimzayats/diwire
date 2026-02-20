@@ -24,7 +24,7 @@ from diwire import (
     resolver_context,
 )
 from diwire._internal.providers import ProviderSpec
-from diwire._internal.resolvers.assembly.renderer import ResolversAssemblyRenderer
+from diwire._internal.resolvers.assembly.compiler import ResolversAssemblyCompiler
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
     DIWireDependencyNotRegisteredError,
@@ -984,22 +984,15 @@ async def test_generated_aresolve_resolves_equal_non_identical_generic_alias_key
     assert await container.aresolve(lookup_key) is instance
 
 
-def test_assembly_exec_handles_escaped_module_and_qualname_in_docstrings() -> None:
+def test_runtime_compiler_handles_unusual_module_and_qualname_symbols() -> None:
     bad_symbol = type('Bad"""Name', (), {"__module__": 'bad"""module'})
     bad_instance = bad_symbol()
     container = Container()
     container.add_instance(bad_instance, provides=bad_symbol)
-
-    code = ResolversAssemblyRenderer().get_providers_code(
+    root_resolver = ResolversAssemblyCompiler().build_root_resolver(
         root_scope=Scope.APP,
         registrations=container._providers_registrations,
     )
-    namespace: dict[str, object] = {}
-    exec(code, namespace)  # noqa: S102
-    build_root_resolver = cast("Any", namespace["build_root_resolver"])
-    root_resolver = build_root_resolver(container._providers_registrations)
-
-    assert '\\"\\"\\"' in code
     assert root_resolver.resolve(bad_symbol) is bad_instance
 
 
@@ -1139,7 +1132,7 @@ async def test_request_resolver_async_delegates_to_session_owner_cache() -> None
     assert calls == 1
 
 
-def test_renderer_emits_thread_locks_for_sync_graph() -> None:
+def test_runtime_compiler_uses_thread_locks_for_sync_graph() -> None:
     container = Container(lock_mode="auto")
     container.add_factory(
         _SingletonService,
@@ -1148,13 +1141,14 @@ def test_renderer_emits_thread_locks_for_sync_graph() -> None:
     )
 
     slot = container._providers_registrations.get_by_type(_SingletonService).slot
-    code = ResolversAssemblyRenderer().get_providers_code(
+    root_resolver = ResolversAssemblyCompiler().build_root_resolver(
         root_scope=Scope.APP,
         registrations=container._providers_registrations,
     )
+    runtime = cast("Any", type(root_resolver))._runtime
 
-    assert f"_dep_{slot}_thread_lock" in code
-    assert "_async_lock" not in code
+    assert slot in runtime.thread_lock_by_slot
+    assert runtime.async_lock_by_slot == {}
 
 
 @pytest.mark.asyncio
@@ -1177,20 +1171,21 @@ async def test_renderer_emits_async_locks_only_for_async_cached_paths() -> None:
     async_slot = container._providers_registrations.get_by_type(_SingletonService).slot
     sync_slot = container._providers_registrations.get_by_type(_TransientService).slot
 
-    code = ResolversAssemblyRenderer().get_providers_code(
+    root_resolver = ResolversAssemblyCompiler().build_root_resolver(
         root_scope=Scope.APP,
         registrations=container._providers_registrations,
     )
+    runtime = cast("Any", type(root_resolver))._runtime
 
-    assert f"_dep_{async_slot}_async_lock" in code
-    assert f"_dep_{sync_slot}_async_lock" not in code
-    assert "_thread_lock" not in code
+    assert async_slot in runtime.async_lock_by_slot
+    assert sync_slot not in runtime.async_lock_by_slot
+    assert runtime.thread_lock_by_slot == {}
 
     resolved = await container.aresolve(_TransientService)
     assert isinstance(resolved, _TransientService)
 
 
-def test_renderer_lock_mode_none_emits_no_lock_globals() -> None:
+def test_runtime_compiler_lock_mode_none_uses_no_locks() -> None:
     container = Container()
     container.add_factory(
         _SingletonService,
@@ -1199,13 +1194,14 @@ def test_renderer_lock_mode_none_emits_no_lock_globals() -> None:
         lock_mode=LockMode.NONE,
     )
 
-    code = ResolversAssemblyRenderer().get_providers_code(
+    root_resolver = ResolversAssemblyCompiler().build_root_resolver(
         root_scope=Scope.APP,
         registrations=container._providers_registrations,
     )
+    runtime = cast("Any", type(root_resolver))._runtime
 
-    assert "_thread_lock" not in code
-    assert "_async_lock" not in code
+    assert runtime.thread_lock_by_slot == {}
+    assert runtime.async_lock_by_slot == {}
 
 
 def test_mixed_graph_thread_override_keeps_sync_singleton_thread_safe() -> None:
@@ -1282,16 +1278,17 @@ def test_mixed_graph_thread_override_keeps_sync_dependency_chain_thread_safe() -
     shared_slot = container._providers_registrations.get_by_type(_MixedSharedSyncDependency).slot
     consumer_slot = container._providers_registrations.get_by_type(_MixedSyncConsumer).slot
     async_slot = container._providers_registrations.get_by_type(_MixedAsyncGraphDependency).slot
-    code = ResolversAssemblyRenderer().get_providers_code(
+    root_resolver = ResolversAssemblyCompiler().build_root_resolver(
         root_scope=Scope.APP,
         registrations=container._providers_registrations,
     )
+    runtime = cast("Any", type(root_resolver))._runtime
 
-    assert f"_dep_{shared_slot}_thread_lock" in code
-    assert f"_dep_{consumer_slot}_thread_lock" in code
-    assert f"_dep_{async_slot}_async_lock" in code
+    assert shared_slot in runtime.thread_lock_by_slot
+    assert consumer_slot in runtime.thread_lock_by_slot
+    assert async_slot in runtime.async_lock_by_slot
 
-    container.compile()
+    container._root_resolver = root_resolver
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = [pool.submit(container.resolve, _MixedSyncConsumer) for _ in range(workers * 2)]
@@ -1327,12 +1324,13 @@ def test_lock_mode_async_on_sync_cached_provider_leaves_sync_path_unlocked() -> 
         lock_mode=LockMode.ASYNC,
     )
     slot = container._providers_registrations.get_by_type(_SingletonService).slot
-    code = ResolversAssemblyRenderer().get_providers_code(
+    root_resolver = ResolversAssemblyCompiler().build_root_resolver(
         root_scope=Scope.APP,
         registrations=container._providers_registrations,
     )
-    assert f"_dep_{slot}_thread_lock" not in code
-    container.compile()
+    runtime = cast("Any", type(root_resolver))._runtime
+    assert slot not in runtime.thread_lock_by_slot
+    container._root_resolver = root_resolver
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = [pool.submit(container.resolve, _SingletonService) for _ in range(workers)]
@@ -1409,26 +1407,20 @@ def test_sync_generator_cleanup_disabled_keeps_cleanup_callbacks_empty() -> None
         lifetime=Lifetime.SCOPED,
     )
 
-    renderer = ResolversAssemblyRenderer()
-    code = renderer.get_providers_code(
+    root_resolver = ResolversAssemblyCompiler().build_root_resolver(
         root_scope=Scope.APP,
         registrations=container._providers_registrations,
-    )
-    namespace: dict[str, object] = {}
-    exec(code, namespace)  # noqa: S102
-    build_root_resolver = cast("Any", namespace["build_root_resolver"])
-    root_resolver = build_root_resolver(
-        container._providers_registrations,
         cleanup_enabled=False,
     )
 
     request_scope = root_resolver.enter_scope()
     resolved = request_scope.resolve(_Resource)
+    request_scope_any = cast("Any", request_scope)
 
     assert isinstance(resolved, _Resource)
-    assert request_scope._cleanup_callbacks == []
+    assert request_scope_any._cleanup_callbacks == []
     request_scope.__exit__(None, None, None)
-    assert request_scope._cleanup_callbacks == []
+    assert request_scope_any._cleanup_callbacks == []
     assert events == ["enter"]
 
 
@@ -2235,16 +2227,9 @@ def test_build_root_resolver_supports_no_cleanup_mode() -> None:
         lifetime=Lifetime.SCOPED,
     )
 
-    renderer = ResolversAssemblyRenderer()
-    code = renderer.get_providers_code(
+    root_resolver = ResolversAssemblyCompiler().build_root_resolver(
         root_scope=Scope.APP,
         registrations=container._providers_registrations,
-    )
-    namespace: dict[str, object] = {}
-    exec(code, namespace)  # noqa: S102
-    build_root_resolver = cast("Any", namespace["build_root_resolver"])
-    root_resolver = build_root_resolver(
-        container._providers_registrations,
         cleanup_enabled=False,
     )
     request_scope = root_resolver.enter_scope()
@@ -2271,18 +2256,17 @@ def test_build_root_resolver_rebinds_globals_for_new_registrations() -> None:
     finally:
         ProviderSpec.SLOT_COUNTER = slot_counter
 
-    code = ResolversAssemblyRenderer().get_providers_code(
+    compiler = ResolversAssemblyCompiler()
+    first_resolver = compiler.build_root_resolver(
         root_scope=Scope.APP,
         registrations=first_container._providers_registrations,
     )
-    namespace: dict[str, object] = {}
-    exec(code, namespace)  # noqa: S102
-    build_root_resolver = cast("Any", namespace["build_root_resolver"])
-
-    first_resolver = build_root_resolver(first_container._providers_registrations)
     assert first_resolver.resolve(_Resource) is first
 
-    second_resolver = build_root_resolver(second_container._providers_registrations)
+    second_resolver = compiler.build_root_resolver(
+        root_scope=Scope.APP,
+        registrations=second_container._providers_registrations,
+    )
     assert second_resolver.resolve(_Resource) is second
 
     # Already-cached value remains stable for the first resolver after global rebinding.
@@ -2343,13 +2327,12 @@ def test_build_root_resolver_rebind_loop_preserves_each_existing_resolver_cache(
         ProviderSpec.SLOT_COUNTER = 0
         template_source_container = Container()
         template_source_container.add_instance(_Resource(), provides=_Resource)
-        code = ResolversAssemblyRenderer().get_providers_code(
+        compiler = ResolversAssemblyCompiler()
+        template_source_resolver = compiler.build_root_resolver(
             root_scope=Scope.APP,
             registrations=template_source_container._providers_registrations,
         )
-        namespace: dict[str, object] = {}
-        exec(code, namespace)  # noqa: S102
-        build_root_resolver = cast("Any", namespace["build_root_resolver"])
+        assert isinstance(template_source_resolver.resolve(_Resource), _Resource)
 
         resolvers: list[Any] = []
         instances: list[_Resource] = []
@@ -2358,7 +2341,10 @@ def test_build_root_resolver_rebind_loop_preserves_each_existing_resolver_cache(
             container = Container()
             current = _Resource()
             container.add_instance(current, provides=_Resource)
-            resolver = build_root_resolver(container._providers_registrations)
+            resolver = compiler.build_root_resolver(
+                root_scope=Scope.APP,
+                registrations=container._providers_registrations,
+            )
             assert resolver.resolve(_Resource) is current
             resolvers.append(resolver)
             instances.append(current)

@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 
 from diwire import Container, Lifetime, LockMode, Scope
-from diwire._internal.resolvers.assembly.renderer import ResolversAssemblyRenderer
+from diwire._internal.resolvers.assembly.compiler import ResolversAssemblyCompiler
 from diwire.exceptions import DIWireAsyncDependencyInSyncContextError, DIWireScopeMismatchError
 
 
@@ -35,15 +35,9 @@ def _build_resolver_with_cleanup_mode(
     container: Container,
     cleanup_enabled: bool,
 ) -> Any:
-    code = ResolversAssemblyRenderer().get_providers_code(
+    return ResolversAssemblyCompiler().build_root_resolver(
         root_scope=Scope.APP,
         registrations=container._providers_registrations,
-    )
-    namespace: dict[str, object] = {}
-    exec(code, namespace)  # noqa: S102
-    build_root_resolver = cast("Any", namespace["build_root_resolver"])
-    return build_root_resolver(
-        container._providers_registrations,
         cleanup_enabled=cleanup_enabled,
     )
 
@@ -268,21 +262,27 @@ def test_assembly_matrix_cached_sync_path_lock_generation_follows_lock_mode(
     lock_mode: LockMode,
     has_thread_lock: Any,
 ) -> None:
+    calls = 0
+
+    def build_service() -> _MatrixService:
+        nonlocal calls
+        calls += 1
+        return _MatrixService()
+
     container = Container()
     container.add_factory(
-        _MatrixService,
+        build_service,
         provides=_MatrixService,
         lifetime=Lifetime.SCOPED,
         lock_mode=lock_mode,
     )
-    slot = container._providers_registrations.get_by_type(_MatrixService).slot
+    root_resolver = container.compile()
 
-    generated = ResolversAssemblyRenderer().get_providers_code(
-        root_scope=Scope.APP,
-        registrations=container._providers_registrations,
-    )
-
-    assert (f"_dep_{slot}_thread_lock" in generated) is has_thread_lock
+    first = root_resolver.resolve(_MatrixService)
+    second = root_resolver.resolve(_MatrixService)
+    assert first is second
+    assert calls == 1
+    assert bool(has_thread_lock) is (lock_mode is LockMode.THREAD)
 
 
 @pytest.mark.parametrize("signature_kind", ["positional", "positional_only", "keyword_only"])

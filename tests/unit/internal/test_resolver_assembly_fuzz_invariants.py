@@ -7,7 +7,7 @@ import pytest
 
 from diwire import Container, Lifetime, Scope
 from diwire._internal.providers import ProviderSpec
-from diwire._internal.resolvers.assembly.renderer import ResolversAssemblyRenderer
+from diwire._internal.resolvers.assembly.compiler import ResolversAssemblyCompiler
 from diwire.exceptions import DIWireInvalidProviderSpecError
 
 _SEEDS = (3, 7, 13, 31, 71)
@@ -70,21 +70,27 @@ def test_fuzz_assembly_is_deterministic_for_same_seed(seed: int) -> None:
     try:
         ProviderSpec.SLOT_COUNTER = 0
         first_container, _, _ = _build_random_container(seed)
-        first_code = ResolversAssemblyRenderer().get_providers_code(
+        first_resolver = ResolversAssemblyCompiler().build_root_resolver(
             root_scope=Scope.APP,
             registrations=first_container._providers_registrations,
         )
 
         ProviderSpec.SLOT_COUNTER = 0
         second_container, _, _ = _build_random_container(seed)
-        second_code = ResolversAssemblyRenderer().get_providers_code(
+        second_resolver = ResolversAssemblyCompiler().build_root_resolver(
             root_scope=Scope.APP,
             registrations=second_container._providers_registrations,
         )
     finally:
         ProviderSpec.SLOT_COUNTER = slot_counter
 
-    assert first_code == second_code
+    first_runtime = cast("Any", type(first_resolver))._runtime
+    second_runtime = cast("Any", type(second_resolver))._runtime
+    assert first_runtime.plan.provider_count == second_runtime.plan.provider_count
+    assert first_runtime.plan.cached_provider_count == second_runtime.plan.cached_provider_count
+    assert first_runtime.plan.identity_dispatch_slots == second_runtime.plan.identity_dispatch_slots
+    assert first_runtime.plan.equality_dispatch_slots == second_runtime.plan.equality_dispatch_slots
+    assert first_runtime.cache_slots_by_owner_level == second_runtime.cache_slots_by_owner_level
 
 
 @pytest.mark.parametrize("seed", _SEEDS)
@@ -129,7 +135,7 @@ def test_fuzz_assembly_raises_for_cycle_graph() -> None:
     container.add(_CycleB, provides=_CycleB, lifetime=Lifetime.SCOPED)
 
     with pytest.raises(DIWireInvalidProviderSpecError, match="Circular dependency detected"):
-        ResolversAssemblyRenderer().get_providers_code(
+        ResolversAssemblyCompiler().build_root_resolver(
             root_scope=Scope.APP,
             registrations=container._providers_registrations,
         )

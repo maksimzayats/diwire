@@ -1,9 +1,7 @@
-from typing import Any, cast
-
 from diwire._internal.providers import ProvidersRegistrations
+from diwire._internal.resolvers.assembly.compiler import ResolversAssemblyCompiler
 from diwire._internal.resolvers.assembly.planner import validate_resolver_assembly_managed_scopes
-from diwire._internal.resolvers.assembly.renderer import ResolversAssemblyRenderer
-from diwire._internal.resolvers.protocol import BuildRootResolverFunctionProtocol, ResolverProtocol
+from diwire._internal.resolvers.protocol import ResolverProtocol
 from diwire._internal.scope import BaseScope
 
 
@@ -11,7 +9,7 @@ class ResolversManager:
     """Manager for dependency resolvers."""
 
     def __init__(self) -> None:
-        self._assembly_renderer = ResolversAssemblyRenderer()
+        self._assembly_compiler = ResolversAssemblyCompiler()
 
     def build_root_resolver(
         self,
@@ -28,23 +26,7 @@ class ResolversManager:
 
         """
         validate_resolver_assembly_managed_scopes(root_scope=root_scope)
-        code = self._assembly_renderer.get_providers_code(
+        return self._assembly_compiler.build_root_resolver(
             root_scope=root_scope,
             registrations=registrations,
         )
-        managed_scopes = validate_resolver_assembly_managed_scopes(root_scope=root_scope)
-
-        namespace: dict[str, Any] = {}
-        exec(code, namespace)  # noqa: S102
-
-        for scope in managed_scopes:
-            scope_binding_name = f"_scope_obj_{scope.level}"
-            if scope_binding_name in namespace:
-                namespace[scope_binding_name] = scope
-
-        build_root_resolver = cast(
-            "BuildRootResolverFunctionProtocol",
-            namespace["build_root_resolver"],
-        )
-
-        return build_root_resolver(registrations)
