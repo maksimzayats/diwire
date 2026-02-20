@@ -37,6 +37,7 @@ benchmark:
 	uv run pytest tests/benchmarks/test_resolve_transient.py --benchmark-only --benchmark-columns=ops -q
 	uv run pytest tests/benchmarks/test_resolve_scoped.py --benchmark-only --benchmark-columns=ops -q
 	uv run pytest tests/benchmarks/test_resolve_mixed_lifetimes.py --benchmark-only --benchmark-columns=ops -q
+	uv run pytest tests/benchmarks/test_resolve_generated_scoped_grid.py --benchmark-only --benchmark-columns=ops -q
 
 benchmark-json:
 	mkdir -p benchmark-results
@@ -65,6 +66,7 @@ benchmark-json-resolve:
 		tests/benchmarks/test_resolve_singleton.py \
 		tests/benchmarks/test_resolve_deep_transient_chain.py \
 		tests/benchmarks/test_resolve_wide_transient_graph.py \
+		tests/benchmarks/test_resolve_generated_scoped_grid.py \
 		--benchmark-only -q --benchmark-json=benchmark-results/raw-benchmark-resolve.json
 
 benchmark-report-resolve: benchmark-json-resolve
@@ -73,4 +75,4 @@ benchmark-report-resolve: benchmark-json-resolve
 		--markdown benchmark-results/benchmark-table-resolve.md \
 		--json benchmark-results/benchmark-table-resolve.json \
 		--comment benchmark-results/pr-comment-resolve.md \
-		--libraries diwire,rodi,dishka,wireup,punq
+		--libraries diwire,rodi,dishka,wireup
