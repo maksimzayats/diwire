@@ -37,6 +37,7 @@ benchmark:
 	uv run pytest tests/benchmarks/test_resolve_transient.py --benchmark-only --benchmark-columns=ops -q
 	uv run pytest tests/benchmarks/test_resolve_scoped.py --benchmark-only --benchmark-columns=ops -q
 	uv run pytest tests/benchmarks/test_resolve_mixed_lifetimes.py --benchmark-only --benchmark-columns=ops -q
+	uv run pytest tests/benchmarks/test_resolve_generated_scoped_grid.py --benchmark-only --benchmark-columns=ops -q
 
 benchmark-json:
 	mkdir -p benchmark-results
