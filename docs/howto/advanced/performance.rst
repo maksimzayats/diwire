@@ -25,7 +25,7 @@ To reproduce locally:
 
    make benchmark-report
 
-Resolve-only comparison table (includes ``punq``):
+Resolve-only comparison table (scope-capable libraries):
 
 .. code-block:: bash
 
@@ -35,7 +35,6 @@ Benchmarked library versions:
 
 - diwire: editable checkout at commit ``4d99b2cf48a1dc51af0f13a158a13073693fa71b`` (branch ``main``)
 - dishka: ``1.8.0``
-- punq: ``0.7.0``
 - rodi: ``2.0.8``
 - wireup: ``2.7.0``
 
@@ -68,100 +67,106 @@ Source of truth: ``benchmark-results/benchmark-table.json`` (rendered to ``bench
      - Speedup (diwire/dishka)
      - Speedup (diwire/wireup)
    * - enter_close_scope_no_resolve
-     - 8994383
-     - 5845207
-     - 1053050
-     - 2574708
-     - 1.54×
-     - 8.54×
-     - 3.49×
+     - 8738649
+     - 5450215
+     - 970593
+     - 2409436
+     - 1.60×
+     - 9.00×
+     - 3.63×
    * - enter_close_scope_resolve_100_instance
-     - 439797
-     - 72806
-     - 14590
-     - 88382
-     - 6.04×
-     - 30.14×
-     - 4.98×
+     - 406013
+     - 70632
+     - 13277
+     - 82257
+     - 5.75×
+     - 30.58×
+     - 4.94×
    * - enter_close_scope_resolve_once
-     - 7372977
-     - 3025993
-     - 626813
-     - 1867059
-     - 2.44×
-     - 11.76×
-     - 3.95×
-   * - enter_close_scope_resolve_scoped_100
-     - 206273
-     - 83922
-     - 48224
-     - 87925
-     - 2.46×
-     - 4.28×
-     - 2.35×
-   * - resolve_deep_transient_chain
-     - 2833062
-     - 1059470
-     - 963263
-     - 1276576
-     - 2.67×
-     - 2.94×
-     - 2.22×
-   * - resolve_mixed_lifetimes
-     - 3167472
-     - 1500569
-     - 523542
-     - 1154623
-     - 2.11×
-     - 6.05×
-     - 2.74×
-   * - resolve_scoped
-     - 4408562
-     - 2443622
-     - 790101
-     - 1738778
-     - 1.80×
-     - 5.58×
-     - 2.54×
-   * - resolve_singleton
-     - 16814447
-     - 4588217
-     - 4697909
-     - 7106521
-     - 3.66×
-     - 3.58×
+     - 6972504
+     - 2940919
+     - 546914
+     - 1788494
      - 2.37×
-   * - resolve_transient
-     - 12229474
-     - 2966293
-     - 3083285
-     - 6664490
-     - 4.12×
-     - 3.97×
-     - 1.84×
-   * - resolve_wide_transient_graph
-     - 3522243
-     - 1138263
-     - 987064
-     - 1663441
-     - 3.09×
+     - 12.75×
+     - 3.90×
+   * - enter_close_scope_resolve_scoped_100
+     - 223004
+     - 91611
+     - 48931
+     - 81391
+     - 2.43×
+     - 4.56×
+     - 2.74×
+   * - resolve_deep_transient_chain
+     - 2614862
+     - 928510
+     - 954487
+     - 1198976
+     - 2.82×
+     - 2.74×
+     - 2.18×
+   * - resolve_generated_scoped_grid
+     - 126503
+     - 46418
+     - 27986
+     - 38994
+     - 2.73×
+     - 4.52×
+     - 3.24×
+   * - resolve_mixed_lifetimes
+     - 3001207
+     - 1471547
+     - 461337
+     - 1087162
+     - 2.04×
+     - 6.51×
+     - 2.76×
+   * - resolve_scoped
+     - 4179979
+     - 2313050
+     - 718835
+     - 1674933
+     - 1.81×
+     - 5.81×
+     - 2.50×
+   * - resolve_singleton
+     - 16169370
+     - 4424704
+     - 4535111
+     - 6611818
+     - 3.65×
      - 3.57×
-     - 2.12×
+     - 2.45×
+   * - resolve_transient
+     - 12075301
+     - 3317453
+     - 3001516
+     - 6192395
+     - 3.64×
+     - 4.02×
+     - 1.95×
+   * - resolve_wide_transient_graph
+     - 3405589
+     - 1069481
+     - 999023
+     - 1555711
+     - 3.18×
+     - 3.41×
+     - 2.19×
 
 Summary (computed from the table above):
 
 - diwire is the top ops/s implementation in all benchmark scenarios in this strict-mode run.
-- Speedup over rodi ranges from **1.54×** to **6.04×**.
-- Speedup over dishka ranges from **2.94×** to **30.14×**.
-- Speedup over wireup ranges from **1.84×** to **4.98×**.
+- Speedup over rodi ranges from **1.60×** to **5.75×**.
+- Speedup over dishka ranges from **2.74×** to **30.58×**.
+- Speedup over wireup ranges from **1.95×** to **4.94×**.
 
 Results vary by environment, Python version, and hardware. Re-run ``make benchmark-report`` on your target runtime
 before drawing final conclusions for production workloads.
 
-Resolve-only comparisons (includes punq)
-----------------------------------------
-
-``punq`` has no request scopes, so it is included only in resolve-only scenarios without scopes.
+Resolve-only comparisons (scope-capable libraries)
+--------------------------------------------------
 
 Source of truth: ``benchmark-results/benchmark-table-resolve.json`` (rendered to
 ``benchmark-results/benchmark-table-resolve.md``).
@@ -174,53 +179,52 @@ Source of truth: ``benchmark-results/benchmark-table-resolve.json`` (rendered to
      - rodi (ops/s)
      - dishka (ops/s)
      - wireup (ops/s)
-     - punq (ops/s)
      - Speedup (diwire/rodi)
      - Speedup (diwire/dishka)
      - Speedup (diwire/wireup)
-     - Speedup (diwire/punq)
    * - resolve_deep_transient_chain
-     - 2778542
-     - 1064436
-     - 1042018
-     - 1261015
-     - 13783
-     - 2.61×
-     - 2.67×
-     - 2.20×
-     - 201.59×
+     - 2604232
+     - 1019443
+     - 958980
+     - 1234597
+     - 2.55×
+     - 2.72×
+     - 2.11×
+   * - resolve_generated_scoped_grid
+     - 115874
+     - 45424
+     - 27992
+     - 37413
+     - 2.55×
+     - 4.14×
+     - 3.10×
    * - resolve_singleton
-     - 16181513
-     - 4631002
-     - 4644919
-     - 6962071
-     - 3073187
-     - 3.49×
-     - 3.48×
-     - 2.32×
-     - 5.27×
+     - 15840413
+     - 4348967
+     - 4497497
+     - 6702791
+     - 3.64×
+     - 3.52×
+     - 2.36×
    * - resolve_transient
-     - 12432966
-     - 3494551
-     - 3318816
-     - 6848240
-     - 32310
-     - 3.56×
-     - 3.75×
-     - 1.82×
-     - 384.80×
+     - 11647805
+     - 3390537
+     - 3043317
+     - 6422295
+     - 3.44×
+     - 3.83×
+     - 1.81×
    * - resolve_wide_transient_graph
-     - 3555619
-     - 1096104
-     - 1027847
-     - 1524611
-     - 5969
-     - 3.24×
-     - 3.46×
-     - 2.33×
-     - 595.70×
+     - 3343088
+     - 1005581
+     - 977814
+     - 1486825
+     - 3.32×
+     - 3.42×
+     - 2.25×
 
 Summary (computed from the table above):
 
-- Speedup over wireup ranges from **1.82×** to **2.33×** in these resolve-only scenarios.
-- Speedup over punq ranges from **5.27×** to **595.70×** in these resolve-only scenarios.
+- Speedup over rodi ranges from **2.55×** to **3.64×** in these resolve-only scenarios.
+- Speedup over dishka ranges from **2.72×** to **4.14×** in these resolve-only scenarios.
+- Speedup over wireup ranges from **1.81×** to **3.10×** in these resolve-only scenarios.

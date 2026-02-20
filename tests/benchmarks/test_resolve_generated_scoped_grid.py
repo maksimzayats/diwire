@@ -4,14 +4,19 @@ from collections.abc import Sequence
 from dataclasses import dataclass, make_dataclass
 from typing import Any
 
+import rodi
 from dishka import Provider
+from wireup import injectable
 
 from diwire import Container, Lifetime, Scope
 from tests.benchmarks.dishka_helpers import DishkaBenchmarkScope, make_dishka_benchmark_container
 from tests.benchmarks.helpers import make_diwire_benchmark_container, run_benchmark
+from tests.benchmarks.wireup_helpers import make_wireup_benchmark_container
 
-GRID_WIDTH = 10
-GRID_HEIGHT = 10
+# Wireup container compilation time becomes pathological with larger generated graphs.
+# Keep this scenario large enough to exercise scoped graph behavior while remaining runnable across frameworks.
+GRID_WIDTH = 6
+GRID_HEIGHT = 6
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +80,31 @@ def _build_scoped_grid_dishka_container(*, graph: _GridGraph) -> Any:
     return make_dishka_benchmark_container(provider)
 
 
+def _build_scoped_grid_rodi_container(*, graph: _GridGraph) -> Any:
+    container = rodi.Container()
+
+    for cls in graph.tops:
+        container.add_singleton(cls)
+    for layer in graph.layers:
+        for cls in layer:
+            container.add_scoped(cls)
+    container.add_scoped(graph.bottom)
+    return container.build_provider()
+
+
+def _wireup_injectable(cls: type[Any], *, lifetime: str) -> type[Any]:
+    return injectable(lifetime=lifetime)(cls)
+
+
+def _build_scoped_grid_wireup_container(*, graph: _GridGraph) -> Any:
+    injectables = [_wireup_injectable(cls, lifetime="singleton") for cls in graph.tops]
+    for layer in graph.layers:
+        injectables.extend(_wireup_injectable(cls, lifetime="scoped") for cls in layer)
+    injectables.append(_wireup_injectable(graph.bottom, lifetime="scoped"))
+
+    return make_wireup_benchmark_container(*injectables)
+
+
 def _walk_to_top(node: Any, *, height: int) -> Any:
     current = node.d_0
     for _ in range(height):
@@ -130,3 +160,53 @@ def test_benchmark_dishka_resolve_generated_scoped_grid(benchmark: Any) -> None:
             _ = scope.get(graph.bottom)
 
     run_benchmark(benchmark, bench_dishka_generated_scoped_grid, iterations=500)
+
+
+def test_benchmark_rodi_resolve_generated_scoped_grid(benchmark: Any) -> None:
+    graph = _build_scoped_grid_graph(width=GRID_WIDTH, height=GRID_HEIGHT)
+    container = _build_scoped_grid_rodi_container(graph=graph)
+
+    with container.create_scope() as first_scope:
+        first = first_scope.get(graph.bottom)
+        second = first_scope.get(graph.bottom)
+    with container.create_scope() as second_scope:
+        third = second_scope.get(graph.bottom)
+
+    assert first is second
+    assert first is not third
+    assert first.d_0 is not third.d_0
+
+    first_top = _walk_to_top(first, height=GRID_HEIGHT)
+    third_top = _walk_to_top(third, height=GRID_HEIGHT)
+    assert first_top is third_top
+
+    def bench_rodi_generated_scoped_grid() -> None:
+        with container.create_scope() as scope:
+            _ = scope.get(graph.bottom)
+
+    run_benchmark(benchmark, bench_rodi_generated_scoped_grid, iterations=500)
+
+
+def test_benchmark_wireup_resolve_generated_scoped_grid(benchmark: Any) -> None:
+    graph = _build_scoped_grid_graph(width=GRID_WIDTH, height=GRID_HEIGHT)
+    container = _build_scoped_grid_wireup_container(graph=graph)
+
+    with container.enter_scope() as first_scope:
+        first = first_scope.get(graph.bottom)
+        second = first_scope.get(graph.bottom)
+    with container.enter_scope() as second_scope:
+        third = second_scope.get(graph.bottom)
+
+    assert first is second
+    assert first is not third
+    assert first.d_0 is not third.d_0
+
+    first_top = _walk_to_top(first, height=GRID_HEIGHT)
+    third_top = _walk_to_top(third, height=GRID_HEIGHT)
+    assert first_top is third_top
+
+    def bench_wireup_generated_scoped_grid() -> None:
+        with container.enter_scope() as scope:
+            _ = scope.get(graph.bottom)
+
+    run_benchmark(benchmark, bench_wireup_generated_scoped_grid, iterations=500)

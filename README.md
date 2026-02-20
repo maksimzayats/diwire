@@ -28,11 +28,11 @@ Benchmarks + methodology live in the docs: [Performance](https://docs.diwire.dev
 
 In this benchmark suite on CPython ``3.14.3`` (Apple M3 Pro, strict mode):
 
-- Speedup over ``rodi`` ranges from **1.54×** to **6.04×**.
-- Speedup over ``dishka`` ranges from **2.94×** to **30.14×**.
-- Speedup over ``wireup`` ranges from **1.84×** to **4.98×**.
-- Resolve-only comparisons (includes ``punq`` in non-scope scenarios): speedup over ``punq`` ranges from **5.27×** to **595.70×**.
-- Current benchmark totals: **10** full-suite scenarios and **4** resolve-only scenarios.
+- Speedup over ``rodi`` ranges from **1.60×** to **5.75×**.
+- Speedup over ``dishka`` ranges from **2.74×** to **30.58×**.
+- Speedup over ``wireup`` ranges from **1.95×** to **4.94×**.
+- Resolve-only comparisons (scope-capable libraries): speedup ranges are **2.55×–3.64×** (``rodi``), **2.72×–4.14×** (``dishka``), and **1.81×–3.10×** (``wireup``).
+- Current benchmark totals: **11** full-suite scenarios and **5** resolve-only scenarios.
 
 Results vary by environment, Python version, and hardware. Re-run ``make benchmark-report`` and
 ``make benchmark-report-resolve`` on your target runtime before drawing final conclusions for production workloads.
