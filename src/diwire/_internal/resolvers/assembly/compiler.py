@@ -54,6 +54,7 @@ _FALLBACK_ARGUMENT_EXPRESSION: Final[Any] = object()
 _OMIT_ARGUMENT: Final[Any] = object()
 _FILENAME: Final[str] = "<diwire-resolver>"
 _DISPATCH_CACHE_WORKFLOW_THRESHOLD: Final[int] = 4
+_INLINE_PROVIDER_EXPRESSION_MAX_DEPTH: Final[int] = 16
 
 
 @dataclass(frozen=True, slots=True)
@@ -1487,6 +1488,8 @@ class ResolversAssemblyCompiler:
                 runtime=runtime,
                 class_plan=class_plan,
                 workflow=workflow,
+                inline_depth=0,
+                seen_slots={workflow.slot},
             )
             arguments = ", ".join(argument for argument in optimized_arguments if argument)
             value_expression = (
@@ -1524,6 +1527,8 @@ class ResolversAssemblyCompiler:
         runtime: _ResolverRuntime,
         class_plan: ScopePlan,
         workflow: ProviderWorkflowPlan,
+        inline_depth: int,
+        seen_slots: set[int],
     ) -> tuple[str, ...]:
         dependency_plans = workflow.dependency_plans
         if not dependency_plans:
@@ -1548,6 +1553,8 @@ class ResolversAssemblyCompiler:
                 class_plan=class_plan,
                 dependency_plan=dependency_plan,
                 resolver_expression=resolver_expression,
+                inline_depth=inline_depth,
+                seen_slots=seen_slots,
             )
             if expression is _FALLBACK_ARGUMENT_EXPRESSION:
                 return workflow.sync_arguments
@@ -1600,6 +1607,8 @@ class ResolversAssemblyCompiler:
         class_plan: ScopePlan,
         dependency_plan: ProviderDependencyPlan,
         resolver_expression: str,
+        inline_depth: int,
+        seen_slots: set[int],
     ) -> str | None | object:
         if dependency_plan.kind == "omit":
             return None
@@ -1643,17 +1652,6 @@ class ResolversAssemblyCompiler:
                 expression = f"self.{owner_scope.resolver_attr_name}.resolve_{dependency_slot}()"
 
         if (
-            dependency_workflow.scope_level == class_plan.scope_level
-            and not dependency_workflow.is_cached
-            and not dependency_workflow.requires_async
-            and dependency_workflow.provider_attribute in {"concrete_type", "factory"}
-            and not dependency_workflow.provider_is_inject_wrapper
-            and not dependency_workflow.dependencies
-            and not dependency_workflow.dependency_plans
-        ):
-            expression = f"_provider_{dependency_slot}()"
-
-        if (
             dependency_workflow.is_cached
             and dependency_workflow.cache_owner_scope_level == runtime.root_scope_level
         ):
@@ -1662,7 +1660,62 @@ class ResolversAssemblyCompiler:
                 f"{resolver_expression}._cache_{dependency_slot} is not _MISSING_CACHE else "
                 f"{resolver_expression}.resolve_{dependency_slot}())"
             )
+
+        if self._is_safe_to_inline_sync_provider_call(
+            class_plan=class_plan,
+            workflow=dependency_workflow,
+            slot=dependency_slot,
+            inline_depth=inline_depth,
+            seen_slots=seen_slots,
+        ):
+            seen_slots.add(dependency_slot)
+            try:
+                if dependency_workflow.provider_attribute == "instance":
+                    return f"_provider_{dependency_slot}"
+                optimized_arguments = self._optimized_sync_arguments(
+                    runtime=runtime,
+                    class_plan=class_plan,
+                    workflow=dependency_workflow,
+                    inline_depth=inline_depth + 1,
+                    seen_slots=seen_slots,
+                )
+                arguments = ", ".join(argument for argument in optimized_arguments if argument)
+                return (
+                    f"_provider_{dependency_slot}({arguments})"
+                    if arguments
+                    else f"_provider_{dependency_slot}()"
+                )
+            finally:
+                seen_slots.remove(dependency_slot)
+
         return expression
+
+    def _is_safe_to_inline_sync_provider_call(
+        self,
+        *,
+        class_plan: ScopePlan,
+        workflow: ProviderWorkflowPlan,
+        slot: int,
+        inline_depth: int,
+        seen_slots: set[int],
+    ) -> bool:
+        if inline_depth >= _INLINE_PROVIDER_EXPRESSION_MAX_DEPTH:
+            return False
+        if slot in seen_slots:
+            return False
+        if workflow.scope_level != class_plan.scope_level:
+            return False
+        if workflow.max_required_scope_level > workflow.scope_level:
+            return False
+        if workflow.is_cached or not workflow.is_transient:
+            return False
+        if workflow.requires_async or workflow.is_provider_async:
+            return False
+        if workflow.uses_thread_lock or workflow.uses_async_lock:
+            return False
+        if workflow.provider_is_inject_wrapper or workflow.needs_cleanup:
+            return False
+        return workflow.provider_attribute in {"instance", "concrete_type", "factory"}
 
 
 def _compile_function(

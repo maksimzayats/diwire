@@ -1605,6 +1605,8 @@ def test_optimized_sync_dependency_expression_additional_branches() -> None:
                 dependency_index=0,
             ),
             resolver_expression="self",
+            inline_depth=0,
+            seen_slots=set(),
         )
         is None
     )
@@ -1619,6 +1621,8 @@ def test_optimized_sync_dependency_expression_additional_branches() -> None:
                 literal_expression="None",
             ),
             resolver_expression="self",
+            inline_depth=0,
+            seen_slots=set(),
         )
         == "None"
     )
@@ -1633,6 +1637,8 @@ def test_optimized_sync_dependency_expression_additional_branches() -> None:
                 provider_inner_slot=None,
             ),
             resolver_expression="self",
+            inline_depth=0,
+            seen_slots=set(),
         )
         is compiler_module._FALLBACK_ARGUMENT_EXPRESSION
     )
@@ -1647,6 +1653,8 @@ def test_optimized_sync_dependency_expression_additional_branches() -> None:
                 ctx_key_global_name=None,
             ),
             resolver_expression="self",
+            inline_depth=0,
+            seen_slots=set(),
         )
         is compiler_module._FALLBACK_ARGUMENT_EXPRESSION
     )
@@ -1661,6 +1669,8 @@ def test_optimized_sync_dependency_expression_additional_branches() -> None:
                 all_slots=(),
             ),
             resolver_expression="self",
+            inline_depth=0,
+            seen_slots=set(),
         )
         == "()"
     )
@@ -1675,6 +1685,8 @@ def test_optimized_sync_dependency_expression_additional_branches() -> None:
                 all_slots=(1,),
             ),
             resolver_expression="self",
+            inline_depth=0,
+            seen_slots=set(),
         )
         == "(self.resolve_1(),)"
     )
@@ -1689,6 +1701,8 @@ def test_optimized_sync_dependency_expression_additional_branches() -> None:
                 all_slots=(1, 2),
             ),
             resolver_expression="self",
+            inline_depth=0,
+            seen_slots=set(),
         )
         == "(self.resolve_1(), self.resolve_2())"
     )
@@ -1703,6 +1717,8 @@ def test_optimized_sync_dependency_expression_additional_branches() -> None:
                 dependency_slot=None,
             ),
             resolver_expression="self",
+            inline_depth=0,
+            seen_slots=set(),
         )
         is compiler_module._FALLBACK_ARGUMENT_EXPRESSION
     )
@@ -1717,6 +1733,8 @@ def test_optimized_sync_dependency_expression_additional_branches() -> None:
                 dependency_slot=1,
             ),
             resolver_expression="self",
+            inline_depth=0,
+            seen_slots=set(),
         )
         == "self._root_resolver.resolve_1()"
     )
@@ -1731,6 +1749,8 @@ def test_optimized_sync_dependency_expression_additional_branches() -> None:
                 dependency_slot=2,
             ),
             resolver_expression="self",
+            inline_depth=0,
+            seen_slots=set(),
         )
         == "self._request_resolver.resolve_2()"
     )
@@ -1745,8 +1765,141 @@ def test_optimized_sync_dependency_expression_additional_branches() -> None:
                 dependency_slot=1,
             ),
             resolver_expression="self",
+            inline_depth=0,
+            seen_slots=set(),
         )
         == "_provider_1()"
+    )
+
+
+def test_optimized_sync_dependency_expression_inlines_instance_provider() -> None:
+    compiler = compiler_module.ResolversAssemblyCompiler()
+    root_scope = _scope_plan(level=1, name="app")
+    workflow_transient_instance = _workflow_plan(
+        slot=1,
+        scope_level=1,
+        is_cached=False,
+        provider_attribute="instance",
+        max_required_scope_level=1,
+    )
+    runtime = _runtime(scopes=(root_scope,), workflows=(workflow_transient_instance,))
+    dependency = _dependency()
+
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=root_scope,
+            dependency_plan=ProviderDependencyPlan(
+                kind="provider",
+                dependency=dependency,
+                dependency_index=0,
+                dependency_slot=1,
+            ),
+            resolver_expression="self",
+            inline_depth=0,
+            seen_slots=set(),
+        )
+        == "_provider_1"
+    )
+
+
+def test_is_safe_to_inline_sync_provider_call_guard_branches() -> None:
+    compiler = compiler_module.ResolversAssemblyCompiler()
+    root_scope = _scope_plan(level=1, name="app")
+    workflow = _workflow_plan(
+        slot=1,
+        scope_level=1,
+        is_cached=False,
+        provider_attribute="factory",
+        max_required_scope_level=1,
+    )
+
+    assert (
+        compiler._is_safe_to_inline_sync_provider_call(
+            class_plan=root_scope,
+            workflow=workflow,
+            slot=1,
+            inline_depth=compiler_module._INLINE_PROVIDER_EXPRESSION_MAX_DEPTH,
+            seen_slots=set(),
+        )
+        is False
+    )
+    assert (
+        compiler._is_safe_to_inline_sync_provider_call(
+            class_plan=root_scope,
+            workflow=workflow,
+            slot=1,
+            inline_depth=0,
+            seen_slots={1},
+        )
+        is False
+    )
+    assert (
+        compiler._is_safe_to_inline_sync_provider_call(
+            class_plan=root_scope,
+            workflow=_workflow_plan(
+                slot=1,
+                scope_level=1,
+                is_cached=False,
+                provider_attribute="factory",
+                max_required_scope_level=2,
+            ),
+            slot=1,
+            inline_depth=0,
+            seen_slots=set(),
+        )
+        is False
+    )
+    assert (
+        compiler._is_safe_to_inline_sync_provider_call(
+            class_plan=root_scope,
+            workflow=_workflow_plan(
+                slot=1,
+                scope_level=1,
+                is_cached=False,
+                provider_attribute="factory",
+                requires_async=True,
+                max_required_scope_level=1,
+            ),
+            slot=1,
+            inline_depth=0,
+            seen_slots=set(),
+        )
+        is False
+    )
+    assert (
+        compiler._is_safe_to_inline_sync_provider_call(
+            class_plan=root_scope,
+            workflow=_workflow_plan(
+                slot=1,
+                scope_level=1,
+                is_cached=False,
+                provider_attribute="factory",
+                uses_thread_lock=True,
+                max_required_scope_level=1,
+            ),
+            slot=1,
+            inline_depth=0,
+            seen_slots=set(),
+        )
+        is False
+    )
+    assert (
+        compiler._is_safe_to_inline_sync_provider_call(
+            class_plan=root_scope,
+            workflow=_workflow_plan(
+                slot=1,
+                scope_level=1,
+                is_cached=False,
+                provider_attribute="factory",
+                provider_is_inject_wrapper=True,
+                max_required_scope_level=1,
+            ),
+            slot=1,
+            inline_depth=0,
+            seen_slots=set(),
+        )
+        is False
     )
 
 
