@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Annotated, Any, cast
 
 import pytest
 
 import diwire
-from diwire import Container, FromContext, Injected, ResolverContext, Scope
-from diwire.exceptions import DIWireInvalidRegistrationError, DIWireResolverNotSetError
+from diwire import Component, Container, FromContext, Injected, ResolverContext, Scope
+from diwire.exceptions import (
+    DIWireDependencyNotRegisteredError,
+    DIWireInvalidRegistrationError,
+    DIWireResolverNotSetError,
+)
 
 
 class _Service:
@@ -308,3 +312,22 @@ def test_inject_forwards_context_kwarg_and_validates_scope_usage() -> None:
         match="was provided but no new scope was opened",
     ):
         no_scope_handler(diwire_context={int: 9})
+
+
+def test_scope_resolver_resolves_from_context_non_component_annotated_key() -> None:
+    container = Container()
+
+    with container.enter_scope(Scope.REQUEST, context={int: 9}) as request_scope:
+        assert request_scope.resolve(FromContext[Annotated[int, "meta"]]) == 9
+
+
+def test_scope_resolver_from_context_component_still_requires_component_key() -> None:
+    component_key = Annotated[int, Component("priority")]
+    container = Container()
+
+    with container.enter_scope(Scope.REQUEST, context={component_key: 7, int: 1}) as request_scope:
+        assert (
+            request_scope.resolve(FromContext[Annotated[int, Component("priority"), "meta"]]) == 7
+        )
+        with pytest.raises(DIWireDependencyNotRegisteredError, match="Context value"):
+            request_scope.resolve(FromContext[Annotated[int, Component("missing"), "meta"]])

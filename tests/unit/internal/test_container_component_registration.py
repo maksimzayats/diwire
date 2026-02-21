@@ -152,7 +152,7 @@ def test_decorate_with_component_targets_component_qualified_binding() -> None:
     assert isinstance(component_resolved.inner, _RepoImpl)
 
 
-def test_component_appends_to_existing_annotated_provides_metadata() -> None:
+def test_component_registration_strips_non_component_metadata_from_provides() -> None:
     container = Container()
     container.add_instance(
         _Service("annotated"),
@@ -160,8 +160,34 @@ def test_component_appends_to_existing_annotated_provides_metadata() -> None:
         component="primary",
     )
 
-    resolved = container.resolve(Annotated[_Service, "metadata", Component("primary")])
+    resolved = container.resolve(Annotated[_Service, Component("primary")])
     assert resolved.value == "annotated"
+
+
+def test_non_component_annotated_registration_collides_with_base_key_last_write_wins() -> None:
+    container = Container()
+    container.add_instance(_Service("base"), provides=_Service)
+    container.add_instance(_Service("annotated"), provides=Annotated[_Service, "metadata"])
+
+    resolved = container.resolve(_Service)
+    assert resolved.value == "annotated"
+
+
+def test_non_component_annotated_key_resolves_via_normalized_lookup() -> None:
+    container = Container()
+    container.add_instance(_Service("base"), provides=_Service)
+
+    resolved = container.resolve(Annotated[_Service, "metadata"])
+    assert resolved.value == "base"
+
+
+@pytest.mark.asyncio
+async def test_non_component_annotated_key_aresolves_via_normalized_lookup() -> None:
+    container = Container()
+    container.add_instance(_Service("base"), provides=_Service)
+
+    resolved = await container.aresolve(Annotated[_Service, "metadata"])
+    assert resolved.value == "base"
 
 
 def test_component_registration_rejects_already_component_qualified_provides() -> None:

@@ -6,7 +6,7 @@ import threading
 from contextlib import asynccontextmanager
 from dataclasses import replace
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Annotated, Any, cast
 
 import pytest
 
@@ -637,6 +637,46 @@ def test_bootstrap_runtime_handles_missing_context_key_name() -> None:
         plan=plan, registrations=registrations, root_scope=Scope.APP
     )
     assert runtime.context_key_by_name == {}
+
+
+def test_bootstrap_runtime_normalizes_context_key_metadata() -> None:
+    def build(value: FromContext[Annotated[int, "meta"]]) -> int:
+        return value
+
+    container = Container()
+    container.add_factory(
+        build,
+        provides=int,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.TRANSIENT,
+    )
+    registrations = container._providers_registrations
+    compiler = compiler_module.ResolversAssemblyCompiler()
+    slot = registrations.get_by_type(int).slot
+
+    workflow = _workflow_plan(
+        slot=slot,
+        provides=int,
+        dependency_plans=(
+            ProviderDependencyPlan(
+                kind="context",
+                dependency=_dependency(provides=FromContext[Annotated[int, "meta"]]),
+                dependency_index=0,
+                ctx_key_global_name="_ctx_0_0_key",
+            ),
+        ),
+    )
+    plan = _generation_plan(
+        scopes=(_scope_plan(level=1, name="app"),),
+        workflows=(workflow,),
+    )
+
+    runtime = compiler._bootstrap_runtime(
+        plan=plan,
+        registrations=registrations,
+        root_scope=Scope.APP,
+    )
+    assert runtime.context_key_by_name["_ctx_0_0_key"] is int
 
 
 def test_awaitable_in_sync_raises_for_awaitable_values() -> None:
@@ -1291,7 +1331,27 @@ def test_bootstrap_runtime_handles_annotated_metadata_base_keys() -> None:
         registrations=container._providers_registrations,
         root_scope=Scope.APP,
     )
-    assert key in runtime.dep_registered_keys
+    slot = container._providers_registrations.get_by_type(int).slot
+    assert int in runtime.dep_registered_keys
+    assert key not in runtime.dep_registered_keys
+    assert runtime.all_slots_by_key[int] == (slot,)
+
+
+def test_resolver_is_registered_dependency_uses_normalized_fallback() -> None:
+    runtime = _runtime(
+        scopes=(_scope_plan(level=1, name="app"),),
+        workflows=(),
+    )
+    runtime.dep_registered_keys = {int}
+
+    class _Resolver:
+        _runtime = runtime
+
+    resolver = _Resolver()
+
+    assert (
+        compiler_module._resolver_is_registered_dependency(resolver, Annotated[int, "meta"]) is True
+    )
 
 
 def test_resolver_exit_and_aexit_double_error_branches() -> None:
@@ -1360,6 +1420,130 @@ async def test_dispatch_fallback_remaining_branches() -> None:
     )
     assert await compiler_module._resolve_dispatch_fallback_async(resolver, FromContext[int]) == 9
     assert await compiler_module._resolve_dispatch_fallback_async(resolver, All[int]) == ()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_fallback_retries_with_normalized_keys() -> None:
+    runtime = SimpleNamespace(all_slots_by_key={int: ()}, dep_registered_keys={int})
+
+    class _Resolver:
+        _runtime = runtime
+
+        def resolve(self, dependency: Any) -> Any:
+            if dependency is int:
+                return 11
+            msg = "missing"
+            raise DIWireDependencyNotRegisteredError(msg)
+
+        async def aresolve(self, dependency: Any) -> Any:
+            if dependency is int:
+                return 22
+            msg = "missing"
+            raise DIWireDependencyNotRegisteredError(msg)
+
+        def _is_registered_dependency(self, dependency: Any) -> bool:
+            return compiler_module._resolver_is_registered_dependency(self, dependency)
+
+        def _resolve_from_context(self, key: Any) -> Any:
+            return {int: 9}[key]
+
+    resolver = _Resolver()
+
+    assert compiler_module._resolve_dispatch_fallback_sync(resolver, Annotated[int, "meta"]) == 11
+    assert (
+        await compiler_module._resolve_dispatch_fallback_async(resolver, Annotated[int, "meta"])
+        == 22
+    )
+    assert (
+        compiler_module._resolve_dispatch_fallback_sync(
+            resolver,
+            FromContext[Annotated[int, "meta"]],
+        )
+        == 9
+    )
+
+
+@pytest.mark.asyncio
+async def test_dispatch_fallback_maybe_normalized_retry_paths() -> None:
+    class _Resolver:
+        def _is_registered_dependency(self, _dependency: Any) -> bool:
+            return True
+
+        def resolve(self, dependency: Any) -> Any:
+            if dependency is int:
+                return 11
+            msg = "missing"
+            raise DIWireDependencyNotRegisteredError(msg)
+
+        async def aresolve(self, dependency: Any) -> Any:
+            if dependency is int:
+                return 22
+            msg = "missing"
+            raise DIWireDependencyNotRegisteredError(msg)
+
+    resolver = _Resolver()
+
+    assert (
+        compiler_module._resolve_dispatch_fallback_sync(
+            resolver,
+            Maybe[Annotated[int, "meta"]],
+        )
+        == 11
+    )
+    assert (
+        await compiler_module._resolve_dispatch_fallback_async(
+            resolver,
+            Maybe[Annotated[int, "meta"]],
+        )
+        == 22
+    )
+
+
+@pytest.mark.asyncio
+async def test_dispatch_fallback_maybe_normalized_retry_returns_none_on_second_miss() -> None:
+    class _Resolver:
+        def _is_registered_dependency(self, _dependency: Any) -> bool:
+            return True
+
+        def resolve(self, _dependency: Any) -> Any:
+            msg = "missing"
+            raise DIWireDependencyNotRegisteredError(msg)
+
+        async def aresolve(self, _dependency: Any) -> Any:
+            msg = "missing"
+            raise DIWireDependencyNotRegisteredError(msg)
+
+    resolver = _Resolver()
+
+    assert (
+        compiler_module._resolve_dispatch_fallback_sync(
+            resolver,
+            Maybe[Annotated[int, "meta"]],
+        )
+        is None
+    )
+    assert compiler_module._resolve_dispatch_fallback_sync(resolver, Maybe[str]) is None
+    assert (
+        await compiler_module._resolve_dispatch_fallback_async(
+            resolver,
+            Maybe[Annotated[int, "meta"]],
+        )
+        is None
+    )
+    assert await compiler_module._resolve_dispatch_fallback_async(resolver, Maybe[str]) is None
+
+
+@pytest.mark.asyncio
+async def test_dispatch_fallback_async_normalized_retry_missing_raises_error() -> None:
+    class _Resolver:
+        async def aresolve(self, _dependency: Any) -> Any:
+            msg = "missing"
+            raise DIWireDependencyNotRegisteredError(msg)
+
+    resolver = _Resolver()
+
+    with pytest.raises(DIWireDependencyNotRegisteredError):
+        await compiler_module._resolve_dispatch_fallback_async(resolver, Annotated[int, "meta"])
 
 
 def test_build_argument_parts_omit_branches_sync_and_async() -> None:

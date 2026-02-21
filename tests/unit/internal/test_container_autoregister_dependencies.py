@@ -547,6 +547,61 @@ def test_ensure_autoregistration_short_circuits_for_disabled_and_open_generic() 
     assert container._providers_registrations.find_by_type(_OpenAutoregDependency[int]) is None
 
 
+def test_ensure_autoregistration_normalizes_non_component_annotated_dependency_key() -> None:
+    container = Container(missing_policy=MissingPolicy.REGISTER_ROOT)
+
+    container._ensure_autoregistration(Annotated[DirectDependency, "plain-metadata"])
+
+    assert container._providers_registrations.find_by_type(DirectDependency) is not None
+
+
+def test_infer_dependency_scope_level_reuses_normalized_cache_entry() -> None:
+    container = Container()
+    cache: dict[Any, int] = {DirectDependency: Scope.APP.level}
+
+    inferred = container._infer_dependency_scope_level(
+        dependency=Annotated[DirectDependency, "plain-metadata"],
+        cache=cache,
+        in_progress=set(),
+    )
+
+    assert inferred == Scope.APP.level
+    assert cache[Annotated[DirectDependency, "plain-metadata"]] == Scope.APP.level
+
+
+def test_is_registered_in_resolver_uses_normalized_dependency_fallbacks() -> None:
+    container = Container()
+    container.add(DirectDependency)
+
+    class _ResolverWithChecker:
+        def _is_registered_dependency(self, dependency: Any) -> bool:
+            return dependency is DirectDependency
+
+    class _ResolverWithoutChecker:
+        pass
+
+    dependency = Annotated[DirectDependency, "plain-metadata"]
+
+    assert container._is_registered_in_resolver(
+        resolver=cast("Any", _ResolverWithChecker()),
+        dependency=dependency,
+    )
+    assert container._is_registered_in_resolver(
+        resolver=cast("Any", _ResolverWithoutChecker()),
+        dependency=dependency,
+    )
+
+
+def test_is_registered_in_resolver_uses_normalized_open_generic_match_fallback() -> None:
+    container = Container()
+    container.add_factory(_build_open_autoreg_dependency, provides=_OpenAutoregDependency)
+
+    assert container._is_registered_in_resolver(
+        resolver=cast("Any", object()),
+        dependency=Annotated[_OpenAutoregDependency[int], "plain-metadata"],
+    )
+
+
 def test_extract_provider_inner_dependency_fast_ignores_non_provider_metadata() -> None:
     container = Container()
     dependency = Annotated[DirectDependency, "plain-metadata"]

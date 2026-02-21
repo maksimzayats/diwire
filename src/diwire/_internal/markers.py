@@ -76,8 +76,9 @@ if TYPE_CHECKING:
     """Mark a parameter to resolve from the current scope context mapping.
 
     At runtime ``FromContext[T]`` becomes ``Annotated[T, FromContextMarker()]``.
-    Context lookups use the full annotation as the key. For plain values use
-    ``FromContext[int]`` with ``context={int: ...}``. For component-scoped values
+    Context lookups ignore non-``Component`` metadata in ``Annotated`` keys.
+    For plain values use ``FromContext[int]`` with ``context={int: ...}``.
+    For component-scoped values
     use ``FromContext[Annotated[int, Component('name')]]`` with the matching
     annotated key in ``context``.
 
@@ -152,8 +153,8 @@ else:
         """Mark a parameter to resolve from scope context instead of providers.
 
         At runtime ``FromContext[T]`` resolves to
-        ``Annotated[T, FromContextMarker()]``. The resolver uses the full
-        annotation key, so ``FromContext[int]`` looks up ``int`` and
+        ``Annotated[T, FromContextMarker()]``. Context lookup ignores non-component
+        metadata, so ``FromContext[int]`` looks up ``int`` and
         ``FromContext[Annotated[int, Component('priority')]]`` looks up that
         annotated token.
 
@@ -376,6 +377,42 @@ def component_base_key(annotation: Any) -> Any | None:
     if not any(isinstance(item, Component) for item in metadata):
         return None
     return annotation_args[0]
+
+
+def strip_non_component_annotation(annotation: Any) -> Any:
+    """Strip non-Component metadata from ``Annotated`` dependency keys.
+
+    Args:
+        annotation: Annotation value to inspect or normalize.
+
+    """
+    metadata = getattr(annotation, "__metadata__", None)
+    if metadata is None:
+        return annotation
+
+    origin = getattr(annotation, "__origin__", None)
+    if origin is None:
+        if get_origin(annotation) is not Annotated:
+            return annotation
+        annotation_args = get_args(annotation)
+        if len(annotation_args) < _ANNOTATED_MARKER_MIN_ARGS:
+            return annotation
+        origin = annotation_args[0]
+        metadata = annotation_args[1:]
+
+    component_metadata: list[Component] = []
+    has_non_component_metadata = False
+    for item in metadata:
+        if isinstance(item, Component):
+            component_metadata.append(item)
+        else:
+            has_non_component_metadata = True
+
+    if not component_metadata:
+        return origin
+    if not has_non_component_metadata:
+        return annotation
+    return _build_annotated((origin, *component_metadata))
 
 
 def _extract_provider_marker(annotation: Any) -> ProviderMarker | None:
