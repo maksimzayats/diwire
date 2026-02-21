@@ -19,7 +19,19 @@ Why it’s fast
 Benchmark methodology
 ---------------------
 
-To reproduce locally:
+For fast local diwire-only checks:
+
+.. code-block:: bash
+
+   make benchmark
+
+For full cross-library comparison (raw benchmark run):
+
+.. code-block:: bash
+
+   make benchmark-comparison
+
+To reproduce the published comparison artifacts locally:
 
 .. code-block:: bash
 
@@ -162,8 +174,9 @@ Summary (computed from the table above):
 - Speedup over dishka ranges from **2.74×** to **30.58×**.
 - Speedup over wireup ranges from **1.95×** to **4.94×**.
 
-Results vary by environment, Python version, and hardware. Re-run ``make benchmark-report`` on your target runtime
-before drawing final conclusions for production workloads.
+Results vary by environment, Python version, and hardware. Re-run ``make benchmark-comparison`` for raw comparisons
+or ``make benchmark-report`` for generated comparison artifacts on your target runtime before drawing final
+conclusions for production workloads.
 
 Resolve-only comparisons (scope-capable libraries)
 --------------------------------------------------

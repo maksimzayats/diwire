@@ -34,8 +34,9 @@ In this benchmark suite on CPython ``3.14.3`` (Apple M3 Pro, strict mode):
 - Resolve-only comparisons (scope-capable libraries): speedup ranges are **2.55×–3.64×** (``rodi``), **2.72×–4.14×** (``dishka``), and **1.81×–3.10×** (``wireup``).
 - Current benchmark totals: **11** full-suite scenarios and **5** resolve-only scenarios.
 
-Results vary by environment, Python version, and hardware. Re-run ``make benchmark-report`` and
-``make benchmark-report-resolve`` on your target runtime before drawing final conclusions for production workloads.
+For quick local regression checks, run ``make benchmark`` (diwire-only).
+For full cross-library runs, use ``make benchmark-comparison`` (raw suite) or
+``make benchmark-report`` / ``make benchmark-report-resolve`` (report artifacts).
 
 ## Installation
 
