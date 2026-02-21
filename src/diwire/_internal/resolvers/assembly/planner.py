@@ -18,6 +18,7 @@ from diwire._internal.markers import (
     is_provider_annotation,
     strip_all_annotation,
     strip_maybe_annotation,
+    strip_non_component_annotation,
     strip_provider_annotation,
 )
 from diwire._internal.providers import (
@@ -524,7 +525,7 @@ class ResolverGenerationPlanner:
                 "be expanded as a mapping."
             )
             raise DIWireInvalidProviderSpecError(msg)
-        inner = strip_all_annotation(dependency_key)
+        inner = strip_non_component_annotation(strip_all_annotation(dependency_key))
         slots = self._all_slots_by_key.get(inner, ())
         requires_async = any(self._requires_async_by_slot[slot] for slot in slots)
         plan = ProviderDependencyPlan(
@@ -562,7 +563,7 @@ class ResolverGenerationPlanner:
         dependency_key: Any,
         optional: bool,
     ) -> tuple[ProviderDependencyPlan, int | None, bool, str, str]:
-        dependency_spec = self._registrations.find_by_type(dependency_key)
+        dependency_spec = self._find_registered_dependency_spec(dependency_key)
         if dependency_spec is None and optional:
             if dependency.parameter.default is not inspect.Parameter.empty:
                 omit_plan = ProviderDependencyPlan(
@@ -755,9 +756,9 @@ class ResolverGenerationPlanner:
         ):
             return ()
         if is_all_annotation(dependency_key):
-            inner = strip_all_annotation(dependency_key)
+            inner = strip_non_component_annotation(strip_all_annotation(dependency_key))
             return self._all_slots_by_key.get(inner, ())
-        dependency_spec = self._registrations.find_by_type(dependency_key)
+        dependency_spec = self._find_registered_dependency_spec(dependency_key)
         if dependency_spec is not None:
             return (dependency_spec.slot,)
         if optional or self._is_dataclass_default_factory_parameter(dependency.parameter):
@@ -934,22 +935,31 @@ class ResolverGenerationPlanner:
         dependency_provides: Any,
         requiring_provider: Any,
     ) -> ProviderSpec:
-        try:
-            return self._registrations.get_by_type(dependency_provides)
-        except KeyError as error:
-            msg = (
-                f"Dependency {dependency_provides!r} required by provider "
-                f"{requiring_provider!r} is not registered."
-            )
-            raise DIWireDependencyNotRegisteredError(msg) from error
+        dependency_spec = self._find_registered_dependency_spec(dependency_provides)
+        if dependency_spec is not None:
+            return dependency_spec
+        msg = (
+            f"Dependency {dependency_provides!r} required by provider "
+            f"{requiring_provider!r} is not registered."
+        )
+        raise DIWireDependencyNotRegisteredError(msg)
+
+    def _find_registered_dependency_spec(self, dependency: Any) -> ProviderSpec | None:
+        dependency_spec = self._registrations.find_by_type(dependency)
+        if dependency_spec is not None:
+            return dependency_spec
+
+        normalized_dependency = strip_non_component_annotation(dependency)
+        if normalized_dependency is dependency:
+            return None
+        return self._registrations.find_by_type(normalized_dependency)
 
     def _build_all_slots_by_key(self) -> dict[Any, tuple[int, ...]]:
         slots_by_key: dict[Any, list[int]] = {}
         for spec in self._work_specs:
-            base_key = component_base_key(spec.provides)
+            normalized_key = strip_non_component_annotation(spec.provides)
+            base_key = component_base_key(normalized_key)
             if base_key is None:
-                if getattr(spec.provides, "__metadata__", None) is not None:
-                    continue
-                base_key = spec.provides
+                base_key = normalized_key
             slots_by_key.setdefault(base_key, []).append(spec.slot)
         return {key: tuple(slots) for key, slots in slots_by_key.items()}

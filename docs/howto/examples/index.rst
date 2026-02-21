@@ -21,6 +21,7 @@ Each page below includes one or more focused, self-contained scripts sourced *ve
    scope-context-values
    function-injection
    named-components
+   annotation-normalization
    providers
    compilation
    open-generics

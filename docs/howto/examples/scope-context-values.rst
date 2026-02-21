@@ -55,6 +55,10 @@ Run locally
 Annotated context keys
 ----------------------
 
+Only ``Component(...)`` metadata is identity-bearing. Non-component metadata is
+stripped when resolving context keys. See also
+:doc:`/howto/examples/annotation-normalization`.
+
 Run locally
 ~~~~~~~~~~~
 

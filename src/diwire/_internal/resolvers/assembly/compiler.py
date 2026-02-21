@@ -26,6 +26,7 @@ from diwire._internal.markers import (
     strip_all_annotation,
     strip_from_context_annotation,
     strip_maybe_annotation,
+    strip_non_component_annotation,
     strip_provider_annotation,
 )
 from diwire._internal.providers import ProviderDependency, ProvidersRegistrations
@@ -172,11 +173,11 @@ class ResolversAssemblyCompiler:
             provider_by_slot[workflow.slot] = getattr(registration, workflow.provider_attribute)
             dep_registered_keys.add(dep_type)
 
-            base_key = component_base_key(dep_type)
-            if base_key is None and not hasattr(dep_type, "__metadata__"):
-                base_key = dep_type
-            if base_key is not None:
-                all_slots_by_key_mut.setdefault(base_key, []).append(workflow.slot)
+            normalized_dep_type = strip_non_component_annotation(dep_type)
+            base_key = component_base_key(normalized_dep_type)
+            if base_key is None:
+                base_key = normalized_dep_type
+            all_slots_by_key_mut.setdefault(base_key, []).append(workflow.slot)
 
             if workflow.dispatch_kind == "equality_map":
                 dep_eq_slot_by_key[dep_type] = workflow.slot
@@ -188,8 +189,10 @@ class ResolversAssemblyCompiler:
                 if context_key_name is None:
                     continue
                 context_key_by_name[context_key_name] = strip_from_context_annotation(
-                    strip_maybe_annotation(
-                        registration.dependencies[dependency_plan.dependency_index].provides,
+                    strip_non_component_annotation(
+                        strip_maybe_annotation(
+                            registration.dependencies[dependency_plan.dependency_index].provides,
+                        ),
                     ),
                 )
 
@@ -298,6 +301,7 @@ class ResolversAssemblyCompiler:
             "strip_all_annotation": strip_all_annotation,
             "strip_from_context_annotation": strip_from_context_annotation,
             "strip_maybe_annotation": strip_maybe_annotation,
+            "strip_non_component_annotation": strip_non_component_annotation,
             "strip_provider_annotation": strip_provider_annotation,
             "TracebackType": TracebackType,
         }
@@ -2070,7 +2074,12 @@ def _resolver_resolve_from_context(self: Any, key: Any) -> Any:
 
 def _resolver_is_registered_dependency(self: Any, dependency: Any) -> bool:
     runtime = type(self)._runtime
-    return dependency in runtime.dep_registered_keys
+    if dependency in runtime.dep_registered_keys:
+        return True
+    normalized_dependency = strip_non_component_annotation(dependency)
+    if normalized_dependency is dependency:
+        return False
+    return normalized_dependency in runtime.dep_registered_keys
 
 
 def _resolver_exit(
@@ -2151,7 +2160,7 @@ def _resolve_dispatch_fallback_sync(self: Any, dependency: Any) -> Any:
             return lambda: self.resolve(provider_inner)
 
         if is_from_context_annotation(inner):
-            key = strip_from_context_annotation(inner)
+            key = strip_non_component_annotation(strip_from_context_annotation(inner))
             try:
                 return self._resolve_from_context(key)
             except DIWireDependencyNotRegisteredError:
@@ -2159,7 +2168,16 @@ def _resolve_dispatch_fallback_sync(self: Any, dependency: Any) -> Any:
 
         if not self._is_registered_dependency(inner):
             return None
-        return self.resolve(inner)
+        try:
+            return self.resolve(inner)
+        except DIWireDependencyNotRegisteredError:
+            normalized_inner = strip_non_component_annotation(inner)
+            if normalized_inner is inner:
+                return None
+            try:
+                return self.resolve(normalized_inner)
+            except DIWireDependencyNotRegisteredError:
+                return None
 
     if is_provider_annotation(dependency):
         inner = strip_provider_annotation(dependency)
@@ -2168,12 +2186,12 @@ def _resolve_dispatch_fallback_sync(self: Any, dependency: Any) -> Any:
         return lambda: self.resolve(inner)
 
     if is_from_context_annotation(dependency):
-        key = strip_from_context_annotation(dependency)
+        key = strip_non_component_annotation(strip_from_context_annotation(dependency))
         return self._resolve_from_context(key)
 
     if is_all_annotation(dependency):
         runtime = type(self)._runtime
-        inner = strip_all_annotation(dependency)
+        inner = strip_non_component_annotation(strip_all_annotation(dependency))
         slots = runtime.all_slots_by_key.get(inner, ())
         if not slots:
             return ()
@@ -2182,6 +2200,13 @@ def _resolve_dispatch_fallback_sync(self: Any, dependency: Any) -> Any:
         for slot in slots:
             results.append(getattr(self, f"resolve_{slot}")())
         return tuple(results)
+
+    normalized_dependency = strip_non_component_annotation(dependency)
+    if normalized_dependency is not dependency:
+        try:
+            return self.resolve(normalized_dependency)
+        except DIWireDependencyNotRegisteredError:
+            pass
 
     msg = f"Dependency {dependency!r} is not registered."
     raise DIWireDependencyNotRegisteredError(msg)
@@ -2198,7 +2223,7 @@ def _resolve_dispatch_fallback_async(self: Any, dependency: Any) -> Awaitable[An
                 return lambda: self.resolve(provider_inner)
 
             if is_from_context_annotation(inner):
-                key = strip_from_context_annotation(inner)
+                key = strip_non_component_annotation(strip_from_context_annotation(inner))
                 try:
                     return self._resolve_from_context(key)
                 except DIWireDependencyNotRegisteredError:
@@ -2206,7 +2231,16 @@ def _resolve_dispatch_fallback_async(self: Any, dependency: Any) -> Awaitable[An
 
             if not self._is_registered_dependency(inner):
                 return None
-            return await self.aresolve(inner)
+            try:
+                return await self.aresolve(inner)
+            except DIWireDependencyNotRegisteredError:
+                normalized_inner = strip_non_component_annotation(inner)
+                if normalized_inner is inner:
+                    return None
+                try:
+                    return await self.aresolve(normalized_inner)
+                except DIWireDependencyNotRegisteredError:
+                    return None
 
         if is_provider_annotation(dependency):
             inner = strip_provider_annotation(dependency)
@@ -2215,12 +2249,12 @@ def _resolve_dispatch_fallback_async(self: Any, dependency: Any) -> Awaitable[An
             return lambda: self.resolve(inner)
 
         if is_from_context_annotation(dependency):
-            key = strip_from_context_annotation(dependency)
+            key = strip_non_component_annotation(strip_from_context_annotation(dependency))
             return self._resolve_from_context(key)
 
         if is_all_annotation(dependency):
             runtime = type(self)._runtime
-            inner = strip_all_annotation(dependency)
+            inner = strip_non_component_annotation(strip_all_annotation(dependency))
             slots = runtime.all_slots_by_key.get(inner, ())
             if not slots:
                 return ()
@@ -2229,6 +2263,13 @@ def _resolve_dispatch_fallback_async(self: Any, dependency: Any) -> Awaitable[An
             for slot in slots:
                 results.append(await getattr(self, f"aresolve_{slot}")())
             return tuple(results)
+
+        normalized_dependency = strip_non_component_annotation(dependency)
+        if normalized_dependency is not dependency:
+            try:
+                return await self.aresolve(normalized_dependency)
+            except DIWireDependencyNotRegisteredError:
+                pass
 
         msg = f"Dependency {dependency!r} is not registered."
         raise DIWireDependencyNotRegisteredError(msg)

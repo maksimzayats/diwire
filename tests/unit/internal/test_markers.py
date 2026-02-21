@@ -29,6 +29,7 @@ from diwire._internal.markers import (
     strip_all_annotation,
     strip_from_context_annotation,
     strip_maybe_annotation,
+    strip_non_component_annotation,
     strip_provider_annotation,
 )
 from diwire._internal.providers import ProviderDependenciesExtractor
@@ -252,6 +253,62 @@ def test_component_base_key_detects_component_keys() -> None:
     assert component_base_key(Database) is None
     assert component_base_key(Injected[PrimaryDatabaseComponent]) is Database
     assert component_base_key(unrelated_annotated) is None
+
+
+def test_strip_non_component_annotation_returns_base_for_non_component_metadata() -> None:
+    dependency = Annotated[Database, "meta"]
+
+    assert strip_non_component_annotation(dependency) is Database
+
+
+def test_strip_non_component_annotation_keeps_only_component_metadata() -> None:
+    dependency = Annotated[Database, Component("primary"), "meta"]
+
+    assert strip_non_component_annotation(dependency) == Annotated[Database, Component("primary")]
+
+
+def test_strip_non_component_annotation_leaves_component_only_keys_stable() -> None:
+    dependency = Annotated[Database, Component("primary")]
+
+    assert strip_non_component_annotation(dependency) == dependency
+
+
+def test_strip_non_component_annotation_handles_missing_origin_fallback_to_get_args(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _AnnotatedLike:
+        __metadata__ = ("meta",)
+
+    dependency = _AnnotatedLike()
+    monkeypatch.setattr(markers_module, "get_origin", lambda _annotation: Annotated)
+    monkeypatch.setattr(markers_module, "get_args", lambda _annotation: (int, "meta"))
+
+    assert strip_non_component_annotation(dependency) is int
+
+
+def test_strip_non_component_annotation_handles_missing_origin_invalid_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _AnnotatedLike:
+        __metadata__ = ("meta",)
+
+    dependency = _AnnotatedLike()
+    monkeypatch.setattr(markers_module, "get_origin", lambda _annotation: Annotated)
+    monkeypatch.setattr(markers_module, "get_args", lambda _annotation: (int,))
+
+    assert strip_non_component_annotation(dependency) is dependency
+
+
+def test_strip_non_component_annotation_handles_missing_origin_non_annotated_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _AnnotatedLike:
+        __metadata__ = ("meta",)
+
+    dependency = _AnnotatedLike()
+    monkeypatch.setattr(markers_module, "get_origin", lambda _annotation: int)
+
+    assert strip_non_component_annotation(dependency) is dependency
 
 
 def test_injected_provider_preserves_provider_metadata() -> None:

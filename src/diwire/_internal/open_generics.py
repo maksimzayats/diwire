@@ -18,6 +18,7 @@ from diwire._internal.markers import (
     is_provider_annotation,
     strip_from_context_annotation,
     strip_maybe_annotation,
+    strip_non_component_annotation,
     strip_provider_annotation,
 )
 from diwire._internal.providers import (
@@ -367,11 +368,22 @@ class _OpenGenericResolver:  # pragma: no cover
         try:
             return self._base_resolver.resolve(dependency)
         except DIWireDependencyNotRegisteredError:
+            normalized_dependency = strip_non_component_annotation(dependency)
+            if normalized_dependency is not dependency:
+                try:
+                    return self._base_resolver.resolve(normalized_dependency)
+                except DIWireDependencyNotRegisteredError:
+                    pass
+
             open_match = self._registry.find_best_match(dependency)
+            match_dependency = dependency
+            if open_match is None and normalized_dependency is not dependency:
+                open_match = self._registry.find_best_match(normalized_dependency)
+                match_dependency = normalized_dependency
             if open_match is None:
                 raise
             return self._resolve_open_match_sync(
-                dependency=dependency,
+                dependency=match_dependency,
                 match=open_match,
             )
 
@@ -387,19 +399,40 @@ class _OpenGenericResolver:  # pragma: no cover
         try:
             return await self._base_resolver.aresolve(dependency)
         except DIWireDependencyNotRegisteredError:
+            normalized_dependency = strip_non_component_annotation(dependency)
+            if normalized_dependency is not dependency:
+                try:
+                    return await self._base_resolver.aresolve(normalized_dependency)
+                except DIWireDependencyNotRegisteredError:
+                    pass
+
             open_match = self._registry.find_best_match(dependency)
+            match_dependency = dependency
+            if open_match is None and normalized_dependency is not dependency:
+                open_match = self._registry.find_best_match(normalized_dependency)
+                match_dependency = normalized_dependency
             if open_match is None:
                 raise
             return await self._resolve_open_match_async(
-                dependency=dependency,
+                dependency=match_dependency,
                 match=open_match,
             )
 
     def _is_registered_dependency(self, dependency: Any) -> bool:
         base_registered_checker = getattr(self._base_resolver, "_is_registered_dependency", None)
-        if callable(base_registered_checker) and base_registered_checker(dependency):
+        normalized_dependency = strip_non_component_annotation(dependency)
+        if callable(base_registered_checker):
+            if base_registered_checker(dependency):
+                return True
+            if normalized_dependency is not dependency and base_registered_checker(
+                normalized_dependency
+            ):
+                return True
+        if self._registry.find_best_match(dependency) is not None:
             return True
-        return self._registry.find_best_match(dependency) is not None
+        if normalized_dependency is dependency:
+            return False
+        return self._registry.find_best_match(normalized_dependency) is not None
 
     def _resolve_maybe_sync(self, *, dependency: Any) -> Any:
         if not is_maybe_annotation(dependency):
@@ -424,7 +457,7 @@ class _OpenGenericResolver:  # pragma: no cover
         return await self.aresolve(inner_dependency)
 
     def _resolve_maybe_from_context_sync(self, dependency: Any) -> Any | None:
-        context_key = strip_from_context_annotation(dependency)
+        context_key = strip_non_component_annotation(strip_from_context_annotation(dependency))
         resolve_from_context = getattr(self._base_resolver, "_resolve_from_context", None)
         try:
             if callable(resolve_from_context):
@@ -434,7 +467,7 @@ class _OpenGenericResolver:  # pragma: no cover
             return None
 
     async def _resolve_maybe_from_context_async(self, dependency: Any) -> Any | None:
-        context_key = strip_from_context_annotation(dependency)
+        context_key = strip_non_component_annotation(strip_from_context_annotation(dependency))
         resolve_from_context = getattr(self._base_resolver, "_resolve_from_context", None)
         try:
             if callable(resolve_from_context):

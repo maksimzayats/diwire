@@ -62,6 +62,7 @@ FromContext in injected callables
 
 Inject wrappers can resolve ``FromContext[T]`` parameters from scope context values.
 Pass context with reserved kwarg ``diwire_context`` when the wrapper opens a new scope.
+For ``Annotated`` keys, non-``Component`` metadata is ignored for context lookup identity.
 
 .. code-block:: python
    :class: diwire-example py-run

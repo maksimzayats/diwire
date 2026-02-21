@@ -40,6 +40,7 @@ from diwire._internal.markers import (
     is_provider_annotation,
     strip_all_annotation,
     strip_maybe_annotation,
+    strip_non_component_annotation,
     strip_provider_annotation,
 )
 from diwire._internal.open_generics import (
@@ -1344,12 +1345,14 @@ class Container:
         component: Component | Any | None,
         method_name: str,
     ) -> Any:
+        normalized_provides = strip_non_component_annotation(provides)
         if component is None:
-            return provides
-        if component_base_key(provides) is not None:
+            return normalized_provides
+        if component_base_key(normalized_provides) is not None:
             msg = (
                 f"{method_name}() received both a component-qualified 'provides' key "
-                f"({provides!r}) and 'component'. Omit component=... or pass the non-component "
+                f"({normalized_provides!r}) and 'component'. Omit component=... or pass the "
+                "non-component "
                 "base key in provides=... and keep component=...."
             )
             raise DIWireInvalidRegistrationError(msg)
@@ -1358,13 +1361,7 @@ class Container:
             component=component,
             method_name=method_name,
         )
-        if get_origin(provides) is not Annotated:
-            return build_annotated_key((provides, component_marker))
-
-        annotation_args = get_args(provides)
-        provides_inner = annotation_args[0]
-        metadata = annotation_args[1:]
-        return build_annotated_key((provides_inner, *metadata, component_marker))
+        return build_annotated_key((normalized_provides, component_marker))
 
     def _normalize_registration_component(
         self,
@@ -1613,7 +1610,7 @@ class Container:
         return injected_arguments, remaining_dependencies
 
     def _closed_generic_typevar_map(self, *, provides: Any) -> dict[TypeVar, Any]:
-        normalized_provides = provides
+        normalized_provides = strip_non_component_annotation(provides)
         if get_origin(normalized_provides) is Annotated:
             normalized_provides = get_args(normalized_provides)[0]
 
@@ -1779,7 +1776,9 @@ class Container:
             return
 
         for dependency in dependencies:
-            dependency_key = self._unwrap_provider_dependency_key(dependency.provides)
+            dependency_key = self._normalize_dependency_identity_key(
+                self._unwrap_provider_dependency_key(dependency.provides),
+            )
             if self._providers_registrations.find_by_type(dependency_key):
                 continue
             with suppress(DIWireError):
@@ -1829,7 +1828,9 @@ class Container:
         effective_on_missing = self._missing_policy if on_missing is None else on_missing
         if effective_on_missing is MissingPolicy.ERROR:
             return
-        dependency_key = self._unwrap_provider_dependency_key(dependency)
+        dependency_key = self._normalize_dependency_identity_key(
+            self._unwrap_provider_dependency_key(dependency),
+        )
 
         if self._providers_registrations.find_by_type(dependency_key):
             return
@@ -2013,7 +2014,9 @@ class Container:
     ) -> None:
         registration_scope = scope or self._root_scope
         for injected_parameter in injected_parameters:
-            dependency_key = self._unwrap_provider_dependency_key(injected_parameter.dependency)
+            dependency_key = self._normalize_dependency_identity_key(
+                self._unwrap_provider_dependency_key(injected_parameter.dependency),
+            )
             if self._providers_registrations.find_by_type(dependency_key):
                 continue
             with suppress(DIWireError):
@@ -2049,32 +2052,37 @@ class Container:
         cache: dict[Any, int],
         in_progress: set[Any],
     ) -> int:
-        known_level = cache.get(dependency)
+        original_dependency = dependency
+        known_level = cache.get(original_dependency)
         if known_level is not None:
             return known_level
         if is_maybe_annotation(dependency):
-            maybe_inner_dependency = strip_maybe_annotation(dependency)
+            maybe_inner_dependency = strip_non_component_annotation(
+                strip_maybe_annotation(dependency)
+            )
             inferred_level = self._infer_dependency_scope_level(
                 dependency=maybe_inner_dependency,
                 cache=cache,
                 in_progress=in_progress,
             )
-            cache[dependency] = inferred_level
+            cache[original_dependency] = inferred_level
             return inferred_level
         if is_provider_annotation(dependency):
-            provider_inner_dependency = strip_provider_annotation(dependency)
+            provider_inner_dependency = strip_non_component_annotation(
+                strip_provider_annotation(dependency),
+            )
             inferred_level = self._infer_dependency_scope_level(
                 dependency=provider_inner_dependency,
                 cache=cache,
                 in_progress=in_progress,
             )
-            cache[dependency] = inferred_level
+            cache[original_dependency] = inferred_level
             return inferred_level
         if is_all_annotation(dependency):
-            if dependency in in_progress:
+            if original_dependency in in_progress:
                 return self._root_scope.level
 
-            inner = strip_all_annotation(dependency)
+            inner = strip_non_component_annotation(strip_all_annotation(dependency))
             collected_keys: list[Any] = []
             if self._providers_registrations.find_by_type(inner) is not None:
                 collected_keys.append(inner)
@@ -2084,10 +2092,10 @@ class Container:
                 if component_base_key(spec.provides) == inner
             )
             if not collected_keys:
-                cache[dependency] = self._root_scope.level
+                cache[original_dependency] = self._root_scope.level
                 return self._root_scope.level
 
-            in_progress.add(dependency)
+            in_progress.add(original_dependency)
             try:
                 inferred_level = max(
                     self._infer_dependency_scope_level(
@@ -2098,15 +2106,24 @@ class Container:
                     for collected_key in collected_keys
                 )
             finally:
-                in_progress.remove(dependency)
-            cache[dependency] = inferred_level
+                in_progress.remove(original_dependency)
+            cache[original_dependency] = inferred_level
             return inferred_level
+
+        dependency = strip_non_component_annotation(dependency)
+        known_level = cache.get(dependency)
+        if known_level is not None:
+            cache[original_dependency] = known_level
+            return known_level
 
         spec = self._providers_registrations.find_by_type(dependency)
         if spec is None:
             open_match = self._open_generic_registry.find_best_match(dependency)
             if open_match is not None:
-                return open_match.spec.scope.level
+                inferred_level = open_match.spec.scope.level
+                cache[original_dependency] = inferred_level
+                return inferred_level
+            cache[original_dependency] = self._root_scope.level
             return self._root_scope.level
         if dependency in in_progress:
             return spec.scope.level
@@ -2124,6 +2141,7 @@ class Container:
             )
         in_progress.remove(dependency)
         cache[dependency] = max_scope_level
+        cache[original_dependency] = max_scope_level
         return max_scope_level
 
     def _unwrap_provider_dependency_key(self, dependency: Any) -> Any:
@@ -2131,6 +2149,16 @@ class Container:
         if provider_inner_dependency is None:
             return dependency
         return provider_inner_dependency
+
+    def _normalize_dependency_identity_key(self, dependency: Any) -> Any:
+        if (
+            is_all_annotation(dependency)
+            or is_from_context_annotation(dependency)
+            or is_maybe_annotation(dependency)
+            or is_provider_annotation(dependency)
+        ):
+            return dependency
+        return strip_non_component_annotation(dependency)
 
     def _extract_provider_inner_dependency_fast(self, dependency: Any) -> Any | None:
         metadata = getattr(dependency, "__metadata__", None)
@@ -2240,11 +2268,25 @@ class Container:
         dependency: Any,
     ) -> bool:
         is_registered_dependency = getattr(resolver, "_is_registered_dependency", None)
+        normalized_dependency = strip_non_component_annotation(dependency)
         if callable(is_registered_dependency):
-            return bool(is_registered_dependency(dependency))
+            if bool(is_registered_dependency(dependency)):
+                return True
+            if normalized_dependency is dependency:
+                return False
+            return bool(is_registered_dependency(normalized_dependency))
         if self._providers_registrations.find_by_type(dependency) is not None:
             return True
-        return self._open_generic_registry.find_best_match(dependency) is not None
+        if (
+            normalized_dependency is not dependency
+            and self._providers_registrations.find_by_type(normalized_dependency) is not None
+        ):
+            return True
+        if self._open_generic_registry.find_best_match(dependency) is not None:
+            return True
+        if normalized_dependency is dependency:
+            return False
+        return self._open_generic_registry.find_best_match(normalized_dependency) is not None
 
     def _resolve_inject_resolver(self, kwargs: dict[str, Any]) -> ResolverProtocol:
         if INJECT_RESOLVER_KWARG in kwargs:

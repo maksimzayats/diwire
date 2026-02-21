@@ -111,6 +111,16 @@ def test_open_concrete_registration_resolves_closed_generic_requests() -> None:
     assert resolved.type is str
 
 
+def test_open_concrete_registration_resolves_non_component_annotated_closed_key() -> None:
+    container = Container()
+    container.add(_Box, provides=_IBox)
+
+    resolved = container.resolve(Annotated[_IBox[int], "meta"])
+
+    assert isinstance(resolved, _Box)
+    assert resolved.type is int
+
+
 def test_closed_registration_wins_over_open_template() -> None:
     container = Container()
     container.add(_Box, provides=_IBox)

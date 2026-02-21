@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import inspect
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Annotated, Any, cast
 
 import pytest
 
-from diwire import Container, Lifetime, Scope
+from diwire import Container, Lifetime, Provider, Scope
 from diwire._internal.providers import ProviderDependency, ProviderSpec, ProvidersRegistrations
 from diwire._internal.resolvers.assembly import planner as planner_module
 from diwire._internal.resolvers.assembly.planner import ResolverGenerationPlanner
@@ -295,3 +295,97 @@ def test_plan_provider_dependency_missing_required_uses_dependency_spec_error() 
             dependency_key=str,
             optional=False,
         )
+
+
+def test_plan_provider_dependency_uses_normalized_key_fallback() -> None:
+    planner = _planner()
+    registration_spec = planner._registrations.get_by_type(int)
+    dependency_key = Annotated[int, "meta"]
+    dependency = ProviderDependency(
+        provides=dependency_key,
+        parameter=inspect.Parameter(
+            name="dependency",
+            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        ),
+    )
+
+    _plan, dependency_slot, _requires_async, _sync_arg, _async_arg = (
+        planner._plan_provider_dependency(
+            spec=registration_spec,
+            dependency_index=0,
+            dependency=dependency,
+            dependency_key=dependency_key,
+            optional=False,
+        )
+    )
+
+    assert dependency_slot == registration_spec.slot
+
+
+def test_plan_provider_handle_dependency_uses_normalized_inner_key_fallback() -> None:
+    planner = _planner()
+    registration_spec = planner._registrations.get_by_type(int)
+    dependency_key = Provider[Annotated[int, "meta"]]
+    dependency = ProviderDependency(
+        provides=dependency_key,
+        parameter=inspect.Parameter(
+            name="provider",
+            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        ),
+    )
+
+    plan, _dependency_slot, _requires_async, _sync_arg, _async_arg = (
+        planner._plan_provider_handle_dependency(
+            spec=registration_spec,
+            dependency_index=0,
+            dependency=dependency,
+            dependency_key=dependency_key,
+        )
+    )
+
+    assert plan.provider_inner_slot == registration_spec.slot
+
+
+def test_dependency_slots_for_graph_uses_normalized_key_fallback() -> None:
+    planner = _planner()
+    dependency_key = Annotated[int, "meta"]
+    dependency = ProviderDependency(
+        provides=dependency_key,
+        parameter=inspect.Parameter(
+            name="dependency",
+            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        ),
+    )
+
+    slots = planner._dependency_slots_for_graph(
+        dependency=dependency,
+        requiring_provider=int,
+    )
+
+    assert slots == (planner._registrations.get_by_type(int).slot,)
+
+
+def test_dependency_spec_or_error_uses_normalized_key_fallback() -> None:
+    planner = _planner()
+
+    dependency_spec = planner._dependency_spec_or_error(
+        dependency_provides=Annotated[int, "meta"],
+        requiring_provider=int,
+    )
+
+    assert dependency_spec.provides is int
+
+
+def test_build_all_slots_by_key_includes_non_component_annotated_registrations() -> None:
+    container = Container()
+    container.add_instance(1, provides=Annotated[int, "meta"])
+    container.add_instance(2, provides=int, component="primary")
+    planner = ResolverGenerationPlanner(
+        root_scope=Scope.APP,
+        registrations=container._providers_registrations,
+    )
+
+    slots_by_key = planner._build_all_slots_by_key()
+
+    assert int in slots_by_key
+    assert len(slots_by_key[int]) == 2

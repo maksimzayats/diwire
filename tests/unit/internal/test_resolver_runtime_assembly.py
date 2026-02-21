@@ -8,11 +8,12 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass, field
 from types import TracebackType
-from typing import Any, Generic, TypeVar, cast
+from typing import Annotated, Any, Generic, TypeVar, cast
 
 import pytest
 
 from diwire import (
+    Component,
     Container,
     DependencyRegistrationPolicy,
     FromContext,
@@ -674,6 +675,17 @@ def test_scope_resolver_can_directly_resolve_from_context_marker() -> None:
 
     with container.enter_scope(Scope.REQUEST, context={int: 9}) as request_scope:
         assert request_scope.resolve(FromContext[int]) == 9
+
+
+def test_scope_resolver_from_context_normalizes_non_component_metadata() -> None:
+    component_key = Annotated[int, Component("priority")]
+    container = Container()
+
+    with container.enter_scope(Scope.REQUEST, context={int: 9, component_key: 7}) as request_scope:
+        assert request_scope.resolve(FromContext[Annotated[int, "meta"]]) == 9
+        assert (
+            request_scope.resolve(FromContext[Annotated[int, Component("priority"), "meta"]]) == 7
+        )
 
 
 def test_assembly_passes_resolver_to_inject_wrapped_provider_calls() -> None:

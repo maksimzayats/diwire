@@ -32,18 +32,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
-      - name: Run benchmark suite
-        run: |
-          mkdir -p benchmark-results
-          uv run pytest tests/benchmarks --benchmark-only -q --benchmark-json=benchmark-results/raw-benchmark.json
-
-      - name: Generate benchmark table artifacts
-        run: |
-          uv run python -m tools.benchmark_reporting \
-            --input benchmark-results/raw-benchmark.json \
-            --markdown benchmark-results/benchmark-table.md \
-            --json benchmark-results/benchmark-table.json \
-            --comment benchmark-results/pr-comment.md
+      - name: Run benchmark comparison report
+        run: make benchmark-report
 
       - name: Upload benchmark artifacts
         uses: actions/upload-artifact@v4
