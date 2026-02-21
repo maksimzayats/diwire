@@ -29,6 +29,7 @@ Each topic lives in a grouped folder named `ex_XX_<topic>/`.
 - [13. Pydantic Settings](#ex-13-pydantic-settings)
 - [14. Pytest Plugin](#ex-14-pytest-plugin)
 - [15. FastAPI](#ex-15-fastapi)
+- [24. Annotation Normalization](#ex-24-annotation-normalization)
 
 <a id="ex-01-quickstart"></a>
 ## 01. Quickstart
@@ -3420,6 +3421,95 @@ def main() -> None:
     print(f"response_1={response_1_json}")  # => response_1={"id":1,"resource":"req-1"}
     print(f"response_2={response_2_json}")  # => response_2={"id":2,"resource":"req-2"}
     print(f"cleanup={cleanup_json}")  # => cleanup={"closed":2,"opened":2}
+
+
+if __name__ == "__main__":
+    main()
+```
+
+<a id="ex-24-annotation-normalization"></a>
+## 24. Annotation Normalization
+
+Files:
+- [01_registration_keys.py](#ex-24-annotation-normalization--01-registration-keys-py)
+- [02_from_context_keys.py](#ex-24-annotation-normalization--02-from-context-keys-py)
+
+<a id="ex-24-annotation-normalization--01-registration-keys-py"></a>
+### [01_registration_keys.py](ex_24_annotation_normalization/01_registration_keys.py)
+
+Non-component Annotated metadata is normalized out of dependency keys.
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Annotated
+
+from diwire import Component, Container
+
+
+@dataclass(slots=True)
+class Service:
+    source: str
+
+
+def main() -> None:
+    container = Container()
+
+    container.add_instance(Service(source="base"), provides=Annotated[Service, "plain-meta"])
+    container.add_instance(
+        Service(source="component"),
+        provides=Annotated[Service, Component("primary"), "extra-meta"],
+    )
+
+    base_direct = container.resolve(Service)
+    base_annotated = container.resolve(Annotated[Service, "another-meta"])
+    component_direct = container.resolve(Annotated[Service, Component("primary")])
+    component_annotated = container.resolve(
+        Annotated[Service, Component("primary"), "different-meta"],
+    )
+
+    print(f"base_direct={base_direct.source}")  # => base_direct=base
+    print(f"base_annotated={base_annotated.source}")  # => base_annotated=base
+    print(f"component_direct={component_direct.source}")  # => component_direct=component
+    print(f"component_annotated={component_annotated.source}")  # => component_annotated=component
+
+
+if __name__ == "__main__":
+    main()
+```
+
+<a id="ex-24-annotation-normalization--02-from-context-keys-py"></a>
+### [02_from_context_keys.py](ex_24_annotation_normalization/02_from_context_keys.py)
+
+FromContext keys also ignore non-component Annotated metadata.
+
+```python
+from __future__ import annotations
+
+from typing import Annotated, TypeAlias
+
+from diwire import Component, Container, FromContext, Scope
+
+Priority: TypeAlias = Annotated[int, Component("priority")]
+PriorityWithMeta: TypeAlias = Annotated[int, Component("priority"), "meta"]
+
+
+def main() -> None:
+    container = Container()
+
+    with container.enter_scope(
+        Scope.REQUEST,
+        context={
+            int: 7,
+            Priority: 42,
+        },
+    ) as request_scope:
+        plain = request_scope.resolve(FromContext[Annotated[int, "request-id"]])
+        component = request_scope.resolve(FromContext[PriorityWithMeta])
+
+    print(f"plain={plain}")  # => plain=7
+    print(f"component={component}")  # => component=42
 
 
 if __name__ == "__main__":

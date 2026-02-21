@@ -46,6 +46,17 @@ first by passing ``component=...``:
 The same shortcut is available on ``add``, ``add_factory``,
 ``add_generator``, ``add_context_manager``, and ``decorate``.
 
+Metadata normalization
+----------------------
+
+For dependency key identity, DIWire strips all non-``Component`` ``Annotated`` metadata.
+
+- ``Annotated[T, \"meta\"]`` is treated as ``T``.
+- ``Annotated[T, Component(\"x\"), \"meta\"]`` is treated as ``Annotated[T, Component(\"x\")]``.
+- Only ``Component(...)`` metadata differentiates registrations.
+
+Runnable example: :doc:`/howto/examples/annotation-normalization`.
+
 
 Resolve all components
 ----------------------

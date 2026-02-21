@@ -61,5 +61,11 @@ Scope context values
 You can attach per-scope context values when entering a scope and resolve them via ``FromContext[T]`` in providers or
 in injected callables.
 
-Runnable example: :doc:`/howto/examples/scope-context-values`.
+Context key normalization follows the same rule as dependency keys:
 
+- ``FromContext[Annotated[T, \"meta\"]]`` looks up ``T``.
+- ``FromContext[Annotated[T, Component(\"x\"), \"meta\"]]`` looks up
+  ``Annotated[T, Component(\"x\")]``.
+
+Runnable examples: :doc:`/howto/examples/scope-context-values`,
+:doc:`/howto/examples/annotation-normalization`.
