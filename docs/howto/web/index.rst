@@ -1,5 +1,5 @@
 .. meta::
-   :description: Integrate diwire with web frameworks: FastAPI today, and patterns for Starlette, Flask, Django, aiohttp, and more.
+   :description: Integrate diwire with web frameworks: FastAPI, aiohttp, Sanic, and patterns for Starlette, Flask, Django, and more.
 
 Web frameworks
 ==============
@@ -18,6 +18,7 @@ The common pattern is:
 
    fastapi
    aiohttp
+   sanic
    starlette
    flask
    django

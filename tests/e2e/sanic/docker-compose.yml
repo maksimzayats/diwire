@@ -1,0 +1,35 @@
+services:
+  api:
+    build:
+      context: ../../..
+      dockerfile: tests/e2e/sanic/Dockerfile
+    command: ["uv", "run", "python", "-m", "tests.e2e.sanic.setup.app"]
+    environment:
+      SANIC_E2E_HOST: "0.0.0.0"
+      SANIC_E2E_PORT: "8240"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "uv",
+          "run",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8240/health', timeout=3).read()",
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 2s
+
+  tests:
+    build:
+      context: ../../..
+      dockerfile: tests/e2e/sanic/Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      SANIC_E2E_BASE_HTTP_URL: "http://api:8240"
+      SANIC_E2E_BASE_WS_URL: "ws://api:8240"
+    command: ["uv", "run", "pytest", "tests/e2e/sanic/tests/test_endpoints.py", "-q", "-ra"]

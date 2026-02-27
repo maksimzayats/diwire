@@ -38,12 +38,12 @@ functions from a root test container.
 
 Runnable example: :doc:`/howto/examples/pytest-plugin`.
 
-Web frameworks (FastAPI + aiohttp)
-----------------------------------
+Web frameworks (FastAPI + aiohttp + Sanic)
+------------------------------------------
 
-diwire includes dedicated middleware/context integrations for both FastAPI and aiohttp.
+diwire includes dedicated middleware/context integrations for FastAPI, aiohttp, and Sanic.
 Use ``@resolver_context.inject(scope=Scope.REQUEST)`` on handlers/endpoints and install the
 framework-specific request context middleware plus ``add_request_context(container)``.
 
-See :doc:`/howto/web/fastapi`, :doc:`/howto/web/aiohttp`, and the runnable script
-:doc:`/howto/examples/fastapi`.
+See :doc:`/howto/web/fastapi`, :doc:`/howto/web/aiohttp`, :doc:`/howto/web/sanic`, and the
+runnable script :doc:`/howto/examples/fastapi`.
