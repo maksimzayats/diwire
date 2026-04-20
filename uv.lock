@@ -595,14 +595,14 @@ toml = [
 
 [[package]]
 name = "dishka"
-version = "1.9.1"
+version = "1.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b9/97/18d4a9bd44f6baa975cd8d54ed3a1a86b341a43c9c077e647d351c9d4573/dishka-1.9.1.tar.gz", hash = "sha256:973f19dc65160a97370181106764ae076052af4489e94b0cedb3eb4e47fe13bf", size = 274962, upload-time = "2026-03-08T09:43:47.298Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/82/f0b47d43ed57a071b86122c941769f9a822dfbd0ba01448a0b5da1a2f2a6/dishka-1.10.0.tar.gz", hash = "sha256:cb4f2603e05195f352a8d2f0eff1ea726a3b51a6310586d5d6d8fd55e9b02ef4", size = 281742, upload-time = "2026-04-18T21:27:04.829Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/33/98/c8f80be83fbd92f5f9d4bdb5d619a9c9901fb1523c0b02a448b942e532e6/dishka-1.9.1-py3-none-any.whl", hash = "sha256:5080a46bf40bd403aee396aac81f999f679078655f9a6f2062111d62e94e7b18", size = 114327, upload-time = "2026-03-08T09:43:46.097Z" },
+    { url = "https://files.pythonhosted.org/packages/34/15/75f92305d907677d56b337589e11e1897259a1f9f61ff4b1eeebfff98492/dishka-1.10.0-py3-none-any.whl", hash = "sha256:a490fee102ee52123058f52c65b78d240fa1d95533ad7dbc271bf3eba394ebeb", size = 119836, upload-time = "2026-04-18T21:27:03.354Z" },
 ]
 
 [[package]]
