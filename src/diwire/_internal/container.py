@@ -600,6 +600,129 @@ class Container:
             resolved_dependency_registration_policy=resolved_dependency_registration_policy,
         )
 
+    def add_factory_class(
+        self,
+        factory_class: type[Any],
+        *,
+        provides: Any | Literal["infer"] = "infer",
+        component: Component | Any | None = None,
+        scope: BaseScope | Literal["from_container"] = "from_container",
+        lifetime: Lifetime | Literal["from_container"] = "from_container",
+        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
+        lock_mode: LockMode | Literal["from_container"] = "from_container",
+        dependency_registration_policy: DependencyRegistrationPolicy
+        | Literal["from_container"] = "from_container",
+    ) -> None:
+        """Register a callable class as a factory provider.
+
+        The container injects dependencies into ``factory_class``'s constructor,
+        creates an instance, and resolves the value returned by its ``__call__``
+        method. ``__call__`` may be synchronous or asynchronous.
+
+        Args:
+            factory_class: Class whose instances are callable providers.
+            provides: Dependency key produced by ``factory_class.__call__``.
+                ``"infer"`` uses the ``__call__`` return annotation.
+            component: Optional component marker value used to register under
+                ``Annotated[provides, Component(...)]``.
+            scope: Provider scope, or ``"from_container"``.
+            lifetime: Provider lifetime, or ``"from_container"``.
+            dependencies: Explicit constructor dependency mapping, or ``"infer"``.
+            lock_mode: Lock strategy, or ``"from_container"``.
+            dependency_registration_policy: Override dependency autoregistration for
+                this registration.
+
+        Raises:
+            DIWireInvalidRegistrationError: If configuration or annotations are
+                invalid.
+            DIWireInvalidProviderSpecError: If explicit dependencies do not match
+                factory class constructor parameters.
+            DIWireProviderDependencyInferenceError: If constructor dependencies
+                cannot be inferred.
+
+        Examples:
+            .. code-block:: python
+
+                class ClientFactory:
+                    def __init__(self, settings: Settings) -> None:
+                        self._settings = settings
+
+                    def __call__(self) -> Client:
+                        return Client(self._settings)
+
+
+                container.add_factory_class(ClientFactory, provides=Client)
+
+        """
+        factory_class_value = cast("Any", factory_class)
+        if not inspect.isclass(factory_class_value):
+            msg = "add_factory_class() parameter 'factory_class' must be a class."
+            raise DIWireInvalidRegistrationError(msg)
+
+        self._dependency_registration_validator.validate_concrete_type(factory_class_value)
+        call_method = self._resolve_factory_class_call_method(factory_class_value)
+
+        resolved_provides = self._resolve_registration_provides(
+            provides=provides,
+            method_name="add_factory_class",
+            infer_from=lambda: self._provider_return_type_extractor.extract_from_factory(
+                factory=call_method,
+            ),
+        )
+        resolved_provides_with_component = self._resolve_registration_component_provides(
+            provides=resolved_provides,
+            component=component,
+            method_name="add_factory_class",
+        )
+        resolved_scope = self._resolve_registration_scope(
+            scope=scope,
+            method_name="add_factory_class",
+        )
+        resolved_lifetime = self._resolve_registration_lifetime(
+            lifetime=lifetime,
+            method_name="add_factory_class",
+        )
+        explicit_dependencies = self._resolve_registration_dependencies(
+            dependencies=dependencies,
+            method_name="add_factory_class",
+        )
+        resolved_dependency_registration_policy = (
+            self._resolve_registration_dependency_registration_policy(
+                dependency_registration_policy=dependency_registration_policy,
+                method_name="add_factory_class",
+            )
+        )
+
+        dependencies_for_provider = self._resolve_concrete_registration_dependencies(
+            concrete_type=factory_class_value,
+            explicit_dependencies=explicit_dependencies,
+        )
+        is_async = self._provider_return_type_extractor.is_factory_async(call_method)
+        is_any_dependency_async = self._provider_return_type_extractor.is_any_dependency_async(
+            dependencies_for_provider,
+        )
+
+        resolved_lock_mode = self._resolve_provider_lock_mode(lock_mode)
+        factory_provider = self._build_factory_class_provider(
+            factory_class=factory_class_value,
+            is_async=is_async,
+        )
+
+        self._register_non_concrete_provider(
+            provides=resolved_provides_with_component,
+            provider_kind="factory",
+            provider=factory_provider,
+            provider_field="factory",
+            lifetime=resolved_lifetime,
+            scope=resolved_scope,
+            lock_mode=resolved_lock_mode,
+            is_async=is_async,
+            is_any_dependency_async=is_any_dependency_async,
+            needs_cleanup=False,
+            dependencies=dependencies_for_provider,
+            resolved_dependency_registration_policy=resolved_dependency_registration_policy,
+        )
+
     def add_generator(
         self,
         generator: (
@@ -1695,6 +1818,41 @@ class Container:
                 has_decoration_chain=has_decoration_chain,
             )
             return
+
+    def _resolve_factory_class_call_method(
+        self,
+        factory_class: type[Any],
+    ) -> FactoryProvider[Any]:
+        call_method = inspect.getattr_static(factory_class, "__call__", None)
+        resolved_call_method = factory_class.__call__
+        if call_method is type.__call__ or not callable(resolved_call_method):
+            msg = (
+                "add_factory_class() parameter 'factory_class' must define an instance "
+                "__call__ method."
+            )
+            raise DIWireInvalidRegistrationError(msg)
+
+        return cast("FactoryProvider[Any]", resolved_call_method)
+
+    def _build_factory_class_provider(
+        self,
+        *,
+        factory_class: type[Any],
+        is_async: bool,
+    ) -> FactoryProvider[Any]:
+        if is_async:
+
+            async def _async_factory_class_provider(*args: Any, **kwargs: Any) -> Any:
+                factory = factory_class(*args, **kwargs)
+                return await cast("Awaitable[Any]", factory())
+
+            return _async_factory_class_provider
+
+        def _factory_class_provider(*args: Any, **kwargs: Any) -> Any:
+            factory = factory_class(*args, **kwargs)
+            return factory()
+
+        return _factory_class_provider
 
     def _resolve_concrete_registration_dependencies(
         self,

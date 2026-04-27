@@ -69,6 +69,31 @@ Use :meth:`diwire.Container.add_factory` for custom construction logic (sync or 
    container = Container()
    container.add_factory(build_client, provides=Client)
 
+Use :meth:`diwire.Container.add_factory_class` when the factory needs constructor-injected state:
+
+.. code-block:: python
+
+   from dataclasses import dataclass
+
+   from diwire import Container, Injected
+
+   class Settings: ...
+
+   class Client:
+       def __init__(self, settings: Settings) -> None:
+           self.settings = settings
+
+   @dataclass(kw_only=True)
+   class ClientFactory:
+       settings: Injected[Settings]
+
+       def __call__(self) -> Client:
+           return Client(self.settings)
+
+   container = Container()
+   container.add_instance(Settings())
+   container.add_factory_class(ClientFactory, provides=Client)
+
 Cleanup providers
 ^^^^^^^^^^^^^^^^^
 
