@@ -660,7 +660,11 @@ class Container:
             raise DIWireInvalidRegistrationError(msg)
 
         self._dependency_registration_validator.validate_concrete_type(factory_class_value)
-        call_method = self._resolve_factory_class_call_method(factory_class_value)
+        call_method = self._resolve_factory_class_call_method(
+            factory_class=factory_class_value,
+            method_name="add_factory_class",
+            parameter_name="factory_class",
+        )
 
         resolved_provides = self._resolve_registration_provides(
             provides=provides,
@@ -703,10 +707,7 @@ class Container:
         )
 
         resolved_lock_mode = self._resolve_provider_lock_mode(lock_mode)
-        factory_provider = self._build_factory_class_provider(
-            factory_class=factory_class_value,
-            is_async=is_async,
-        )
+        factory_provider = self._build_factory_class_provider(factory_class=factory_class_value)
 
         self._register_non_concrete_provider(
             provides=resolved_provides_with_component,
@@ -719,6 +720,126 @@ class Container:
             is_async=is_async,
             is_any_dependency_async=is_any_dependency_async,
             needs_cleanup=False,
+            dependencies=dependencies_for_provider,
+            resolved_dependency_registration_policy=resolved_dependency_registration_policy,
+        )
+
+    def add_generator_class(
+        self,
+        generator_class: type[Any],
+        *,
+        provides: Any | Literal["infer"] = "infer",
+        component: Component | Any | None = None,
+        scope: BaseScope | Literal["from_container"] = "from_container",
+        lifetime: Lifetime | Literal["from_container"] = "from_container",
+        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
+        lock_mode: LockMode | Literal["from_container"] = "from_container",
+        dependency_registration_policy: DependencyRegistrationPolicy
+        | Literal["from_container"] = "from_container",
+        require_generator_finally: bool = True,
+    ) -> None:
+        """Register a callable class as a generator provider with cleanup.
+
+        The container injects dependencies into ``generator_class``'s constructor,
+        creates an instance, and treats its ``__call__`` result as a generator or
+        async generator. The yielded value is resolved as the dependency, and
+        teardown runs when the owning resolver scope exits.
+
+        Args:
+            generator_class: Class whose instances are generator providers.
+            provides: Dependency key yielded by ``generator_class.__call__``.
+                ``"infer"`` uses the ``__call__`` return annotation.
+            component: Optional component marker value used to register under
+                ``Annotated[provides, Component(...)]``.
+            scope: Provider scope, or ``"from_container"``.
+            lifetime: Provider lifetime, or ``"from_container"``.
+            dependencies: Explicit constructor dependency mapping, or ``"infer"``.
+            lock_mode: Lock strategy, or ``"from_container"``.
+            dependency_registration_policy: Override dependency autoregistration.
+            require_generator_finally: Validate that every ``yield`` / ``yield from``
+                in ``__call__`` appears inside the body of a ``try`` with a
+                non-empty ``finally``.
+
+        """
+        generator_class_value = cast("Any", generator_class)
+        if not inspect.isclass(generator_class_value):
+            msg = "add_generator_class() parameter 'generator_class' must be a class."
+            raise DIWireInvalidRegistrationError(msg)
+        require_generator_finally_value = cast("Any", require_generator_finally)
+        if not isinstance(require_generator_finally_value, bool):
+            msg = "add_generator_class() parameter 'require_generator_finally' must be bool."
+            raise DIWireInvalidRegistrationError(msg)
+
+        self._dependency_registration_validator.validate_concrete_type(generator_class_value)
+        call_method = self._resolve_factory_class_call_method(
+            factory_class=generator_class_value,
+            method_name="add_generator_class",
+            parameter_name="generator_class",
+        )
+        generator_provider = cast("GeneratorProvider[Any]", call_method)
+
+        resolved_provides = self._resolve_registration_provides(
+            provides=provides,
+            method_name="add_generator_class",
+            infer_from=lambda: self._provider_return_type_extractor.extract_from_generator(
+                generator=generator_provider,
+            ),
+        )
+        resolved_provides_with_component = self._resolve_registration_component_provides(
+            provides=resolved_provides,
+            component=component,
+            method_name="add_generator_class",
+        )
+        resolved_scope = self._resolve_registration_scope(
+            scope=scope,
+            method_name="add_generator_class",
+        )
+        resolved_lifetime = self._resolve_registration_lifetime(
+            lifetime=lifetime,
+            method_name="add_generator_class",
+        )
+        explicit_dependencies = self._resolve_registration_dependencies(
+            dependencies=dependencies,
+            method_name="add_generator_class",
+        )
+        resolved_dependency_registration_policy = (
+            self._resolve_registration_dependency_registration_policy(
+                dependency_registration_policy=dependency_registration_policy,
+                method_name="add_generator_class",
+            )
+        )
+
+        dependencies_for_provider = self._resolve_concrete_registration_dependencies(
+            concrete_type=generator_class_value,
+            explicit_dependencies=explicit_dependencies,
+        )
+        if require_generator_finally_value:
+            self._validate_generator_provider_uses_try_finally(
+                generator_provider,
+                method_name="add_generator_class",
+            )
+        is_async = self._provider_return_type_extractor.is_generator_async(generator_provider)
+        is_any_dependency_async = self._provider_return_type_extractor.is_any_dependency_async(
+            dependencies_for_provider,
+        )
+
+        resolved_lock_mode = self._resolve_provider_lock_mode(lock_mode)
+        provider = self._build_generator_factory_class_provider(
+            factory_class=generator_class_value,
+            is_async=is_async,
+        )
+
+        self._register_non_concrete_provider(
+            provides=resolved_provides_with_component,
+            provider_kind="generator",
+            provider=provider,
+            provider_field="generator",
+            lifetime=resolved_lifetime,
+            scope=resolved_scope,
+            lock_mode=resolved_lock_mode,
+            is_async=is_async,
+            is_any_dependency_async=is_any_dependency_async,
+            needs_cleanup=True,
             dependencies=dependencies_for_provider,
             resolved_dependency_registration_policy=resolved_dependency_registration_policy,
         )
@@ -857,6 +978,8 @@ class Container:
     def _validate_generator_provider_uses_try_finally(
         self,
         provider: GeneratorProvider[Any],
+        *,
+        method_name: str = "add_generator",
     ) -> None:
         unwrapped_provider = inspect.unwrap(provider)
         if not (
@@ -875,10 +998,11 @@ class Container:
                 parsed_source=parsed_source,
                 provider_name=provider_name,
                 function_name=getattr(unwrapped_provider, "__name__", ""),
+                method_name=method_name,
             )
         except (OSError, SyntaxError, TypeError, ValueError) as error:
             msg = (
-                "add_generator() could not inspect generator provider "
+                f"{method_name}() could not inspect generator provider "
                 f"'{provider_name}' for try/finally validation; pass "
                 "require_generator_finally=False if you intentionally want to skip "
                 "this validation."
@@ -889,7 +1013,7 @@ class Container:
             return
 
         msg = (
-            "add_generator() provider "
+            f"{method_name}() provider "
             f"'{provider_name}' must place every yield/yield from inside the body "
             "of a try block with a non-empty finally block; pass "
             "require_generator_finally=False if you intentionally want to skip this "
@@ -903,6 +1027,7 @@ class Container:
         parsed_source: ast.Module,
         provider_name: str,
         function_name: str,
+        method_name: str,
     ) -> ast.FunctionDef | ast.AsyncFunctionDef:
         function_nodes = [
             node
@@ -916,7 +1041,7 @@ class Container:
             return function_nodes[0]
 
         msg = (
-            "add_generator() could not inspect generator provider "
+            f"{method_name}() could not inspect generator provider "
             f"'{provider_name}' for try/finally validation; pass "
             "require_generator_finally=False if you intentionally want to skip "
             "this validation."
@@ -958,6 +1083,116 @@ class Container:
 
         return all(
             _walk_node(statement, inside_valid_try_body=False) for statement in function_node.body
+        )
+
+    def add_context_manager_class(
+        self,
+        context_manager_class: type[Any],
+        *,
+        provides: Any | Literal["infer"] = "infer",
+        component: Component | Any | None = None,
+        scope: BaseScope | Literal["from_container"] = "from_container",
+        lifetime: Lifetime | Literal["from_container"] = "from_container",
+        dependencies: Mapping[Any, inspect.Parameter] | Literal["infer"] = "infer",
+        lock_mode: LockMode | Literal["from_container"] = "from_container",
+        dependency_registration_policy: DependencyRegistrationPolicy
+        | Literal["from_container"] = "from_container",
+    ) -> None:
+        """Register a callable class as a context-manager provider with cleanup.
+
+        The container injects dependencies into ``context_manager_class``'s
+        constructor, creates an instance, and treats its ``__call__`` result as a
+        context manager or async context manager. The entered value is resolved
+        as the dependency, and cleanup runs when the owning resolver scope exits.
+
+        Args:
+            context_manager_class: Class whose instances return context managers.
+            provides: Dependency key entered by ``context_manager_class.__call__``.
+                ``"infer"`` uses the ``__call__`` return annotation.
+            component: Optional component marker value used to register under
+                ``Annotated[provides, Component(...)]``.
+            scope: Provider scope, or ``"from_container"``.
+            lifetime: Provider lifetime, or ``"from_container"``.
+            dependencies: Explicit constructor dependency mapping, or ``"infer"``.
+            lock_mode: Lock strategy, or ``"from_container"``.
+            dependency_registration_policy: Override dependency autoregistration.
+
+        """
+        context_manager_class_value = cast("Any", context_manager_class)
+        if not inspect.isclass(context_manager_class_value):
+            msg = "add_context_manager_class() parameter 'context_manager_class' must be a class."
+            raise DIWireInvalidRegistrationError(msg)
+
+        self._dependency_registration_validator.validate_concrete_type(
+            context_manager_class_value,
+        )
+        call_method = self._resolve_factory_class_call_method(
+            factory_class=context_manager_class_value,
+            method_name="add_context_manager_class",
+            parameter_name="context_manager_class",
+        )
+        context_manager_provider = cast("ContextManagerProvider[Any]", call_method)
+
+        resolved_provides = self._resolve_registration_provides(
+            provides=provides,
+            method_name="add_context_manager_class",
+            infer_from=lambda: self._provider_return_type_extractor.extract_from_context_manager(
+                context_manager=context_manager_provider,
+            ),
+        )
+        resolved_provides_with_component = self._resolve_registration_component_provides(
+            provides=resolved_provides,
+            component=component,
+            method_name="add_context_manager_class",
+        )
+        resolved_scope = self._resolve_registration_scope(
+            scope=scope,
+            method_name="add_context_manager_class",
+        )
+        resolved_lifetime = self._resolve_registration_lifetime(
+            lifetime=lifetime,
+            method_name="add_context_manager_class",
+        )
+        explicit_dependencies = self._resolve_registration_dependencies(
+            dependencies=dependencies,
+            method_name="add_context_manager_class",
+        )
+        resolved_dependency_registration_policy = (
+            self._resolve_registration_dependency_registration_policy(
+                dependency_registration_policy=dependency_registration_policy,
+                method_name="add_context_manager_class",
+            )
+        )
+
+        dependencies_for_provider = self._resolve_concrete_registration_dependencies(
+            concrete_type=context_manager_class_value,
+            explicit_dependencies=explicit_dependencies,
+        )
+        is_async = self._provider_return_type_extractor.is_context_manager_async(
+            context_manager_provider,
+        )
+        is_any_dependency_async = self._provider_return_type_extractor.is_any_dependency_async(
+            dependencies_for_provider,
+        )
+
+        resolved_lock_mode = self._resolve_provider_lock_mode(lock_mode)
+        provider = self._build_context_manager_factory_class_provider(
+            factory_class=context_manager_class_value,
+        )
+
+        self._register_non_concrete_provider(
+            provides=resolved_provides_with_component,
+            provider_kind="context_manager",
+            provider=provider,
+            provider_field="context_manager",
+            lifetime=resolved_lifetime,
+            scope=resolved_scope,
+            lock_mode=resolved_lock_mode,
+            is_async=is_async,
+            is_any_dependency_async=is_any_dependency_async,
+            needs_cleanup=True,
+            dependencies=dependencies_for_provider,
+            resolved_dependency_registration_policy=resolved_dependency_registration_policy,
         )
 
     def add_context_manager(
@@ -1821,13 +2056,16 @@ class Container:
 
     def _resolve_factory_class_call_method(
         self,
+        *,
         factory_class: type[Any],
+        method_name: str,
+        parameter_name: str,
     ) -> FactoryProvider[Any]:
         call_method = inspect.getattr_static(factory_class, "__call__", None)
         resolved_call_method = factory_class.__call__
         if call_method is type.__call__ or not callable(resolved_call_method):
             msg = (
-                "add_factory_class() parameter 'factory_class' must define an instance "
+                f"{method_name}() parameter '{parameter_name}' must define an instance "
                 "__call__ method."
             )
             raise DIWireInvalidRegistrationError(msg)
@@ -1838,21 +2076,58 @@ class Container:
         self,
         *,
         factory_class: type[Any],
-        is_async: bool,
     ) -> FactoryProvider[Any]:
-        if is_async:
-
-            async def _async_factory_class_provider(*args: Any, **kwargs: Any) -> Any:
-                factory = factory_class(*args, **kwargs)
-                return await cast("Awaitable[Any]", factory())
-
-            return _async_factory_class_provider
-
         def _factory_class_provider(*args: Any, **kwargs: Any) -> Any:
             factory = factory_class(*args, **kwargs)
             return factory()
 
         return _factory_class_provider
+
+    def _build_generator_factory_class_provider(
+        self,
+        *,
+        factory_class: type[Any],
+        is_async: bool,
+    ) -> GeneratorProvider[Any]:
+        if is_async:
+
+            async def _async_generator_factory_class_provider(
+                *args: Any,
+                **kwargs: Any,
+            ) -> AsyncGenerator[Any, None]:
+                factory = factory_class(*args, **kwargs)
+                provider_gen = cast("AsyncGenerator[Any, None]", factory())
+                try:
+                    async for value in provider_gen:
+                        yield value
+                finally:
+                    await provider_gen.aclose()
+
+            return _async_generator_factory_class_provider
+
+        def _generator_factory_class_provider(
+            *args: Any,
+            **kwargs: Any,
+        ) -> Generator[Any, None, None]:
+            factory = factory_class(*args, **kwargs)
+            provider_gen = cast("Generator[Any, None, None]", factory())
+            try:
+                yield from provider_gen
+            finally:
+                provider_gen.close()
+
+        return _generator_factory_class_provider
+
+    def _build_context_manager_factory_class_provider(
+        self,
+        *,
+        factory_class: type[Any],
+    ) -> ContextManagerProvider[Any]:
+        def _context_manager_factory_class_provider(*args: Any, **kwargs: Any) -> Any:
+            factory = factory_class(*args, **kwargs)
+            return factory()
+
+        return _context_manager_factory_class_provider
 
     def _resolve_concrete_registration_dependencies(
         self,

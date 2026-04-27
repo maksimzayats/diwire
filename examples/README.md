@@ -95,6 +95,7 @@ Files:
 - [05_add_context_manager_cleanup.py](#ex-02-registration-methods--05-add-context-manager-cleanup-py)
 - [06_explicit_dependencies.py](#ex-02-registration-methods--06-explicit-dependencies-py)
 - [07_add_generator_finally_validation.py](#ex-02-registration-methods--07-add-generator-finally-validation-py)
+- [08_add_cleanup_classes.py](#ex-02-registration-methods--08-add-cleanup-classes-py)
 
 <a id="ex-02-registration-methods--01-add-py"></a>
 ### [01_add.py](ex_02_registration_methods/01_add.py)
@@ -393,6 +394,90 @@ def main() -> None:
     with opt_out_container.enter_scope() as request_scope:
         resolved = request_scope.resolve(Resource)
         print(f"opt_out_resolve_ok={isinstance(resolved, Resource)}")  # => opt_out_resolve_ok=True
+
+
+if __name__ == "__main__":
+    main()
+```
+
+<a id="ex-02-registration-methods--08-add-cleanup-classes-py"></a>
+### [08_add_cleanup_classes.py](ex_02_registration_methods/08_add_cleanup_classes.py)
+
+Focused example: cleanup provider classes.
+
+```python
+from __future__ import annotations
+
+from collections.abc import Generator
+from contextlib import contextmanager
+from dataclasses import dataclass
+
+from diwire import Container, Injected, Lifetime, Scope
+
+
+@dataclass(kw_only=True)
+class State:
+    generator_cleaned: bool = False
+    context_manager_cleaned: bool = False
+
+
+class GeneratorResource:
+    pass
+
+
+class ContextManagerResource:
+    pass
+
+
+@dataclass(kw_only=True)
+class GeneratorResourceFactory:
+    state: Injected[State]
+
+    def __call__(self) -> Generator[GeneratorResource, None, None]:
+        try:
+            yield GeneratorResource()
+        finally:
+            self.state.generator_cleaned = True
+
+
+@dataclass(kw_only=True)
+class ContextManagerResourceFactory:
+    state: Injected[State]
+
+    @contextmanager
+    def __call__(self) -> Generator[ContextManagerResource, None, None]:
+        try:
+            yield ContextManagerResource()
+        finally:
+            self.state.context_manager_cleaned = True
+
+
+def main() -> None:
+    container = Container()
+    state = State()
+
+    container.add_instance(state)
+    container.add_generator_class(
+        GeneratorResourceFactory,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.add_context_manager_class(
+        ContextManagerResourceFactory,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with container.enter_scope() as request_scope:
+        _ = request_scope.resolve(GeneratorResource)
+        _ = request_scope.resolve(ContextManagerResource)
+
+    print(
+        f"generator_class_cleaned={state.generator_cleaned}",
+    )  # => generator_class_cleaned=True
+    print(
+        f"context_manager_class_cleaned={state.context_manager_cleaned}",
+    )  # => context_manager_class_cleaned=True
 
 
 if __name__ == "__main__":

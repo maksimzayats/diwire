@@ -100,11 +100,13 @@ Cleanup providers
 For deterministic cleanup, use:
 
 - :meth:`diwire.Container.add_generator` for generator/async-generator providers
+- :meth:`diwire.Container.add_generator_class` for callable classes whose ``__call__`` yields resources
 - :meth:`diwire.Container.add_context_manager` for (async) context manager providers
+- :meth:`diwire.Container.add_context_manager_class` for callable classes whose ``__call__`` returns context managers
 
-``add_generator()`` validates registrations by default and requires every ``yield`` / ``yield from`` in the provider
-body to be inside a ``try`` block with a non-empty ``finally``. If you intentionally want to skip this validation for
-a specific registration, pass ``require_generator_finally=False``.
+``add_generator()`` and ``add_generator_class()`` validate registrations by default and require every ``yield`` /
+``yield from`` in the provider body to be inside a ``try`` block with a non-empty ``finally``. If you intentionally
+want to skip this validation for a specific registration, pass ``require_generator_finally=False``.
 
 See :doc:`/howto/examples/scopes` for a runnable cleanup example.
 

@@ -80,6 +80,20 @@ Run locally
    :language: python
    :class: diwire-example py-run
 
+Add cleanup classes
+-------------------
+
+Run locally
+~~~~~~~~~~~
+
+.. code-block:: bash
+
+   uv run python examples/ex_02_registration_methods/08_add_cleanup_classes.py
+
+.. literalinclude:: ../../../examples/ex_02_registration_methods/08_add_cleanup_classes.py
+   :language: python
+   :class: diwire-example py-run
+
 Explicit dependencies
 ---------------------
 
