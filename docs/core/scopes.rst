@@ -51,9 +51,11 @@ Cleanup
 -------
 
 For deterministic cleanup, use generator / async-generator providers (or context manager providers). diwire will run
-cleanup when the owning scope exits.
-Generator registrations added via ``add_generator()`` are validated by default and must place ``yield`` in a
-``try/finally`` block. Opt out per registration with ``require_generator_finally=False`` when intentionally needed.
+cleanup when the owning scope exits. Use ``add_generator_class()`` or ``add_context_manager_class()`` when setup and
+cleanup need a provider class with constructor-injected state.
+Generator registrations added via ``add_generator()`` or ``add_generator_class()`` are validated by default and must
+place ``yield`` in a ``try/finally`` block. Opt out per registration with ``require_generator_finally=False`` when
+intentionally needed.
 
 Runnable example: :doc:`/howto/examples/scopes`.
 

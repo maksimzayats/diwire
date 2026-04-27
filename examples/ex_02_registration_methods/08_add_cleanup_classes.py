@@ -1,4 +1,4 @@
-"""Focused example: cleanup provider classes."""
+"""Focused example: provider classes that keep setup and cleanup together."""
 
 from __future__ import annotations
 

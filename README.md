@@ -142,10 +142,48 @@ container.add_factory(build_answer)
 print(container.resolve(int))  # => 42
 ```
 
+When provider setup needs injected state of its own, register a callable class instead of a function. The class
+constructor receives dependencies, and the instance `__call__` produces the dependency value.
+
+```python
+from dataclasses import dataclass
+
+from diwire import Container, Injected
+
+
+@dataclass(frozen=True)
+class Settings:
+    endpoint: str
+
+
+class Client:
+    def __init__(self, endpoint: str) -> None:
+        self.endpoint = endpoint
+
+
+@dataclass(kw_only=True)
+class ClientFactory:
+    settings: Injected[Settings]
+
+    def __call__(self) -> Client:
+        return Client(self.settings.endpoint)
+
+
+container = Container()
+container.add_instance(Settings(endpoint="https://api.example.test"))
+container.add_factory_class(ClientFactory, provides=Client)
+
+print(container.resolve(Client).endpoint)  # => https://api.example.test
+```
+
+The same pattern is available for cleanup providers: use `add_generator_class()` when `__call__` yields the resource,
+or `add_context_manager_class()` when `__call__` returns a context manager.
+
 ## Scopes & cleanup
 
 Use `Lifetime.SCOPED` for per-request/per-job caching. Use generator/async-generator providers for deterministic
-cleanup on scope exit.
+cleanup on scope exit. If the provider needs constructor-injected state, use the class variants and put the cleanup
+logic in `__call__`.
 
 ```python
 from collections.abc import Generator

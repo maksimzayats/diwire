@@ -96,6 +96,7 @@ Files:
 - [06_explicit_dependencies.py](#ex-02-registration-methods--06-explicit-dependencies-py)
 - [07_add_generator_finally_validation.py](#ex-02-registration-methods--07-add-generator-finally-validation-py)
 - [08_add_cleanup_classes.py](#ex-02-registration-methods--08-add-cleanup-classes-py)
+- [09_add_factory_class.py](#ex-02-registration-methods--09-add-factory-class-py)
 
 <a id="ex-02-registration-methods--01-add-py"></a>
 ### [01_add.py](ex_02_registration_methods/01_add.py)
@@ -403,7 +404,7 @@ if __name__ == "__main__":
 <a id="ex-02-registration-methods--08-add-cleanup-classes-py"></a>
 ### [08_add_cleanup_classes.py](ex_02_registration_methods/08_add_cleanup_classes.py)
 
-Focused example: cleanup provider classes.
+Focused example: provider classes that keep setup and cleanup together.
 
 ```python
 from __future__ import annotations
@@ -478,6 +479,52 @@ def main() -> None:
     print(
         f"context_manager_class_cleaned={state.context_manager_cleaned}",
     )  # => context_manager_class_cleaned=True
+
+
+if __name__ == "__main__":
+    main()
+```
+
+<a id="ex-02-registration-methods--09-add-factory-class-py"></a>
+### [09_add_factory_class.py](ex_02_registration_methods/09_add_factory_class.py)
+
+Focused example: ``add_factory_class`` for reusable provider state.
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from diwire import Container, Injected
+
+
+@dataclass(frozen=True, slots=True)
+class Settings:
+    endpoint: str
+
+
+@dataclass(frozen=True, slots=True)
+class Client:
+    endpoint: str
+
+
+@dataclass(kw_only=True)
+class ClientFactory:
+    settings: Injected[Settings]
+
+    def __call__(self) -> Client:
+        return Client(endpoint=self.settings.endpoint)
+
+
+def main() -> None:
+    container = Container()
+    container.add_instance(Settings(endpoint="https://api.example.test"))
+    container.add_factory_class(ClientFactory, provides=Client)
+
+    client = container.resolve(Client)
+    print(
+        f"factory_class_endpoint={client.endpoint}"
+    )  # => factory_class_endpoint=https://api.example.test
 
 
 if __name__ == "__main__":

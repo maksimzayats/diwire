@@ -52,6 +52,20 @@ Run locally
    :language: python
    :class: diwire-example py-run
 
+Add factory class
+-----------------
+
+Run locally
+~~~~~~~~~~~
+
+.. code-block:: bash
+
+   uv run python examples/ex_02_registration_methods/09_add_factory_class.py
+
+.. literalinclude:: ../../../examples/ex_02_registration_methods/09_add_factory_class.py
+   :language: python
+   :class: diwire-example py-run
+
 Add generator cleanup
 ---------------------
 

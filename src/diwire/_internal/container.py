@@ -617,7 +617,9 @@ class Container:
 
         The container injects dependencies into ``factory_class``'s constructor,
         creates an instance, and resolves the value returned by its ``__call__``
-        method. ``__call__`` may be synchronous or asynchronous.
+        method. ``__call__`` may be synchronous or asynchronous. This is useful
+        when provider construction needs injected state but the provider object
+        itself is not the dependency being resolved.
 
         Args:
             factory_class: Class whose instances are callable providers.
@@ -743,7 +745,8 @@ class Container:
         The container injects dependencies into ``generator_class``'s constructor,
         creates an instance, and treats its ``__call__`` result as a generator or
         async generator. The yielded value is resolved as the dependency, and
-        teardown runs when the owning resolver scope exits.
+        teardown runs when the owning resolver scope exits. Use this when setup
+        and cleanup belong together and need constructor-injected state.
 
         Args:
             generator_class: Class whose instances are generator providers.
@@ -1104,6 +1107,8 @@ class Container:
         constructor, creates an instance, and treats its ``__call__`` result as a
         context manager or async context manager. The entered value is resolved
         as the dependency, and cleanup runs when the owning resolver scope exits.
+        Decorating ``__call__`` with ``contextlib.contextmanager`` is supported
+        because the call returns a context manager object.
 
         Args:
             context_manager_class: Class whose instances return context managers.
