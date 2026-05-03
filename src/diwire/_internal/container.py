@@ -2814,6 +2814,8 @@ class Container:
             )
             if self._providers_registrations.find_by_type(dependency_key):
                 continue
+            if self._open_generic_registry.has_match_for_dependency(dependency_key):
+                continue
             with suppress(DIWireError):
                 self._autoregister_dependency(
                     dependency=dependency_key,

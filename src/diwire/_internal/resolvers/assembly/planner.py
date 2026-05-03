@@ -20,6 +20,7 @@ from diwire._internal.markers import (
     strip_non_component_annotation,
     strip_provider_annotation,
 )
+from diwire._internal.open_generics import _close_generic_dependency_with_typevar_defaults
 from diwire._internal.providers import (
     Lifetime,
     ProviderDependency,
@@ -916,10 +917,25 @@ class ResolverGenerationPlanner:
         if dependency_spec is not None:
             return dependency_spec
 
+        closed_dependency = _close_generic_dependency_with_typevar_defaults(dependency)
+        if closed_dependency is not dependency:
+            dependency_spec = self._registrations.find_by_type(closed_dependency)
+            if dependency_spec is not None:
+                return dependency_spec
+
         normalized_dependency = strip_non_component_annotation(dependency)
         if normalized_dependency is dependency:
             return None
-        return self._registrations.find_by_type(normalized_dependency)
+        dependency_spec = self._registrations.find_by_type(normalized_dependency)
+        if dependency_spec is not None:
+            return dependency_spec
+
+        closed_normalized_dependency = _close_generic_dependency_with_typevar_defaults(
+            normalized_dependency,
+        )
+        if closed_normalized_dependency is normalized_dependency:
+            return None
+        return self._registrations.find_by_type(closed_normalized_dependency)
 
     def _build_all_slots_by_key(self) -> dict[Any, tuple[int, ...]]:
         slots_by_key: dict[Any, list[int]] = {}

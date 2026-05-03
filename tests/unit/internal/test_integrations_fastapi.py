@@ -13,6 +13,7 @@ from starlette.requests import Request, StateT
 from starlette.websockets import WebSocket
 
 import diwire._internal.integrations.fastapi as fastapi_integration
+from diwire import Container, Lifetime, Scope
 from diwire.exceptions import DIWireIntegrationError
 
 
@@ -125,6 +126,22 @@ def test_get_websocket_selector_chooses_typed_path_when_state_typevar_is_present
     assert reloaded.get_websocket is reloaded._get_websocket_typed
 
 
+def test_get_websocket_selector_falls_back_to_untyped_path_when_state_typevar_is_absent(
+    monkeypatch: Any,
+) -> None:
+    module = importlib.reload(fastapi_integration)
+    monkeypatch.setattr(
+        module.WebSocket,
+        "__orig_bases__",
+        (SimpleNamespace(__args__=(object(),)),),
+        raising=False,
+    )
+
+    reloaded = importlib.reload(module)
+
+    assert reloaded.get_websocket is reloaded._get_websocket_untyped
+
+
 def test_get_websocket_selector_falls_back_to_untyped_path_on_orig_bases_errors(
     monkeypatch: Any,
 ) -> None:
@@ -134,3 +151,39 @@ def test_get_websocket_selector_falls_back_to_untyped_path_on_orig_bases_errors(
     reloaded = importlib.reload(module)
 
     assert reloaded.get_websocket is reloaded._get_websocket_untyped
+
+
+def test_add_request_context_resolves_untyped_request_dependency() -> None:
+    class _RequestService:
+        def __init__(self, request: Request) -> None:
+            self.request = request
+
+    container = Container()
+    fastapi_integration.add_request_context(container)
+    container.add(_RequestService, scope=Scope.REQUEST, lifetime=Lifetime.SCOPED)
+
+    token = fastapi_integration._connection_context.set(_request_for_scope("/request"))
+    try:
+        with container.enter_scope() as resolver:
+            service = resolver.resolve(_RequestService)
+        assert service.request.url.path == "/request"
+    finally:
+        fastapi_integration._connection_context.reset(token)
+
+
+def test_add_request_context_resolves_untyped_websocket_dependency() -> None:
+    class _WebSocketService:
+        def __init__(self, websocket: WebSocket) -> None:
+            self.websocket = websocket
+
+    container = Container()
+    fastapi_integration.add_request_context(container)
+    container.add(_WebSocketService, scope=Scope.REQUEST, lifetime=Lifetime.SCOPED)
+
+    token = fastapi_integration._connection_context.set(_websocket_for_scope("/websocket"))
+    try:
+        with container.enter_scope() as resolver:
+            service = resolver.resolve(_WebSocketService)
+        assert service.websocket.url.path == "/websocket"
+    finally:
+        fastapi_integration._connection_context.reset(token)

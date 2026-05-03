@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import inspect
 from types import SimpleNamespace
-from typing import Annotated, Any, cast
+from typing import Annotated, Any, Generic, cast
 
 import pytest
+from typing_extensions import TypeVar as TypeVarExt
 
 from diwire import Container, Lifetime, Provider, Scope
 from diwire._internal.providers import ProviderDependency, ProviderSpec, ProvidersRegistrations
@@ -12,6 +13,17 @@ from diwire._internal.resolvers.assembly import planner as planner_module
 from diwire._internal.resolvers.assembly.planner import ResolverGenerationPlanner
 from diwire._internal.scope import BaseScope, BaseScopes
 from diwire.exceptions import DIWireDependencyNotRegisteredError, DIWireInvalidProviderSpecError
+
+DefaultT = TypeVarExt("DefaultT", default=str)
+BareT = TypeVarExt("BareT")
+
+
+class _DefaultPlannerBox(Generic[DefaultT]):
+    pass
+
+
+class _BarePlannerBox(Generic[BareT]):
+    pass
 
 
 def _planner() -> ResolverGenerationPlanner:
@@ -374,6 +386,56 @@ def test_dependency_spec_or_error_uses_normalized_key_fallback() -> None:
     )
 
     assert dependency_spec.provides is int
+
+
+def test_find_registered_dependency_spec_uses_typevar_default_closed_lookup() -> None:
+    container = Container()
+    container.add_instance(_DefaultPlannerBox[str](), provides=_DefaultPlannerBox[str])
+    planner = ResolverGenerationPlanner(
+        root_scope=Scope.APP,
+        registrations=container._providers_registrations,
+    )
+
+    dependency_spec = planner._find_registered_dependency_spec(_DefaultPlannerBox)
+
+    assert dependency_spec is not None
+    assert dependency_spec.provides == _DefaultPlannerBox[str]
+
+
+def test_find_registered_dependency_spec_uses_normalized_typevar_default_lookup() -> None:
+    container = Container()
+    container.add_instance(_DefaultPlannerBox[str](), provides=_DefaultPlannerBox[str])
+    planner = ResolverGenerationPlanner(
+        root_scope=Scope.APP,
+        registrations=container._providers_registrations,
+    )
+
+    dependency_spec = planner._find_registered_dependency_spec(
+        Annotated[_DefaultPlannerBox, "meta"]
+    )
+
+    assert dependency_spec is not None
+    assert dependency_spec.provides == _DefaultPlannerBox[str]
+
+
+def test_find_registered_dependency_spec_keeps_searching_after_missing_default_closed_lookup() -> (
+    None
+):
+    planner = _planner()
+
+    dependency_spec = planner._find_registered_dependency_spec(_DefaultPlannerBox)
+
+    assert dependency_spec is None
+
+
+def test_find_registered_dependency_spec_returns_none_for_normalized_generic_without_defaults() -> (
+    None
+):
+    planner = _planner()
+
+    dependency_spec = planner._find_registered_dependency_spec(Annotated[_BarePlannerBox, "meta"])
+
+    assert dependency_spec is None
 
 
 def test_build_all_slots_by_key_includes_non_component_annotated_registrations() -> None:
