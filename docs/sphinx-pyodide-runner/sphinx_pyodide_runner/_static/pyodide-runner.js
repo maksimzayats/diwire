@@ -120,6 +120,7 @@ await micropip.install([${escaped}])
       const result = await pyodide.runPythonAsync(`
 from contextlib import redirect_stdout, redirect_stderr
 from io import StringIO
+import linecache
 import sys
 import types
 
@@ -128,14 +129,22 @@ _stderr = StringIO()
 with redirect_stdout(_stdout), redirect_stderr(_stderr):
     # Execute in a real module so get_type_hints() can resolve names via sys.modules.
     _mod = types.ModuleType("__main__")
+    _filename = f"<pyodide-runner-{id(_mod)}>"
+    _source_lines = __RUN_CODE__.splitlines(keepends=True)
+    if __RUN_CODE__ and not __RUN_CODE__.endswith(("\\n", "\\r")):
+        _source_lines[-1] += "\\n"
+
+    linecache.cache[_filename] = (len(__RUN_CODE__), None, _source_lines, _filename)
     _mod.__dict__["__name__"] = "__main__"
     _mod.__dict__["__package__"] = None
+    _mod.__dict__["__file__"] = _filename
 
     _old_main = sys.modules.get("__main__")
     sys.modules["__main__"] = _mod
     try:
-        exec(__RUN_CODE__, _mod.__dict__)
+        exec(compile(__RUN_CODE__, _filename, "exec"), _mod.__dict__)
     finally:
+        linecache.cache.pop(_filename, None)
         if _old_main is None:
             del sys.modules["__main__"]
         else:
