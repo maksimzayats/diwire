@@ -33,7 +33,44 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
+        if: matrix.python-version != '3.15t'
         run: uv sync --group dev --group docs
+
+      - name: Install dependencies without mypy on Python 3.15t
+        if: matrix.python-version == '3.15t'
+        run: |
+          # mypy 2.1.0 depends on ast-serialize 0.3.0, whose built wheel is
+          # rejected by uv for free-threaded Python 3.15. Keep the 3.15t
+          # runtime test coverage, but skip installing the incompatible type
+          # checker stack until upstream publishes compatible wheels.
+          uv sync --group dev --group docs \
+            --no-install-package mypy \
+            --no-install-package ast-serialize
+          echo "UV_NO_SYNC=1" >> "$GITHUB_ENV"
+
+      - name: Remove Python 3.15-incompatible sphinxcontrib-jsmath namespace hook
+        if: matrix.python-version == '3.15' || matrix.python-version == '3.15t'
+        run: |
+          uv run python - <<'PY'
+          from importlib.metadata import PackageNotFoundError, distribution
+          from pathlib import Path
+
+          # sphinxcontrib-jsmath 1.0.1 ships an old setuptools namespace .pth hook.
+          # On Python 3.15, that hook raises a startup KeyError before every subprocess.
+          # Remove only the broken hook; the real sphinxcontrib.jsmath package stays installed.
+          target = "sphinxcontrib_jsmath-1.0.1-py3.7-nspkg.pth"
+
+          try:
+              dist = distribution("sphinxcontrib-jsmath")
+          except PackageNotFoundError:
+              raise SystemExit(0)
+
+          for file in dist.files or ():
+              if file.name == target:
+                  path = Path(dist.locate_file(file))
+                  path.unlink(missing_ok=True)
+                  print(f"Removed {path}")
+          PY
 
       - name: Check formatting
         run: uv run ruff format --check .
@@ -42,6 +79,7 @@ jobs:
         run: uv run ruff check .
 
       - name: Type check with mypy
+        if: matrix.python-version != '3.15t'
         run: uv run mypy .
 
       - name: Run tests with coverage
@@ -49,8 +87,17 @@ jobs:
         run: uv run pytest tests/ --benchmark-skip --cov=src/diwire --cov-report=xml --cov-report=term-missing
 
       - name: Run tests (no coverage on Python 3.15)
-        if: matrix.python-version == '3.15' || matrix.python-version == '3.15t'
+        if: matrix.python-version == '3.15'
         run: uv run pytest tests/ --benchmark-skip
+
+      - name: Run tests (no coverage on Python 3.15t)
+        if: matrix.python-version == '3.15t'
+        run: |
+          # mypy is intentionally not installed on 3.15t above, so skip only
+          # the mypy-plugin tests that import mypy directly.
+          uv run pytest tests/ --benchmark-skip \
+            --ignore=tests/unit/internal/test_integrations_mypy_plugin.py \
+            --ignore=tests/unit/internal/test_integrations_mypy_plugin_internal.py
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.14'
