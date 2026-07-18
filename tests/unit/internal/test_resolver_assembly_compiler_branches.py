@@ -2564,6 +2564,94 @@ def test_optimized_sync_dependency_expression_keeps_unsafe_transient_boundaries(
     assert f"_provider_{unsafe_workflow.slot}(" not in expression
 
 
+def test_dispatch_cache_is_disabled_only_when_every_workflow_is_cached() -> None:
+    root_scope = _scope_plan(level=Scope.APP.level, name="app")
+    request_scope = _scope_plan(level=Scope.REQUEST.level, name="request")
+    cached_workflows = tuple(_workflow_plan(slot=slot) for slot in range(1, 5))
+
+    for workflow_count in (1, 4):
+        plan = _generation_plan(
+            scopes=(root_scope, request_scope),
+            workflows=cached_workflows[:workflow_count],
+        )
+        assert not compiler_module._dispatch_cache_enabled_for_class(
+            plan=plan,
+            class_plan=root_scope,
+        )
+        assert not compiler_module._dispatch_cache_enabled_for_class(
+            plan=plan,
+            class_plan=request_scope,
+        )
+
+    transient_workflow = replace(
+        cached_workflows[0],
+        lifetime=Lifetime.TRANSIENT,
+        is_cached=False,
+        is_transient=True,
+        cache_owner_scope_level=None,
+    )
+    one_transient_plan = _generation_plan(
+        scopes=(root_scope, request_scope),
+        workflows=(transient_workflow,),
+    )
+    assert compiler_module._dispatch_cache_enabled_for_class(
+        plan=one_transient_plan,
+        class_plan=request_scope,
+    )
+
+    mixed_plan = _generation_plan(
+        scopes=(root_scope, request_scope),
+        workflows=(*cached_workflows[:3], transient_workflow),
+    )
+    assert compiler_module._dispatch_cache_enabled_for_class(
+        plan=mixed_plan,
+        class_plan=root_scope,
+    )
+    assert compiler_module._dispatch_cache_enabled_for_class(
+        plan=mixed_plan,
+        class_plan=request_scope,
+    )
+
+
+@pytest.mark.asyncio
+async def test_all_cached_dispatch_omits_dead_cache_and_preserves_equality_lookup() -> None:
+    class _EqualityKey:
+        def __init__(self, value: int) -> None:
+            self.value = value
+
+        def __eq__(self, other: object) -> bool:
+            return isinstance(other, _EqualityKey) and self.value == other.value
+
+        def __hash__(self) -> int:
+            return hash(self.value)
+
+    registration_keys = tuple(_EqualityKey(value) for value in range(4))
+    registered_values = tuple(object() for _ in registration_keys)
+    container = Container(use_resolver_context=False)
+    for key, value in zip(registration_keys, registered_values, strict=True):
+        container.add_instance(value, provides=key)
+    resolver = container.compile()
+
+    with resolver.enter_scope(Scope.REQUEST) as request_scope:
+        request_slots = cast("Any", type(request_scope)).__slots__
+        assert "_last_sync_dependency" not in request_slots
+        assert "_last_sync_method" not in request_slots
+        assert "_last_async_dependency" not in request_slots
+        assert "_last_async_method" not in request_slots
+        assert "_last_sync_dependency" not in request_scope.resolve.__code__.co_names
+        assert "_last_async_dependency" not in request_scope.aresolve.__code__.co_names
+
+        lookup_key = _EqualityKey(registration_keys[0].value)
+        assert lookup_key is not registration_keys[0]
+        assert request_scope.resolve(lookup_key) is registered_values[0]
+        assert await request_scope.aresolve(lookup_key) is registered_values[0]
+
+        with pytest.raises(DIWireDependencyNotRegisteredError, match="is not registered"):
+            request_scope.resolve(_EqualityKey(99))
+        with pytest.raises(DIWireDependencyNotRegisteredError, match="is not registered"):
+            await request_scope.aresolve(_EqualityKey(99))
+
+
 def test_resolver_init_additional_branches() -> None:
     root_scope = _scope_plan(level=1, name="app")
     request_scope = _scope_plan(level=3, name="request")

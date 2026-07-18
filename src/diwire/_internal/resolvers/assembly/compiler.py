@@ -3710,7 +3710,10 @@ def _dispatch_cache_enabled_for_class(
     plan: ResolverGenerationPlan,
     class_plan: ScopePlan,
 ) -> bool:
-    workflow_count = len(_dispatch_workflows(plan=plan, class_plan=class_plan))
+    workflows = _dispatch_workflows(plan=plan, class_plan=class_plan)
+    if not any(not workflow.is_cached for workflow in workflows):
+        return False
+    workflow_count = len(workflows)
     return workflow_count >= _DISPATCH_CACHE_WORKFLOW_THRESHOLD or (
         not class_plan.is_root and workflow_count == 1
     )
