@@ -1874,6 +1874,275 @@ def test_optimized_sync_dependency_expression_additional_branches() -> None:
     )
 
 
+def test_optimized_sync_dependency_expression_recursively_inlines_safe_transients() -> None:
+    compiler = compiler_module.ResolversAssemblyCompiler()
+    request_scope = _scope_plan(level=Scope.REQUEST.level, name="request")
+    leaf_workflow = _workflow_plan(
+        slot=90,
+        scope_level=Scope.REQUEST.level,
+        is_cached=False,
+        cache_owner_scope_level=None,
+        provider_attribute="concrete_type",
+    )
+    middle_dependency = _dependency(provides=leaf_workflow.provides, name="leaf")
+    middle_workflow = _workflow_plan(
+        slot=91,
+        scope_level=Scope.REQUEST.level,
+        is_cached=False,
+        cache_owner_scope_level=None,
+        provider_attribute="factory",
+        dependencies=(middle_dependency,),
+        dependency_slots=(leaf_workflow.slot,),
+        dependency_requires_async=(False,),
+        dependency_plans=(
+            ProviderDependencyPlan(
+                kind="provider",
+                dependency=middle_dependency,
+                dependency_index=0,
+                dependency_slot=leaf_workflow.slot,
+            ),
+        ),
+    )
+    outer_dependency = _dependency(provides=middle_workflow.provides, name="middle")
+    outer_workflow = _workflow_plan(
+        slot=92,
+        scope_level=Scope.REQUEST.level,
+        is_cached=False,
+        cache_owner_scope_level=None,
+        provider_attribute="concrete_type",
+        dependencies=(outer_dependency,),
+        dependency_slots=(middle_workflow.slot,),
+        dependency_requires_async=(False,),
+        dependency_plans=(
+            ProviderDependencyPlan(
+                kind="provider",
+                dependency=outer_dependency,
+                dependency_index=0,
+                dependency_slot=middle_workflow.slot,
+            ),
+        ),
+    )
+    runtime = _runtime(
+        scopes=(_scope_plan(level=Scope.APP.level, name="app"), request_scope),
+        workflows=(leaf_workflow, middle_workflow, outer_workflow),
+    )
+    dependency = _dependency(provides=outer_workflow.provides, name="outer")
+
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=request_scope,
+            dependency_plan=ProviderDependencyPlan(
+                kind="provider",
+                dependency=dependency,
+                dependency_index=0,
+                dependency_slot=outer_workflow.slot,
+            ),
+            resolver_expression="self._root_resolver",
+        )
+        == "_provider_92(_provider_91(_provider_90()))"
+    )
+    bounded_plan = ProviderDependencyPlan(
+        kind="provider",
+        dependency=dependency,
+        dependency_index=0,
+        dependency_slot=outer_workflow.slot,
+    )
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=request_scope,
+            dependency_plan=bounded_plan,
+            resolver_expression="self._root_resolver",
+            inline_state=compiler_module._SyncTransientInlineState(
+                remaining_non_leaf_nodes=1,
+                active_slots=set(),
+            ),
+        )
+        == "_provider_92(self.resolve_91())"
+    )
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=request_scope,
+            dependency_plan=bounded_plan,
+            resolver_expression="self._root_resolver",
+            inline_state=compiler_module._SyncTransientInlineState(
+                remaining_non_leaf_nodes=8,
+                active_slots={outer_workflow.slot},
+            ),
+        )
+        == "self.resolve_92()"
+    )
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=request_scope,
+            dependency_plan=bounded_plan,
+            resolver_expression="self._root_resolver",
+            inline_state=compiler_module._SyncTransientInlineState(
+                remaining_non_leaf_nodes=8,
+                active_slots=set(),
+            ),
+            inline_depth=compiler_module._SYNC_TRANSIENT_INLINE_MAX_DEPTH,
+        )
+        == "self.resolve_92()"
+    )
+
+
+@pytest.mark.parametrize(
+    "unsafe_workflow",
+    [
+        _workflow_plan(
+            slot=93,
+            scope_level=Scope.REQUEST.level,
+            is_cached=True,
+            cache_owner_scope_level=Scope.REQUEST.level,
+            provider_attribute="factory",
+            dependencies=(_dependency(name="value"),),
+            dependency_slots=(90,),
+            dependency_requires_async=(False,),
+            dependency_plans=(
+                ProviderDependencyPlan(
+                    kind="provider",
+                    dependency=_dependency(name="value"),
+                    dependency_index=0,
+                    dependency_slot=90,
+                ),
+            ),
+        ),
+        _workflow_plan(
+            slot=94,
+            scope_level=Scope.REQUEST.level,
+            is_cached=False,
+            cache_owner_scope_level=None,
+            provider_attribute="factory",
+            requires_async=True,
+            is_provider_async=True,
+            dependencies=(_dependency(name="value"),),
+            dependency_slots=(90,),
+            dependency_requires_async=(False,),
+            dependency_plans=(
+                ProviderDependencyPlan(
+                    kind="provider",
+                    dependency=_dependency(name="value"),
+                    dependency_index=0,
+                    dependency_slot=90,
+                ),
+            ),
+        ),
+        _workflow_plan(
+            slot=95,
+            scope_level=Scope.REQUEST.level,
+            is_cached=False,
+            cache_owner_scope_level=None,
+            provider_attribute="factory",
+            provider_is_inject_wrapper=True,
+            dependencies=(_dependency(name="value"),),
+            dependency_slots=(90,),
+            dependency_requires_async=(False,),
+            dependency_plans=(
+                ProviderDependencyPlan(
+                    kind="provider",
+                    dependency=_dependency(name="value"),
+                    dependency_index=0,
+                    dependency_slot=90,
+                ),
+            ),
+        ),
+        replace(
+            _workflow_plan(
+                slot=96,
+                scope_level=Scope.REQUEST.level,
+                is_cached=False,
+                cache_owner_scope_level=None,
+                provider_attribute="factory",
+                dependencies=(_dependency(name="value"),),
+                dependency_slots=(90,),
+                dependency_requires_async=(False,),
+                dependency_plans=(
+                    ProviderDependencyPlan(
+                        kind="provider",
+                        dependency=_dependency(name="value"),
+                        dependency_index=0,
+                        dependency_slot=90,
+                    ),
+                ),
+            ),
+            needs_cleanup=True,
+        ),
+        _workflow_plan(
+            slot=97,
+            scope_level=Scope.REQUEST.level,
+            is_cached=False,
+            cache_owner_scope_level=None,
+            provider_attribute="factory",
+            dependencies=(_dependency(name="value"),),
+            dependency_slots=(90,),
+            dependency_requires_async=(False,),
+            dependency_plans=(),
+        ),
+        _workflow_plan(
+            slot=98,
+            scope_level=Scope.REQUEST.level,
+            is_cached=False,
+            cache_owner_scope_level=None,
+            provider_attribute="factory",
+            dependencies=(_dependency(name="value"),),
+            dependency_slots=(None,),
+            dependency_requires_async=(False,),
+            dependency_plans=(
+                ProviderDependencyPlan(
+                    kind="all",
+                    dependency=_dependency(name="value"),
+                    dependency_index=0,
+                    all_slots=(90,),
+                ),
+            ),
+        ),
+    ],
+    ids=(
+        "cached",
+        "async",
+        "inject-wrapper",
+        "cleanup",
+        "incomplete-plan",
+        "all-dependency",
+    ),
+)
+def test_optimized_sync_dependency_expression_keeps_unsafe_transient_boundaries(
+    unsafe_workflow: ProviderWorkflowPlan,
+) -> None:
+    compiler = compiler_module.ResolversAssemblyCompiler()
+    request_scope = _scope_plan(level=Scope.REQUEST.level, name="request")
+    leaf_workflow = _workflow_plan(
+        slot=90,
+        scope_level=Scope.REQUEST.level,
+        is_cached=False,
+        cache_owner_scope_level=None,
+        provider_attribute="factory",
+    )
+    runtime = _runtime(
+        scopes=(_scope_plan(level=Scope.APP.level, name="app"), request_scope),
+        workflows=(leaf_workflow, unsafe_workflow),
+    )
+    dependency = _dependency(provides=unsafe_workflow.provides)
+    expression = compiler._optimized_sync_dependency_expression(
+        runtime=runtime,
+        class_plan=request_scope,
+        dependency_plan=ProviderDependencyPlan(
+            kind="provider",
+            dependency=dependency,
+            dependency_index=0,
+            dependency_slot=unsafe_workflow.slot,
+        ),
+        resolver_expression="self._root_resolver",
+    )
+
+    assert isinstance(expression, str)
+    assert f"_provider_{unsafe_workflow.slot}(" not in expression
+
+
 def test_resolver_init_additional_branches() -> None:
     root_scope = _scope_plan(level=1, name="app")
     request_scope = _scope_plan(level=3, name="request")

@@ -25,9 +25,18 @@ class _ThreadScoped:
         self.initialized = False
 
 
-class _ThreadScopedConsumer:
+class _ThreadScopedIntermediate:
     def __init__(self, dependency: _ThreadScoped) -> None:
         self.dependency = dependency
+
+
+class _ThreadScopedConsumer:
+    def __init__(self, intermediate: _ThreadScopedIntermediate) -> None:
+        self.intermediate = intermediate
+
+    @property
+    def dependency(self) -> _ThreadScoped:
+        return self.intermediate.dependency
 
 
 class _AsyncScoped:
@@ -160,6 +169,12 @@ def test_concurrency_stress_current_scope_dependency_fast_path_publishes_once() 
         lock_mode=LockMode.THREAD,
     )
     container.add(
+        _ThreadScopedIntermediate,
+        provides=_ThreadScopedIntermediate,
+        lifetime=Lifetime.TRANSIENT,
+        scope=Scope.REQUEST,
+    )
+    container.add(
         _ThreadScopedConsumer,
         provides=_ThreadScopedConsumer,
         lifetime=Lifetime.TRANSIENT,
@@ -180,6 +195,8 @@ def test_concurrency_stress_current_scope_dependency_fast_path_publishes_once() 
 
         dependencies = [consumer.dependency for consumer in consumers]
         assert calls == 1
+        assert len({id(consumer) for consumer in consumers}) == _THREAD_WORKERS
+        assert len({id(consumer.intermediate) for consumer in consumers}) == _THREAD_WORKERS
         assert all(dependency is dependencies[0] for dependency in dependencies)
         assert all(dependency.initialized for dependency in dependencies)
         assert request_scope.resolve(_ThreadScopedConsumer).dependency is dependencies[0]

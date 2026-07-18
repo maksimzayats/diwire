@@ -53,6 +53,11 @@ _FALLBACK_ARGUMENT_EXPRESSION: Final[Any] = object()
 _OMIT_ARGUMENT: Final[Any] = object()
 _FILENAME: Final[str] = "<diwire-resolver>"
 _DISPATCH_CACHE_WORKFLOW_THRESHOLD: Final[int] = 4
+_SYNC_TRANSIENT_INLINE_MAX_DEPTH: Final[int] = 6
+_SYNC_TRANSIENT_INLINE_MAX_NON_LEAF_NODES: Final[int] = 8
+_SYNC_TRANSIENT_INLINE_DEPENDENCY_KINDS: Final[frozenset[str]] = frozenset(
+    {"literal", "omit", "provider"},
+)
 _CLEANUP_KIND_SYNC: Final[int] = 0
 _CLEANUP_KIND_ASYNC: Final[int] = 1
 _CLEANUP_KIND_SYNC_GENERATOR: Final[int] = 2
@@ -63,6 +68,14 @@ class _ArgumentPart:
     kind: Literal["arg", "kw", "star", "starstar"]
     value: Any
     name: str | None = None
+
+
+@dataclass(slots=True)
+class _SyncTransientInlineState:
+    """Bound recursive transient expressions emitted for one generated method."""
+
+    remaining_non_leaf_nodes: int
+    active_slots: set[int]
 
 
 @dataclass(slots=True)
@@ -1564,10 +1577,18 @@ class ResolversAssemblyCompiler:
         runtime: _ResolverRuntime,
         class_plan: ScopePlan,
         workflow: ProviderWorkflowPlan,
+        inline_state: _SyncTransientInlineState | None = None,
+        inline_depth: int = 0,
     ) -> tuple[str, ...]:
         dependency_plans = workflow.dependency_plans
         if not dependency_plans:
             return ()
+
+        if inline_state is None:
+            inline_state = _SyncTransientInlineState(
+                remaining_non_leaf_nodes=_SYNC_TRANSIENT_INLINE_MAX_NON_LEAF_NODES,
+                active_slots={workflow.slot},
+            )
 
         resolver_expression = (
             "self" if class_plan.scope_level == runtime.root_scope_level else "self._root_resolver"
@@ -1588,6 +1609,8 @@ class ResolversAssemblyCompiler:
                 class_plan=class_plan,
                 dependency_plan=dependency_plan,
                 resolver_expression=resolver_expression,
+                inline_state=inline_state,
+                inline_depth=inline_depth,
             )
             if expression is _FALLBACK_ARGUMENT_EXPRESSION:
                 return workflow.sync_arguments
@@ -1633,6 +1656,76 @@ class ResolversAssemblyCompiler:
 
         return tuple(optimized_arguments)
 
+    def _inlined_sync_transient_dependency_expression(
+        self,
+        *,
+        runtime: _ResolverRuntime,
+        class_plan: ScopePlan,
+        workflow: ProviderWorkflowPlan,
+        inline_state: _SyncTransientInlineState,
+        inline_depth: int,
+    ) -> str | None:
+        if (
+            workflow.scope_level != class_plan.scope_level
+            or workflow.max_required_scope_level > class_plan.scope_level
+            or not workflow.is_transient
+            or workflow.is_cached
+            or workflow.cache_owner_scope_level is not None
+            or workflow.requires_async
+            or workflow.is_provider_async
+            or workflow.provider_attribute not in {"concrete_type", "factory"}
+            or workflow.provider_is_inject_wrapper
+            or workflow.needs_cleanup
+            or workflow.uses_thread_lock
+            or workflow.uses_async_lock
+        ):
+            return None
+
+        dependency_plans = workflow.dependency_plans
+        dependencies = workflow.dependencies
+        if len(dependency_plans) != len(dependencies):
+            return None
+        if any(
+            dependency_plan.dependency != dependency
+            or dependency_plan.kind not in _SYNC_TRANSIENT_INLINE_DEPENDENCY_KINDS
+            or dependency_plan.dependency.parameter.kind
+            in {inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD}
+            or (dependency_plan.kind == "provider" and dependency_plan.dependency_slot is None)
+            or (dependency_plan.kind == "literal" and dependency_plan.literal_expression is None)
+            for dependency_plan, dependency in zip(
+                dependency_plans,
+                dependencies,
+                strict=True,
+            )
+        ):
+            return None
+
+        provider_expression = f"_provider_{workflow.slot}"
+        if not dependency_plans:
+            return f"{provider_expression}()"
+        if (
+            inline_depth >= _SYNC_TRANSIENT_INLINE_MAX_DEPTH
+            or inline_state.remaining_non_leaf_nodes == 0
+            or workflow.slot in inline_state.active_slots
+        ):
+            return None
+
+        inline_state.remaining_non_leaf_nodes -= 1
+        inline_state.active_slots.add(workflow.slot)
+        try:
+            optimized_arguments = self._optimized_sync_arguments(
+                runtime=runtime,
+                class_plan=class_plan,
+                workflow=workflow,
+                inline_state=inline_state,
+                inline_depth=inline_depth + 1,
+            )
+        finally:
+            inline_state.active_slots.remove(workflow.slot)
+
+        arguments = ", ".join(argument for argument in optimized_arguments if argument)
+        return f"{provider_expression}({arguments})" if arguments else f"{provider_expression}()"
+
     def _optimized_sync_dependency_expression(
         self,
         *,
@@ -1640,6 +1733,8 @@ class ResolversAssemblyCompiler:
         class_plan: ScopePlan,
         dependency_plan: ProviderDependencyPlan,
         resolver_expression: str,
+        inline_state: _SyncTransientInlineState | None = None,
+        inline_depth: int = 0,
     ) -> str | None | object:
         if dependency_plan.kind == "omit":
             return None
@@ -1677,16 +1772,20 @@ class ResolversAssemblyCompiler:
                 owner_scope = runtime.scopes_by_level[dependency_workflow.scope_level]
                 expression = f"self.{owner_scope.resolver_attr_name}.resolve_{dependency_slot}()"
 
-        if (
-            dependency_workflow.scope_level == class_plan.scope_level
-            and not dependency_workflow.is_cached
-            and not dependency_workflow.requires_async
-            and dependency_workflow.provider_attribute in {"concrete_type", "factory"}
-            and not dependency_workflow.provider_is_inject_wrapper
-            and not dependency_workflow.dependencies
-            and not dependency_workflow.dependency_plans
-        ):
-            expression = f"_provider_{dependency_slot}()"
+        if inline_state is None:
+            inline_state = _SyncTransientInlineState(
+                remaining_non_leaf_nodes=_SYNC_TRANSIENT_INLINE_MAX_NON_LEAF_NODES,
+                active_slots=set(),
+            )
+        inlined_expression = self._inlined_sync_transient_dependency_expression(
+            runtime=runtime,
+            class_plan=class_plan,
+            workflow=dependency_workflow,
+            inline_state=inline_state,
+            inline_depth=inline_depth,
+        )
+        if inlined_expression is not None:
+            expression = inlined_expression
 
         cache_owner_scope_level = dependency_workflow.cache_owner_scope_level
         if dependency_workflow.is_cached and cache_owner_scope_level == runtime.root_scope_level:

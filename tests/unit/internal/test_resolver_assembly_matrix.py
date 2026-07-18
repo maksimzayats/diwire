@@ -36,6 +36,27 @@ class _SignatureService:
         self.payload = payload
 
 
+class _InlineLeaf:
+    pass
+
+
+class _InlineBranch:
+    def __init__(self, left: _InlineLeaf, right: _InlineLeaf) -> None:
+        self.left = left
+        self.right = right
+
+
+class _InlineMiddle:
+    def __init__(self, branch: _InlineBranch, cached: _MatrixService) -> None:
+        self.branch = branch
+        self.cached = cached
+
+
+class _InlineRoot:
+    def __init__(self, middle: _InlineMiddle) -> None:
+        self.middle = middle
+
+
 def _build_resolver_with_cleanup_mode(
     *,
     container: Container,
@@ -177,6 +198,94 @@ def test_assembly_matrix_current_scope_dependency_cache_handles_miss_hit_and_iso
         assert second_pair.first is not first_pair.first
 
     assert calls == 2
+
+
+def test_assembly_matrix_bounded_transient_inlining_preserves_graph_semantics() -> None:
+    events: list[str] = []
+
+    def build_leaf() -> _InlineLeaf:
+        events.append("leaf")
+        return _InlineLeaf()
+
+    def build_branch(left: _InlineLeaf, right: _InlineLeaf) -> _InlineBranch:
+        events.append("branch")
+        return _InlineBranch(left, right)
+
+    def build_cached() -> _MatrixService:
+        events.append("cached")
+        return _MatrixService()
+
+    def build_middle(branch: _InlineBranch, cached: _MatrixService) -> _InlineMiddle:
+        events.append("middle")
+        return _InlineMiddle(branch, cached)
+
+    def build_root(middle: _InlineMiddle) -> _InlineRoot:
+        events.append("root")
+        return _InlineRoot(middle)
+
+    container = Container()
+    container.add_factory(
+        build_leaf,
+        provides=_InlineLeaf,
+        lifetime=Lifetime.TRANSIENT,
+        scope=Scope.REQUEST,
+    )
+    container.add_factory(
+        build_branch,
+        provides=_InlineBranch,
+        lifetime=Lifetime.TRANSIENT,
+        scope=Scope.REQUEST,
+    )
+    container.add_factory(
+        build_cached,
+        provides=_MatrixService,
+        lifetime=Lifetime.SCOPED,
+        scope=Scope.REQUEST,
+    )
+    container.add_factory(
+        build_middle,
+        provides=_InlineMiddle,
+        lifetime=Lifetime.TRANSIENT,
+        scope=Scope.REQUEST,
+    )
+    container.add_factory(
+        build_root,
+        provides=_InlineRoot,
+        lifetime=Lifetime.TRANSIENT,
+        scope=Scope.REQUEST,
+    )
+
+    with container.enter_scope(Scope.REQUEST) as request_scope:
+        first = request_scope.resolve(_InlineRoot)
+        second = request_scope.resolve(_InlineRoot)
+
+        assert first is not second
+        assert first.middle is not second.middle
+        assert first.middle.branch is not second.middle.branch
+        assert first.middle.branch.left is not first.middle.branch.right
+        assert second.middle.branch.left is not second.middle.branch.right
+        assert first.middle.branch.left is not second.middle.branch.left
+        assert first.middle.branch.right is not second.middle.branch.right
+        assert first.middle.cached is second.middle.cached
+        assert events == [
+            "leaf",
+            "leaf",
+            "branch",
+            "cached",
+            "middle",
+            "root",
+            "leaf",
+            "leaf",
+            "branch",
+            "middle",
+            "root",
+        ]
+
+    with container.enter_scope(Scope.REQUEST) as next_scope:
+        next_value = next_scope.resolve(_InlineRoot)
+
+    assert next_value.middle.cached is not first.middle.cached
+    assert events[-6:] == ["leaf", "leaf", "branch", "cached", "middle", "root"]
 
 
 @pytest.mark.parametrize("provider_kind", ["generator", "context_manager"])
