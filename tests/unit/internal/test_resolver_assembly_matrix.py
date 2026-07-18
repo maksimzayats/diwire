@@ -7,7 +7,7 @@ from typing import Any, cast
 
 import pytest
 
-from diwire import Container, Lifetime, LockMode, Scope
+from diwire import Container, Lifetime, LockMode, ResolverProtocol, Scope
 from diwire._internal.resolvers.assembly.compiler import ResolversAssemblyCompiler
 from diwire.exceptions import DIWireAsyncDependencyInSyncContextError, DIWireScopeMismatchError
 
@@ -65,6 +65,32 @@ class _InlineManagedMiddle:
 class _InlineManagedRoot:
     def __init__(self, middle: _InlineManagedMiddle) -> None:
         self.middle = middle
+
+
+class _CachedFusionLeafA:
+    pass
+
+
+class _CachedFusionLeafB:
+    pass
+
+
+class _CachedFusionMiddleA:
+    def __init__(self, leaf_a: _CachedFusionLeafA, leaf_b: _CachedFusionLeafB) -> None:
+        self.leaf_a = leaf_a
+        self.leaf_b = leaf_b
+
+
+class _CachedFusionMiddleB:
+    def __init__(self, leaf_a: _CachedFusionLeafA, leaf_b: _CachedFusionLeafB) -> None:
+        self.leaf_a = leaf_a
+        self.leaf_b = leaf_b
+
+
+class _CachedFusionRoot:
+    def __init__(self, middle_a: _CachedFusionMiddleA, middle_b: _CachedFusionMiddleB) -> None:
+        self.middle_a = middle_a
+        self.middle_b = middle_b
 
 
 def _build_resolver_with_cleanup_mode(
@@ -208,6 +234,177 @@ def test_assembly_matrix_current_scope_dependency_cache_handles_miss_hit_and_iso
         assert second_pair.first is not first_pair.first
 
     assert calls == 2
+
+
+def test_cached_dispatch_fusion_preserves_dfs_order_identity_and_scope_isolation() -> None:
+    events: list[str] = []
+
+    def build_leaf_a() -> _CachedFusionLeafA:
+        events.append("leaf_a")
+        return _CachedFusionLeafA()
+
+    def build_leaf_b() -> _CachedFusionLeafB:
+        events.append("leaf_b")
+        return _CachedFusionLeafB()
+
+    def build_middle_a(
+        leaf_a: _CachedFusionLeafA,
+        leaf_b: _CachedFusionLeafB,
+    ) -> _CachedFusionMiddleA:
+        events.append("middle_a")
+        return _CachedFusionMiddleA(leaf_a, leaf_b)
+
+    def build_middle_b(
+        leaf_a: _CachedFusionLeafA,
+        leaf_b: _CachedFusionLeafB,
+    ) -> _CachedFusionMiddleB:
+        events.append("middle_b")
+        return _CachedFusionMiddleB(leaf_a, leaf_b)
+
+    def build_root(
+        middle_a: _CachedFusionMiddleA,
+        middle_b: _CachedFusionMiddleB,
+    ) -> _CachedFusionRoot:
+        events.append("root")
+        return _CachedFusionRoot(middle_a, middle_b)
+
+    container = Container(lock_mode=LockMode.NONE)
+    for provider in (build_leaf_a, build_leaf_b, build_middle_a, build_middle_b, build_root):
+        container.add_factory(
+            provider,
+            lifetime=Lifetime.SCOPED,
+            scope=Scope.REQUEST,
+        )
+
+    with container.enter_scope(Scope.REQUEST) as first_scope:
+        first = first_scope.resolve(_CachedFusionRoot)
+        assert first_scope.resolve(_CachedFusionRoot) is first
+        assert first.middle_a.leaf_a is first.middle_b.leaf_a
+        assert first.middle_a.leaf_b is first.middle_b.leaf_b
+
+    assert events == ["leaf_a", "leaf_b", "middle_a", "middle_b", "root"]
+
+    events.clear()
+    with container.enter_scope(Scope.REQUEST) as second_scope:
+        second = second_scope.resolve(_CachedFusionRoot)
+
+    assert second is not first
+    assert second.middle_a.leaf_a is not first.middle_a.leaf_a
+    assert events == ["leaf_a", "leaf_b", "middle_a", "middle_b", "root"]
+
+
+def test_cached_dispatch_fusion_preserves_partial_cache_and_retry_after_failure() -> None:
+    events: list[str] = []
+    middle_a_values: list[_CachedFusionMiddleA] = []
+    middle_b_calls = 0
+
+    def build_leaf_a() -> _CachedFusionLeafA:
+        events.append("leaf_a")
+        return _CachedFusionLeafA()
+
+    def build_leaf_b() -> _CachedFusionLeafB:
+        events.append("leaf_b")
+        return _CachedFusionLeafB()
+
+    def build_middle_a(
+        leaf_a: _CachedFusionLeafA,
+        leaf_b: _CachedFusionLeafB,
+    ) -> _CachedFusionMiddleA:
+        events.append("middle_a")
+        value = _CachedFusionMiddleA(leaf_a, leaf_b)
+        middle_a_values.append(value)
+        return value
+
+    def build_middle_b(
+        leaf_a: _CachedFusionLeafA,
+        leaf_b: _CachedFusionLeafB,
+    ) -> _CachedFusionMiddleB:
+        nonlocal middle_b_calls
+        middle_b_calls += 1
+        events.append(f"middle_b:{middle_b_calls}")
+        if middle_b_calls == 1:
+            raise ValueError("middle failure")
+        return _CachedFusionMiddleB(leaf_a, leaf_b)
+
+    def build_root(
+        middle_a: _CachedFusionMiddleA,
+        middle_b: _CachedFusionMiddleB,
+    ) -> _CachedFusionRoot:
+        events.append("root")
+        return _CachedFusionRoot(middle_a, middle_b)
+
+    container = Container(lock_mode=LockMode.NONE)
+    for provider in (build_leaf_a, build_leaf_b, build_middle_a, build_middle_b, build_root):
+        container.add_factory(provider, lifetime=Lifetime.SCOPED, scope=Scope.REQUEST)
+
+    with container.enter_scope(Scope.REQUEST) as scope:
+        with pytest.raises(ValueError, match="middle failure"):
+            scope.resolve(_CachedFusionRoot)
+
+        assert scope.resolve(_CachedFusionMiddleA) is middle_a_values[0]
+        root = scope.resolve(_CachedFusionRoot)
+        assert root.middle_a is middle_a_values[0]
+        assert scope.resolve(_CachedFusionRoot) is root
+
+    assert events == [
+        "leaf_a",
+        "leaf_b",
+        "middle_a",
+        "middle_b:1",
+        "middle_b:2",
+        "root",
+    ]
+
+
+def test_cached_dispatch_fusion_preserves_reentrant_outer_publication() -> None:
+    middle_a_calls = 0
+    request_scope: ResolverProtocol | None = None
+    nested_values: list[_CachedFusionMiddleA] = []
+    outer_values: list[_CachedFusionMiddleA] = []
+
+    def build_leaf_a() -> _CachedFusionLeafA:
+        return _CachedFusionLeafA()
+
+    def build_leaf_b() -> _CachedFusionLeafB:
+        return _CachedFusionLeafB()
+
+    def build_middle_a(
+        leaf_a: _CachedFusionLeafA,
+        leaf_b: _CachedFusionLeafB,
+    ) -> _CachedFusionMiddleA:
+        nonlocal middle_a_calls
+        middle_a_calls += 1
+        value = _CachedFusionMiddleA(leaf_a, leaf_b)
+        if middle_a_calls == 1:
+            assert request_scope is not None
+            nested_values.append(request_scope.resolve(_CachedFusionMiddleA))
+            outer_values.append(value)
+        return value
+
+    def build_middle_b(
+        leaf_a: _CachedFusionLeafA,
+        leaf_b: _CachedFusionLeafB,
+    ) -> _CachedFusionMiddleB:
+        return _CachedFusionMiddleB(leaf_a, leaf_b)
+
+    def build_root(
+        middle_a: _CachedFusionMiddleA,
+        middle_b: _CachedFusionMiddleB,
+    ) -> _CachedFusionRoot:
+        return _CachedFusionRoot(middle_a, middle_b)
+
+    container = Container(lock_mode=LockMode.NONE)
+    for provider in (build_leaf_a, build_leaf_b, build_middle_a, build_middle_b, build_root):
+        container.add_factory(provider, lifetime=Lifetime.SCOPED, scope=Scope.REQUEST)
+
+    with container.enter_scope(Scope.REQUEST) as scope:
+        request_scope = scope
+        root = scope.resolve(_CachedFusionRoot)
+
+        assert middle_a_calls == 2
+        assert nested_values[0] is not outer_values[0]
+        assert root.middle_a is outer_values[0]
+        assert scope.resolve(_CachedFusionMiddleA) is outer_values[0]
 
 
 def test_assembly_matrix_bounded_transient_inlining_preserves_graph_semantics() -> None:
