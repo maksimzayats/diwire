@@ -93,6 +93,15 @@ class _CachedFusionRoot:
         self.middle_b = middle_b
 
 
+class _CachedFusionZero:
+    pass
+
+
+class _CachedFusionOne:
+    def __init__(self, value: _CachedFusionZero) -> None:
+        self.value = value
+
+
 def _build_resolver_with_cleanup_mode(
     *,
     container: Container,
@@ -405,6 +414,70 @@ def test_cached_dispatch_fusion_preserves_reentrant_outer_publication() -> None:
         assert nested_values[0] is not outer_values[0]
         assert root.middle_a is outer_values[0]
         assert scope.resolve(_CachedFusionMiddleA) is outer_values[0]
+
+
+def test_shallow_one_child_cached_dispatch_fusion_preserves_identity_and_scope_isolation() -> None:
+    events: list[str] = []
+
+    def build_zero() -> _CachedFusionZero:
+        events.append("zero")
+        return _CachedFusionZero()
+
+    def build_one(value: _CachedFusionZero) -> _CachedFusionOne:
+        events.append("one")
+        return _CachedFusionOne(value)
+
+    container = Container(lock_mode=LockMode.NONE)
+    for provider in (build_zero, build_one):
+        container.add_factory(provider, lifetime=Lifetime.SCOPED, scope=Scope.REQUEST)
+
+    with container.enter_scope(Scope.REQUEST) as first_scope:
+        first = first_scope.resolve(_CachedFusionOne)
+
+        assert first_scope.resolve(_CachedFusionOne) is first
+        assert first_scope.resolve(_CachedFusionZero) is first.value
+
+    with container.enter_scope(Scope.REQUEST) as second_scope:
+        second = second_scope.resolve(_CachedFusionOne)
+
+        assert second is not first
+        assert second.value is not first.value
+
+    assert events == ["zero", "one", "zero", "one"]
+
+
+def test_shallow_cached_dispatch_fusion_preserves_failure_and_reentrant_publication() -> None:
+    calls = 0
+    request_scope: ResolverProtocol | None = None
+    nested_values: list[_CachedFusionZero] = []
+    outer_values: list[_CachedFusionZero] = []
+
+    def build_value() -> _CachedFusionZero:
+        nonlocal calls
+        calls += 1
+        value = _CachedFusionZero()
+        if calls == 1:
+            raise ValueError("shallow failure")
+        if calls == 2:
+            assert request_scope is not None
+            nested_values.append(request_scope.resolve(_CachedFusionZero))
+            outer_values.append(value)
+        return value
+
+    container = Container(lock_mode=LockMode.NONE)
+    container.add_factory(build_value, lifetime=Lifetime.SCOPED, scope=Scope.REQUEST)
+
+    with container.enter_scope(Scope.REQUEST) as scope:
+        request_scope = scope
+        with pytest.raises(ValueError, match="shallow failure"):
+            scope.resolve(_CachedFusionZero)
+
+        value = scope.resolve(_CachedFusionZero)
+
+        assert calls == 3
+        assert nested_values[0] is not outer_values[0]
+        assert value is outer_values[0]
+        assert scope.resolve(_CachedFusionZero) is outer_values[0]
 
 
 def test_assembly_matrix_bounded_transient_inlining_preserves_graph_semantics() -> None:

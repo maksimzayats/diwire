@@ -2611,6 +2611,65 @@ def _cached_fusion_test_workflow(
     )
 
 
+def test_sync_cached_dispatch_fusion_supports_zero_and_one_child() -> None:
+    class _Leaf:
+        pass
+
+    class _OneChild:
+        pass
+
+    class _ZeroChild:
+        pass
+
+    root_scope = _scope_plan(level=Scope.APP.level, name="app")
+    request_scope = _scope_plan(level=Scope.REQUEST.level, name="request")
+    leaf = _cached_fusion_test_workflow(slot=80, provides=_Leaf)
+    one_child = _cached_fusion_test_workflow(
+        slot=81,
+        provides=_OneChild,
+        children=(leaf,),
+    )
+    zero_child = _cached_fusion_test_workflow(slot=82, provides=_ZeroChild)
+    compiler = compiler_module.ResolversAssemblyCompiler()
+
+    for workflows in ((zero_child,), (leaf, one_child)):
+        for ordered_workflows in (workflows, tuple(reversed(workflows))):
+            runtime = _runtime(
+                scopes=(root_scope, request_scope),
+                workflows=ordered_workflows,
+            )
+            generated_globals = compiler._build_generated_globals(runtime=runtime)
+            sync_dispatch = compiler._compile_dispatch_method(
+                runtime=runtime,
+                class_plan=request_scope,
+                generated_globals=generated_globals,
+                is_async=False,
+            )
+            async_dispatch = compiler._compile_dispatch_method(
+                runtime=runtime,
+                class_plan=request_scope,
+                generated_globals=generated_globals,
+                is_async=True,
+            )
+            target = zero_child if len(workflows) == 1 else one_child
+
+            assert f"_provider_{target.slot}" in sync_dispatch.__code__.co_names
+            assert f"resolve_{target.slot}" not in sync_dispatch.__code__.co_names
+            assert f"_provider_{target.slot}" not in async_dispatch.__code__.co_names
+            assert f"aresolve_{target.slot}" in async_dispatch.__code__.co_names
+
+            if target is one_child:
+                instructions = tuple(dis.get_instructions(sync_dispatch))
+                assert "_provider_80" in sync_dispatch.__code__.co_names
+                assert (
+                    sum(
+                        instruction.opname == "LOAD_ATTR" and instruction.argval == "_cache_80"
+                        for instruction in instructions
+                    )
+                    == 2
+                )
+
+
 def test_sync_cached_fusion_workflow_safety_rejects_every_unsafe_shape() -> None:
     compiler = compiler_module.ResolversAssemblyCompiler()
     request_scope = _scope_plan(level=Scope.REQUEST.level, name="request")
@@ -2723,6 +2782,15 @@ def test_sync_cached_dispatch_fusion_rejects_unsafe_shapes_and_bounds(
             identity_workflows=identity_workflows,
         )
 
+    def assert_safe_fallback_selected(
+        *,
+        workflows: tuple[ProviderWorkflowPlan, ...],
+    ) -> None:
+        candidate = fusion_candidate(workflows=workflows)
+
+        assert candidate is not None
+        assert candidate[0].slot == child_b.slot
+
     assert fusion_candidate(workflows=(child_a, child_b, target)) is not None
     assert (
         fusion_candidate(
@@ -2784,7 +2852,6 @@ def test_sync_cached_dispatch_fusion_rejects_unsafe_shapes_and_bounds(
     target_variants = (
         replace(target, effective_lock_mode=LockMode.THREAD),
         replace(target, dependency_order_is_signature_order=False),
-        _cached_fusion_test_workflow(slot=92, provides=_Target, children=(child_a,)),
         replace(
             target,
             dependency_plans=(non_provider_plan, target.dependency_plans[1]),
@@ -2800,11 +2867,11 @@ def test_sync_cached_dispatch_fusion_rejects_unsafe_shapes_and_bounds(
         keyword_only_target,
     )
     for target_variant in target_variants:
-        assert fusion_candidate(workflows=(child_a, child_b, target_variant)) is None
+        assert_safe_fallback_selected(workflows=(child_a, child_b, target_variant))
 
-    assert fusion_candidate(workflows=(child_a, child_b, self_child_target)) is None
-    assert fusion_candidate(workflows=(oversized_child, child_b, target)) is None
-    assert fusion_candidate(workflows=(unsafe_child, child_b, target)) is None
+    assert_safe_fallback_selected(workflows=(child_a, child_b, self_child_target))
+    assert_safe_fallback_selected(workflows=(oversized_child, child_b, target))
+    assert_safe_fallback_selected(workflows=(unsafe_child, child_b, target))
 
     monkeypatch.setattr(compiler_module, "_SYNC_CACHED_FUSION_MAX_AST_NODES", 1)
     assert fusion_candidate(workflows=(child_a, child_b, target)) is None
