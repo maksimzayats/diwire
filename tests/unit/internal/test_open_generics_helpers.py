@@ -676,6 +676,48 @@ def test_open_generic_warmed_one_hop_entry_bypasses_transition_fallback(
         root.enter_scope(Scope.ACTION)
 
 
+def test_open_generic_warmed_one_hop_entry_inlines_complete_child_initialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base_resolver = _MissingResolver()
+    base_resolver._cleanup_enabled = False
+    root = open_generics.OpenGenericResolver(
+        base_resolver=cast("Any", base_resolver),
+        registry=open_generics.OpenGenericRegistry(),
+        root_scope=Scope.APP,
+        has_async_specs=False,
+        scope_level=Scope.APP.level,
+    )
+    cold_child = root.enter_scope(Scope.REQUEST)
+
+    def fail_general_child_factory(*_args: object, **_kwargs: object) -> Any:
+        msg = "general child factory used"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(
+        open_generics,
+        "_create_open_generic_child",
+        fail_general_child_factory,
+    )
+
+    hot_child = root.enter_scope(Scope.REQUEST)
+
+    assert hot_child is not cold_child
+    assert type(hot_child) is open_generics.OpenGenericResolver
+    assert all(hasattr(hot_child, slot) for slot in hot_child.__slots__)
+    assert hot_child._base_resolver is cast("Any", base_resolver)
+    assert hot_child._root_wrapper is root
+    assert hot_child._parent_wrapper is root
+    assert hot_child._scope_level == Scope.REQUEST.level
+    assert hot_child._cleanup_enabled is False
+    assert hot_child._shared_child_state is root._shared_child_state
+    assert hot_child._cache is None
+    assert hot_child._thread_locks is None
+    assert hot_child._async_locks is None
+    assert hot_child._cleanup_callbacks is None
+    assert hot_child._owned_scope_wrappers == ()
+
+
 def test_open_generic_default_and_child_entries_keep_transition_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

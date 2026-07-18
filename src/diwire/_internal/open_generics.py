@@ -764,13 +764,61 @@ class _OpenGenericResolver:  # pragma: no cover
         ):
             next_scope = hot_transition_path[0]
             scoped_base_resolver = self._base_resolver.enter_scope(next_scope)
-            return _create_open_generic_child(
-                scoped_base_resolver,
-                self,
-                target_scope_level,
-                shared_child_state=self._shared_child_state,
-                cleanup_enabled=self._cleanup_enabled,
-            )
+            parent_wrapper = self
+            registry = self._registry
+            root_scope = self._root_scope
+            has_async_specs = self._has_async_specs
+            cleanup_enabled = self._cleanup_enabled
+            shared_child_state = self._shared_child_state
+            materialize_closed_callback = self._materialize_closed_callback
+
+            # Rebinding keeps slot initialization on direct STORE_ATTR bytecode instead of
+            # restoring the helper frame or adding reflective setter calls on this hot path.
+            self = object.__new__(_OpenGenericResolver)  # noqa: PLW0642
+            self._base_resolver = scoped_base_resolver
+            self._registry = registry
+            self._root_scope = root_scope
+            self._has_async_specs = has_async_specs
+            self._scope_level = target_scope_level
+            self._root_wrapper = parent_wrapper
+            self._parent_wrapper = parent_wrapper
+            self._cache = self._thread_locks = self._async_locks = None
+            self._cleanup_callbacks = None
+            self._cleanup_enabled = cleanup_enabled
+            self._owned_scope_wrappers = ()
+
+            (
+                self._managed_scopes,
+                self._scope_transition_cache,
+                self._sync_dispatch_cache,
+                self._async_dispatch_cache,
+                self._sync_base_dispatch,
+                self._async_base_dispatch,
+                self._sync_base_slot_functions,
+                self._async_base_slot_functions,
+                self._sync_base_slot_indices,
+                self._async_base_slot_indices,
+                self._sync_hot_base_dependency,
+                self._sync_hot_slot_function,
+                self._materialization_attempted_dependencies,
+                self._shared_state_lock,
+                self._materialization_attempt_lock,
+            ) = shared_child_state
+            self._scope_transition_cache_for_level = self._scope_transition_cache[
+                target_scope_level
+            ]
+            self._local_state_lock = self._shared_state_lock
+            self._async_hot_base_dependency = _UNSET_CACHE
+            self._async_hot_slot_function = None
+            self._shared_child_state = shared_child_state
+
+            self._scope_transition_hot_entry = (_MISSING_CACHE, ())
+            self._sync_base_slot_resolvers = self._async_base_slot_resolvers = None
+            self._sync_inline_dependency = self._async_inline_dependency = _MISSING_CACHE
+            self._sync_inline_resolver = self._missing_sync_inline_resolver
+            self._async_inline_resolver = self._missing_async_inline_resolver
+            self._materialize_closed_callback = materialize_closed_callback
+            return self
 
         transition_path = self._resolve_scope_transition_path_cached(
             scope=scope,
