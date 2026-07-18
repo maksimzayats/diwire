@@ -25,6 +25,12 @@ class _MatrixAsyncDependency:
     pass
 
 
+class _MatrixScopedPair:
+    def __init__(self, first: _MatrixService, second: _MatrixService) -> None:
+        self.first = first
+        self.second = second
+
+
 class _SignatureService:
     def __init__(self, payload: object) -> None:
         self.payload = payload
@@ -130,6 +136,46 @@ def test_assembly_matrix_scoped_cache_isolated_across_scope_instances() -> None:
         assert second is second_scope.resolve(_MatrixService)
 
     assert first is not second
+    assert calls == 2
+
+
+def test_assembly_matrix_current_scope_dependency_cache_handles_miss_hit_and_isolation() -> None:
+    calls = 0
+
+    def build_service() -> _MatrixService:
+        nonlocal calls
+        calls += 1
+        return _MatrixService()
+
+    container = Container(lock_mode=LockMode.NONE)
+    container.add_factory(
+        build_service,
+        provides=_MatrixService,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+    container.add(
+        _MatrixScopedPair,
+        provides=_MatrixScopedPair,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.TRANSIENT,
+    )
+
+    with container.enter_scope() as first_scope:
+        first_pair = first_scope.resolve(_MatrixScopedPair)
+        next_pair = first_scope.resolve(_MatrixScopedPair)
+
+        assert first_pair is not next_pair
+        assert first_pair.first is first_pair.second
+        assert next_pair.first is first_pair.first
+        assert next_pair.second is first_pair.first
+
+    with container.enter_scope() as second_scope:
+        second_pair = second_scope.resolve(_MatrixScopedPair)
+
+        assert second_pair.first is second_pair.second
+        assert second_pair.first is not first_pair.first
+
     assert calls == 2
 
 

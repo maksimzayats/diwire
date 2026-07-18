@@ -1640,9 +1640,37 @@ def test_optimized_sync_dependency_expression_additional_branches() -> None:
         is_cached=False,
         max_required_scope_level=3,
     )
+    workflow_root_cached = _workflow_plan(
+        slot=3,
+        scope_level=1,
+        is_cached=True,
+        cache_owner_scope_level=1,
+        max_required_scope_level=1,
+    )
+    workflow_request_cached = _workflow_plan(
+        slot=4,
+        scope_level=3,
+        is_cached=True,
+        cache_owner_scope_level=3,
+        max_required_scope_level=3,
+    )
+    workflow_request_async_cached = _workflow_plan(
+        slot=5,
+        scope_level=3,
+        is_cached=True,
+        cache_owner_scope_level=3,
+        requires_async=True,
+        max_required_scope_level=3,
+    )
     runtime = _runtime(
         scopes=(root_scope, request_scope, action_scope),
-        workflows=(workflow_root, workflow_request),
+        workflows=(
+            workflow_root,
+            workflow_request,
+            workflow_root_cached,
+            workflow_request_cached,
+            workflow_request_async_cached,
+        ),
     )
 
     dependency = _dependency()
@@ -1784,6 +1812,65 @@ def test_optimized_sync_dependency_expression_additional_branches() -> None:
             resolver_expression="self",
         )
         == "_provider_1()"
+    )
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=action_scope,
+            dependency_plan=ProviderDependencyPlan(
+                kind="provider",
+                dependency=dependency,
+                dependency_index=0,
+                dependency_slot=3,
+            ),
+            resolver_expression="self._root_resolver",
+        )
+        == "(self._root_resolver._cache_3 if self._root_resolver._cache_3 "
+        "is not _MISSING_CACHE else self._root_resolver.resolve_3())"
+    )
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=request_scope,
+            dependency_plan=ProviderDependencyPlan(
+                kind="provider",
+                dependency=dependency,
+                dependency_index=0,
+                dependency_slot=4,
+            ),
+            resolver_expression="self._root_resolver",
+        )
+        == "(_cached_dependency_4 if (_cached_dependency_4 := self._cache_4) "
+        "is not _MISSING_CACHE else self.resolve_4())"
+    )
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=action_scope,
+            dependency_plan=ProviderDependencyPlan(
+                kind="provider",
+                dependency=dependency,
+                dependency_index=0,
+                dependency_slot=4,
+            ),
+            resolver_expression="self._root_resolver",
+        )
+        == "self._request_resolver.resolve_4()"
+    )
+    assert (
+        compiler._optimized_sync_dependency_expression(
+            runtime=runtime,
+            class_plan=request_scope,
+            dependency_plan=ProviderDependencyPlan(
+                kind="provider",
+                dependency=dependency,
+                dependency_index=0,
+                dependency_slot=5,
+                dependency_requires_async=True,
+            ),
+            resolver_expression="self._root_resolver",
+        )
+        == "self.resolve_5()"
     )
 
 

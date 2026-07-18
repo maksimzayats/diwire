@@ -1688,14 +1688,23 @@ class ResolversAssemblyCompiler:
         ):
             expression = f"_provider_{dependency_slot}()"
 
-        if (
-            dependency_workflow.is_cached
-            and dependency_workflow.cache_owner_scope_level == runtime.root_scope_level
-        ):
+        cache_owner_scope_level = dependency_workflow.cache_owner_scope_level
+        if dependency_workflow.is_cached and cache_owner_scope_level == runtime.root_scope_level:
             expression = (
                 f"({resolver_expression}._cache_{dependency_slot} if "
                 f"{resolver_expression}._cache_{dependency_slot} is not _MISSING_CACHE else "
                 f"{resolver_expression}.resolve_{dependency_slot}())"
+            )
+        elif (
+            dependency_workflow.is_cached
+            and cache_owner_scope_level == class_plan.scope_level
+            and not dependency_workflow.requires_async
+        ):
+            cached_local = f"_cached_dependency_{dependency_slot}"
+            expression = (
+                f"({cached_local} if "
+                f"({cached_local} := self._cache_{dependency_slot}) "
+                f"is not _MISSING_CACHE else self.resolve_{dependency_slot}())"
             )
         return expression
 
