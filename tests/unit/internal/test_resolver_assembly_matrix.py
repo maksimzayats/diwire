@@ -57,6 +57,16 @@ class _InlineRoot:
         self.middle = middle
 
 
+class _InlineManagedMiddle:
+    def __init__(self, resource: _MatrixResource) -> None:
+        self.resource = resource
+
+
+class _InlineManagedRoot:
+    def __init__(self, middle: _InlineManagedMiddle) -> None:
+        self.middle = middle
+
+
 def _build_resolver_with_cleanup_mode(
     *,
     container: Container,
@@ -223,7 +233,7 @@ def test_assembly_matrix_bounded_transient_inlining_preserves_graph_semantics() 
         events.append("root")
         return _InlineRoot(middle)
 
-    container = Container()
+    container = Container(use_resolver_context=False)
     container.add_factory(
         build_leaf,
         provides=_InlineLeaf,
@@ -256,9 +266,25 @@ def test_assembly_matrix_bounded_transient_inlining_preserves_graph_semantics() 
     )
 
     with container.enter_scope(Scope.REQUEST) as request_scope:
-        first = request_scope.resolve(_InlineRoot)
-        second = request_scope.resolve(_InlineRoot)
+        first_leaf = request_scope.resolve(_InlineLeaf)
+        request_scope_any = cast("Any", request_scope)
+        cached_method = request_scope_any._last_sync_method
+        assert request_scope_any._last_sync_dependency is _InlineLeaf
 
+        first = request_scope.resolve(_InlineRoot)
+        assert cast("object", request_scope_any._last_sync_dependency) is _InlineRoot
+        assert request_scope_any._last_sync_method is cached_method
+
+        second_leaf = request_scope.resolve(_InlineLeaf)
+        assert request_scope_any._last_sync_dependency is _InlineLeaf
+        refreshed_cached_method = request_scope_any._last_sync_method
+        assert refreshed_cached_method is not cached_method
+
+        second = request_scope.resolve(_InlineRoot)
+        assert cast("object", request_scope_any._last_sync_dependency) is _InlineRoot
+        assert request_scope_any._last_sync_method is refreshed_cached_method
+
+        assert first_leaf is not second_leaf
         assert first is not second
         assert first.middle is not second.middle
         assert first.middle.branch is not second.middle.branch
@@ -270,10 +296,12 @@ def test_assembly_matrix_bounded_transient_inlining_preserves_graph_semantics() 
         assert events == [
             "leaf",
             "leaf",
+            "leaf",
             "branch",
             "cached",
             "middle",
             "root",
+            "leaf",
             "leaf",
             "leaf",
             "branch",
@@ -286,6 +314,59 @@ def test_assembly_matrix_bounded_transient_inlining_preserves_graph_semantics() 
 
     assert next_value.middle.cached is not first.middle.cached
     assert events[-6:] == ["leaf", "leaf", "branch", "cached", "middle", "root"]
+
+
+def test_sync_dispatch_fusion_excludes_scoped_generator_cleanup_graph() -> None:
+    events: list[str] = []
+
+    def provide_resource() -> Generator[_MatrixResource, None, None]:
+        events.append("enter")
+        try:
+            yield _MatrixResource()
+        finally:
+            events.append("exit")
+
+    container = Container(use_resolver_context=False)
+    container.add_generator(
+        provide_resource,
+        provides=_MatrixResource,
+        lifetime=Lifetime.SCOPED,
+        scope=Scope.REQUEST,
+    )
+    container.add(
+        _InlineManagedMiddle,
+        lifetime=Lifetime.TRANSIENT,
+        scope=Scope.REQUEST,
+    )
+    container.add(
+        _InlineManagedRoot,
+        lifetime=Lifetime.TRANSIENT,
+        scope=Scope.REQUEST,
+    )
+    container.add(
+        _InlineLeaf,
+        lifetime=Lifetime.TRANSIENT,
+        scope=Scope.REQUEST,
+    )
+
+    with pytest.raises(ValueError, match="body failure"):
+        with container.enter_scope(Scope.REQUEST) as request_scope:
+            root_slot = container._providers_registrations.get_by_type(
+                _InlineManagedRoot,
+            ).slot
+            assert f"_provider_{root_slot}" not in request_scope.resolve.__code__.co_names
+            assert f"resolve_{root_slot}" in request_scope.resolve.__code__.co_names
+
+            first = request_scope.resolve(_InlineManagedRoot)
+            second = request_scope.resolve(_InlineManagedRoot)
+
+            assert first is not second
+            assert first.middle is not second.middle
+            assert first.middle.resource is second.middle.resource
+            assert events == ["enter"]
+            raise ValueError("body failure")
+
+    assert events == ["enter", "exit"]
 
 
 @pytest.mark.parametrize("provider_kind", ["generator", "context_manager"])

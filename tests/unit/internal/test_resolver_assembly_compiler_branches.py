@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import dis
 import inspect
 import threading
 from contextlib import asynccontextmanager
@@ -1988,6 +1989,426 @@ def test_optimized_sync_dependency_expression_recursively_inlines_safe_transient
         )
         == "self.resolve_92()"
     )
+
+
+def test_sync_dispatch_fusion_selects_largest_graph_before_cache_deterministically() -> None:
+    class _Leaf:
+        pass
+
+    class _Middle:
+        pass
+
+    class _SelectedRoot:
+        pass
+
+    class _SmallRoot:
+        pass
+
+    class _TiedRoot:
+        pass
+
+    request_scope = _scope_plan(level=Scope.REQUEST.level, name="request")
+    leaf_workflow = _workflow_plan(
+        slot=90,
+        provides=_Leaf,
+        scope_level=Scope.REQUEST.level,
+        is_cached=False,
+        cache_owner_scope_level=None,
+        provider_attribute="factory",
+    )
+    middle_dependency = _dependency(provides=_Leaf, name="leaf")
+    middle_workflow = _workflow_plan(
+        slot=91,
+        provides=_Middle,
+        scope_level=Scope.REQUEST.level,
+        is_cached=False,
+        cache_owner_scope_level=None,
+        provider_attribute="factory",
+        dependencies=(middle_dependency,),
+        dependency_slots=(leaf_workflow.slot,),
+        dependency_requires_async=(False,),
+        dependency_plans=(
+            ProviderDependencyPlan(
+                kind="provider",
+                dependency=middle_dependency,
+                dependency_index=0,
+                dependency_slot=leaf_workflow.slot,
+            ),
+        ),
+    )
+    selected_dependency = _dependency(provides=_Middle, name="middle")
+    selected_workflow = _workflow_plan(
+        slot=92,
+        provides=_SelectedRoot,
+        scope_level=Scope.REQUEST.level,
+        is_cached=False,
+        cache_owner_scope_level=None,
+        provider_attribute="factory",
+        dependencies=(selected_dependency,),
+        dependency_slots=(middle_workflow.slot,),
+        dependency_requires_async=(False,),
+        dependency_plans=(
+            ProviderDependencyPlan(
+                kind="provider",
+                dependency=selected_dependency,
+                dependency_index=0,
+                dependency_slot=middle_workflow.slot,
+            ),
+        ),
+    )
+    small_dependency = _dependency(provides=_Leaf, name="leaf")
+    small_workflow = _workflow_plan(
+        slot=94,
+        provides=_SmallRoot,
+        scope_level=Scope.REQUEST.level,
+        is_cached=False,
+        cache_owner_scope_level=None,
+        provider_attribute="factory",
+        dependencies=(small_dependency,),
+        dependency_slots=(leaf_workflow.slot,),
+        dependency_requires_async=(False,),
+        dependency_plans=(
+            ProviderDependencyPlan(
+                kind="provider",
+                dependency=small_dependency,
+                dependency_index=0,
+                dependency_slot=leaf_workflow.slot,
+            ),
+        ),
+    )
+    tied_dependency = _dependency(provides=_Middle, name="middle")
+    tied_workflow = _workflow_plan(
+        slot=95,
+        provides=_TiedRoot,
+        scope_level=Scope.REQUEST.level,
+        is_cached=False,
+        cache_owner_scope_level=None,
+        provider_attribute="factory",
+        dependencies=(tied_dependency,),
+        dependency_slots=(middle_workflow.slot,),
+        dependency_requires_async=(False,),
+        dependency_plans=(
+            ProviderDependencyPlan(
+                kind="provider",
+                dependency=tied_dependency,
+                dependency_index=0,
+                dependency_slot=middle_workflow.slot,
+            ),
+        ),
+    )
+    workflows = (
+        tied_workflow,
+        small_workflow,
+        selected_workflow,
+        middle_workflow,
+        leaf_workflow,
+    )
+    runtime = _runtime(
+        scopes=(_scope_plan(level=Scope.APP.level, name="app"), request_scope),
+        workflows=workflows,
+    )
+    compiler = compiler_module.ResolversAssemblyCompiler()
+    generated_globals = compiler._build_generated_globals(runtime=runtime)
+
+    sync_dispatch = compiler._compile_dispatch_method(
+        runtime=runtime,
+        class_plan=request_scope,
+        generated_globals=generated_globals,
+        is_async=False,
+    )
+    async_dispatch = compiler._compile_dispatch_method(
+        runtime=runtime,
+        class_plan=request_scope,
+        generated_globals=generated_globals,
+        is_async=True,
+    )
+
+    sync_names = sync_dispatch.__code__.co_names
+    assert "_provider_92" in sync_names
+    assert "_provider_91" in sync_names
+    assert "_provider_90" in sync_names
+    assert "resolve_92" not in sync_names
+    assert "_provider_94" not in sync_names
+    assert "_provider_95" not in sync_names
+    assert "resolve_94" in sync_names
+    assert "resolve_95" in sync_names
+    sync_instructions = tuple(dis.get_instructions(sync_dispatch))
+    selected_dependency_loads = [
+        index
+        for index, instruction in enumerate(sync_instructions)
+        if instruction.argval == "_dep_92_type"
+    ]
+    cache_load = next(
+        index
+        for index, instruction in enumerate(sync_instructions)
+        if instruction.argval == "_last_sync_dependency"
+    )
+    assert len(selected_dependency_loads) == 1
+    assert selected_dependency_loads[0] < cache_load
+    assert "_provider_92" not in async_dispatch.__code__.co_names
+    assert "aresolve_92" in async_dispatch.__code__.co_names
+
+    ordered_runtime = _runtime(
+        scopes=(_scope_plan(level=Scope.APP.level, name="app"), request_scope),
+        workflows=tuple(reversed(workflows)),
+    )
+    ordered_dispatch = compiler._compile_dispatch_method(
+        runtime=ordered_runtime,
+        class_plan=request_scope,
+        generated_globals=compiler._build_generated_globals(runtime=ordered_runtime),
+        is_async=False,
+    )
+    assert "_provider_92" in ordered_dispatch.__code__.co_names
+    assert "resolve_92" not in ordered_dispatch.__code__.co_names
+    assert "_provider_95" not in ordered_dispatch.__code__.co_names
+
+
+@pytest.mark.parametrize(
+    ("replacement", "dependency_kind"),
+    [
+        (
+            {
+                "is_cached": True,
+                "is_transient": False,
+                "cache_owner_scope_level": Scope.REQUEST.level,
+            },
+            None,
+        ),
+        ({"requires_async": True, "is_provider_async": True}, None),
+        ({"provider_is_inject_wrapper": True}, None),
+        ({"needs_cleanup": True}, None),
+        ({"scope_level": Scope.APP.level, "scope_name": "app"}, None),
+        ({"max_required_scope_level": Scope.ACTION.level}, None),
+        ({"uses_thread_lock": True}, None),
+        ({"uses_async_lock": True}, None),
+        ({"dispatch_kind": "equality_map"}, None),
+        ({"dependency_plans": ()}, None),
+        ({}, "all"),
+        ({}, "variadic"),
+    ],
+    ids=(
+        "cached",
+        "async",
+        "inject-wrapper",
+        "cleanup",
+        "other-scope",
+        "deeper-scope",
+        "thread-lock",
+        "async-lock",
+        "equality-dispatch",
+        "incomplete-plan",
+        "all-dependency",
+        "variadic",
+    ),
+)
+def test_sync_dispatch_fusion_keeps_unsafe_top_level_workflows(
+    replacement: dict[str, Any],
+    dependency_kind: str | None,
+) -> None:
+    class _Leaf:
+        pass
+
+    class _UnsafeRoot:
+        pass
+
+    request_scope = _scope_plan(level=Scope.REQUEST.level, name="request")
+    leaf_workflow = _workflow_plan(
+        slot=90,
+        provides=_Leaf,
+        scope_level=Scope.REQUEST.level,
+        is_cached=False,
+        cache_owner_scope_level=None,
+        provider_attribute="factory",
+    )
+    dependency = _dependency(provides=_Leaf, name="leaf")
+    unsafe_workflow = _workflow_plan(
+        slot=93,
+        provides=_UnsafeRoot,
+        scope_level=Scope.REQUEST.level,
+        is_cached=False,
+        cache_owner_scope_level=None,
+        provider_attribute="factory",
+        dependencies=(dependency,),
+        dependency_slots=(leaf_workflow.slot,),
+        dependency_requires_async=(False,),
+        dependency_plans=(
+            ProviderDependencyPlan(
+                kind="provider",
+                dependency=dependency,
+                dependency_index=0,
+                dependency_slot=leaf_workflow.slot,
+            ),
+        ),
+    )
+    if dependency_kind == "all":
+        unsafe_workflow = replace(
+            unsafe_workflow,
+            dependency_plans=(
+                ProviderDependencyPlan(
+                    kind="all",
+                    dependency=dependency,
+                    dependency_index=0,
+                    all_slots=(leaf_workflow.slot,),
+                ),
+            ),
+        )
+    elif dependency_kind == "variadic":
+        variadic_dependency = _dependency(
+            provides=_Leaf,
+            name="leaves",
+            kind=inspect.Parameter.VAR_POSITIONAL,
+        )
+        unsafe_workflow = replace(
+            unsafe_workflow,
+            dependencies=(variadic_dependency,),
+            dependency_plans=(
+                ProviderDependencyPlan(
+                    kind="provider",
+                    dependency=variadic_dependency,
+                    dependency_index=0,
+                    dependency_slot=leaf_workflow.slot,
+                ),
+            ),
+        )
+    else:
+        unsafe_workflow = replace(unsafe_workflow, **replacement)
+
+    filler_one = _workflow_plan(
+        slot=91,
+        provides=str,
+        scope_level=Scope.REQUEST.level,
+        is_cached=False,
+        cache_owner_scope_level=None,
+        provider_attribute="factory",
+    )
+    filler_two = _workflow_plan(
+        slot=92,
+        provides=bytes,
+        scope_level=Scope.REQUEST.level,
+        is_cached=False,
+        cache_owner_scope_level=None,
+        provider_attribute="factory",
+    )
+    runtime = _runtime(
+        scopes=(_scope_plan(level=Scope.APP.level, name="app"), request_scope),
+        workflows=(leaf_workflow, filler_one, filler_two, unsafe_workflow),
+    )
+    compiler = compiler_module.ResolversAssemblyCompiler()
+    dispatch = compiler._compile_dispatch_method(
+        runtime=runtime,
+        class_plan=request_scope,
+        generated_globals=compiler._build_generated_globals(runtime=runtime),
+        is_async=False,
+    )
+
+    assert "_provider_93" not in dispatch.__code__.co_names
+    assert "resolve_93" in dispatch.__code__.co_names
+
+
+@pytest.mark.parametrize("bound_kind", ["dispatch-cache", "call-count", "ast-nodes"])
+def test_sync_dispatch_fusion_respects_dispatch_and_expression_bounds(
+    bound_kind: str,
+) -> None:
+    class _Leaf:
+        pass
+
+    class _BoundedRoot:
+        pass
+
+    request_scope = _scope_plan(level=Scope.REQUEST.level, name="request")
+    leaf_workflows: list[ProviderWorkflowPlan] = []
+    dependencies: list[ProviderDependency] = []
+    dependency_plans: list[ProviderDependencyPlan] = []
+    if bound_kind == "call-count":
+        leaf_count = compiler_module._SYNC_DISPATCH_FUSION_MAX_CALLS
+    else:
+        leaf_count = 1
+    for index in range(leaf_count):
+        slot = 90 + index
+        leaf_workflow = _workflow_plan(
+            slot=slot,
+            provides=type(f"_Leaf{index}", (), {}),
+            scope_level=Scope.REQUEST.level,
+            is_cached=False,
+            cache_owner_scope_level=None,
+            provider_attribute="factory",
+        )
+        dependency = _dependency(provides=leaf_workflow.provides, name=f"leaf_{index}")
+        leaf_workflows.append(leaf_workflow)
+        dependencies.append(dependency)
+        dependency_plans.append(
+            ProviderDependencyPlan(
+                kind="provider",
+                dependency=dependency,
+                dependency_index=index,
+                dependency_slot=slot,
+            ),
+        )
+
+    if bound_kind == "ast-nodes":
+        literal_dependency = _dependency(provides=tuple[object, ...], name="values")
+        dependencies.append(literal_dependency)
+        dependency_plans.append(
+            ProviderDependencyPlan(
+                kind="literal",
+                dependency=literal_dependency,
+                dependency_index=1,
+                literal_expression="(" + ", ".join("None" for _ in range(130)) + ",)",
+            ),
+        )
+
+    root_slot = 90 + leaf_count
+    root_workflow = _workflow_plan(
+        slot=root_slot,
+        provides=_BoundedRoot,
+        scope_level=Scope.REQUEST.level,
+        is_cached=False,
+        cache_owner_scope_level=None,
+        provider_attribute="factory",
+        dependencies=tuple(dependencies),
+        dependency_slots=tuple(plan.dependency_slot for plan in dependency_plans),
+        dependency_requires_async=tuple(False for _ in dependency_plans),
+        dependency_plans=tuple(dependency_plans),
+    )
+    workflows: list[ProviderWorkflowPlan] = [*leaf_workflows, root_workflow]
+    if bound_kind != "call-count":
+        workflows.extend(
+            (
+                _workflow_plan(
+                    slot=root_slot + 1,
+                    provides=str,
+                    scope_level=Scope.REQUEST.level,
+                    is_cached=False,
+                    cache_owner_scope_level=None,
+                    provider_attribute="factory",
+                ),
+                _workflow_plan(
+                    slot=root_slot + 2,
+                    provides=bytes,
+                    scope_level=Scope.REQUEST.level,
+                    is_cached=False,
+                    cache_owner_scope_level=None,
+                    provider_attribute="factory",
+                ),
+            ),
+        )
+    if bound_kind == "dispatch-cache":
+        workflows = [*leaf_workflows, root_workflow]
+
+    runtime = _runtime(
+        scopes=(_scope_plan(level=Scope.APP.level, name="app"), request_scope),
+        workflows=tuple(workflows),
+    )
+    compiler = compiler_module.ResolversAssemblyCompiler()
+    dispatch = compiler._compile_dispatch_method(
+        runtime=runtime,
+        class_plan=request_scope,
+        generated_globals=compiler._build_generated_globals(runtime=runtime),
+        is_async=False,
+    )
+
+    assert f"_provider_{root_slot}" not in dispatch.__code__.co_names
+    assert f"resolve_{root_slot}" in dispatch.__code__.co_names
 
 
 @pytest.mark.parametrize(

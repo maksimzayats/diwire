@@ -470,6 +470,115 @@ def test_registering_after_compile_invalidates_compilation_and_rebinds_lazy_entr
         previous_resolver = compiled_resolver
 
 
+def test_sync_dispatch_fusion_rebuilds_captured_providers_after_registration() -> None:
+    class _VersionedDependency:
+        def __init__(self, version: str) -> None:
+            self.version = version
+
+    class _VersionedRoot:
+        def __init__(self, dependency: _VersionedDependency) -> None:
+            self.dependency = dependency
+
+    class _FillerOne:
+        pass
+
+    class _FillerTwo:
+        pass
+
+    def build_original() -> _VersionedDependency:
+        return _VersionedDependency("original")
+
+    def build_replacement() -> _VersionedDependency:
+        return _VersionedDependency("replacement")
+
+    def build_root(dependency: Any) -> _VersionedRoot:
+        return _VersionedRoot(dependency)
+
+    container = Container(use_resolver_context=False)
+    container.add_factory(
+        build_original,
+        provides=_VersionedDependency,
+        lifetime=Lifetime.TRANSIENT,
+    )
+    container.add_factory(
+        build_root,
+        provides=_VersionedRoot,
+        lifetime=Lifetime.TRANSIENT,
+        dependencies={
+            _VersionedDependency: inspect.signature(build_root).parameters["dependency"],
+        },
+    )
+    container.add(_FillerOne, lifetime=Lifetime.TRANSIENT)
+    container.add(_FillerTwo, lifetime=Lifetime.TRANSIENT)
+    original_resolver = container.compile()
+    root_slot = container._providers_registrations.get_by_type(_VersionedRoot).slot
+    assert f"_provider_{root_slot}" in original_resolver.resolve.__code__.co_names
+    assert f"resolve_{root_slot}" not in original_resolver.resolve.__code__.co_names
+
+    original = container.resolve(_VersionedRoot)
+
+    container.add_factory(
+        build_replacement,
+        provides=_VersionedDependency,
+        lifetime=Lifetime.TRANSIENT,
+    )
+    replacement = container.resolve(_VersionedRoot)
+
+    assert container._root_resolver is not original_resolver
+    assert original.dependency.version == "original"
+    assert replacement.dependency.version == "replacement"
+
+
+def test_sync_dispatch_fusion_invalidates_mutated_equality_key_cache() -> None:
+    class _StatefulEqualityKey:
+        def __init__(self, value: str) -> None:
+            self.value = value
+
+        def __eq__(self, other: object) -> bool:
+            return isinstance(other, _StatefulEqualityKey) and self.value == other.value
+
+        def __hash__(self) -> int:
+            return 0
+
+    class _FusedLeaf:
+        pass
+
+    class _FusedRoot:
+        def __init__(self, leaf: Any) -> None:
+            self.leaf = leaf
+
+    class _Filler:
+        pass
+
+    def build_root(leaf: Any) -> _FusedRoot:
+        return _FusedRoot(leaf)
+
+    registration_key = _StatefulEqualityKey("registered")
+    lookup_key = _StatefulEqualityKey("registered")
+    registered_value = object()
+    container = Container(use_resolver_context=False)
+    container.add_instance(registered_value, provides=registration_key)
+    container.add(_FusedLeaf, lifetime=Lifetime.TRANSIENT)
+    container.add_factory(
+        build_root,
+        provides=_FusedRoot,
+        lifetime=Lifetime.TRANSIENT,
+        dependencies={_FusedLeaf: inspect.signature(build_root).parameters["leaf"]},
+    )
+    container.add(_Filler, lifetime=Lifetime.TRANSIENT)
+    resolver = container.compile()
+    root_slot = container._providers_registrations.get_by_type(_FusedRoot).slot
+    assert f"_provider_{root_slot}" in resolver.resolve.__code__.co_names
+    assert f"resolve_{root_slot}" not in resolver.resolve.__code__.co_names
+
+    assert resolver.resolve(lookup_key) is registered_value
+    lookup_key.value = "missing"
+    assert isinstance(resolver.resolve(_FusedRoot), _FusedRoot)
+
+    with pytest.raises(DIWireDependencyNotRegisteredError, match="is not registered"):
+        resolver.resolve(lookup_key)
+
+
 def test_autoregister_keeps_container_entrypoints_and_skips_existing_registration() -> None:
     class _AutoRegisteredService:
         pass

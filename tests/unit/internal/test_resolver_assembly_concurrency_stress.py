@@ -39,6 +39,10 @@ class _ThreadScopedConsumer:
         return self.intermediate.dependency
 
 
+class _ThreadFusionFiller:
+    pass
+
+
 class _AsyncScoped:
     pass
 
@@ -160,7 +164,7 @@ def test_concurrency_stress_current_scope_dependency_fast_path_publishes_once() 
         dependency.initialized = True
         return dependency
 
-    container = Container()
+    container = Container(use_resolver_context=False)
     container.add_factory(
         build_scoped,
         provides=_ThreadScoped,
@@ -180,10 +184,20 @@ def test_concurrency_stress_current_scope_dependency_fast_path_publishes_once() 
         lifetime=Lifetime.TRANSIENT,
         scope=Scope.REQUEST,
     )
+    container.add(
+        _ThreadFusionFiller,
+        lifetime=Lifetime.TRANSIENT,
+        scope=Scope.REQUEST,
+    )
     container.compile()
     start = threading.Barrier(_THREAD_WORKERS)
 
     with container.enter_scope(Scope.REQUEST) as request_scope:
+        consumer_slot = container._providers_registrations.get_by_type(
+            _ThreadScopedConsumer,
+        ).slot
+        assert f"_provider_{consumer_slot}" in request_scope.resolve.__code__.co_names
+        assert f"resolve_{consumer_slot}" not in request_scope.resolve.__code__.co_names
 
         def resolve_consumer() -> _ThreadScopedConsumer:
             start.wait()
