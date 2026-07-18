@@ -27,7 +27,11 @@ from diwire._internal.markers import (
     strip_non_component_annotation,
     strip_provider_annotation,
 )
-from diwire._internal.providers import ProviderDependency, ProvidersRegistrations
+from diwire._internal.providers import (
+    MaterializedProviderCallPlan,
+    ProviderDependency,
+    ProvidersRegistrations,
+)
 from diwire._internal.resolvers.assembly.planner import (
     ProviderDependencyPlan,
     ProviderWorkflowPlan,
@@ -67,6 +71,42 @@ _SYNC_CACHED_FUSION_MAX_AST_NODES: Final[int] = 1536
 _CLEANUP_KIND_SYNC: Final[int] = 0
 _CLEANUP_KIND_ASYNC: Final[int] = 1
 _CLEANUP_KIND_SYNC_GENERATOR: Final[int] = 2
+
+
+def _sync_materialized_provider_call_plan(
+    workflow: ProviderWorkflowPlan,
+) -> MaterializedProviderCallPlan | None:
+    call_plan = workflow.materialized_call_plan
+    if (
+        call_plan is None
+        or workflow.provider_attribute != "factory"
+        or workflow.dependencies
+        or workflow.dependency_plans
+        or workflow.sync_arguments
+        or workflow.effective_lock_mode is not LockMode.NONE
+        or workflow.uses_thread_lock
+        or workflow.uses_async_lock
+        or workflow.requires_async
+        or workflow.is_provider_async
+        or workflow.provider_is_inject_wrapper
+        or workflow.needs_cleanup
+    ):
+        return None
+    return call_plan
+
+
+def _sync_provider_value_expression(
+    *,
+    workflow: ProviderWorkflowPlan,
+    arguments: str,
+) -> str:
+    if workflow.provider_attribute == "instance":
+        return f"_provider_{workflow.slot}"
+    if _sync_materialized_provider_call_plan(workflow) is not None:
+        return f"_materialized_provider_{workflow.slot}(_materialized_argument_{workflow.slot})"
+    if arguments:
+        return f"_provider_{workflow.slot}({arguments})"
+    return f"_provider_{workflow.slot}()"
 
 
 @dataclass(frozen=True, slots=True)
@@ -313,6 +353,14 @@ class ResolversAssemblyCompiler:
             generated_globals[f"_provider_{workflow.slot}"] = runtime.provider_by_slot[
                 workflow.slot
             ]
+            materialized_call_plan = _sync_materialized_provider_call_plan(workflow)
+            if materialized_call_plan is not None:
+                generated_globals[f"_materialized_provider_{workflow.slot}"] = (
+                    materialized_call_plan.provider
+                )
+                generated_globals[f"_materialized_argument_{workflow.slot}"] = (
+                    materialized_call_plan.argument
+                )
             generated_globals[f"_sync_slot_{workflow.slot}"] = _build_sync_slot_impl(
                 workflow=workflow,
             )
@@ -1788,21 +1836,17 @@ class ResolversAssemblyCompiler:
             )
 
         arguments = ""
-        value_expression: str
-        if workflow.provider_attribute == "instance":
-            value_expression = f"_provider_{workflow.slot}"
-        else:
+        if workflow.provider_attribute != "instance":
             optimized_arguments = self._optimized_sync_arguments(
                 runtime=runtime,
                 class_plan=class_plan,
                 workflow=workflow,
             )
             arguments = ", ".join(argument for argument in optimized_arguments if argument)
-            value_expression = (
-                f"_provider_{workflow.slot}({arguments})"
-                if arguments
-                else f"_provider_{workflow.slot}()"
-            )
+        value_expression = _sync_provider_value_expression(
+            workflow=workflow,
+            arguments=arguments,
+        )
 
         if workflow.provider_attribute == "generator":
             if workflow.is_provider_async:

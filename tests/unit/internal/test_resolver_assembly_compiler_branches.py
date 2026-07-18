@@ -14,7 +14,7 @@ import pytest
 
 from diwire import All, AsyncProvider, Container, Lifetime, Maybe, Provider, Scope
 from diwire._internal.lock_mode import LockMode
-from diwire._internal.providers import ProviderDependency
+from diwire._internal.providers import MaterializedProviderCallPlan, ProviderDependency
 from diwire._internal.resolvers.assembly import compiler as compiler_module
 from diwire._internal.resolvers.assembly.planner import (
     ProviderDependencyPlan,
@@ -227,6 +227,88 @@ def _runtime(
         },
         cache_slots_by_owner_level=cache_slots_by_owner_level,
         next_scope_options_by_level=next_scope_options_by_level,
+    )
+
+
+def _eligible_materialized_workflow() -> tuple[
+    ProviderWorkflowPlan,
+    MaterializedProviderCallPlan,
+]:
+    call_plan = MaterializedProviderCallPlan(
+        provider=lambda argument: argument,
+        argument=int,
+    )
+    workflow = replace(
+        _workflow_plan(
+            slot=1,
+            provider_attribute="factory",
+            is_cached=False,
+            cache_owner_scope_level=None,
+        ),
+        lock_mode=LockMode.NONE,
+        effective_lock_mode=LockMode.NONE,
+        needs_cleanup=False,
+        materialized_call_plan=call_plan,
+    )
+    return workflow, call_plan
+
+
+def test_sync_materialized_provider_call_plan_accepts_exact_safe_shape() -> None:
+    workflow, call_plan = _eligible_materialized_workflow()
+
+    assert compiler_module._sync_materialized_provider_call_plan(workflow) is call_plan
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        {"materialized_call_plan": None},
+        {"provider_attribute": "concrete_type"},
+        {"dependencies": (_dependency(),)},
+        {
+            "dependency_plans": (
+                ProviderDependencyPlan(
+                    kind="literal",
+                    dependency=_dependency(),
+                    dependency_index=0,
+                    literal_expression="1",
+                ),
+            ),
+        },
+        {"sync_arguments": ("1",)},
+        {"effective_lock_mode": LockMode.THREAD},
+        {"uses_thread_lock": True},
+        {"uses_async_lock": True},
+        {"requires_async": True},
+        {"is_provider_async": True},
+        {"provider_is_inject_wrapper": True},
+        {"needs_cleanup": True},
+    ],
+    ids=(
+        "missing-plan",
+        "non-factory",
+        "dependencies",
+        "dependency-plans",
+        "sync-arguments",
+        "lock-mode",
+        "thread-lock",
+        "async-lock",
+        "requires-async",
+        "async-provider",
+        "inject-wrapper",
+        "cleanup",
+    ),
+)
+def test_sync_materialized_provider_call_plan_rejects_unsafe_workflow(
+    replacement: dict[str, Any],
+) -> None:
+    workflow, _ = _eligible_materialized_workflow()
+
+    assert (
+        compiler_module._sync_materialized_provider_call_plan(
+            replace(workflow, **replacement),
+        )
+        is None
     )
 
 

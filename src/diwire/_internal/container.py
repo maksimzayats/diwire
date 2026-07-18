@@ -52,10 +52,12 @@ from diwire._internal.open_generics import (
 )
 from diwire._internal.policies import DependencyRegistrationPolicy, MissingPolicy
 from diwire._internal.providers import (
+    MATERIALIZED_PROVIDER_CALL_PLAN_KEY,
     ContextManagerProvider,
     FactoryProvider,
     GeneratorProvider,
     Lifetime,
+    MaterializedProviderCallPlan,
     ProviderDependenciesExtractor,
     ProviderDependency,
     ProviderReturnTypeExtractor,
@@ -2444,6 +2446,13 @@ class Container:
                 def _zero_runtime_wrapper_one_arg() -> Any:
                     return provider(arg0)
 
+                wrapper_metadata = cast(
+                    "dict[Any, Any]",
+                    _zero_runtime_wrapper_one_arg.__dict__,
+                )
+                wrapper_metadata[MATERIALIZED_PROVIDER_CALL_PLAN_KEY] = (
+                    MaterializedProviderCallPlan(provider=provider, argument=arg0)
+                )
                 return _zero_runtime_wrapper_one_arg
             if len(prebuilt_args) == two_arguments:
                 arg0 = prebuilt_args[0]

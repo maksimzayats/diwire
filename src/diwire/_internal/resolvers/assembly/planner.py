@@ -22,7 +22,9 @@ from diwire._internal.markers import (
 )
 from diwire._internal.open_generics import _close_generic_dependency_with_typevar_defaults
 from diwire._internal.providers import (
+    MATERIALIZED_PROVIDER_CALL_PLAN_KEY,
     Lifetime,
+    MaterializedProviderCallPlan,
     ProviderDependency,
     ProviderSpec,
     ProvidersRegistrations,
@@ -195,6 +197,7 @@ class ProviderWorkflowPlan:
     async_arguments: tuple[str, ...]
     provider_is_inject_wrapper: bool = False
     dependency_plans: tuple[ProviderDependencyPlan, ...] = ()
+    materialized_call_plan: MaterializedProviderCallPlan | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -331,6 +334,14 @@ class ResolverGenerationPlanner:
     ) -> ProviderWorkflowPlan:
         provider_attribute = self._resolve_provider_attribute(spec=spec)
         provider_reference = getattr(spec, provider_attribute)
+        provider_metadata = getattr(provider_reference, "__dict__", None)
+        materialized_call_plan = (
+            provider_metadata.get(MATERIALIZED_PROVIDER_CALL_PLAN_KEY)
+            if isinstance(provider_metadata, dict)
+            else None
+        )
+        if not isinstance(materialized_call_plan, MaterializedProviderCallPlan):
+            materialized_call_plan = None
         is_cached = self._is_cached(spec=spec)
         cache_owner_scope_level = self._cache_owner_scope_level(spec=spec, is_cached=is_cached)
 
@@ -398,6 +409,7 @@ class ResolverGenerationPlanner:
                 getattr(provider_reference, INJECT_WRAPPER_MARKER, False),
             ),
             dependency_plans=tuple(dependency_plans),
+            materialized_call_plan=materialized_call_plan,
         )
 
     def _plan_dependency(

@@ -22,13 +22,19 @@ from diwire import (
     Lifetime,
     LockMode,
     Maybe,
+    MissingPolicy,
     Provider,
     ResolverContext,
     Scope,
     resolver_context,
 )
 from diwire._internal.injection import INJECT_WRAPPER_MARKER
-from diwire._internal.providers import ProviderDependency, ProviderSpec
+from diwire._internal.providers import (
+    MATERIALIZED_PROVIDER_CALL_PLAN_KEY,
+    MaterializedProviderCallPlan,
+    ProviderDependency,
+    ProviderSpec,
+)
 from diwire.exceptions import (
     DIWireAsyncDependencyInSyncContextError,
     DIWireDependencyNotRegisteredError,
@@ -123,6 +129,18 @@ def _create_box_positional_only(type_arg: type[T], /) -> _IBox[T]:
     return _Box(type=type_arg)
 
 
+def _create_box_keyword_only(*, type_arg: type[T]) -> _IBox[T]:
+    return _Box(type=type_arg)
+
+
+class _CallableBoxFactory:
+    def __call__(self, type_arg: type[T]) -> _IBox[T]:
+        return _Box(type=type_arg)
+
+
+_CALLABLE_BOX_FACTORY = _CallableBoxFactory()
+
+
 async def _create_box_async(type_arg: type[T]) -> _IBox[T]:
     return _Box(type=type_arg)
 
@@ -213,6 +231,110 @@ def test_open_factory_registration_supports_type_argument_injection() -> None:
     materialized = container._providers_registrations.find_by_type(_IBox[int])
     assert materialized is not None
     assert materialized.factory is not None
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [_create_box, _create_box_positional_only, _CALLABLE_BOX_FACTORY.__call__],
+    ids=("function", "positional-only", "bound-method"),
+)
+def test_materialized_one_argument_factory_uses_exact_generated_direct_call(
+    factory: Any,
+) -> None:
+    container = Container(
+        lock_mode=LockMode.NONE,
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+        use_resolver_context=False,
+    )
+    container.add_factory(
+        factory,
+        provides=_IBox,
+        lifetime=Lifetime.TRANSIENT,
+    )
+    container.compile()
+
+    int_first = cast("Any", container.resolve(_IBox[int]))
+    str_first = cast("Any", container.resolve(_IBox[str]))
+    int_second = cast("Any", container.resolve(_IBox[int]))
+    str_second = cast("Any", container.resolve(_IBox[str]))
+
+    assert int_first.type is int
+    assert str_first.type is str
+    assert int_second.type is int
+    assert str_second.type is str
+    assert int_first is not int_second
+    assert str_first is not str_second
+
+    root_wrapper = cast("Any", container._root_resolver)
+    base_resolver = root_wrapper._base_resolver
+    for dependency, argument in ((_IBox[int], int), (_IBox[str], str)):
+        materialized = container._providers_registrations.get_by_type(dependency)
+        wrapper = materialized.factory
+        assert wrapper is not None
+        wrapper_metadata = cast("dict[Any, Any]", wrapper.__dict__)
+        call_plan = wrapper_metadata[MATERIALIZED_PROVIDER_CALL_PLAN_KEY]
+        assert call_plan == MaterializedProviderCallPlan(
+            provider=factory,
+            argument=argument,
+        )
+        assert cast("Any", wrapper()).type is argument
+
+        slot_method = getattr(type(base_resolver), f"resolve_{materialized.slot}")
+        slot_names = slot_method.__code__.co_names
+        assert f"_materialized_provider_{materialized.slot}" in slot_names
+        assert f"_materialized_argument_{materialized.slot}" in slot_names
+        assert f"_provider_{materialized.slot}" not in slot_names
+        assert slot_method.__globals__[f"_provider_{materialized.slot}"] is wrapper
+
+
+def test_materialized_keyword_only_factory_keeps_wrapper_call() -> None:
+    container = Container(lock_mode=LockMode.NONE)
+    container.add_factory(
+        _create_box_keyword_only,
+        provides=_IBox,
+        lifetime=Lifetime.TRANSIENT,
+    )
+
+    first = cast("Any", container.resolve(_IBox[int]))
+    second = cast("Any", container.resolve(_IBox[int]))
+
+    assert first.type is int
+    assert second.type is int
+    materialized = container._providers_registrations.get_by_type(_IBox[int])
+    wrapper = materialized.factory
+    assert wrapper is not None
+    assert MATERIALIZED_PROVIDER_CALL_PLAN_KEY not in wrapper.__dict__
+    root_wrapper = cast("Any", container._root_resolver)
+    slot_method = getattr(
+        type(root_wrapper._base_resolver),
+        f"resolve_{materialized.slot}",
+    )
+    assert f"_provider_{materialized.slot}" in slot_method.__code__.co_names
+
+
+@pytest.mark.parametrize(
+    ("prebuilt_args", "prebuilt_kwargs"),
+    [((int, str), {}), ((int,), {"other": str}), ((), {"type_arg": int})],
+    ids=("multiple-positional", "positional-and-keyword", "keyword-only"),
+)
+def test_prebound_materialized_non_one_positional_shapes_have_no_direct_call_plan(
+    prebuilt_args: tuple[Any, ...],
+    prebuilt_kwargs: dict[str, Any],
+) -> None:
+    container = Container()
+
+    def _capture(*args: Any, **kwargs: Any) -> tuple[tuple[Any, ...], dict[str, Any]]:
+        return args, kwargs
+
+    wrapper = container._build_prebound_materialized_wrapper(
+        provider=_capture,
+        prebuilt_args=prebuilt_args,
+        prebuilt_kwargs=prebuilt_kwargs,
+    )
+
+    assert wrapper() == (prebuilt_args, prebuilt_kwargs)
+    assert MATERIALIZED_PROVIDER_CALL_PLAN_KEY not in wrapper.__dict__
 
 
 def test_open_factory_materialized_wrapper_uses_bind_partial_fallback_for_positional_only() -> None:
@@ -558,12 +680,13 @@ def test_typevar_bound_is_validated_at_resolve_time() -> None:
 
 
 def test_materialized_closed_key_is_purged_before_registration_mutation() -> None:
-    container = Container()
+    container = Container(lock_mode=LockMode.NONE)
     container.add_instance("keep", provides=str)
     container.add(_BoxA, provides=_IBox)
 
     first = container.resolve(_IBox[int])
     assert isinstance(first, _BoxA)
+    assert isinstance(container.resolve(_IBox[int]), _BoxA)
     assert container._providers_registrations.find_by_type(_IBox[int]) is not None
 
     container.add(_BoxB, provides=_IBox)
@@ -572,6 +695,56 @@ def test_materialized_closed_key_is_purged_before_registration_mutation() -> Non
 
     second = container.resolve(_IBox[int])
     assert isinstance(second, _BoxB)
+    assert isinstance(container.resolve(_IBox[int]), _BoxB)
+
+
+def test_generated_direct_scoped_provider_failure_retries_before_cache_publication() -> None:
+    call_count = 0
+    failure = RuntimeError("materialized provider failure")
+
+    def _flaky_factory(type_arg: type[T]) -> _IBox[T]:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 2:
+            raise failure
+        return _Box(type=type_arg)
+
+    container = Container(
+        lock_mode=LockMode.NONE,
+        missing_policy=MissingPolicy.ERROR,
+        dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+        use_resolver_context=False,
+    )
+    container.add_factory(
+        _flaky_factory,
+        provides=_IBox,
+        lifetime=Lifetime.SCOPED,
+        scope=Scope.REQUEST,
+    )
+
+    with container.enter_scope(Scope.REQUEST) as materializing_scope:
+        initial = cast("Any", materializing_scope.resolve(_IBox[int]))
+    assert initial.type is int
+    assert call_count == 1
+
+    with container.enter_scope(Scope.REQUEST) as direct_scope:
+        materialized = container._providers_registrations.get_by_type(_IBox[int])
+        slot_method = getattr(
+            type(cast("Any", direct_scope)._base_resolver),
+            f"resolve_{materialized.slot}",
+        )
+        assert f"_materialized_provider_{materialized.slot}" in slot_method.__code__.co_names
+
+        with pytest.raises(RuntimeError) as raised:
+            direct_scope.resolve(_IBox[int])
+        assert raised.value is failure
+
+        resolved = direct_scope.resolve(_IBox[int])
+        cached = direct_scope.resolve(_IBox[int])
+
+    assert cast("Any", resolved).type is int
+    assert cached is resolved
+    assert call_count == 3
 
 
 def test_materialized_open_concrete_without_type_argument_dependencies_stays_concrete() -> None:
@@ -1290,7 +1463,7 @@ def test_closed_generic_injection_helpers_cover_non_injected_dependency_paths() 
 def test_runtime_materialization_serializes_provider_registration_add_calls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    container = Container()
+    container = Container(lock_mode=LockMode.NONE)
     container.add_factory(
         _create_box,
         provides=_IBox,
@@ -1334,6 +1507,7 @@ def test_runtime_materialization_serializes_provider_registration_add_calls(
     assert observed_overlap is False
     for dependency in dependencies:
         assert container._providers_registrations.find_by_type(_IBox[dependency]) is not None
+        assert cast("Any", container.resolve(_IBox[dependency])).type is dependency
 
 
 def test_compile_is_safe_during_concurrent_runtime_materialization() -> None:

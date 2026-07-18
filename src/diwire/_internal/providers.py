@@ -12,6 +12,7 @@ from typing import (
     Annotated,
     Any,
     ClassVar,
+    Final,
     Literal,
     Protocol,
     TypeAlias,
@@ -52,6 +53,17 @@ GeneratorProvider: TypeAlias = (
     Callable[..., Generator[T, None, None]] | Callable[..., AsyncGenerator[T, None]]
 )
 """A generator function or asynchronous generator function that yields a dependency."""
+
+
+MATERIALIZED_PROVIDER_CALL_PLAN_KEY: Final[object] = object()
+
+
+@dataclass(frozen=True, slots=True)
+class MaterializedProviderCallPlan:
+    """Describe an exact prebound provider call available to generated code."""
+
+    provider: Any
+    argument: Any
 
 
 class _ContextManagerLike(Protocol[_CMT_co]):
