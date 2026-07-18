@@ -281,6 +281,46 @@ def test_open_generic_scope_resolver_close_runs_cleanup_via_wrapper_delegate() -
     assert events == ["enter-int", "exit-int"]
 
 
+def test_open_scoped_cleanup_is_owned_by_overlapping_scope_and_runs_lifo() -> None:
+    closed: list[object] = []
+
+    def _tracked_open_generator(type_arg: type[T]) -> Generator[_IBox[T], None, None]:
+        box = _Box(type=type_arg)
+        try:
+            yield box
+        finally:
+            closed.append(box)
+
+    container = Container()
+    container.add_generator(
+        _tracked_open_generator,
+        provides=_IBox,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    first_scope = container.enter_scope()
+    second_scope = container.enter_scope()
+    first_int = first_scope.resolve(_IBox[int])
+    first_str = first_scope.resolve(_IBox[str])
+    second_int = second_scope.resolve(_IBox[int])
+    second_str = second_scope.resolve(_IBox[str])
+
+    assert first_scope.resolve(_IBox[int]) is first_int
+    assert second_scope.resolve(_IBox[int]) is second_int
+    assert cast("object", first_int) is not cast("object", second_int)
+    assert cast("object", first_str) is not cast("object", second_str)
+
+    first_scope.close()
+
+    assert closed == [first_str, first_int]
+    assert second_scope.resolve(_IBox[int]) is second_int
+
+    second_scope.close()
+
+    assert closed == [first_str, first_int, second_str, second_int]
+
+
 @pytest.mark.asyncio
 async def test_open_async_context_manager_registration_works_in_async_path() -> None:
     container = Container()

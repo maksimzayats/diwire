@@ -402,16 +402,18 @@ class _OpenGenericResolver:  # pragma: no cover
         self._scope_level = scope_level
         self._root_wrapper = self if root_wrapper is None else root_wrapper
         self._parent_wrapper = parent_wrapper
-        self._local_state_lock: Any = threading.RLock()
+        self._local_state_lock: Any
         self._cache: dict[Any, Any] | None = None
         self._thread_locks: dict[Any, threading.Lock] | None = None
         self._async_locks: dict[Any, asyncio.Lock] | None = None
-        self._cleanup_callbacks: list[tuple[int, Any]] = []
+        self._cleanup_callbacks: list[tuple[int, Any]] | None
         self._cleanup_enabled = bool(
             getattr(base_resolver, "_cleanup_enabled", True),
         )
         self._owned_scope_wrappers: tuple[_OpenGenericResolver, ...] = ()
         if root_wrapper is None:
+            self._local_state_lock = threading.RLock()
+            self._cleanup_callbacks = []
             self._managed_scopes = tuple(
                 sorted(
                     (
@@ -462,16 +464,15 @@ class _OpenGenericResolver:  # pragma: no cover
                 self._sync_hot_base_dependency,
                 self._sync_hot_slot_function,
                 self._materialization_attempted_dependencies,
+                self._shared_state_lock,
+                self._materialization_attempt_lock,
             ) = shared_child_state
-            self._scope_transition_cache_for_level = self._scope_transition_cache.setdefault(
-                scope_level,
-                {},
-            )
-            self._shared_state_lock = self._root_wrapper.shared_state_lock()
-            self._materialization_attempt_lock = self._root_wrapper.materialization_attempt_lock()
+            self._scope_transition_cache_for_level = self._scope_transition_cache[scope_level]
+            self._local_state_lock = self._shared_state_lock
             self._async_hot_base_dependency = _UNSET_CACHE
             self._async_hot_slot_function = None
             self._shared_child_state = shared_child_state
+            self._cleanup_callbacks = None
         self._init_runtime_resolver_state(
             materialize_closed_callback=materialize_closed_callback,
         )
@@ -511,6 +512,8 @@ class _OpenGenericResolver:  # pragma: no cover
         Any,
         Callable[[Any], Any] | None,
         set[Any],
+        Any,
+        threading.Lock,
     ]:
         return self._shared_child_state
 
@@ -529,6 +532,8 @@ class _OpenGenericResolver:  # pragma: no cover
             self._sync_hot_base_dependency,
             self._sync_hot_slot_function,
             self._materialization_attempted_dependencies,
+            self._shared_state_lock,
+            self._materialization_attempt_lock,
         )
 
     def resolve(self, dependency: Any) -> Any:
@@ -803,8 +808,11 @@ class _OpenGenericResolver:  # pragma: no cover
             self._base_resolver.__exit__(exc_type, exc_value, traceback)
             return
 
+        local_callbacks = self._cleanup_callbacks
         callbacks: list[tuple[int, Any]] = (
-            self._cleanup_callbacks if self._resolver_cleanup_callbacks() is None else []
+            []
+            if self._resolver_cleanup_callbacks() is not None or local_callbacks is None
+            else local_callbacks
         )
 
         def _base_exit_callback(
@@ -865,8 +873,11 @@ class _OpenGenericResolver:  # pragma: no cover
             await self._base_resolver.__aexit__(exc_type, exc_value, traceback)
             return
 
+        local_callbacks = self._cleanup_callbacks
         callbacks: list[tuple[int, Any]] = (
-            self._cleanup_callbacks if self._resolver_cleanup_callbacks() is None else []
+            []
+            if self._resolver_cleanup_callbacks() is not None or local_callbacks is None
+            else local_callbacks
         )
 
         async def _base_aexit_callback(
@@ -1232,7 +1243,14 @@ class _OpenGenericResolver:  # pragma: no cover
         if callbacks is not None:
             callbacks.append((kind, callback))
             return
-        self._cleanup_callbacks.append((kind, callback))
+        callbacks = self._cleanup_callbacks
+        if callbacks is None:
+            with self._local_state_lock:
+                callbacks = self._cleanup_callbacks
+                if callbacks is None:
+                    callbacks = []
+                    self._cleanup_callbacks = callbacks
+        callbacks.append((kind, callback))
 
     def _resolver_cleanup_callbacks(self) -> list[tuple[int, Any]] | None:
         callbacks = getattr(self._base_resolver, "_cleanup_callbacks", None)

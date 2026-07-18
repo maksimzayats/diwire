@@ -573,6 +573,59 @@ def test_open_generic_resolver_thread_lock_first_touch_is_singleton_under_concur
     assert len({id(lock) for lock in locks}) == 1
 
 
+def test_open_generic_child_local_state_is_isolated_during_concurrent_first_touch() -> None:
+    resolver = open_generics.OpenGenericResolver(
+        base_resolver=cast("Any", _MissingResolver()),
+        registry=open_generics.OpenGenericRegistry(),
+        root_scope=Scope.APP,
+        has_async_specs=False,
+        scope_level=Scope.APP.level,
+    )
+    first_child = resolver.enter_scope(Scope.REQUEST)
+    second_child = resolver.enter_scope(Scope.REQUEST)
+    dependency = _Generic[int]
+    barrier = threading.Barrier(24)
+
+    def _resolve_thread_lock(child: Any) -> Any:
+        barrier.wait()
+        return child.get_thread_lock(dependency)
+
+    children = [first_child, second_child] * 12
+    with ThreadPoolExecutor(max_workers=len(children)) as executor:
+        locks = list(executor.map(_resolve_thread_lock, children))
+
+    first_locks = locks[::2]
+    second_locks = locks[1::2]
+    assert len({id(lock) for lock in first_locks}) == 1
+    assert len({id(lock) for lock in second_locks}) == 1
+    assert first_locks[0] is not second_locks[0]
+
+    first_child.set_cached(dependency=dependency, value="first")
+    second_child.set_cached(dependency=dependency, value="second")
+    assert first_child.get_cached(dependency) == "first"
+    assert second_child.get_cached(dependency) == "second"
+
+    first_async_lock = first_child.get_async_lock(dependency)
+    second_async_lock = second_child.get_async_lock(dependency)
+    assert first_child.get_async_lock(dependency) is first_async_lock
+    assert second_child.get_async_lock(dependency) is second_async_lock
+    assert first_async_lock is not second_async_lock
+
+    cleanup_events: list[str] = []
+    first_child._register_cleanup(
+        kind=0,
+        callback=lambda *_args: cleanup_events.append("first"),
+    )
+    second_child._register_cleanup(
+        kind=0,
+        callback=lambda *_args: cleanup_events.append("second"),
+    )
+    first_child.close()
+    assert cleanup_events == ["first"]
+    second_child.close()
+    assert cleanup_events == ["first", "second"]
+
+
 def test_open_generic_resolver_cache_first_touch_preserves_concurrent_writes() -> None:
     resolver = open_generics.OpenGenericResolver(
         base_resolver=cast("Any", _MissingResolver()),
