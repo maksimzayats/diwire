@@ -573,6 +573,65 @@ def test_open_generic_resolver_thread_lock_first_touch_is_singleton_under_concur
     assert len({id(lock) for lock in locks}) == 1
 
 
+def test_open_generic_direct_child_factory_initializes_complete_fresh_state() -> None:
+    registry = open_generics.OpenGenericRegistry()
+    base_resolver = cast("Any", _MissingResolver())
+    root = open_generics.OpenGenericResolver(
+        base_resolver=base_resolver,
+        registry=registry,
+        root_scope=Scope.APP,
+        has_async_specs=False,
+        scope_level=Scope.APP.level,
+    )
+    constructor_child = open_generics.OpenGenericResolver(
+        base_resolver=base_resolver,
+        registry=registry,
+        root_scope=Scope.APP,
+        has_async_specs=False,
+        scope_level=Scope.REQUEST.level,
+        root_wrapper=root,
+        parent_wrapper=root,
+    )
+
+    factory_child = open_generics._create_open_generic_child(
+        base_resolver,
+        root,
+        Scope.REQUEST.level,
+    )
+    next_factory_child = open_generics._create_open_generic_child(
+        base_resolver,
+        root,
+        Scope.REQUEST.level,
+    )
+
+    assert type(factory_child) is open_generics.OpenGenericResolver
+    assert factory_child is not constructor_child
+    assert next_factory_child is not factory_child
+    assert all(hasattr(factory_child, slot) for slot in factory_child.__slots__)
+    assert factory_child._base_resolver is constructor_child._base_resolver
+    assert factory_child._registry is constructor_child._registry
+    assert factory_child._root_scope is constructor_child._root_scope
+    assert factory_child._root_wrapper is root
+    assert factory_child._parent_wrapper is root
+    assert factory_child._scope_level == constructor_child._scope_level
+    assert factory_child._cleanup_enabled is constructor_child._cleanup_enabled
+    assert factory_child._local_state_lock is constructor_child._local_state_lock
+    assert factory_child._shared_child_state is constructor_child._shared_child_state
+    assert (
+        factory_child._scope_transition_cache_for_level
+        is constructor_child._scope_transition_cache_for_level
+    )
+    assert factory_child._cache is None
+    assert factory_child._thread_locks is None
+    assert factory_child._async_locks is None
+    assert factory_child._cleanup_callbacks is None
+    assert factory_child._owned_scope_wrappers == ()
+    assert factory_child._sync_base_slot_resolvers is None
+    assert factory_child._async_base_slot_resolvers is None
+    assert factory_child._sync_inline_resolver is constructor_child._sync_inline_resolver
+    assert factory_child._async_inline_resolver is constructor_child._async_inline_resolver
+
+
 def test_open_generic_child_local_state_is_isolated_during_concurrent_first_touch() -> None:
     resolver = open_generics.OpenGenericResolver(
         base_resolver=cast("Any", _MissingResolver()),
@@ -624,6 +683,29 @@ def test_open_generic_child_local_state_is_isolated_during_concurrent_first_touc
     assert cleanup_events == ["first"]
     second_child.close()
     assert cleanup_events == ["first", "second"]
+
+
+def test_open_generic_concurrent_scope_entry_creates_fresh_child_wrappers() -> None:
+    resolver = open_generics.OpenGenericResolver(
+        base_resolver=cast("Any", _MissingResolver()),
+        registry=open_generics.OpenGenericRegistry(),
+        root_scope=Scope.APP,
+        has_async_specs=False,
+        scope_level=Scope.APP.level,
+    )
+    barrier = threading.Barrier(24)
+
+    def _enter_scope(index: int) -> Any:
+        barrier.wait()
+        child = resolver.enter_scope(Scope.REQUEST)
+        child.set_cached(dependency=index, value=index)
+        return child
+
+    with ThreadPoolExecutor(max_workers=24) as executor:
+        children = list(executor.map(_enter_scope, range(24)))
+
+    assert len({id(child) for child in children}) == len(children)
+    assert [child.get_cached(index) for index, child in enumerate(children)] == list(range(24))
 
 
 def test_open_generic_resolver_cache_first_touch_preserves_concurrent_writes() -> None:

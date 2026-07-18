@@ -321,6 +321,73 @@ def test_open_scoped_cleanup_is_owned_by_overlapping_scope_and_runs_lifo() -> No
     assert closed == [first_str, first_int, second_str, second_int]
 
 
+def test_direct_action_scope_owns_implicit_request_open_cleanup_and_forwards_error() -> None:
+    events: list[str] = []
+
+    @contextmanager
+    def _tracked_open_context(type_arg: type[T]) -> Generator[_IBox[T], None, None]:
+        events.append(f"enter-{type_arg.__name__}")
+        try:
+            yield _Box(type=type_arg)
+        except ValueError as error:
+            events.append(f"error-{type_arg.__name__}-{error}")
+            raise
+        finally:
+            events.append(f"exit-{type_arg.__name__}")
+
+    container = Container()
+    container.add_context_manager(
+        _tracked_open_context,
+        provides=_IBox,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with pytest.raises(ValueError, match="body boom"):
+        with container.enter_scope(Scope.ACTION) as action_scope:
+            action_scope.resolve(_IBox[int])
+            action_scope.resolve(_IBox[str])
+            raise ValueError("body boom")
+
+    assert events == [
+        "enter-int",
+        "enter-str",
+        "error-str-body boom",
+        "exit-str",
+        "error-int-body boom",
+        "exit-int",
+    ]
+
+
+def test_nested_action_close_keeps_request_owned_open_resource_alive() -> None:
+    events: list[str] = []
+
+    @contextmanager
+    def _tracked_open_context(type_arg: type[T]) -> Generator[_IBox[T], None, None]:
+        events.append(f"enter-{type_arg.__name__}")
+        try:
+            yield _Box(type=type_arg)
+        finally:
+            events.append(f"exit-{type_arg.__name__}")
+
+    container = Container()
+    container.add_context_manager(
+        _tracked_open_context,
+        provides=_IBox,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with container.enter_scope() as request_scope:
+        with request_scope.enter_scope(Scope.ACTION) as action_scope:
+            resolved = action_scope.resolve(_IBox[int])
+
+        assert events == ["enter-int"]
+        assert request_scope.resolve(_IBox[int]) is resolved
+
+    assert events == ["enter-int", "exit-int"]
+
+
 @pytest.mark.asyncio
 async def test_open_async_context_manager_registration_works_in_async_path() -> None:
     container = Container()
@@ -377,6 +444,47 @@ async def test_open_generic_scope_resolver_aclose_runs_cleanup_via_wrapper_deleg
 
     await request_scope.aclose()
     assert events == ["enter-int", "exit-int"]
+
+
+@pytest.mark.asyncio
+async def test_direct_action_scope_async_cleanup_owns_implicit_request_and_forwards_error() -> None:
+    events: list[str] = []
+
+    @asynccontextmanager
+    async def _tracked_open_context(
+        type_arg: type[T],
+    ) -> AsyncGenerator[_IBox[T], None]:
+        events.append(f"enter-{type_arg.__name__}")
+        try:
+            yield _Box(type=type_arg)
+        except ValueError as error:
+            events.append(f"error-{type_arg.__name__}-{error}")
+            raise
+        finally:
+            events.append(f"exit-{type_arg.__name__}")
+
+    container = Container()
+    container.add_context_manager(
+        _tracked_open_context,
+        provides=_IBox,
+        scope=Scope.REQUEST,
+        lifetime=Lifetime.SCOPED,
+    )
+
+    with pytest.raises(ValueError, match="async body boom"):
+        async with container.enter_scope(Scope.ACTION) as action_scope:
+            await action_scope.aresolve(_IBox[int])
+            await action_scope.aresolve(_IBox[str])
+            raise ValueError("async body boom")
+
+    assert events == [
+        "enter-int",
+        "enter-str",
+        "error-str-async body boom",
+        "exit-str",
+        "error-int-async body boom",
+        "exit-int",
+    ]
 
 
 def test_open_async_factory_raises_in_sync_resolution() -> None:
@@ -665,6 +773,7 @@ def test_open_scoped_cache_isolated_per_scope_and_closed_dependency_key() -> Non
     with container.enter_scope() as request_two:
         two_first = request_two.resolve(_IBox[int])
 
+    assert request_one is not request_two
     assert one_first is one_second
     assert cast("object", one_first) is not cast("object", one_str)
     assert cast("object", one_first) is not cast("object", two_first)
@@ -687,6 +796,7 @@ def test_open_scoped_cache_works_when_entering_action_scope_directly() -> None:
     with container.enter_scope(Scope.ACTION) as next_action_scope:
         next_scope_first = next_action_scope.resolve(_IBox[int])
 
+    assert action_scope is not next_action_scope
     assert first is second
     assert cast("object", first) is not cast("object", other)
     assert cast("object", first) is not cast("object", next_scope_first)

@@ -761,15 +761,10 @@ class _OpenGenericResolver:  # pragma: no cover
         if len(transition_path) == 1:
             next_scope = transition_path[0]
             scoped_base_resolver = self._base_resolver.enter_scope(next_scope)
-            return _OpenGenericResolver(
-                base_resolver=scoped_base_resolver,
-                registry=self._registry,
-                root_scope=self._root_scope,
-                has_async_specs=self._has_async_specs,
-                scope_level=next_scope.level,
-                root_wrapper=self._root_wrapper,
-                parent_wrapper=self,
-                materialize_closed_callback=self._materialize_closed_callback,
+            return _create_open_generic_child(
+                scoped_base_resolver,
+                self,
+                next_scope.level,
             )
 
         current_wrapper = self
@@ -778,20 +773,19 @@ class _OpenGenericResolver:  # pragma: no cover
 
         for next_scope in transition_path:
             current_base_resolver = current_base_resolver.enter_scope(next_scope)
-            current_wrapper = _OpenGenericResolver(
-                base_resolver=current_base_resolver,
-                registry=self._registry,
-                root_scope=self._root_scope,
-                has_async_specs=self._has_async_specs,
-                scope_level=next_scope.level,
-                root_wrapper=self._root_wrapper,
-                parent_wrapper=current_wrapper,
-                materialize_closed_callback=self._materialize_closed_callback,
+            current_wrapper = _create_open_generic_child(
+                current_base_resolver,
+                current_wrapper,
+                next_scope.level,
             )
             created_wrappers.append(current_wrapper)
 
         if len(created_wrappers) > 1:
-            current_wrapper._owned_scope_wrappers = tuple(created_wrappers[:-1])
+            object.__setattr__(
+                current_wrapper,
+                "_owned_scope_wrappers",
+                tuple(created_wrappers[:-1]),
+            )
         return current_wrapper
 
     def __enter__(self) -> Self:
@@ -1716,6 +1710,71 @@ class _OpenGenericResolver:  # pragma: no cover
     async def _missing_async_inline_resolver() -> NoReturn:
         msg = "Inline async resolver cache is not initialized."
         raise RuntimeError(msg)
+
+
+def _create_open_generic_child(
+    base_resolver: ResolverProtocol,
+    parent_wrapper: _OpenGenericResolver,
+    scope_level: int,
+) -> _OpenGenericResolver:
+    self = parent_wrapper
+    root_wrapper = self._root_wrapper
+    registry = self._registry
+    root_scope = self._root_scope
+    has_async_specs = self._has_async_specs
+    materialize_closed_callback = self._materialize_closed_callback
+    shared_child_state = root_wrapper.shared_child_init_state()
+
+    self = object.__new__(_OpenGenericResolver)
+    self._base_resolver = base_resolver
+    self._registry = registry
+    self._root_scope = root_scope
+    self._has_async_specs = has_async_specs
+    self._scope_level = scope_level
+    self._root_wrapper = root_wrapper
+    self._parent_wrapper = parent_wrapper
+    self._cache = None
+    self._thread_locks = None
+    self._async_locks = None
+    self._cleanup_callbacks = None
+    self._cleanup_enabled = bool(
+        getattr(base_resolver, "_cleanup_enabled", True),
+    )
+    self._owned_scope_wrappers = ()
+
+    (
+        self._managed_scopes,
+        self._scope_transition_cache,
+        self._sync_dispatch_cache,
+        self._async_dispatch_cache,
+        self._sync_base_dispatch,
+        self._async_base_dispatch,
+        self._sync_base_slot_functions,
+        self._async_base_slot_functions,
+        self._sync_base_slot_indices,
+        self._async_base_slot_indices,
+        self._sync_hot_base_dependency,
+        self._sync_hot_slot_function,
+        self._materialization_attempted_dependencies,
+        self._shared_state_lock,
+        self._materialization_attempt_lock,
+    ) = shared_child_state
+    self._scope_transition_cache_for_level = self._scope_transition_cache[scope_level]
+    self._local_state_lock = self._shared_state_lock
+    self._async_hot_base_dependency = _UNSET_CACHE
+    self._async_hot_slot_function = None
+    self._shared_child_state = shared_child_state
+
+    self._scope_transition_hot_target = _MISSING_CACHE
+    self._scope_transition_hot_path = ()
+    self._sync_base_slot_resolvers = None
+    self._async_base_slot_resolvers = None
+    self._sync_inline_dependency = _MISSING_CACHE
+    self._sync_inline_resolver = self._missing_sync_inline_resolver
+    self._async_inline_dependency = _MISSING_CACHE
+    self._async_inline_resolver = self._missing_async_inline_resolver
+    self._materialize_closed_callback = materialize_closed_callback
+    return self
 
 
 @dataclass(frozen=True, slots=True)
