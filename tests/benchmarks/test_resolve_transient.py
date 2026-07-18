@@ -6,7 +6,7 @@ import rodi
 from dishka import Provider
 from wireup import injectable
 
-from diwire import Lifetime
+from diwire import Lifetime, Scope
 from tests.benchmarks.dishka_helpers import DishkaBenchmarkScope, make_dishka_benchmark_container
 from tests.benchmarks.helpers import make_diwire_benchmark_container, run_benchmark
 from tests.benchmarks.wireup_helpers import make_wireup_benchmark_container
@@ -19,44 +19,51 @@ class _TransientService:
 
 def test_benchmark_diwire_resolve_transient(benchmark: Any) -> None:
     container = make_diwire_benchmark_container()
-    container.add(_TransientService, lifetime=Lifetime.TRANSIENT)
+    container.add(
+        _TransientService,
+        lifetime=Lifetime.TRANSIENT,
+        scope=Scope.REQUEST,
+    )
     container.compile()
-    first = container.resolve(_TransientService)
-    second = container.resolve(_TransientService)
-    assert first is not second
+    with container.enter_scope(Scope.REQUEST) as scope:
+        first = scope.resolve(_TransientService)
+        second = scope.resolve(_TransientService)
+        assert first is not second
 
-    def bench_diwire_transient() -> None:
-        _ = container.resolve(_TransientService)
+        def bench_diwire_transient() -> None:
+            _ = scope.resolve(_TransientService)
 
-    run_benchmark(benchmark, bench_diwire_transient)
+        run_benchmark(benchmark, bench_diwire_transient)
 
 
 def test_benchmark_rodi_resolve_transient(benchmark: Any) -> None:
     rodi_container = rodi.Container()
     rodi_container.add_transient(_TransientService)
     services = rodi_container.build_provider()
-    first = services.get(_TransientService)
-    second = services.get(_TransientService)
-    assert first is not second
+    with services.create_scope() as scope:
+        first = scope.get(_TransientService)
+        second = scope.get(_TransientService)
+        assert first is not second
 
-    def bench_rodi_transient() -> None:
-        _ = services.get(_TransientService)
+        def bench_rodi_transient() -> None:
+            _ = scope.get(_TransientService)
 
-    run_benchmark(benchmark, bench_rodi_transient)
+        run_benchmark(benchmark, bench_rodi_transient)
 
 
 def test_benchmark_dishka_resolve_transient(benchmark: Any) -> None:
     provider = Provider(scope=DishkaBenchmarkScope.APP)
-    provider.provide(_TransientService, scope=DishkaBenchmarkScope.APP, cache=False)
+    provider.provide(_TransientService, scope=DishkaBenchmarkScope.REQUEST, cache=False)
     container = make_dishka_benchmark_container(provider)
-    first = container.get(_TransientService)
-    second = container.get(_TransientService)
-    assert first is not second
+    with container(scope=DishkaBenchmarkScope.REQUEST) as scope:
+        first = scope.get(_TransientService)
+        second = scope.get(_TransientService)
+        assert first is not second
 
-    def bench_dishka_transient() -> None:
-        _ = container.get(_TransientService)
+        def bench_dishka_transient() -> None:
+            _ = scope.get(_TransientService)
 
-    run_benchmark(benchmark, bench_dishka_transient)
+        run_benchmark(benchmark, bench_dishka_transient)
 
 
 def test_benchmark_wireup_resolve_transient(benchmark: Any) -> None:

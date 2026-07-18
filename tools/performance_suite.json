@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "suite_id": "performance-goal-v1",
+  "subject": "diwire",
+  "libraries": [
+    "diwire",
+    "rodi",
+    "dishka",
+    "wireup"
+  ],
+  "scenarios": {
+    "enter_close_scope_no_resolve": {
+      "benchmark_file": "tests/benchmarks/test_enter_close_scope_no_resolve.py",
+      "stable": true,
+      "cells": {
+        "diwire": {"status": "subject"},
+        "rodi": {"status": "comparable"},
+        "dishka": {"status": "comparable"},
+        "wireup": {"status": "comparable"}
+      }
+    },
+    "enter_close_scope_resolve_100_instance": {
+      "benchmark_file": "tests/benchmarks/test_enter_close_scope_resolve_100_instance.py",
+      "stable": true,
+      "cells": {
+        "diwire": {"status": "subject"},
+        "rodi": {"status": "comparable"},
+        "dishka": {"status": "comparable"},
+        "wireup": {"status": "comparable"}
+      }
+    },
+    "enter_close_scope_resolve_generator_request_try_finally": {
+      "benchmark_file": "tests/benchmarks/test_enter_close_scope_resolve_generator_request_try_finally.py",
+      "stable": true,
+      "cells": {
+        "diwire": {"status": "subject"},
+        "rodi": {
+          "status": "unsupported",
+          "reason": "No equivalent scoped generator cleanup provider is exposed by Rodi"
+        },
+        "dishka": {"status": "comparable"},
+        "wireup": {"status": "comparable"}
+      }
+    },
+    "enter_close_scope_resolve_once": {
+      "benchmark_file": "tests/benchmarks/test_enter_close_scope_resolve_once.py",
+      "stable": true,
+      "cells": {
+        "diwire": {"status": "subject"},
+        "rodi": {"status": "comparable"},
+        "dishka": {"status": "comparable"},
+        "wireup": {"status": "comparable"}
+      }
+    },
+    "enter_close_scope_resolve_open_generic_scoped": {
+      "benchmark_file": "tests/benchmarks/test_enter_close_scope_resolve_open_generic_scoped.py",
+      "stable": true,
+      "cells": {
+        "diwire": {"status": "subject"},
+        "rodi": {
+          "status": "unsupported",
+          "reason": "Rodi does not expose an equivalent open-generic scoped registration"
+        },
+        "dishka": {"status": "comparable"},
+        "wireup": {
+          "status": "unsupported",
+          "reason": "Wireup does not expose an equivalent open-generic scoped registration"
+        }
+      }
+    },
+    "enter_close_scope_resolve_scoped_100": {
+      "benchmark_file": "tests/benchmarks/test_enter_close_scope_resolve_scoped_100.py",
+      "stable": true,
+      "cells": {
+        "diwire": {"status": "subject"},
+        "rodi": {"status": "comparable"},
+        "dishka": {"status": "comparable"},
+        "wireup": {"status": "comparable"}
+      }
+    },
+    "resolve_deep_transient_chain": {
+      "benchmark_file": "tests/benchmarks/test_resolve_deep_transient_chain.py",
+      "stable": true,
+      "cells": {
+        "diwire": {"status": "subject"},
+        "rodi": {"status": "comparable"},
+        "dishka": {"status": "comparable"},
+        "wireup": {"status": "comparable"}
+      }
+    },
+    "resolve_generated_scoped_grid": {
+      "benchmark_file": "tests/benchmarks/test_resolve_generated_scoped_grid.py",
+      "stable": true,
+      "cells": {
+        "diwire": {"status": "subject"},
+        "rodi": {"status": "comparable"},
+        "dishka": {"status": "comparable"},
+        "wireup": {"status": "comparable"}
+      }
+    },
+    "resolve_mixed_lifetimes": {
+      "benchmark_file": "tests/benchmarks/test_resolve_mixed_lifetimes.py",
+      "stable": true,
+      "cells": {
+        "diwire": {"status": "subject"},
+        "rodi": {"status": "comparable"},
+        "dishka": {"status": "comparable"},
+        "wireup": {"status": "comparable"}
+      }
+    },
+    "resolve_open_generic_transient": {
+      "benchmark_file": "tests/benchmarks/test_resolve_open_generic_transient.py",
+      "stable": true,
+      "cells": {
+        "diwire": {"status": "subject"},
+        "rodi": {
+          "status": "unsupported",
+          "reason": "Rodi does not expose an equivalent open-generic registration"
+        },
+        "dishka": {"status": "comparable"},
+        "wireup": {
+          "status": "unsupported",
+          "reason": "Wireup does not expose an equivalent open-generic registration"
+        }
+      }
+    },
+    "resolve_scoped": {
+      "benchmark_file": "tests/benchmarks/test_resolve_scoped.py",
+      "stable": true,
+      "cells": {
+        "diwire": {"status": "subject"},
+        "rodi": {"status": "comparable"},
+        "dishka": {"status": "comparable"},
+        "wireup": {"status": "comparable"}
+      }
+    },
+    "resolve_scoped_with_registered_open_closed_generics": {
+      "benchmark_file": "tests/benchmarks/test_resolve_scoped_with_registered_open_closed_generics.py",
+      "stable": true,
+      "cells": {
+        "diwire": {"status": "subject"},
+        "rodi": {
+          "status": "unsupported",
+          "reason": "Rodi does not expose equivalent open- and closed-generic registrations"
+        },
+        "dishka": {"status": "comparable"},
+        "wireup": {
+          "status": "unsupported",
+          "reason": "Wireup does not expose equivalent open- and closed-generic registrations"
+        }
+      }
+    },
+    "resolve_scoped_with_registered_open_closed_generics_pair_alternating": {
+      "benchmark_file": "tests/benchmarks/test_resolve_scoped_with_registered_open_closed_generics_pair_alternating.py",
+      "stable": true,
+      "cells": {
+        "diwire": {"status": "subject"},
+        "rodi": {
+          "status": "unsupported",
+          "reason": "Rodi does not expose equivalent open- and closed-generic registrations"
+        },
+        "dishka": {"status": "comparable"},
+        "wireup": {
+          "status": "unsupported",
+          "reason": "Wireup does not expose equivalent open- and closed-generic registrations"
+        }
+      }
+    },
+    "resolve_scoped_with_registered_open_closed_generics_pair_same": {
+      "benchmark_file": "tests/benchmarks/test_resolve_scoped_with_registered_open_closed_generics_pair_same.py",
+      "stable": true,
+      "cells": {
+        "diwire": {"status": "subject"},
+        "rodi": {
+          "status": "unsupported",
+          "reason": "Rodi does not expose equivalent open- and closed-generic registrations"
+        },
+        "dishka": {"status": "comparable"},
+        "wireup": {
+          "status": "unsupported",
+          "reason": "Wireup does not expose equivalent open- and closed-generic registrations"
+        }
+      }
+    },
+    "resolve_singleton": {
+      "benchmark_file": "tests/benchmarks/test_resolve_singleton.py",
+      "stable": true,
+      "cells": {
+        "diwire": {"status": "subject"},
+        "rodi": {"status": "comparable"},
+        "dishka": {"status": "comparable"},
+        "wireup": {"status": "comparable"}
+      }
+    },
+    "resolve_transient": {
+      "benchmark_file": "tests/benchmarks/test_resolve_transient.py",
+      "stable": true,
+      "cells": {
+        "diwire": {"status": "subject"},
+        "rodi": {"status": "comparable"},
+        "dishka": {"status": "comparable"},
+        "wireup": {"status": "comparable"}
+      }
+    },
+    "resolve_wide_transient_graph": {
+      "benchmark_file": "tests/benchmarks/test_resolve_wide_transient_graph.py",
+      "stable": true,
+      "cells": {
+        "diwire": {"status": "subject"},
+        "rodi": {"status": "comparable"},
+        "dishka": {"status": "comparable"},
+        "wireup": {"status": "comparable"}
+      }
+    }
+  }
+}

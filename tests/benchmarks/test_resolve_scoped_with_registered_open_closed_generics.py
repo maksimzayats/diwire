@@ -47,19 +47,23 @@ def test_benchmark_diwire_resolve_scoped_with_registered_open_closed_generics(
         first_int = cast("Any", first_scope.resolve(_Repo[int]))
         second_int = cast("Any", first_scope.resolve(_Repo[int]))
         first_str = cast("Any", first_scope.resolve(_Repo[str]))
+        second_str = cast("Any", first_scope.resolve(_Repo[str]))
     with container.enter_scope(Scope.REQUEST) as second_scope:
         third_int = cast("Any", second_scope.resolve(_Repo[int]))
-        second_str = cast("Any", second_scope.resolve(_Repo[str]))
+        third_str = cast("Any", second_scope.resolve(_Repo[str]))
     assert isinstance(first_int, _ClosedIntRepo)
     assert isinstance(second_int, _ClosedIntRepo)
     assert isinstance(third_int, _ClosedIntRepo)
     assert isinstance(first_str, _OpenGenericRepo)
     assert isinstance(second_str, _OpenGenericRepo)
+    assert isinstance(third_str, _OpenGenericRepo)
     assert first_int is second_int
     assert first_int is not third_int
-    assert first_str is not second_str
+    assert first_str is second_str
+    assert first_str is not third_str
     assert first_str.dependency_type is str
     assert second_str.dependency_type is str
+    assert third_str.dependency_type is str
 
     repo_int = _Repo[int]
     with container.enter_scope(Scope.REQUEST) as bench_scope:
@@ -83,19 +87,23 @@ def test_benchmark_dishka_resolve_scoped_with_registered_open_closed_generics(
         first_int = cast("Any", first_scope.get(_Repo[int]))
         second_int = cast("Any", first_scope.get(_Repo[int]))
         first_str = cast("Any", first_scope.get(_Repo[str]))
+        second_str = cast("Any", first_scope.get(_Repo[str]))
     with container(scope=DishkaBenchmarkScope.REQUEST) as second_scope:
         third_int = cast("Any", second_scope.get(_Repo[int]))
-        second_str = cast("Any", second_scope.get(_Repo[str]))
+        third_str = cast("Any", second_scope.get(_Repo[str]))
     assert isinstance(first_int, _ClosedIntRepo)
     assert isinstance(second_int, _ClosedIntRepo)
     assert isinstance(third_int, _ClosedIntRepo)
     assert isinstance(first_str, _OpenGenericRepo)
     assert isinstance(second_str, _OpenGenericRepo)
+    assert isinstance(third_str, _OpenGenericRepo)
     assert first_int is second_int
     assert first_int is not third_int
-    assert first_str is not second_str
+    assert first_str is second_str
+    assert first_str is not third_str
     assert first_str.dependency_type is str
     assert second_str.dependency_type is str
+    assert third_str.dependency_type is str
 
     repo_int = _Repo[int]
     with container(scope=DishkaBenchmarkScope.REQUEST) as bench_scope:

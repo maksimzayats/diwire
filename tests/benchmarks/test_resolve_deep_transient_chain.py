@@ -6,7 +6,7 @@ import rodi
 from dishka import Provider
 from wireup import injectable
 
-from diwire import Lifetime
+from diwire import Lifetime, Scope
 from tests.benchmarks.dishka_helpers import DishkaBenchmarkScope, make_dishka_benchmark_container
 from tests.benchmarks.helpers import make_diwire_benchmark_container, run_benchmark
 from tests.benchmarks.wireup_helpers import make_wireup_benchmark_container
@@ -49,23 +49,24 @@ class _Root:
 
 def test_benchmark_diwire_resolve_deep_transient_chain(benchmark: Any) -> None:
     container = make_diwire_benchmark_container()
-    container.add(_Dep0, lifetime=Lifetime.TRANSIENT)
-    container.add(_Dep1, lifetime=Lifetime.TRANSIENT)
-    container.add(_Dep2, lifetime=Lifetime.TRANSIENT)
-    container.add(_Dep3, lifetime=Lifetime.TRANSIENT)
-    container.add(_Dep4, lifetime=Lifetime.TRANSIENT)
-    container.add(_Root, lifetime=Lifetime.TRANSIENT)
+    container.add(_Dep0, lifetime=Lifetime.TRANSIENT, scope=Scope.REQUEST)
+    container.add(_Dep1, lifetime=Lifetime.TRANSIENT, scope=Scope.REQUEST)
+    container.add(_Dep2, lifetime=Lifetime.TRANSIENT, scope=Scope.REQUEST)
+    container.add(_Dep3, lifetime=Lifetime.TRANSIENT, scope=Scope.REQUEST)
+    container.add(_Dep4, lifetime=Lifetime.TRANSIENT, scope=Scope.REQUEST)
+    container.add(_Root, lifetime=Lifetime.TRANSIENT, scope=Scope.REQUEST)
     container.compile()
-    first = container.resolve(_Root)
-    second = container.resolve(_Root)
-    assert first is not second
-    assert first.dep_4 is not second.dep_4
-    assert first.dep_4.dep_3.dep_2.dep_1.dep_0 is not second.dep_4.dep_3.dep_2.dep_1.dep_0
+    with container.enter_scope(Scope.REQUEST) as scope:
+        first = scope.resolve(_Root)
+        second = scope.resolve(_Root)
+        assert first is not second
+        assert first.dep_4 is not second.dep_4
+        assert first.dep_4.dep_3.dep_2.dep_1.dep_0 is not second.dep_4.dep_3.dep_2.dep_1.dep_0
 
-    def bench_diwire_deep_chain() -> None:
-        _ = container.resolve(_Root)
+        def bench_diwire_deep_chain() -> None:
+            _ = scope.resolve(_Root)
 
-    run_benchmark(benchmark, bench_diwire_deep_chain, iterations=25_000)
+        run_benchmark(benchmark, bench_diwire_deep_chain, iterations=25_000)
 
 
 def test_benchmark_rodi_resolve_deep_transient_chain(benchmark: Any) -> None:
@@ -77,37 +78,39 @@ def test_benchmark_rodi_resolve_deep_transient_chain(benchmark: Any) -> None:
     rodi_container.add_transient(_Dep4)
     rodi_container.add_transient(_Root)
     services = rodi_container.build_provider()
-    first = services.get(_Root)
-    second = services.get(_Root)
-    assert first is not second
-    assert first.dep_4 is not second.dep_4
-    assert first.dep_4.dep_3.dep_2.dep_1.dep_0 is not second.dep_4.dep_3.dep_2.dep_1.dep_0
+    with services.create_scope() as scope:
+        first = scope.get(_Root)
+        second = scope.get(_Root)
+        assert first is not second
+        assert first.dep_4 is not second.dep_4
+        assert first.dep_4.dep_3.dep_2.dep_1.dep_0 is not second.dep_4.dep_3.dep_2.dep_1.dep_0
 
-    def bench_rodi_deep_chain() -> None:
-        _ = services.get(_Root)
+        def bench_rodi_deep_chain() -> None:
+            _ = scope.get(_Root)
 
-    run_benchmark(benchmark, bench_rodi_deep_chain, iterations=25_000)
+        run_benchmark(benchmark, bench_rodi_deep_chain, iterations=25_000)
 
 
 def test_benchmark_dishka_resolve_deep_transient_chain(benchmark: Any) -> None:
     provider = Provider(scope=DishkaBenchmarkScope.APP)
-    provider.provide(_Dep0, scope=DishkaBenchmarkScope.APP, cache=False)
-    provider.provide(_Dep1, scope=DishkaBenchmarkScope.APP, cache=False)
-    provider.provide(_Dep2, scope=DishkaBenchmarkScope.APP, cache=False)
-    provider.provide(_Dep3, scope=DishkaBenchmarkScope.APP, cache=False)
-    provider.provide(_Dep4, scope=DishkaBenchmarkScope.APP, cache=False)
-    provider.provide(_Root, scope=DishkaBenchmarkScope.APP, cache=False)
+    provider.provide(_Dep0, scope=DishkaBenchmarkScope.REQUEST, cache=False)
+    provider.provide(_Dep1, scope=DishkaBenchmarkScope.REQUEST, cache=False)
+    provider.provide(_Dep2, scope=DishkaBenchmarkScope.REQUEST, cache=False)
+    provider.provide(_Dep3, scope=DishkaBenchmarkScope.REQUEST, cache=False)
+    provider.provide(_Dep4, scope=DishkaBenchmarkScope.REQUEST, cache=False)
+    provider.provide(_Root, scope=DishkaBenchmarkScope.REQUEST, cache=False)
     container = make_dishka_benchmark_container(provider)
-    first = container.get(_Root)
-    second = container.get(_Root)
-    assert first is not second
-    assert first.dep_4 is not second.dep_4
-    assert first.dep_4.dep_3.dep_2.dep_1.dep_0 is not second.dep_4.dep_3.dep_2.dep_1.dep_0
+    with container(scope=DishkaBenchmarkScope.REQUEST) as scope:
+        first = scope.get(_Root)
+        second = scope.get(_Root)
+        assert first is not second
+        assert first.dep_4 is not second.dep_4
+        assert first.dep_4.dep_3.dep_2.dep_1.dep_0 is not second.dep_4.dep_3.dep_2.dep_1.dep_0
 
-    def bench_dishka_deep_chain() -> None:
-        _ = container.get(_Root)
+        def bench_dishka_deep_chain() -> None:
+            _ = scope.get(_Root)
 
-    run_benchmark(benchmark, bench_dishka_deep_chain, iterations=25_000)
+        run_benchmark(benchmark, bench_dishka_deep_chain, iterations=25_000)
 
 
 def test_benchmark_wireup_resolve_deep_transient_chain(benchmark: Any) -> None:
