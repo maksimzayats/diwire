@@ -2752,6 +2752,137 @@ def test_sync_cached_dispatch_fusion_supports_zero_and_one_child() -> None:
                 )
 
 
+def test_sync_cached_generator_dispatch_fusion_accepts_only_exact_safe_shape() -> None:
+    compiler = compiler_module.ResolversAssemblyCompiler()
+    root_scope = _scope_plan(level=Scope.APP.level, name="app")
+    request_scope = _scope_plan(level=Scope.REQUEST.level, name="request")
+    safe_workflow = replace(
+        _cached_fusion_test_workflow(slot=83, provides=bytearray),
+        provider_attribute="generator",
+        needs_cleanup=True,
+    )
+
+    def fusion_candidate(
+        workflow: ProviderWorkflowPlan,
+        *,
+        class_plan: ScopePlan = request_scope,
+        identity_workflows: tuple[ProviderWorkflowPlan, ...] | None = None,
+        has_cleanup: bool = True,
+    ) -> tuple[ProviderWorkflowPlan, tuple[ast.stmt, ...]] | None:
+        runtime = _runtime(
+            scopes=(root_scope, request_scope),
+            workflows=(workflow,),
+        )
+        runtime.has_cleanup = has_cleanup
+        if identity_workflows is None:
+            identity_workflows = (workflow,) if workflow.dispatch_kind == "identity" else ()
+        return compiler._sync_cached_generator_dispatch_fusion_candidate(
+            runtime=runtime,
+            class_plan=class_plan,
+            identity_workflows=identity_workflows,
+        )
+
+    candidate = fusion_candidate(safe_workflow)
+    assert candidate is not None
+    assert candidate[0] is safe_workflow
+
+    dependency = _dependency(provides=int)
+    dependency_plan = ProviderDependencyPlan(
+        kind="provider",
+        dependency=dependency,
+        dependency_index=0,
+        dependency_slot=84,
+    )
+    unsafe_workflows = (
+        replace(safe_workflow, scope_level=Scope.APP.level),
+        replace(safe_workflow, cache_owner_scope_level=Scope.APP.level),
+        replace(safe_workflow, max_required_scope_level=Scope.REQUEST.level + 1),
+        replace(safe_workflow, is_cached=False, cache_owner_scope_level=None),
+        replace(safe_workflow, is_transient=True),
+        replace(safe_workflow, lock_mode="auto"),
+        replace(safe_workflow, effective_lock_mode=LockMode.THREAD),
+        replace(safe_workflow, uses_thread_lock=True),
+        replace(safe_workflow, uses_async_lock=True),
+        replace(safe_workflow, requires_async=True),
+        replace(safe_workflow, is_provider_async=True),
+        replace(safe_workflow, provider_attribute="factory"),
+        replace(safe_workflow, provider_is_inject_wrapper=True),
+        replace(safe_workflow, needs_cleanup=False),
+        replace(
+            safe_workflow,
+            dependencies=(dependency,),
+            dependency_slots=(84,),
+            dependency_requires_async=(False,),
+        ),
+        replace(safe_workflow, dependency_plans=(dependency_plan,)),
+        replace(safe_workflow, sync_arguments=("self.resolve_84()",)),
+        replace(safe_workflow, dispatch_kind="equality_map"),
+    )
+    for unsafe_workflow in unsafe_workflows:
+        assert fusion_candidate(unsafe_workflow) is None
+
+    assert fusion_candidate(safe_workflow, class_plan=root_scope) is None
+    assert fusion_candidate(safe_workflow, identity_workflows=()) is None
+    assert fusion_candidate(safe_workflow, has_cleanup=False) is None
+
+    cloned_workflow = replace(safe_workflow)
+    assert fusion_candidate(safe_workflow, identity_workflows=(cloned_workflow,)) is None
+
+    second_workflow = replace(safe_workflow, slot=84, provides=bytes)
+    multiple_runtime = _runtime(
+        scopes=(root_scope, request_scope),
+        workflows=(safe_workflow, second_workflow),
+    )
+    assert (
+        compiler._sync_cached_generator_dispatch_fusion_candidate(
+            runtime=multiple_runtime,
+            class_plan=request_scope,
+            identity_workflows=(safe_workflow, second_workflow),
+        )
+        is None
+    )
+
+
+def test_specialized_sync_generator_body_lines_cover_cache_and_cleanup_variants() -> None:
+    compiler = compiler_module.ResolversAssemblyCompiler()
+    root_scope = _scope_plan(level=Scope.APP.level, name="app")
+    root_workflow = _workflow_plan(
+        slot=84,
+        provider_attribute="generator",
+        scope_level=Scope.APP.level,
+        cache_owner_scope_level=Scope.APP.level,
+    )
+    root_runtime = _runtime(scopes=(root_scope,), workflows=(root_workflow,))
+
+    root_lines = compiler._specialized_sync_generator_body_lines(
+        runtime=root_runtime,
+        workflow=root_workflow,
+        arguments="",
+    )
+
+    assert "self._cache_84 = value" in root_lines
+    assert "self.resolve_84 = lambda: value" in root_lines
+
+    transient_workflow = _workflow_plan(
+        slot=85,
+        provider_attribute="generator",
+        is_cached=False,
+        cache_owner_scope_level=None,
+    )
+    transient_runtime = _runtime(scopes=(root_scope,), workflows=(transient_workflow,))
+    transient_runtime.has_cleanup = False
+
+    assert compiler._specialized_sync_generator_body_lines(
+        runtime=transient_runtime,
+        workflow=transient_workflow,
+        arguments="",
+    ) == [
+        "provider_gen = _provider_85()",
+        "value = next(provider_gen)",
+        "return value",
+    ]
+
+
 def test_sync_cached_fusion_workflow_safety_rejects_every_unsafe_shape() -> None:
     compiler = compiler_module.ResolversAssemblyCompiler()
     request_scope = _scope_plan(level=Scope.REQUEST.level, name="request")

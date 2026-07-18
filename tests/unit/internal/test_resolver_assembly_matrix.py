@@ -586,6 +586,294 @@ def test_assembly_matrix_bounded_transient_inlining_preserves_graph_semantics() 
     assert events[-6:] == ["leaf", "leaf", "branch", "cached", "middle", "root"]
 
 
+def test_sync_dispatch_fusion_inlines_sole_scoped_generator_cleanup_graph() -> None:
+    def provide_resource() -> Generator[_MatrixResource, None, None]:
+        try:
+            yield _MatrixResource()
+        finally:
+            pass
+
+    container = Container(lock_mode=LockMode.NONE, use_resolver_context=False)
+    container.add_generator(
+        provide_resource,
+        provides=_MatrixResource,
+        lifetime=Lifetime.SCOPED,
+        scope=Scope.REQUEST,
+    )
+
+    with container.enter_scope(Scope.REQUEST) as request_scope:
+        resource_slot = container._providers_registrations.get_by_type(
+            _MatrixResource,
+        ).slot
+
+        assert f"_provider_{resource_slot}" in request_scope.resolve.__code__.co_names
+        assert f"resolve_{resource_slot}" not in request_scope.resolve.__code__.co_names
+        assert f"aresolve_{resource_slot}" in request_scope.aresolve.__code__.co_names
+
+
+def test_sync_dispatch_fused_generator_preserves_scope_cache_and_cleanup() -> None:
+    events: list[tuple[str, _MatrixResource]] = []
+
+    def provide_resource() -> Generator[_MatrixResource, None, None]:
+        resource = _MatrixResource()
+        events.append(("enter", resource))
+        try:
+            yield resource
+        finally:
+            events.append(("exit", resource))
+
+    container = Container(lock_mode=LockMode.NONE, use_resolver_context=False)
+    container.add_generator(
+        provide_resource,
+        provides=_MatrixResource,
+        lifetime=Lifetime.SCOPED,
+        scope=Scope.REQUEST,
+    )
+
+    with container.enter_scope(Scope.REQUEST) as first_scope:
+        first = first_scope.resolve(_MatrixResource)
+        second = first_scope.resolve(_MatrixResource)
+        assert first is second
+        assert events == [("enter", first)]
+
+    with container.enter_scope(Scope.REQUEST) as second_scope:
+        third = second_scope.resolve(_MatrixResource)
+        assert third is not first
+        assert events == [("enter", first), ("exit", first), ("enter", third)]
+
+    assert events == [
+        ("enter", first),
+        ("exit", first),
+        ("enter", third),
+        ("exit", third),
+    ]
+
+
+def test_sync_dispatch_fused_generator_retries_after_empty_generator() -> None:
+    provider_calls = 0
+    cleanup_calls = 0
+
+    def provide_resource() -> Generator[_MatrixResource, None, None]:
+        nonlocal cleanup_calls, provider_calls
+        provider_calls += 1
+        if provider_calls == 1:
+            return
+        try:
+            yield _MatrixResource()
+        finally:
+            cleanup_calls += 1
+
+    container = Container(lock_mode=LockMode.NONE, use_resolver_context=False)
+    container.add_generator(
+        provide_resource,
+        provides=_MatrixResource,
+        lifetime=Lifetime.SCOPED,
+        scope=Scope.REQUEST,
+    )
+
+    with container.enter_scope(Scope.REQUEST) as request_scope:
+        with pytest.raises(RuntimeError, match="generator didn't yield") as error:
+            request_scope.resolve(_MatrixResource)
+
+        assert isinstance(error.value.__cause__, StopIteration)
+        request_scope_any = cast("Any", request_scope)
+        assert request_scope_any._cleanup_callback_single is None
+        assert request_scope_any._cleanup_callbacks == []
+
+        resolved = request_scope.resolve(_MatrixResource)
+        assert isinstance(resolved, _MatrixResource)
+        assert provider_calls == 2
+
+    assert cleanup_calls == 1
+
+
+def test_sync_dispatch_fused_generator_preserves_disabled_cleanup() -> None:
+    cleanup_calls = 0
+    retained_generators: list[Generator[_MatrixResource, None, None]] = []
+
+    def resource_generator() -> Generator[_MatrixResource, None, None]:
+        nonlocal cleanup_calls
+        try:
+            yield _MatrixResource()
+        finally:
+            cleanup_calls += 1
+
+    def provide_resource() -> Generator[_MatrixResource, None, None]:
+        provider_generator = resource_generator()
+        retained_generators.append(provider_generator)
+        return provider_generator
+
+    container = Container(lock_mode=LockMode.NONE, use_resolver_context=False)
+    container.add_generator(
+        provide_resource,
+        provides=_MatrixResource,
+        lifetime=Lifetime.SCOPED,
+        scope=Scope.REQUEST,
+    )
+    root_resolver = _build_resolver_with_cleanup_mode(
+        container=container,
+        cleanup_enabled=False,
+    )
+
+    request_scope = root_resolver.enter_scope(Scope.REQUEST)
+    resolved = request_scope.resolve(_MatrixResource)
+    request_scope_any = cast("Any", request_scope)
+    assert isinstance(resolved, _MatrixResource)
+    assert request_scope_any._cleanup_callback_single is None
+    assert request_scope_any._cleanup_callbacks == []
+
+    request_scope.__exit__(None, None, None)
+    assert cleanup_calls == 0
+
+    retained_generators[0].close()
+    assert cleanup_calls == 1
+
+
+def test_sync_dispatch_fused_generator_preserves_disabled_cleanup_empty_error() -> None:
+    provider_calls = 0
+
+    def provide_resource() -> Generator[_MatrixResource, None, None]:
+        nonlocal provider_calls
+        provider_calls += 1
+        if provider_calls == 1:
+            return
+        yield _MatrixResource()
+
+    container = Container(lock_mode=LockMode.NONE, use_resolver_context=False)
+    container.add_generator(
+        provide_resource,
+        provides=_MatrixResource,
+        lifetime=Lifetime.SCOPED,
+        scope=Scope.REQUEST,
+        require_generator_finally=False,
+    )
+    root_resolver = _build_resolver_with_cleanup_mode(
+        container=container,
+        cleanup_enabled=False,
+    )
+
+    request_scope = root_resolver.enter_scope(Scope.REQUEST)
+    with pytest.raises(StopIteration):
+        request_scope.resolve(_MatrixResource)
+
+    assert isinstance(request_scope.resolve(_MatrixResource), _MatrixResource)
+    assert provider_calls == 2
+    request_scope.__exit__(None, None, None)
+
+
+def test_sync_dispatch_fused_generator_preserves_reentrant_outer_publication() -> None:
+    events: list[tuple[str, _MatrixResource]] = []
+    nested_values: list[_MatrixResource] = []
+    request_scope: ResolverProtocol
+
+    def provide_resource() -> Generator[_MatrixResource, None, None]:
+        resource = _MatrixResource()
+        events.append(("enter", resource))
+        if len(events) == 1:
+            nested_values.append(request_scope.resolve(_MatrixResource))
+        try:
+            yield resource
+        finally:
+            events.append(("exit", resource))
+
+    container = Container(lock_mode=LockMode.NONE, use_resolver_context=False)
+    container.add_generator(
+        provide_resource,
+        provides=_MatrixResource,
+        lifetime=Lifetime.SCOPED,
+        scope=Scope.REQUEST,
+    )
+
+    with container.enter_scope(Scope.REQUEST) as request_scope:
+        outer_value = request_scope.resolve(_MatrixResource)
+        cached_value = request_scope.resolve(_MatrixResource)
+        assert cached_value is outer_value
+        assert len(nested_values) == 1
+        assert nested_values[0] is not outer_value
+        request_scope_any = cast("Any", request_scope)
+        assert request_scope_any._cleanup_callback_single is not None
+        assert len(request_scope_any._cleanup_callbacks) == 1
+        assert request_scope_any._cleanup_callbacks[0][0] == 2
+
+    assert events == [
+        ("enter", outer_value),
+        ("enter", nested_values[0]),
+        ("exit", nested_values[0]),
+        ("exit", outer_value),
+    ]
+
+
+def test_sync_dispatch_fused_generator_retries_after_setup_failure() -> None:
+    provider_calls = 0
+
+    def provide_resource() -> Generator[_MatrixResource, None, None]:
+        nonlocal provider_calls
+        provider_calls += 1
+        if provider_calls == 1:
+            msg = "setup failure"
+            raise ValueError(msg)
+        try:
+            yield _MatrixResource()
+        finally:
+            pass
+
+    container = Container(lock_mode=LockMode.NONE, use_resolver_context=False)
+    container.add_generator(
+        provide_resource,
+        provides=_MatrixResource,
+        lifetime=Lifetime.SCOPED,
+        scope=Scope.REQUEST,
+    )
+
+    with container.enter_scope(Scope.REQUEST) as request_scope:
+        with pytest.raises(ValueError, match="setup failure"):
+            request_scope.resolve(_MatrixResource)
+
+        request_scope_any = cast("Any", request_scope)
+        assert request_scope_any._cleanup_callback_single is None
+        assert request_scope_any._cleanup_callbacks == []
+        assert isinstance(request_scope.resolve(_MatrixResource), _MatrixResource)
+
+    assert provider_calls == 2
+
+
+def test_sync_dispatch_fused_generator_does_not_displace_cached_factory_fusion() -> None:
+    def provide_resource() -> Generator[_MatrixResource, None, None]:
+        try:
+            yield _MatrixResource()
+        finally:
+            pass
+
+    container = Container(lock_mode=LockMode.NONE, use_resolver_context=False)
+    container.add_generator(
+        provide_resource,
+        provides=_MatrixResource,
+        lifetime=Lifetime.SCOPED,
+        scope=Scope.REQUEST,
+    )
+    container.add(
+        _MatrixService,
+        lifetime=Lifetime.SCOPED,
+        scope=Scope.REQUEST,
+    )
+
+    with container.enter_scope(Scope.REQUEST) as request_scope:
+        resource_slot = container._providers_registrations.get_by_type(
+            _MatrixResource,
+        ).slot
+        service_slot = container._providers_registrations.get_by_type(
+            _MatrixService,
+        ).slot
+        dispatch_names = request_scope.resolve.__code__.co_names
+
+        assert f"_provider_{service_slot}" in dispatch_names
+        assert f"resolve_{service_slot}" not in dispatch_names
+        assert f"_provider_{resource_slot}" not in dispatch_names
+        assert f"resolve_{resource_slot}" in dispatch_names
+        assert isinstance(request_scope.resolve(_MatrixResource), _MatrixResource)
+        assert isinstance(request_scope.resolve(_MatrixService), _MatrixService)
+
+
 def test_sync_dispatch_fusion_excludes_scoped_generator_cleanup_graph() -> None:
     events: list[str] = []
 
