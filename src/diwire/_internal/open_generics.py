@@ -367,8 +367,7 @@ class _OpenGenericResolver:  # pragma: no cover
         "_scope_level",
         "_scope_transition_cache",
         "_scope_transition_cache_for_level",
-        "_scope_transition_hot_path",
-        "_scope_transition_hot_target",
+        "_scope_transition_hot_entry",
         "_shared_child_state",
         "_shared_state_lock",
         "_sync_base_dispatch",
@@ -482,8 +481,10 @@ class _OpenGenericResolver:  # pragma: no cover
         *,
         materialize_closed_callback: Callable[[Any, _OpenGenericMatch], None] | None,
     ) -> None:
-        self._scope_transition_hot_target: Any = _MISSING_CACHE
-        self._scope_transition_hot_path: tuple[BaseScope, ...] = ()
+        self._scope_transition_hot_entry: tuple[Any, tuple[BaseScope, ...]] = (
+            _MISSING_CACHE,
+            (),
+        )
         self._sync_base_slot_resolvers: dict[Any, Callable[[], Any]] | None = None
         self._async_base_slot_resolvers: dict[Any, Callable[[], Awaitable[Any]]] | None = None
         self._sync_inline_dependency: Any = _MISSING_CACHE
@@ -752,6 +753,25 @@ class _OpenGenericResolver:  # pragma: no cover
         self,
         scope: BaseScope | None = None,
     ) -> _OpenGenericResolver:
+        target_scope_level = None if scope is None else scope.level
+        hot_target_scope_level, hot_transition_path = self._scope_transition_hot_entry
+        if (
+            self is self._root_wrapper
+            and target_scope_level is not None
+            and target_scope_level == hot_target_scope_level
+            and hot_transition_path
+            and hot_transition_path[0].level == target_scope_level
+        ):
+            next_scope = hot_transition_path[0]
+            scoped_base_resolver = self._base_resolver.enter_scope(next_scope)
+            return _create_open_generic_child(
+                scoped_base_resolver,
+                self,
+                target_scope_level,
+                shared_child_state=self._shared_child_state,
+                cleanup_enabled=self._cleanup_enabled,
+            )
+
         transition_path = self._resolve_scope_transition_path_cached(
             scope=scope,
         )
@@ -1656,12 +1676,14 @@ class _OpenGenericResolver:  # pragma: no cover
         scope: BaseScope | None,
     ) -> tuple[BaseScope, ...]:
         target_scope_level = None if scope is None else scope.level
-        if target_scope_level == self._scope_transition_hot_target:
-            return self._scope_transition_hot_path
+        hot_target_scope_level, hot_transition_path = self._scope_transition_hot_entry
+        if target_scope_level == hot_target_scope_level:
+            return hot_transition_path
 
         with self._shared_state_lock:
-            if target_scope_level == self._scope_transition_hot_target:
-                return self._scope_transition_hot_path
+            hot_target_scope_level, hot_transition_path = self._scope_transition_hot_entry
+            if target_scope_level == hot_target_scope_level:
+                return hot_transition_path
             transition_path = self._scope_transition_cache_for_level.get(target_scope_level)
             if transition_path is None:
                 transition_path = tuple(
@@ -1673,8 +1695,7 @@ class _OpenGenericResolver:  # pragma: no cover
                     )
                 )
                 self._scope_transition_cache_for_level[target_scope_level] = transition_path
-            self._scope_transition_hot_target = target_scope_level
-            self._scope_transition_hot_path = transition_path
+            self._scope_transition_hot_entry = (target_scope_level, transition_path)
             return transition_path
 
     def _resolve_sync_annotation_preflight(self, *, dependency: Any) -> Any:
@@ -1716,6 +1737,9 @@ def _create_open_generic_child(
     base_resolver: ResolverProtocol,
     parent_wrapper: _OpenGenericResolver,
     scope_level: int,
+    *,
+    shared_child_state: tuple[Any, ...] | None = None,
+    cleanup_enabled: bool | None = None,
 ) -> _OpenGenericResolver:
     self = parent_wrapper
     root_wrapper = self._root_wrapper
@@ -1723,7 +1747,8 @@ def _create_open_generic_child(
     root_scope = self._root_scope
     has_async_specs = self._has_async_specs
     materialize_closed_callback = self._materialize_closed_callback
-    shared_child_state = root_wrapper.shared_child_init_state()
+    if shared_child_state is None:
+        shared_child_state = root_wrapper.shared_child_init_state()
 
     self = object.__new__(_OpenGenericResolver)
     self._base_resolver = base_resolver
@@ -1737,8 +1762,10 @@ def _create_open_generic_child(
     self._thread_locks = None
     self._async_locks = None
     self._cleanup_callbacks = None
-    self._cleanup_enabled = bool(
-        getattr(base_resolver, "_cleanup_enabled", True),
+    self._cleanup_enabled = (
+        bool(getattr(base_resolver, "_cleanup_enabled", True))
+        if cleanup_enabled is None
+        else cleanup_enabled
     )
     self._owned_scope_wrappers = ()
 
@@ -1765,8 +1792,7 @@ def _create_open_generic_child(
     self._async_hot_slot_function = None
     self._shared_child_state = shared_child_state
 
-    self._scope_transition_hot_target = _MISSING_CACHE
-    self._scope_transition_hot_path = ()
+    self._scope_transition_hot_entry = (_MISSING_CACHE, ())
     self._sync_base_slot_resolvers = None
     self._async_base_slot_resolvers = None
     self._sync_inline_dependency = _MISSING_CACHE
