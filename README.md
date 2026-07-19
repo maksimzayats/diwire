@@ -43,11 +43,11 @@ uv add diwire
 
 Benchmarks + methodology live in the docs: [Performance](https://docs.diwire.dev/howto/advanced/performance.html).
 
-In this benchmark suite on CPython ``3.14.3`` (Apple M3 Pro, strict mode):
+In this benchmark suite on CPython ``3.14.6`` (Apple M3 Pro, strict mode):
 
-- diwire is the top performer across this suite, reaching up to **6.89×** vs ``rodi``, **30.79×** vs ``dishka``, and **4.40×** vs ``wireup``.
-- Resolve-only comparisons (scope-capable libraries): diwire reaches up to **3.64×** (``rodi``), **4.14×** (``dishka``), and **3.10×** (``wireup``).
-- Current benchmark totals: **11** full-suite scenarios and **5** resolve-only scenarios.
+- diwire is the top performer across this suite, reaching up to **6.30×** vs ``rodi``, **7.50×** vs ``dishka``, and **5.01×** vs ``wireup``.
+- Resolve-only comparisons (scope-capable libraries): diwire reaches up to **3.53×** (``rodi``), **4.42×** (``dishka``), and **4.38×** (``wireup``).
+- Current benchmark totals: **17** full-suite scenarios and **9** resolve-only scenarios.
 
 For quick local regression checks, run ``make benchmark`` (diwire-only).
 For full cross-library runs, use ``make benchmark-comparison`` (raw suite) or
