@@ -18,13 +18,26 @@ from tests.benchmarks.wireup_helpers import make_wireup_benchmark_container
 
 _GENERATOR_BENCHMARK_ITERATIONS = 25_000
 _BENCHMARK_VALIDATION_CALLS = 1
-_EXPECTED_BENCHMARK_CLEANUPS = _BENCHMARK_VALIDATION_CALLS + (
-    (BENCHMARK_WARMUP_ROUNDS + BENCHMARK_ROUNDS) * _GENERATOR_BENCHMARK_ITERATIONS
-)
 
 
 class _RequestResource:
     pass
+
+
+def _expected_benchmark_cleanups(benchmark: Any) -> int:
+    if benchmark.disabled:
+        return 1
+
+    cleanups = _BENCHMARK_VALIDATION_CALLS + (
+        (BENCHMARK_WARMUP_ROUNDS + BENCHMARK_ROUNDS) * _GENERATOR_BENCHMARK_ITERATIONS
+    )
+    if benchmark.cprofile:
+        cleanups += (
+            _GENERATOR_BENCHMARK_ITERATIONS
+            if benchmark.cprofile_loops is None
+            else benchmark.cprofile_loops
+        )
+    return cleanups
 
 
 def test_benchmark_diwire_enter_close_scope_resolve_generator_request_try_finally(
@@ -69,7 +82,7 @@ def test_benchmark_diwire_enter_close_scope_resolve_generator_request_try_finall
         bench_diwire_enter_close_scope_resolve_generator_request_try_finally,
         iterations=_GENERATOR_BENCHMARK_ITERATIONS,
     )
-    assert cleanup_count - cleanup_count_before_benchmark == _EXPECTED_BENCHMARK_CLEANUPS
+    assert cleanup_count - cleanup_count_before_benchmark == _expected_benchmark_cleanups(benchmark)
 
 
 def test_benchmark_dishka_enter_close_scope_resolve_generator_request_try_finally(
@@ -113,7 +126,7 @@ def test_benchmark_dishka_enter_close_scope_resolve_generator_request_try_finall
         bench_dishka_enter_close_scope_resolve_generator_request_try_finally,
         iterations=_GENERATOR_BENCHMARK_ITERATIONS,
     )
-    assert cleanup_count - cleanup_count_before_benchmark == _EXPECTED_BENCHMARK_CLEANUPS
+    assert cleanup_count - cleanup_count_before_benchmark == _expected_benchmark_cleanups(benchmark)
 
 
 def test_benchmark_wireup_enter_close_scope_resolve_generator_request_try_finally(
@@ -153,4 +166,4 @@ def test_benchmark_wireup_enter_close_scope_resolve_generator_request_try_finall
         bench_wireup_enter_close_scope_resolve_generator_request_try_finally,
         iterations=_GENERATOR_BENCHMARK_ITERATIONS,
     )
-    assert cleanup_count - cleanup_count_before_benchmark == _EXPECTED_BENCHMARK_CLEANUPS
+    assert cleanup_count - cleanup_count_before_benchmark == _expected_benchmark_cleanups(benchmark)

@@ -44,13 +44,13 @@ def test_benchmark_diwire_resolve_scoped_with_registered_open_closed_generics(
     container.compile()
 
     with container.enter_scope(Scope.REQUEST) as first_scope:
-        first_int = cast("Any", first_scope.resolve(_Repo[int]))
-        second_int = cast("Any", first_scope.resolve(_Repo[int]))
-        first_str = cast("Any", first_scope.resolve(_Repo[str]))
-        second_str = cast("Any", first_scope.resolve(_Repo[str]))
+        first_int = cast("_ClosedIntRepo", first_scope.resolve(_Repo[int]))
+        second_int = cast("_ClosedIntRepo", first_scope.resolve(_Repo[int]))
+        first_str = cast("_OpenGenericRepo[str]", first_scope.resolve(_Repo[str]))
+        second_str = cast("_OpenGenericRepo[str]", first_scope.resolve(_Repo[str]))
     with container.enter_scope(Scope.REQUEST) as second_scope:
-        third_int = cast("Any", second_scope.resolve(_Repo[int]))
-        third_str = cast("Any", second_scope.resolve(_Repo[str]))
+        third_int = cast("_ClosedIntRepo", second_scope.resolve(_Repo[int]))
+        third_str = cast("_OpenGenericRepo[str]", second_scope.resolve(_Repo[str]))
     assert isinstance(first_int, _ClosedIntRepo)
     assert isinstance(second_int, _ClosedIntRepo)
     assert isinstance(third_int, _ClosedIntRepo)
@@ -84,13 +84,13 @@ def test_benchmark_dishka_resolve_scoped_with_registered_open_closed_generics(
     container = make_dishka_benchmark_container(provider)
 
     with container(scope=DishkaBenchmarkScope.REQUEST) as first_scope:
-        first_int = cast("Any", first_scope.get(_Repo[int]))
-        second_int = cast("Any", first_scope.get(_Repo[int]))
-        first_str = cast("Any", first_scope.get(_Repo[str]))
-        second_str = cast("Any", first_scope.get(_Repo[str]))
+        first_int = cast("_ClosedIntRepo", first_scope.get(_Repo[int]))
+        second_int = cast("_ClosedIntRepo", first_scope.get(_Repo[int]))
+        first_str = cast("_OpenGenericRepo[str]", first_scope.get(_Repo[str]))
+        second_str = cast("_OpenGenericRepo[str]", first_scope.get(_Repo[str]))
     with container(scope=DishkaBenchmarkScope.REQUEST) as second_scope:
-        third_int = cast("Any", second_scope.get(_Repo[int]))
-        third_str = cast("Any", second_scope.get(_Repo[str]))
+        third_int = cast("_ClosedIntRepo", second_scope.get(_Repo[int]))
+        third_str = cast("_OpenGenericRepo[str]", second_scope.get(_Repo[str]))
     assert isinstance(first_int, _ClosedIntRepo)
     assert isinstance(second_int, _ClosedIntRepo)
     assert isinstance(third_int, _ClosedIntRepo)

@@ -491,7 +491,7 @@ def test_sync_dispatch_fusion_rebuilds_captured_providers_after_registration() -
     def build_replacement() -> _VersionedDependency:
         return _VersionedDependency("replacement")
 
-    def build_root(dependency: Any) -> _VersionedRoot:
+    def build_root(dependency: _VersionedDependency) -> _VersionedRoot:
         return _VersionedRoot(dependency)
 
     container = Container(use_resolver_context=False)
@@ -544,13 +544,13 @@ def test_sync_dispatch_fusion_invalidates_mutated_equality_key_cache() -> None:
         pass
 
     class _FusedRoot:
-        def __init__(self, leaf: Any) -> None:
+        def __init__(self, leaf: _FusedLeaf) -> None:
             self.leaf = leaf
 
     class _Filler:
         pass
 
-    def build_root(leaf: Any) -> _FusedRoot:
+    def build_root(leaf: _FusedLeaf) -> _FusedRoot:
         return _FusedRoot(leaf)
 
     registration_key = _StatefulEqualityKey("registered")

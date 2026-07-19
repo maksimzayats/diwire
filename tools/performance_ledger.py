@@ -639,6 +639,17 @@ def _parse_cell_policy(*, scenario: str, library: str, value: object) -> CellPol
 
 
 def _parse_environment(payload: dict[str, object]) -> BenchmarkEnvironment:
+    competitor_versions = _read_str_mapping(payload, key="competitor_versions")
+    expected_packages = set(_BENCHMARK_PACKAGES)
+    actual_packages = set(competitor_versions)
+    if actual_packages != expected_packages:
+        missing = sorted(expected_packages - actual_packages)
+        unexpected = sorted(actual_packages - expected_packages)
+        msg = (
+            "Expected 'competitor_versions' to contain exactly the benchmark packages; "
+            f"missing={missing}, unexpected={unexpected}."
+        )
+        raise PerformanceLedgerError(msg)
     return BenchmarkEnvironment(
         python_executable=_read_non_empty_str(payload, key="python_executable"),
         python_version=_read_non_empty_str(payload, key="python_version"),
@@ -648,7 +659,7 @@ def _parse_environment(payload: dict[str, object]) -> BenchmarkEnvironment:
         cpu=_read_non_empty_str(payload, key="cpu"),
         power_state=_read_non_empty_str(payload, key="power_state"),
         uv_lock_sha256=_read_non_empty_str(payload, key="uv_lock_sha256"),
-        competitor_versions=_read_str_mapping(payload, key="competitor_versions"),
+        competitor_versions=competitor_versions,
     )
 
 
@@ -687,6 +698,18 @@ def _parse_stats(payload: dict[str, object]) -> RunStats:
         iqr_outliers=_read_non_negative_int(payload, key="iqr_outliers"),
         stddev_outliers=_read_non_negative_int(payload, key="stddev_outliers"),
     )
+    if not stats.min_seconds <= stats.mean_seconds <= stats.max_seconds:
+        msg = "Benchmark mean must be within [min, max]."
+        raise PerformanceLedgerError(msg)
+    if not stats.min_seconds <= stats.median_seconds <= stats.max_seconds:
+        msg = "Benchmark median must be within [min, max]."
+        raise PerformanceLedgerError(msg)
+    if stats.iqr_outliers > stats.rounds:
+        msg = "Benchmark iqr_outliers cannot exceed rounds."
+        raise PerformanceLedgerError(msg)
+    if stats.stddev_outliers > stats.rounds:
+        msg = "Benchmark stddev_outliers cannot exceed rounds."
+        raise PerformanceLedgerError(msg)
     expected_ops = 1.0 / stats.mean_seconds
     if not math.isclose(stats.mean_ops_per_second, expected_ops, rel_tol=1e-9):
         msg = "Benchmark OPS is inconsistent with reciprocal mean duration."

@@ -70,6 +70,8 @@ def _environment_payload() -> dict[str, object]:
         "uv_lock_sha256": "abc123",
         "competitor_versions": {
             "dishka": "1.10.1",
+            "pytest-benchmark": "5.2.3",
+            "rodi": "2.1.0",
             "wireup": "2.12.0",
         },
     }
@@ -394,6 +396,44 @@ def test_load_suite_manifest_rejects_invalid_cell_matrix(
 
 
 @pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (
+            "missing",
+            "Expected 'competitor_versions' to contain exactly the benchmark packages; "
+            "missing=['rodi'], unexpected=[].",
+        ),
+        (
+            "unexpected",
+            "Expected 'competitor_versions' to contain exactly the benchmark packages; "
+            "missing=[], unexpected=['extra-package'].",
+        ),
+    ],
+)
+def test_load_record_manifest_requires_exact_competitor_versions(
+    tmp_path: Path,
+    mutation: str,
+    message: str,
+) -> None:
+    payload = _record_payload(raw_files=["full.json"])
+    environment = payload["environment"]
+    assert isinstance(environment, dict)
+    competitor_versions = environment["competitor_versions"]
+    assert isinstance(competitor_versions, dict)
+    if mutation == "missing":
+        del competitor_versions["rodi"]
+    else:
+        competitor_versions["extra-package"] = "1.0.0"
+    manifest_path = tmp_path / "manifest.json"
+    _write_json(manifest_path, payload)
+
+    with pytest.raises(PerformanceLedgerError) as error:
+        load_record_manifest(manifest_path)
+
+    assert str(error.value) == message
+
+
+@pytest.mark.parametrize(
     ("key", "value", "message"),
     [
         ("ops", 0.0, "positive"),
@@ -423,6 +463,41 @@ def test_parse_raw_run_rejects_invalid_stats(
 
     with pytest.raises(PerformanceLedgerError, match=message):
         parse_raw_run(raw_path, suite)
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "message"),
+    [
+        ("mean", 0.0097, "Benchmark mean must be within [min, max]."),
+        ("mean", 0.0103, "Benchmark mean must be within [min, max]."),
+        ("median", 0.0097, "Benchmark median must be within [min, max]."),
+        ("median", 0.0103, "Benchmark median must be within [min, max]."),
+        ("iqr_outliers", 6, "Benchmark iqr_outliers cannot exceed rounds."),
+        ("stddev_outliers", 6, "Benchmark stddev_outliers cannot exceed rounds."),
+    ],
+)
+def test_parse_raw_run_rejects_invalid_stat_relationships(
+    tmp_path: Path,
+    key: str,
+    value: object,
+    message: str,
+) -> None:
+    suite_path = tmp_path / "suite.json"
+    _write_json(suite_path, _suite_payload())
+    suite = load_suite_manifest(suite_path)
+    payload = _raw_payload(values={("alpha", "diwire"): 100.0})
+    benchmarks = payload["benchmarks"]
+    assert isinstance(benchmarks, list)
+    stats = benchmarks[0]["stats"]
+    assert isinstance(stats, dict)
+    stats[key] = value
+    raw_path = tmp_path / "raw.json"
+    _write_json(raw_path, payload)
+
+    with pytest.raises(PerformanceLedgerError) as error:
+        parse_raw_run(raw_path, suite)
+
+    assert str(error.value) == message
 
 
 def test_score_set_requires_every_comparable_cell(tmp_path: Path) -> None:

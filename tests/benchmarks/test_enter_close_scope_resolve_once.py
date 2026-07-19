@@ -15,7 +15,7 @@ _BENCHMARK_ROUNDS = 5
 
 
 def test_benchmark_diwire_enter_close_scope_resolve_once(benchmark: Any) -> None:
-    value = 42
+    value = int("1000")
     container = make_diwire_benchmark_container()
     container.add_instance(value, provides=int)
     container.compile()
@@ -36,7 +36,7 @@ def test_benchmark_diwire_enter_close_scope_resolve_once(benchmark: Any) -> None
 
 
 def test_benchmark_rodi_enter_close_scope_resolve_once(benchmark: Any) -> None:
-    value = 42
+    value = int("1000")
     rodi_container = rodi.Container()
     rodi_container.add_instance(value, declared_class=int)
     services = rodi_container.build_provider()
@@ -57,7 +57,7 @@ def test_benchmark_rodi_enter_close_scope_resolve_once(benchmark: Any) -> None:
 
 
 def test_benchmark_dishka_enter_close_scope_resolve_once(benchmark: Any) -> None:
-    value = 42
+    value = int("1000")
     container = make_dishka_benchmark_container(context={int: value})
     assert container.get(int) is value
     with container(scope=DishkaBenchmarkScope.REQUEST) as scope:
@@ -76,7 +76,7 @@ def test_benchmark_dishka_enter_close_scope_resolve_once(benchmark: Any) -> None
 
 
 def test_benchmark_wireup_enter_close_scope_resolve_once(benchmark: Any) -> None:
-    value = 42
+    value = int("1000")
     container = make_wireup_benchmark_container(instance(value, as_type=int))
     assert container.get(int) is value
     with container.enter_scope() as scope:

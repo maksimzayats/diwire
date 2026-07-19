@@ -562,7 +562,7 @@ def test_open_generic_resolver_thread_lock_first_touch_is_singleton_under_concur
     dependency = _Generic[int]
     barrier = threading.Barrier(24)
 
-    def _resolve_thread_lock() -> Any:
+    def _resolve_thread_lock() -> threading.Lock:
         barrier.wait()
         return resolver.get_thread_lock(dependency)
 
@@ -792,7 +792,9 @@ def test_open_generic_child_local_state_is_isolated_during_concurrent_first_touc
     dependency = _Generic[int]
     barrier = threading.Barrier(24)
 
-    def _resolve_thread_lock(child: Any) -> Any:
+    def _resolve_thread_lock(
+        child: open_generics.OpenGenericResolver,
+    ) -> threading.Lock:
         barrier.wait()
         return child.get_thread_lock(dependency)
 
@@ -842,7 +844,7 @@ def test_open_generic_concurrent_scope_entry_creates_fresh_child_wrappers() -> N
     )
     barrier = threading.Barrier(24)
 
-    def _enter_scope(index: int) -> Any:
+    def _enter_scope(index: int) -> open_generics.OpenGenericResolver:
         barrier.wait()
         child = resolver.enter_scope(Scope.REQUEST)
         child.set_cached(dependency=index, value=index)
