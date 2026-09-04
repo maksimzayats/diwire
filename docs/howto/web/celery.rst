@@ -91,4 +91,4 @@ Testing
 - In-process integration tests: configure Celery with eager mode
   (``task_always_eager=True``) and call ``delay(...).get(...)``.
 - End-to-end tests with a real worker + broker are available in this repository:
-  run ``make test-e2e-celery``.
+  run ``just test-e2e-celery``.

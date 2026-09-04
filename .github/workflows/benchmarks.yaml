@@ -35,7 +35,37 @@ jobs:
         run: uv sync --group dev
 
       - name: Run benchmark reports
-        run: make benchmark-report benchmark-report-resolve
+        run: |
+          mkdir -p "$(dirname "$BENCHMARK_ARTIFACT_DIR")"
+          mkdir "$BENCHMARK_ARTIFACT_DIR"
+
+          uv run pytest tests/benchmarks --benchmark-only -q \
+            --benchmark-json="$BENCHMARK_ARTIFACT_DIR/all.json"
+          uv run python -m tools.benchmark_reporting \
+            --input "$BENCHMARK_ARTIFACT_DIR/all.json" \
+            --markdown "$BENCHMARK_ARTIFACT_DIR/benchmark-table.md" \
+            --json "$BENCHMARK_ARTIFACT_DIR/benchmark-table.json" \
+            --comment "$BENCHMARK_ARTIFACT_DIR/pr-comment.md" \
+            --libraries diwire,rodi,dishka,wireup
+
+          uv run pytest \
+            tests/benchmarks/test_resolve_transient.py \
+            tests/benchmarks/test_resolve_open_generic_transient.py \
+            tests/benchmarks/test_resolve_singleton.py \
+            tests/benchmarks/test_resolve_deep_transient_chain.py \
+            tests/benchmarks/test_resolve_wide_transient_graph.py \
+            tests/benchmarks/test_resolve_scoped_with_registered_open_closed_generics.py \
+            tests/benchmarks/test_resolve_scoped_with_registered_open_closed_generics_pair_same.py \
+            tests/benchmarks/test_resolve_scoped_with_registered_open_closed_generics_pair_alternating.py \
+            tests/benchmarks/test_resolve_generated_scoped_grid.py \
+            --benchmark-only -q \
+            --benchmark-json="$BENCHMARK_ARTIFACT_DIR/resolve.json"
+          uv run python -m tools.benchmark_reporting \
+            --input "$BENCHMARK_ARTIFACT_DIR/resolve.json" \
+            --markdown "$BENCHMARK_ARTIFACT_DIR/benchmark-table-resolve.md" \
+            --json "$BENCHMARK_ARTIFACT_DIR/benchmark-table-resolve.json" \
+            --comment "$BENCHMARK_ARTIFACT_DIR/pr-comment-resolve.md" \
+            --libraries diwire,rodi,dishka,wireup
 
       - name: Upload benchmark artifacts
         uses: actions/upload-artifact@v4
