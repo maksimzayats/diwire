@@ -700,3 +700,79 @@ Commands used the v2 same-path runner with `--checkpoint
 Timing protection remains unresolved on the Mac. Investigate one separately
 preregistered Linux CI environment, with calibration and comparison in the same
 job; keep all Mac and Linux evidence separate.
+
+### H005 Linux timing protocol: one new environment, one calibration attempt
+
+H004's local timing calibration remains failed. A GitHub-hosted Ubuntu 24.04 VM
+is an objectively different environment, with a different OS, architecture and
+scheduler. Preregister one Linux job to establish its own calibration and timing
+protections; never pool its observations with the Mac evidence. This is a
+Linux-specific acceptance investigation, not another unchanged local A/A retry.
+The hosted VM does not guarantee exclusive physical CPU or a known host power
+policy. Record the image, CPU, affinity, quota, load, processes and cumulative
+CPU/steal counters; do not claim control of the underlying host.
+
+The machine-readable protocol is
+`performance-evidence/2026-09-05/h005-linux-protocol.json`. Freeze subject
+`7eaaf194905675bcd6505b9b434be9748798d3a7`, Python 3.14.6 with GIL enabled, uv
+0.11.26, the existing dependency lock, exact candidate patch/archive hashes and
+all workload settings. Use a separate controller checkout and one subject
+checkout/venv for every role and phase in a single job. Install dependencies
+before measurements. Launch the absolute subject interpreter, disable bytecode
+writes, and verify source, harness, runtime and dependency metadata before and
+after each process. Apply/reverse only the archived compiler patch. Odd pairs run
+base/work; even pairs work/base. Every initial series has exactly five independent
+fresh-process pairs. Preserve all individual rounds and all partial artifacts.
+
+Run these gates in order:
+
+1. Timing A/A: the frozen 12 cells (three cold, four warm-cache and five async
+   dispatch patterns). Both absolute headline and paired-median effects must be
+   at most 2%, without rounding. Any failure defers H005; do not rerun calibration.
+2. Memory A/A: all three sizes, retained and peak, within the same 2% bounds.
+   Require the expected independent function/code counts and one globals dict.
+3. Memory A/B: at both 64 and 256 providers, require at least 5% retained saving
+   in both headline and paired medians, with all five pairs improving. Protect
+   retained-16 and every peak metric at a maximum 2% regression.
+4. Timing A/B: all 38 frozen cells, protecting every cold and steady workload at
+   2%. H005 does not require or claim a primary throughput gain.
+5. For protected flags (either headline or paired effect below -2%), run separate
+   five-pair confirmations of the flagged timing nodes and/or the memory probe.
+   Complete both initial confirmation groups before any extension. Clear
+   failures reject. A result is ambiguous only when the two threshold decisions
+   disagree or either effect is within 0.25 percentage points of -2%. This band
+   triggers an extension; it does not relax acceptance or estimate confidence.
+6. If no clear failure exists, permit one extension wave for ambiguous cells,
+   grouped by measurement kind, numbered pairs 6-10. Recompute from all ten
+   dedicated confirmation pairs. Both effects at least -2% pass; both below -2%
+   reject; disagreement is inconclusive. Never pool initial broad A/B samples,
+   average block medians, remove outliers, subtract calibration offsets or extend
+   again. Memory probes always retain all three sizes, though only flagged
+   metrics drive the confirmation decision.
+
+Use the existing Benchmarks workflow's manual experiment input. The experiment
+has read-only repository permissions, its own non-cancelling concurrency group,
+a 70-minute controller budget, bounded child/setup commands and a 90-minute job
+limit. It must stop and verify its owned process group before source restoration,
+including after normal leader exit, timeout and interruption. Initialization,
+measurement and restoration failures must leave diagnostic evidence. Upload the
+complete or partial directory regardless of outcome. Dispatch exactly once from
+the committed controller revision; record the workflow run ID afterward.
+
+Independent compiler/lifecycle and measurement reviewers approved the corrected
+controller. Regression checks cover absent optional files in the frozen subject,
+canonical-only confirmation metadata, wrong child runtime, exact arithmetic and
+sample validation, global confirmation staging, calibration stopping, deferred
+launch interruption, surviving descendants and failure evidence. Archived H004
+rounds and all H005 allocation probes validate against the new readers. The
+candidate remains parked until the experiment and required semantic/quality
+checks support a decision. A Linux calibration failure means defer/pivot, not a
+second hosted attempt chosen for a more favorable sample.
+
+Controller quality checkpoint: all 27 focused regression cases pass, including
+validation of 10 archived timing runs and 20 allocation probes. A clean export of
+the actual pinned subject passes the input-hash and candidate/apply/restore check
+with both optional files absent. `make lint` passes (Ruff and strict mypy),
+`make test` passes 1,150 tests with 86 skips and 100% coverage, and the final
+`make test-e2e-fastapi` passes all five tests from the exact staged-source export.
+No library implementation change is included in this checkpoint.
