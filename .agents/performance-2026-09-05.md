@@ -932,3 +932,55 @@ pass; the archive contains 123 hash-verified files, including the frozen driver,
 and 100% coverage, and the final `make test-e2e-fastapi` passes all five tests
 from the exact staged-source export. Docker required an engine restart before
 this E2E and is stopped before local measurements. No runtime patch is included.
+
+### H007 calibration result: both gates pass
+
+The one preregistered startup A/A and one 25-pair timing A/A ran against exact
+checkpoint `a5b988efa3dfce2b6aa1caea8695164d11380325`, with identical source in
+both roles. Startup retained all 400 timed observations and eight warmups. Every
+one of the eight cells passed both 2% bounds: the largest absolute headline
+effect was 1.4466267256667331% (absent-dependency autoregistration), and the
+largest absolute paired effect was 1.7563500603758775% (settings imported first).
+
+Timing retained all 50 processes, 700 cell measurements and their original
+rounds. All 14 cells passed. The largest absolute headline effect was
+0.4763666099956154% (alternating equal aliases); the largest absolute paired
+effect was 0.775907521825725% (warm settings registration). The previous failed
+guards now measured headline/paired -0.350315%/-0.728824% for THREAD cached
+resolution and -0.372290%/-0.628855% for REQUEST cached async-provider resolution.
+These values describe this fixed protocol; they do not establish a cause for
+earlier failures or reopen H005.
+
+All source, runtime, dependency, bytecode and power checks passed. Both series
+verified owned-child cleanup and exact source restoration. Preserve every
+observation, including large child stalls: no filtering, offset, retry or
+extension was used. The complete 1,466-file raw evidence, driver and selections
+are archived in `performance-evidence/2026-09-05/h007-calibration.json.gz`.
+Passing calibration permits the preregistered H007 candidate experiment; it is
+not evidence of a candidate gain.
+
+Independent audit reproduced all startup and timing groupings, every retained
+round and both decisions. This evidence-only checkpoint passes `make lint` and
+`make test` (1,162 tests, 90 skips, 100% coverage). Library and harness files are
+unchanged from the previously verified five-test FastAPI export.
+
+### H008 screening: reject skipping hints for zero-parameter providers
+
+An independent source review proposed returning early from dependency extraction
+when the provider signature has no parameters. Reject that universal shortcut
+before implementation: the current type-hint pass also evaluates class/member
+annotations. An unrelated postponed expression can have observable side effects
+or raise an uncaught exception even for a zero-argument class. Empty parameters
+do not prove this work is semantically redundant. No runtime edit or performance
+claim was made.
+
+### H009 screening: count open-generic registrations without copying values
+
+A separate candidate replaces only four cardinality expressions of the form
+`len(tuple(registry.values()))` in registered open-generic materialization with
+the registry's existing O(1) `__len__`. Keep actual iteration snapshots and fresh
+reads of the current registry unchanged. A source-derived flat graph with 64
+consumer/closed-generic pairs would perform 131 such counts, currently creating
+262 lists/tuples and copying 25,216 references. These are screening counts, not
+measured savings. Investigate after H007 with a dedicated public first-compile
+workload and existing convergence/rollback safeguards; no patch is written yet.
