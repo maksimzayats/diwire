@@ -1408,3 +1408,42 @@ readout. The controller also freezes its external helper/validator hashes and
 force-compiles both untimed warmups. Final readout uses the frozen controller
 and cell selection archived in `final-instrumentation.json.gz`, followed by
 exactly one 25-pair official series with no retries or additional hypotheses.
+
+### Final canonical readout result
+
+The single fixed 25-pair series retained 50 timed processes and all 17 canonical
+DIWire cells. The headline geometric mean is +0.38217474871287127%. The worst
+headline/paired effects are -0.553878409563735%/-0.4331434423348046% for alternating
+registered generic pairs. The generated scoped grid is +3.485255245006691%
+headline/+3.8007708360732195% paired, with 25/25 positive pairs. Report every
+cell in `performance-2026-09-05-summary.md`; no observations were removed and
+no follow-up series or hypothesis was opened. All source/runtime/settings,
+cache/environment sidecars and control-input checks passed. The comparison
+checkout returned to its original clean db6b866 revision.
+
+Independent final scope review confirms only H001/H002/H003/H007 in the three-file
+library/documentation diff. Source/docs are identical to accepted H007 commit
+932802ec, the readout target 9be5102 and the current working tree. No prototype,
+comment-only patch, rejected/deferred runtime change or public API change remains.
+H006 is closed as screened but unimplemented. Hypothesis work is finished.
+
+### Campaign closure and final verification
+
+The independent measurement audit verified all 50 timed processes, 850 cell
+measurements and 4,250 retained rounds, including order, arithmetic, settings,
+source, runtime, cache/environment sidecars and clean restoration. It verified
+all 295 embedded files and cross-links in `final-canonical.json.gz` (2,927,453
+bytes). Prior archived ledger snapshots remain exact historical prefixes.
+
+Final `UV_NO_SYNC=1 make lint` passed: Ruff checks and formatting clean (292
+files), strict mypy clean (190 source files). Final `UV_NO_SYNC=1 make test`
+passed 1,170 tests with 93 skips and 100% statement/branch coverage: 4,101
+statements and 1,516 branches, none missing. The last implementation verification
+was `make test-e2e-fastapi` in an exact staged-source export, with Docker 29.6.1:
+five tests passed, command exit zero, and Compose removed its containers and
+network. Only closing reports and evidence were added afterward.
+
+`final-verification.json.gz` preserves these logs, exact commands, source/export
+hash checks, final report/PR text and the previously local H006 screening record.
+The PR remains a draft for review. The campaign is closed at the user's request;
+no further hypotheses, confirmations or performance changes are pending.
