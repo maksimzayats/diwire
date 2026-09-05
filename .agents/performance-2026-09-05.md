@@ -776,3 +776,41 @@ with both optional files absent. `make lint` passes (Ruff and strict mypy),
 `make test` passes 1,150 tests with 86 skips and 100% coverage, and the final
 `make test-e2e-fastapi` passes all five tests from the exact staged-source export.
 No library implementation change is included in this checkpoint.
+
+### H005 Linux result: calibration failed, candidate remains parked
+
+Controller `b29b2884ef5bb593a750f13f34813047cb8b6c41` was dispatched exactly once:
+[run 33970326870](https://github.com/maksimzayats/diwire/actions/runs/33970326870).
+The job used image `ubuntu24` version `20260831.293.1`, Linux 6.17.0-1022-azure,
+four virtual CPUs on an AMD EPYC 7763, Python 3.14.6 with GIL enabled and the pinned
+uv/lock. Every raw runtime, source and harness invariant passed. All ten A/A
+processes finished and retained the exact 12 workloads and every measured round.
+
+The warm REQUEST-cache async-provider cell shifted **+2.78686069752927%** in both
+headline and paired medians despite identical source, exceeding the preregistered
+2% bound. Every other calibration cell was within 1.172% in both metrics; cold
+16/64/256 headline effects were -0.383%/-0.258%/-0.453%. The failed cell is not
+rounded away or offset against other results. This identifies insufficient
+calibration, not a candidate regression or a proven cause of noise.
+
+The controller stopped immediately after timing A/A. No memory phase, candidate
+A/B, confirmation or extension ran. It verified child cleanup and exact source
+restoration. Full raw files, per-run snapshots/logs/hashes, manifests, summaries,
+protocol and controller sources are preserved in
+`performance-evidence/2026-09-05/h005-linux-calibration.json.gz`. Do not dispatch a
+second unchanged hosted experiment. H005's local retained-memory benefit remains
+provisional; its runtime patch/tests stay parked. No library change is accepted.
+
+All normal checks for the controller commit passed, including the Python
+3.10-3.15 and free-threaded matrix, docs, integration E2Es, benchmark report and
+CodeRabbit. The dedicated experiment job is intentionally unsuccessful because
+its measurement gate failed. Pivot to import/startup overhead; the optional
+Pydantic settings integration is a separate source-supported hypothesis whose
+fresh-process lifecycle requires its own harness and calibration.
+
+Independent audit reproduced all 120 calibration cells, sidecar hashes, pinned
+metadata and paired effects. The failed cell's pair effects were +2.787%,
++3.407%, -1.192%, +9.746% and -1.814%; shifts span whole process runs, without
+identifying a specific host cause. The evidence-only checkpoint again passes
+`make lint` and `make test` (1,150 tests, 86 skips, 100% coverage); implementation
+and the previously verified FastAPI export remain unchanged.
