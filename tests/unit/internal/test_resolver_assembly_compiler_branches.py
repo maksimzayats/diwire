@@ -3,18 +3,28 @@ from __future__ import annotations
 import ast
 import asyncio
 import dis
+import gc
 import inspect
+import sys
+import sysconfig
 import threading
+import weakref
+from collections.abc import Mapping
 from contextlib import asynccontextmanager
 from dataclasses import replace
-from types import SimpleNamespace
+from types import FunctionType, MappingProxyType, SimpleNamespace
 from typing import Annotated, Any, cast
 
 import pytest
 
 from diwire import All, AsyncProvider, Container, Lifetime, Maybe, Provider, Scope
 from diwire._internal.lock_mode import LockMode
-from diwire._internal.providers import MaterializedProviderCallPlan, ProviderDependency
+from diwire._internal.providers import (
+    MaterializedProviderCallPlan,
+    ProviderDependency,
+    ProviderSpec,
+    ProvidersRegistrations,
+)
 from diwire._internal.resolvers.assembly import compiler as compiler_module
 from diwire._internal.resolvers.assembly.planner import (
     ProviderDependencyPlan,
@@ -251,6 +261,83 @@ def _eligible_materialized_workflow() -> tuple[
         materialized_call_plan=call_plan,
     )
     return workflow, call_plan
+
+
+@pytest.mark.parametrize("use_source", [False, True])
+@pytest.mark.parametrize("namespace_kind", ["dict", "proxy", "subclass"])
+def test_compiled_function_shares_plain_namespace_and_snapshots_other_mappings(
+    *,
+    use_source: bool,
+    namespace_kind: str,
+) -> None:
+    class Namespace(dict[str, object]):
+        pass
+
+    original: dict[str, object] = {"value": object()}
+    namespace: Mapping[str, object]
+    if namespace_kind == "proxy":
+        namespace = MappingProxyType(original)
+    elif namespace_kind == "subclass":
+        original = Namespace(original)
+        namespace = original
+    else:
+        namespace = original
+
+    if use_source:
+        compiled = compiler_module._compile_function_from_source(
+            name="read_value",
+            arg_names=(),
+            body_lines=["return value"],
+            generated_globals=namespace,
+        )
+    else:
+        compiled = compiler_module._compile_function(
+            name="read_value",
+            arguments=ast.arguments(
+                posonlyargs=[], args=[], kwonlyargs=[], kw_defaults=[], defaults=[]
+            ),
+            body=[ast.Return(value=ast.Name(id="value", ctx=ast.Load()))],
+            generated_globals=namespace,
+        )
+
+    first = original["value"]
+    assert compiled() is first
+    original["value"] = second = object()
+    assert compiled() is (second if namespace_kind == "dict" else first)
+    assert (cast("FunctionType", compiled).__globals__ is original) is (namespace_kind == "dict")
+
+
+@pytest.mark.skipif(
+    sys.version_info[:2] == (3, 13) and bool(sysconfig.get_config_var("Py_GIL_DISABLED")),
+    reason="Free-threaded Python 3.13 immortalizes generated classes after threads start.",
+)
+def test_generated_classes_are_collected_when_compilation_graph_is_released() -> None:
+    def compile_class_refs() -> tuple[weakref.ReferenceType[type[Any]], ...]:
+        registrations = ProvidersRegistrations()
+        registrations.add(
+            ProviderSpec(
+                provides=object,
+                concrete_type=object,
+                lifetime=Lifetime.SCOPED,
+                scope=Scope.REQUEST,
+                lock_mode=LockMode.NONE,
+                is_async=False,
+                is_any_dependency_async=False,
+                needs_cleanup=False,
+            ),
+        )
+        resolver = compiler_module.ResolversAssemblyCompiler().build_root_resolver(
+            root_scope=Scope.APP,
+            registrations=registrations,
+        )
+        with resolver.enter_scope(Scope.REQUEST) as scope:
+            assert scope.resolve(object) is scope.resolve(object)
+        runtime = cast("Any", type(resolver))._runtime
+        return tuple(weakref.ref(cls) for cls in runtime.class_by_level.values())
+
+    class_refs = compile_class_refs()
+    gc.collect()
+    assert all(class_ref() is None for class_ref in class_refs)
 
 
 def test_sync_materialized_provider_call_plan_accepts_exact_safe_shape() -> None:
@@ -882,6 +969,62 @@ async def test_build_local_value_async_additional_paths() -> None:
             workflow=workflow_sync_cm,
             provider_scope_resolver=compiler_module._MISSING_RESOLVER,
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("is_cached", [False, True])
+async def test_async_sync_workflow_preserves_lazy_dynamic_delegation_and_cache(
+    *,
+    is_cached: bool,
+) -> None:
+    root_scope = _scope_plan(level=Scope.APP.level, name="app")
+    workflow = _workflow_plan(slot=1, is_cached=is_cached)
+    runtime = _runtime(scopes=(root_scope,), workflows=(workflow,))
+    calls: list[int] = []
+
+    def first_sync_slot() -> int:
+        calls.append(1)
+        return 11
+
+    method = compiler_module.ResolversAssemblyCompiler()._compile_slot_method(
+        runtime=runtime,
+        workflow=workflow,
+        class_plan=root_scope,
+        generated_globals={
+            "_MISSING_CACHE": compiler_module._MISSING_CACHE,
+            "_async_slot_1": compiler_module._build_async_slot_impl(workflow=workflow),
+        },
+        is_async=True,
+    )
+    resolver_type = type(
+        "SyncWorkflowResolver",
+        (),
+        {"_runtime": runtime, "_class_plan": root_scope, "aresolve_1": method},
+    )
+    resolver = resolver_type()
+    resolver.resolve_1 = first_sync_slot
+    resolver._cache_1 = compiler_module._MISSING_CACHE
+    pending = resolver.aresolve_1()
+    assert calls == []
+    assert await pending == 11
+    assert calls == [1]
+
+    resolver.resolve_1 = lambda: 22
+    assert await resolver.aresolve_1() == 22
+    resolver._cache_1 = 33
+    assert await resolver.aresolve_1() == (33 if is_cached else 22)
+
+
+@pytest.mark.asyncio
+async def test_async_slot_helper_delegates_sync_workflow_to_current_sync_slot() -> None:
+    root_scope = _scope_plan(level=Scope.APP.level, name="app")
+    workflow = _workflow_plan(slot=1, is_cached=False)
+    runtime = _runtime(scopes=(root_scope,), workflows=(workflow,))
+    resolver_type = type("SyncHelperResolver", (), {"_runtime": runtime, "_class_plan": root_scope})
+    resolver = resolver_type()
+    resolver.resolve_1 = lambda: 42
+
+    assert await compiler_module._build_async_slot_impl(workflow=workflow)(resolver) == 42
 
 
 @pytest.mark.asyncio

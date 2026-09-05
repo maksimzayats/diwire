@@ -1,0 +1,583 @@
+{
+  "tests/benchmarks/test_enter_close_scope_no_resolve.py::test_benchmark_diwire_enter_close_scope_no_resolve": {
+    "iterations": 100000,
+    "rounds": 5,
+    "extra_info": {},
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/benchmarks/test_enter_close_scope_resolve_100_instance.py::test_benchmark_diwire_enter_close_scope_resolve_100": {
+    "iterations": 1000,
+    "rounds": 5,
+    "extra_info": {},
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/benchmarks/test_enter_close_scope_resolve_generator_request_try_finally.py::test_benchmark_diwire_enter_close_scope_resolve_generator_request_try_finally": {
+    "iterations": 25000,
+    "rounds": 5,
+    "extra_info": {},
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/benchmarks/test_enter_close_scope_resolve_once.py::test_benchmark_diwire_enter_close_scope_resolve_once": {
+    "iterations": 100000,
+    "rounds": 5,
+    "extra_info": {},
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/benchmarks/test_enter_close_scope_resolve_open_generic_scoped.py::test_benchmark_diwire_enter_close_scope_resolve_open_generic_scoped": {
+    "iterations": 100000,
+    "rounds": 5,
+    "extra_info": {},
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/benchmarks/test_enter_close_scope_resolve_scoped_100.py::test_benchmark_diwire_enter_close_scope_resolve_scoped_100": {
+    "iterations": 1000,
+    "rounds": 5,
+    "extra_info": {},
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/benchmarks/test_resolve_deep_transient_chain.py::test_benchmark_diwire_resolve_deep_transient_chain": {
+    "iterations": 25000,
+    "rounds": 5,
+    "extra_info": {},
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/benchmarks/test_resolve_generated_scoped_grid.py::test_benchmark_diwire_resolve_generated_scoped_grid": {
+    "iterations": 500,
+    "rounds": 5,
+    "extra_info": {},
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/benchmarks/test_resolve_mixed_lifetimes.py::test_benchmark_diwire_resolve_mixed_lifetimes": {
+    "iterations": 100000,
+    "rounds": 5,
+    "extra_info": {},
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/benchmarks/test_resolve_open_generic_transient.py::test_benchmark_diwire_resolve_open_generic_transient": {
+    "iterations": 100000,
+    "rounds": 5,
+    "extra_info": {},
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/benchmarks/test_resolve_scoped.py::test_benchmark_diwire_resolve_scoped": {
+    "iterations": 100000,
+    "rounds": 5,
+    "extra_info": {},
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/benchmarks/test_resolve_scoped_with_registered_open_closed_generics.py::test_benchmark_diwire_resolve_scoped_with_registered_open_closed_generics": {
+    "iterations": 100000,
+    "rounds": 5,
+    "extra_info": {},
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/benchmarks/test_resolve_scoped_with_registered_open_closed_generics_pair_alternating.py::test_benchmark_diwire_resolve_scoped_with_registered_open_closed_generics_pair_alternating": {
+    "iterations": 100000,
+    "rounds": 5,
+    "extra_info": {},
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/benchmarks/test_resolve_scoped_with_registered_open_closed_generics_pair_same.py::test_benchmark_diwire_resolve_scoped_with_registered_open_closed_generics_pair_same": {
+    "iterations": 100000,
+    "rounds": 5,
+    "extra_info": {},
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/benchmarks/test_resolve_singleton.py::test_benchmark_diwire_resolve_singleton": {
+    "iterations": 100000,
+    "rounds": 5,
+    "extra_info": {},
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/benchmarks/test_resolve_transient.py::test_benchmark_diwire_resolve_transient": {
+    "iterations": 100000,
+    "rounds": 5,
+    "extra_info": {},
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/benchmarks/test_resolve_wide_transient_graph.py::test_benchmark_diwire_resolve_wide_transient_graph": {
+    "iterations": 25000,
+    "rounds": 5,
+    "extra_info": {},
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_aresolve_workloads.py::test_benchmark_diwire_aresolve_provider[Lifetime.TRANSIENT-sync]": {
+    "iterations": 100,
+    "rounds": 5,
+    "extra_info": {
+      "operations_per_batch": 1000
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_aresolve_workloads.py::test_benchmark_diwire_aresolve_provider[Lifetime.TRANSIENT-async]": {
+    "iterations": 100,
+    "rounds": 5,
+    "extra_info": {
+      "operations_per_batch": 1000
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_aresolve_workloads.py::test_benchmark_diwire_aresolve_provider[Lifetime.TRANSIENT-suspending]": {
+    "iterations": 100,
+    "rounds": 5,
+    "extra_info": {
+      "operations_per_batch": 1000
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_aresolve_workloads.py::test_benchmark_diwire_aresolve_provider[Lifetime.SCOPED-sync]": {
+    "iterations": 100,
+    "rounds": 5,
+    "extra_info": {
+      "operations_per_batch": 1000
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_aresolve_workloads.py::test_benchmark_diwire_aresolve_provider[Lifetime.SCOPED-async]": {
+    "iterations": 100,
+    "rounds": 5,
+    "extra_info": {
+      "operations_per_batch": 1000
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_aresolve_workloads.py::test_benchmark_diwire_aresolve_provider[Lifetime.SCOPED-suspending]": {
+    "iterations": 100,
+    "rounds": 5,
+    "extra_info": {
+      "operations_per_batch": 1000
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_aresolve_workloads.py::test_benchmark_diwire_aresolve_mixed_graph": {
+    "iterations": 100,
+    "rounds": 5,
+    "extra_info": {
+      "operations_per_batch": 1000
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_aresolve_workloads.py::test_benchmark_diwire_aresolve_scope_lifecycle[class]": {
+    "iterations": 100,
+    "rounds": 5,
+    "extra_info": {
+      "operations_per_batch": 1000
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_aresolve_workloads.py::test_benchmark_diwire_aresolve_scope_lifecycle[generator]": {
+    "iterations": 100,
+    "rounds": 5,
+    "extra_info": {
+      "operations_per_batch": 1000
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_compile_workloads.py::test_benchmark_diwire_cold_compile[16]": {
+    "iterations": 1,
+    "rounds": 20,
+    "extra_info": {
+      "provider_count": 16,
+      "operation": "cold compile; registrations and teardown excluded",
+      "gc_policy": "enabled during compile; collect before setup"
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_compile_workloads.py::test_benchmark_diwire_cold_compile[64]": {
+    "iterations": 1,
+    "rounds": 20,
+    "extra_info": {
+      "provider_count": 64,
+      "operation": "cold compile; registrations and teardown excluded",
+      "gc_policy": "enabled during compile; collect before setup"
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_compile_workloads.py::test_benchmark_diwire_cold_compile[256]": {
+    "iterations": 1,
+    "rounds": 20,
+    "extra_info": {
+      "provider_count": 256,
+      "operation": "cold compile; registrations and teardown excluded",
+      "gc_policy": "enabled during compile; collect before setup"
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_cached_scope_workloads.py::test_benchmark_diwire_aresolve_warm_request_cache[sync]": {
+    "iterations": 100,
+    "rounds": 5,
+    "extra_info": {
+      "operations_per_batch": 1000
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_cached_scope_workloads.py::test_benchmark_diwire_aresolve_warm_request_cache[async]": {
+    "iterations": 100,
+    "rounds": 5,
+    "extra_info": {
+      "operations_per_batch": 1000
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_cached_scope_workloads.py::test_benchmark_diwire_aresolve_warm_request_cache[suspending]": {
+    "iterations": 100,
+    "rounds": 5,
+    "extra_info": {
+      "operations_per_batch": 1000
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_cached_scope_workloads.py::test_benchmark_diwire_resolve_warm_request_cache_with_thread_lock": {
+    "iterations": 1000000,
+    "rounds": 5,
+    "extra_info": {},
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_async_dispatch_workloads.py::test_benchmark_diwire_aresolve_dispatch_patterns[same_identity]": {
+    "iterations": 100,
+    "rounds": 5,
+    "extra_info": {
+      "operations_per_batch": 1000,
+      "dispatch_pattern": "same_identity"
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_async_dispatch_workloads.py::test_benchmark_diwire_aresolve_dispatch_patterns[same_equality]": {
+    "iterations": 100,
+    "rounds": 5,
+    "extra_info": {
+      "operations_per_batch": 1000,
+      "dispatch_pattern": "same_equality"
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_async_dispatch_workloads.py::test_benchmark_diwire_aresolve_dispatch_patterns[alternate_identity_equality]": {
+    "iterations": 100,
+    "rounds": 5,
+    "extra_info": {
+      "operations_per_batch": 1000,
+      "dispatch_pattern": "alternate_identity_equality"
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_async_dispatch_workloads.py::test_benchmark_diwire_aresolve_dispatch_patterns[alternate_equal_aliases]": {
+    "iterations": 100,
+    "rounds": 5,
+    "extra_info": {
+      "operations_per_batch": 1000,
+      "dispatch_pattern": "alternate_equal_aliases"
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_async_dispatch_workloads.py::test_benchmark_diwire_aresolve_dispatch_patterns[mixed_cached]": {
+    "iterations": 100,
+    "rounds": 5,
+    "extra_info": {
+      "operations_per_batch": 1000,
+      "dispatch_pattern": "mixed_cached"
+    },
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    }
+  },
+  "tests/performance/test_registration_workloads.py::test_benchmark_diwire_warm_recursive_registration[plain]": {
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    },
+    "extra_info": {
+      "dependency_count": 16,
+      "kind": "plain",
+      "operation": "warm recursive registration; type/container setup and compile excluded",
+      "gc_policy": "enabled during registration; collect before setup"
+    },
+    "rounds": 20,
+    "iterations": 1
+  },
+  "tests/performance/test_registration_workloads.py::test_benchmark_diwire_warm_recursive_registration[settings]": {
+    "options": {
+      "disable_gc": false,
+      "timer": "perf_counter",
+      "min_rounds": 5,
+      "max_time": 1.0,
+      "min_time": 5e-06,
+      "warmup": false
+    },
+    "extra_info": {
+      "dependency_count": 16,
+      "kind": "settings",
+      "operation": "warm recursive registration; type/container setup and compile excluded",
+      "gc_policy": "enabled during registration; collect before setup"
+    },
+    "rounds": 20,
+    "iterations": 1
+  }
+}

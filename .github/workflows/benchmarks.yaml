@@ -4,17 +4,23 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      performance_experiment:
+        description: Run the frozen H005 experiment instead of competitor reports
+        type: boolean
+        default: false
 
 permissions:
   contents: read
   pull-requests: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.performance_experiment && 'experiment' || 'report' }}
+  cancel-in-progress: ${{ !inputs.performance_experiment }}
 
 jobs:
   benchmarks:
+    if: ${{ !inputs.performance_experiment }}
     name: Benchmark Report (Python 3.14)
     runs-on: ubuntu-latest
     env:
@@ -50,3 +56,53 @@ jobs:
         with:
           header: benchmark-results
           path: ${{ env.BENCHMARK_ARTIFACT_DIR }}/pr-comment.md
+
+  performance-experiment:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.performance_experiment }}
+    name: H005 calibrated allocation experiment (Python 3.14.6)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout experiment controller
+        uses: actions/checkout@v5
+        with:
+          path: controller
+          persist-credentials: false
+
+      - name: Checkout frozen subject
+        uses: actions/checkout@v5
+        with:
+          ref: 7eaaf194905675bcd6505b9b434be9748798d3a7
+          path: subject
+          persist-credentials: false
+
+      - name: Install pinned uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.26"
+          enable-cache: false
+
+      - name: Install frozen Python and dependencies
+        working-directory: subject
+        run: |
+          uv python install 3.14.6
+          uv sync --locked --python 3.14.6 --group dev --group docs
+
+      - name: Run one bounded calibration and comparison
+        working-directory: controller
+        run: |
+          "$GITHUB_WORKSPACE/subject/.venv/bin/python" -m tests.performance.remote_experiment \
+            --subject "$GITHUB_WORKSPACE/subject" \
+            --output "$RUNNER_TEMP/h005-performance-experiment" \
+            --protocol .agents/performance-evidence/2026-09-05/h005-linux-protocol.json \
+            --archive .agents/performance-evidence/2026-09-05/h005-allocation.json.gz
+
+      - name: Upload complete or partial experiment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: h005-performance-experiment-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/h005-performance-experiment/
+          if-no-files-found: warn
