@@ -35,16 +35,29 @@ def measure_compile_memory(provider_count: int) -> dict[str, int]:
     runtime = cast("Any", resolver)._runtime
     namespaces: dict[int, dict[str, object]] = {}
     generated_function_count = 0
+    function_ids: set[int] = set()
+    code_ids: set[int] = set()
+    async_slot_function_ids: set[int] = set()
+    async_slot_code_ids: set[int] = set()
     for resolver_class in runtime.class_by_level.values():
         for member in vars(resolver_class).values():
             if isinstance(member, FunctionType):
                 generated_function_count += 1
                 namespaces[id(member.__globals__)] = member.__globals__
+                function_ids.add(id(member))
+                code_ids.add(id(member.__code__))
+                if member.__name__.startswith("aresolve_"):
+                    async_slot_function_ids.add(id(member))
+                    async_slot_code_ids.add(id(member.__code__))
     result = {
         "provider_count": provider_count,
         "retained_bytes": retained - initial,
         "peak_bytes": peak - initial,
         "generated_function_count": generated_function_count,
+        "unique_function_count": len(function_ids),
+        "unique_code_count": len(code_ids),
+        "unique_async_slot_function_count": len(async_slot_function_ids),
+        "unique_async_slot_code_count": len(async_slot_code_ids),
         "unique_globals_count": len(namespaces),
         "shallow_globals_dictionary_bytes": sum(
             sys.getsizeof(value) for value in namespaces.values()

@@ -586,3 +586,49 @@ expected settings and reproduction scripts are archived in
 `performance-evidence/2026-09-05/h004-calibration.json.gz`.
 Source, tests and configuration remain byte-for-byte at the green checkpoint;
 there is no runtime patch to reverse.
+
+### Allocation investigation and measurement extension for H005
+
+A separate allocation profile at the unchanged runtime finds 1,280 async slot
+functions/code objects for 256 providers across five scope classes, but only 256
+structurally distinct async code shapes. Source compilation accounts for the
+largest retained allocation site. Inspection suggests about 200-239 bytes of
+duplicate immutable metadata per async wrapper, roughly 205 KB gross potential
+at 256 transient providers. This is not a measured saving. The 327,680 shallow
+code-object bytes are not savings: executable code objects must remain distinct.
+The initial `co_varnames` shallow estimate is invalid because its getter can
+synthesize tuples; exclude it from allocation reasoning. Profiles remain at
+`h005-allocation-profile.json` and `h005-code-clone-feasibility.json` under the
+campaign artifact directory.
+
+Directly sharing code would also share interpreter specialization state across
+different scope classes. A narrower candidate would compile each async shape
+once within one build, then use `CodeType.replace()` and a fresh `FunctionType`
+for each other class, sharing only immutable metadata. Keep this limited to
+async slot wrappers, which have no nested code constants. The local cache key is
+the workflow slot and whether the wrapper performs its owner-local cache
+precheck. Cross-build cache retention and scope-prefix collisions are prohibited.
+Review also identifies an observable compatibility difference: replacement code
+emits `code.__new__` audit events, which restrictive audit hooks may reject.
+
+Before any runtime edit, extend `measure_compile_memory.py` with unique function,
+code, async-slot function and async-slot code identity counts. Use `id(code)`,
+not structural code equality. Collect these only after tracing stops, preserving
+the existing registration/compile/GC/retention boundary. The executable probe
+checks 215/695/2,615 distinct generated functions and code objects, and 80/320/1,280
+distinct async-slot functions/code objects at 16/64/256 providers. Lint and the
+full suite pass (1,123 tests, 86 skips, 100% coverage). The final FastAPI gate passes
+all five tests from the exact staged-source export. The first invocation reached
+Docker before its daemon was ready; the unchanged export passed once it started.
+
+H005 is explicitly allocation-only for now. Predeclare fixed five-pair same-path
+memory A/A and then A/B, with exact fingerprints and unchanged AC/low-power-1,
+trace and GC settings. Memory calibration must remain within 2%. Require at least
+5% retained reduction in both headline and paired medians at 64 and 256 providers,
+with all five pairs improving; protect retained-16 and every peak measurement at
+2%. Function and code identity counts must remain unchanged. Add focused semantic
+tests before the candidate probe. The decision ceiling is "memory benefit
+established; timing protection unresolved". H004's timing-calibration failure
+still applies; allocation results cannot justify accepting a runtime optimization
+without a separately justified timing protocol/environment decision and the
+cold/35-steady protections. Park and reverse a provisional candidate afterward.
