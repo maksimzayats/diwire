@@ -632,3 +632,71 @@ established; timing protection unresolved". H004's timing-calibration failure
 still applies; allocation results cannot justify accepting a runtime optimization
 without a separately justified timing protocol/environment decision and the
 cold/35-steady protections. Park and reverse a provisional candidate afterward.
+
+### H005 hypothesis: clone async code templates within a compilation
+
+Baseline: `7eaaf194905675bcd6505b9b434be9748798d3a7`, with the memory identity
+probe committed and all required gates green.
+
+Hypothesis: independently compiling identical async wrapper source for each scope
+duplicates immutable code metadata. A build-local template map can avoid that
+duplication while preserving independent executable code and function objects.
+
+Change: only `_build_classes`; cache the first async wrapper code by
+`(workflow.slot, owner_local_cache_precheck)`. For another class with the same
+shape, construct a fresh function from `template_code.replace()`, with the same
+generated globals and name. Keep `_compile_slot_method` and all sync generation
+unchanged. The map dies when class construction returns. No persistent cache,
+shared executable code, nested-code cloning or runtime dispatch change.
+
+Target/decision: the allocation-only rules immediately above apply unchanged.
+Reject the candidate if either 64/256 retained saving misses 5%, any protected
+allocation exceeds 2%, identity counts change, or focused semantics fail. Even a
+passing memory result remains provisional and must be parked; there is no
+accepted runtime performance commit while timing protection remains unresolved.
+
+Risks/validation: preserve owner-prefix separation, transitive async delegation,
+scope mismatch, cached identity, transient freshness, independent code/function
+identities, absent closures/defaults/nested code, cross-build slot isolation and
+collection while the compiler remains alive. Record the additional
+`code.__new__` audit event as a compatibility difference for any later decision.
+
+### H005 local result: memory benefit established, candidate parked
+
+The fixed memory A/A passes with zero headline/paired median differences at all
+sizes; 64/256 observations are identical across all ten probes, while 16 varies
+by only 55 bytes. Fresh five-pair A/B then saves retained memory in every pair:
+
+| Providers | Baseline retained | Candidate retained | Reduction |
+| --- | ---: | ---: | ---: |
+| 16 | 275,927 bytes | 261,547 bytes | 5.21% |
+| 64 | 855,332 bytes | 797,668 bytes | 6.74% |
+| 256 | 3,251,687 bytes | 3,018,187 bytes | 7.18% |
+
+Both primary headline and paired medians clear 5%. Peak reductions are
+1.48%/1.75%/1.84%; every function, code-object and globals count remains unchanged.
+Independent audit verifies all 20 raw probes and the allocation verdict. This is
+a useful allocation benefit, not an accepted overall runtime optimization.
+
+The six new semantic cases pass on baseline and candidate. An initial collection
+test failed under coverage on both versions because executing generated code
+allowed the coverage machinery to retain it. The repaired test constructs the
+classes without executing generated methods; it still retains the compiler and
+checks weak references to all classes and code objects. Candidate lint and the
+full suite pass: 1,129 tests, 86 skips, 100% coverage. Semantic review finds no
+blocking lifecycle or cache-shape issue; the audit-event difference remains noted.
+
+The exact compiler patch and validated tests are parked, with source/tests/config
+restored byte-for-byte to `7eaaf19`. Two hundred focused checkpoint tests pass
+after restoration. No candidate implementation is committed. All raw memory
+probes, hashes, manifests, comparisons, profile caveats, candidate patch/tests and
+reproduction scripts are preserved in
+`performance-evidence/2026-09-05/h005-allocation.json.gz`.
+
+Commands used the v2 same-path runner with `--checkpoint
+7eaaf194905675bcd6505b9b434be9748798d3a7 --kind memory`, labels
+`h005-singlepath-memory-aa` and `h005-singlepath-memory-ab`; only the latter adds
+`--patch benchmark-results/campaign-2026-09-05/h005-candidate.patch`.
+Timing protection remains unresolved on the Mac. Investigate one separately
+preregistered Linux CI environment, with calibration and comparison in the same
+job; keep all Mac and Linux evidence separate.
