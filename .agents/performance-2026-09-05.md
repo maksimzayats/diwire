@@ -814,3 +814,121 @@ metadata and paired effects. The failed cell's pair effects were +2.787%,
 identifying a specific host cause. The evidence-only checkpoint again passes
 `make lint` and `make test` (1,150 tests, 86 skips, 100% coverage); implementation
 and the previously verified FastAPI export remain unchanged.
+
+### H006 screening: unused helpers for synchronous providers
+
+After H001, generated async wrappers for synchronous workflows delegate to their
+sync slot method. The compiler still creates an `_async_slot_N` globals helper
+for those workflows. Source review found no remaining indirect dependency on
+that helper, including the open-generic path. A possible change would guard its
+creation on `workflow.requires_async`, not merely on provider asyncness. Gross
+shallow accounting at 256 providers identifies 43,008 bytes of functions, 14,336
+bytes of closure tuples, 10,240 bytes of cells and 14,317 bytes of key strings.
+These are screening estimates, not retained-memory measurements or a gain.
+No runtime patch was written. Defer this smaller opportunity while investigating
+the separately observed startup cost in H007.
+
+### H007 preregistration: defer optional settings integration until inspection
+
+Baseline source eagerly imports the optional settings integration from
+`container.py`; importing that integration constructs `SETTINGS_BASES` and
+imports installed Pydantic packages. One import-time profile attributes about
+95 ms of a 135 ms DIWire import to the integration. These instrumented numbers
+identify a hypothesis only and cannot establish a performance effect.
+
+The candidate, if calibration permits implementation, will replace that import
+with a same-name, fully typed `(candidate: object) -> bool` facade that imports
+the existing integration function locally and delegates directly. Keep the
+integration's initialization and detection behavior unchanged once imported.
+Do not add caching, function rebinding, eligibility shortcuts or locking. The
+intentional behavior change is that optional imports, their warnings and their
+non-ImportError failures occur on first settings inspection rather than DIWire
+import. Preserve the existing internal monkeypatch target and public signatures.
+First use may occur in a worker thread; fresh-process concurrency checks must
+exercise normal import-lock initialization.
+
+The measurement target is **warm-bytecode fresh-process startup**, with total
+time measured inside each fresh interpreter. It excludes interpreter launch;
+stage timings are diagnostic only. This is a new cache and sampling protocol on
+the same Mac, not a claim that the cause of earlier A/A failures was identified
+or repaired. H005 remains deferred. Pin CPython 3.14.6 with the GIL enabled,
+hash seed 0, AC power with low-power mode 1, the existing uv lock, and one common
+subject path. Use the installed development environment with Pydantic 2.13.3,
+pydantic-settings 2.14.0 and pydantic-core 2.46.3, plus an actual separate empty
+venv using the same Python (not `-S` for official measurements).
+
+Freeze eight startup cells: import, explicit registration plus first resolution,
+plain autoregistration plus first resolution in both environments, and settings
+autoregistration plus first resolution with settings imported before DIWire and
+with DIWire imported first in the installed environment. Settings totals include
+both package imports. Container close, assertions, repeated-instance validation,
+metadata imports and optional-module snapshots occur after the timer stops.
+Reject preloaded subject/optional modules, instrumentation, changed dependencies,
+runtime/source/harness mismatches and invalid stage totals.
+
+Prepare one fixed cache directory outside measurements: warm all eight startup
+cells and, for steady timing, all 40 benchmark cells with timing disabled. Force
+matching source bytecode before every role, including identical A/A transitions.
+Disable writes in measured children and require the complete cache hash map to
+remain unchanged during every role. Preserve all raw observations, sidecars,
+process/power snapshots, preparation logs, source hashes and failures. Odd pairs
+run base/work; even pairs run work/base. Rotate startup cell order identically
+within each corresponding role. Freeze the driver, workload selections and
+operational evidence before official calibration.
+
+Run these gates in order, with no unchanged calibration retry:
+
+1. Startup A/A: exactly five paired blocks, five fresh children per cell and
+   role, all eight cells (400 timed observations). Average the five observations
+   within each cell/role/block. Both absolute headline and paired-median effects
+   must be at most 2% for every cell. Any failure defers H007 before a runtime
+   patch is written.
+2. Steady/cold A/A: exactly 25 adjacent fresh-process pairs and the frozen 14
+   cells: the prior 12-cell calibration plus plain/settings warm recursive
+   registration of 16 distinct dependencies. Preserve every previous workload
+   setting and both previously failed guards. Require both absolute headline
+   and paired-median effects at most 2% for every cell. The larger fixed sample
+   count is chosen before new decision data; it can reduce independent sampling
+   noise but does not correct serial drift or bias. Any failure defers H007.
+3. Only after both A/A gates pass, implement the one candidate and semantic
+   checks. Startup A/B uses the same fixed five-by-five design and eight cells.
+   Require at least 25% latency reduction in both headline and paired medians
+   for installed-environment import and explicit-registration startup, with all
+   five paired blocks improving. Protect every startup total at 2% regression.
+4. Steady/cold A/B: exactly 25 adjacent pairs of all 40 frozen cells (the prior
+   38 plus the two warm-registration guards), protecting each at 2% regression.
+   The new guards create types and containers outside timing, warm integration
+   initialization before measurement, and time only registration of a root and
+   its 16 dependencies. Compilation, resolution, identity checks and cleanup
+   stay outside timing. Missing a settings guard invalidates official evidence.
+5. For any protected flag in either metric, allow one dedicated confirmation
+   wave per measurement kind: five paired blocks of five children for flagged
+   startup cells, and 25 pairs for flagged steady/cold cells. Both confirmation
+   effects at least -2% pass; both below -2% reject; disagreement defers. Do not
+   pool broad A/B and confirmation data, extend samples, drop observations,
+   subtract offsets or weaken a threshold. Primary-gain failure rejects directly.
+
+Latency effects are `100 * (1 - work/base)`; throughput effects are
+`100 * (work/base - 1)`. Headline uses the medians of role values and paired uses
+the median of pair effects. Preserve fixed batching and normalize only absolute
+throughput presentation; factors cancel in paired ratios. The startup driver has
+a 30-minute budget; each steady/cold series has 60 minutes. Child processes and
+their groups have bounded cleanup before exact owned-patch restoration. Source
+restoration must not overwrite an independent edit.
+
+The candidate additionally requires fresh-process absent-dependency, explicit
+registration, real settings and concurrent-first-use checks; existing v1/v2
+settings semantics, public API compatibility, minimum-Python and free-threaded
+coverage checks; independent review; clean lint and 100% coverage; and FastAPI
+E2E as the final implementation verification. Existing resolver source identity
+does not replace the 40 timing guards. Operational smoke runs, including an
+intentional interruption, validate the harness only and are excluded from every
+performance decision.
+
+H007 instrumentation checkpoint: independent measurement and lifecycle reviews
+pass; the archive contains 123 hash-verified files, including the frozen driver,
+40/14-cell catalogs and operational smoke/cleanup evidence. `make lint` passes
+(187 strictly typed source files), `make test` passes 1,162 tests with 90 skips
+and 100% coverage, and the final `make test-e2e-fastapi` passes all five tests
+from the exact staged-source export. Docker required an engine restart before
+this E2E and is stopped before local measurements. No runtime patch is included.
