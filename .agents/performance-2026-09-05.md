@@ -481,3 +481,46 @@ counts and 100% coverage; `sys._is_gil_enabled()` is false on the latter. Public
 API signatures pass on the maintained 3.14 runtime. The final
 `make test-e2e-fastapi` gate passes all five tests from an exact staged-source
 export. H003 is accepted; the next hypothesis starts from this green checkpoint.
+
+### Measurement extension: async dispatcher key patterns
+
+At accepted H003 checkpoint `0d8bf40`, three profiled 256-provider compilations
+spend 0.784 of 0.996 instrumented seconds in dispatch generation and 0.568 seconds
+in AST location walking. This identifies the remaining compiler limiter; these
+profiled durations are not benchmark results. Raw profile:
+`benchmark-results/campaign-2026-09-05/h004-baseline-profile.pstats` and `.txt`.
+
+Before changing dispatch generation, add five cases in
+`tests/performance/test_async_dispatch_workloads.py`. Four APP registrations
+(identity/equality keys, each transient/scoped) enable the last-method cache.
+All providers are synchronous, resolved through the async API. Patterns cover
+repeated identity keys, repeated equality aliases, alternating identity/equality,
+alternating equal-but-distinct aliases, and mixed cached/transient requests.
+Repeated equality aliases hit the last-method cache after priming; alternating
+equal aliases force dictionary lookup on every operation. Mixed cached requests
+leave the preceding transient dispatch entry intact.
+
+Pre-expand each pattern to exactly 1,000 keys outside timing. Retain the existing
+100-iteration batch helper, three warmups and five rounds, with event-loop setup
+and cleanup outside timing. Untimed assertions verify provider results, transient
+freshness, cached identity, pairwise-distinct equal aliases, exact lookup-object
+publication and preservation of the previous key/method by cached workflows.
+Both cached values and the selected pattern are warmed before timing. Independent
+measurement and lifecycle reviews find no fairness or semantic coverage blocker.
+Existing genuine async-provider and lifecycle guards remain in the broad suite.
+
+This is a measurement-only checkpoint. Five executable benchmark checks pass;
+`UV_NO_SYNC=1 make lint` and `UV_NO_SYNC=1 make test` pass (1,123 tests, 86 skips,
+100% coverage). The final `make test-e2e-fastapi` verification passes all five
+tests from an exact staged-source export.
+
+Preregister one fixed five-pair same-path A/A from the new checkpoint covering
+all five new patterns, four warm request-cache guards and three cold sizes.
+Keep the established AC/low-power-1 regime, neutral artifact names, alternating
+fresh processes, empty bytecode cache and disabled cache writes. Require headline
+and paired medians within 2% for all twelve cells before candidate testing.
+Inspect full distributions without exclusions or calibration offsets. If this
+fails, diagnose and defer runtime testing until a separately documented protocol
+decision; do not sample repeatedly until the result passes. The generalized
+runner requires the full checkpoint hash and freezes all source/harness inputs;
+its optional absent patch performs A/A with the same child lifecycle as A/B.
