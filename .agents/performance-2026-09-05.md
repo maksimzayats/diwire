@@ -524,3 +524,65 @@ fails, diagnose and defer runtime testing until a separately documented protocol
 decision; do not sample repeatedly until the result passes. The generalized
 runner requires the full checkpoint hash and freezes all source/harness inputs;
 its optional absent patch performs A/A with the same child lifecycle as A/B.
+
+### H004 hypothesis: source emission for async dispatch
+
+Hypothesis: constructing and walking the async dispatch AST contributes material
+cold compiler cost after H003. The accepted-checkpoint profile above identifies
+dispatch generation as the remaining large cost.
+
+Change: emit only async dispatch through the existing source compiler. Reuse
+workflow ordering and cache-enable policy. Keep synchronous dispatch AST output
+identical, removing only its now-unreachable async alternatives. Preserve the
+hot last-method check, root-owned cache precheck, exact equality lookup key,
+bound-method capture and publication order, equality switch and awaited fallback.
+Do not fuse providers, change cache policy or inline async workflows.
+
+Target: cold compilation throughput at 64 and 256 providers, with at least 5%
+headline and paired-median gains and at least four of five paired wins at both.
+
+Risks: source positions can alter generated instructions, especially warmed root
+cache reads and method capture. Cache publication before provider failure,
+scoped retry, equality aliases, dynamic methods, normalization/fallback, ownership
+and cleanup must remain equivalent. Add untimed failure/retry and single-REQUEST
+transient semantic guards; compare synchronous generated code fields before and
+after across the existing compiler branch suite.
+
+Accept only after the fixed 12-cell A/A passes, focused correctness/review,
+five-pair focused A/B, separate allocation measurements and all 35 steady guards.
+Cold-16 plus retained/peak memory at 16/64/256 remain protected; no confirmed
+headline or paired regression beyond 2%, and unchanged generated-function counts.
+Flagged protections receive the existing fixed five-pair confirmation, with at
+most one additional five-pair extension only for genuine boundary ambiguity.
+Require full quality/runtime gates, independent reviews and final FastAPI E2E.
+
+Reject and reverse the exact candidate patch if semantics fail, either primary
+gain misses the threshold, or a protected loss is confirmed. Record inconclusive
+noise without selective exclusions or offsets. No runtime change is applied yet.
+
+### H004 decision: defer before runtime edits
+
+The fixed 12-cell A/A at `34f2dfa59ce7bfb247345de4776565d2a27abbd5` fails the
+preregistered gate: the THREAD guard's exact paired median is
+`+2.002987408764212%`, beyond 2%, despite a +0.933370% headline. Do not round this
+into a pass. The other eleven headline/paired medians remain within 1.48%.
+THREAD differences persist through whole rounds: pair-three baseline rounds are
+100-102 ns versus candidate 96-97 ns; pair-five baseline 95-96 versus 92-93 ns.
+Run 007 also has a 442 ns mixed-cached round against typical 225-230 ns, and
+equal-alias rounds of 317-374 ns against about 308 ns. All observations remain.
+
+Independent audit confirms pristine identical source/harness/runtime inputs,
+stable AC/low-power-1 before and after every process, and empty bytecode caches.
+Desktop process snapshots do not identify a causal process, scheduling effect or
+layout effect. H004 is deferred, not rejected as an optimization: it has not been
+implemented. Do not rerun unchanged calibration, alter iterations, subtract an
+offset or reuse the A/B confirmation extension. Reopening requires a separately
+documented, objectively different execution protocol/environment and one new
+preregistered calibration. Pivot to allocation investigation in the meantime.
+
+Command: `.venv/bin/python benchmark-results/campaign-2026-09-05/run_single_path_v2.py.txt h004-singlepath-calibration-aa --checkpoint 34f2dfa59ce7bfb247345de4776565d2a27abbd5 --select 'cold_compile or warm_request_cache or aresolve_dispatch_patterns'`.
+All ten raw runs, 120 cells, round data, manifests, exact failed value, profile,
+expected settings and reproduction scripts are archived in
+`performance-evidence/2026-09-05/h004-calibration.json.gz`.
+Source, tests and configuration remain byte-for-byte at the green checkpoint;
+there is no runtime patch to reverse.
