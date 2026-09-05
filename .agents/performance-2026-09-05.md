@@ -1187,3 +1187,37 @@ full `--checkpoint`, and `--kind startup|timing|memory`. Timing additionally use
 `--expected-cells` with the frozen calibration/focused/steady selection. A/B adds
 `--patch` with the exact frozen compiler patch. Official runs never use `--smoke`.
 Every manifest records the exact child argv, inputs, cache maps and power state.
+
+### H004-R1 calibration result: defer after the first failed gate
+
+The single startup A/A at instrumentation checkpoint
+`07e9a2033c8b5f26edeae7c1bd278b950b4fe60b` retained all 400 timed children and
+eight warmups. Both roles used identical accepted runtime source. Two of the
+eight cells failed the predeclared 2% absolute calibration bound:
+
+| Startup total | Headline effect | Paired effect |
+| --- | ---: | ---: |
+| Installed plain autoregistration | -2.002013070107278% | -1.0513241118535133% |
+| Absent-dependency plain autoregistration | -5.409514343696142% | -5.409514343696142% |
+
+The absent-autoregistration pair effects were +5.1203%, -2.6288%, -5.4095%,
+-5.6910% and -14.8540%; all observations remain included. This is measurement
+instability between identical-code roles, not an optimization regression or a
+cause attribution. Do not round the installed result into a pass. Runtime,
+source, prepared cache and power checks passed, as did owned-child cleanup and
+exact source restoration.
+
+Defer H004-R1 immediately under its frozen rule. No timing A/A, memory A/A,
+candidate implementation or A/B series was run. Preserve the full startup gate
+and controller in `performance-evidence/2026-09-05/h004r1-calibration.json.gz`.
+There is no unchanged retry, sample extension, filtered result or offset. The
+next iteration investigates a different mechanism: generator reductions in
+cleanup-flag propagation, which occupy a material part of the generic workload's
+profile. H004 and H005 remain deferred.
+
+Independent audit reproduced all 408 records, 80 five-child groups, ten role
+blocks and the two failures. All byte hashes, source/runtime/module shapes,
+cache maps and restoration checks passed. `make lint` and `make test` remain
+clean (1,170 passed, 90 skipped, 100% coverage); library/tests/harness still match
+the accepted H007 source and its final passing FastAPI verification. Record the
+failed gate as an evidence-only checkpoint before further experimentation.
