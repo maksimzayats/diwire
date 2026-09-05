@@ -157,3 +157,28 @@ candidate. The initial attempt timed out resolving the public base image while
 the Docker credential helper stalled. A retry with a temporary anonymous Docker
 configuration passed; saved Docker settings were untouched. Compose removed its
 containers and network afterward.
+
+### Measurement extension: cold compilation and retained memory
+
+`tests/performance/test_compile_workloads.py` measures fresh compilation with 16,
+64 and 256 independent request-scope transient providers. Each of 20 measured
+rounds (after three warmups) registers a new container outside timing, compiles it
+once with GC enabled, then validates transient resolution and closes it outside
+timing. The target returns no resolver to the benchmark framework. Explicit final
+cleanup also supports `--benchmark-disable`, which omits framework teardown.
+
+`python -m tests.performance.measure_compile_memory --output UNIQUE_PATH` measures
+allocation separately from timings. Registrations precede tracing; peak is read
+immediately after compilation, and retained bytes after collection with the root
+still live. Introspection happens after tracing stops. It reports shallow globals
+mapping bytes, unique namespace count and generated function count in addition to
+traced allocation, with full source/harness/configuration fingerprints and runtime
+identity. The initial 256-provider probe retained 71.29 MB, including 68.07 MB of
+shallow globals-dictionary storage spread across 2,615 generated functions.
+
+Measurement-only validation: three new benchmark cases pass disabled-mode checks;
+`make lint` and `make test` pass, 1,115 tests, 77 skips, 100% coverage. The independent
+review required canonical-helper/configuration fingerprinting and explicit GIL
+metadata for the memory probe; both are included. No compiler change is part of
+this checkpoint. Five fresh-process A/A pairs of cold timings and five separate
+A/A memory-probe pairs will set H002's thresholds before runtime edits.
