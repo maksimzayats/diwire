@@ -1051,3 +1051,139 @@ by **all five passing `make test-e2e-fastapi` tests** as the final implementatio
 verification. Accept H007. The startup import deferral, semantic regressions and
 documentation are committed together; no protected result was rounded into a
 pass or removed. The draft PR remains open for the continuing campaign.
+
+### H009 screening result: reject as immaterial
+
+Three fresh, public first-compile profiles at each of 64 and 256 closed-generic
+consumer pairs exercised actual generic materialization, checked the resulting
+registrations, and resolved every consumer to its expected entity type. There
+were 131/515 direct cardinality reads and 133/517 `values()` calls. Generously
+charging the materializer's entire self time plus all its direct `values()` and
+`len()` time to this proposal accounts for only 0.3825-0.4176% of profiled compile
+time at 64 and 0.4832-0.4934% at 256. This includes unchanged work and is a
+profiling screen, not a bound on unprofiled runtime or a measured candidate gain.
+The cost is too small to justify an experiment against the campaign's 5% useful
+compile-effect floor. Reject without a runtime patch. The convergence fixture
+review also identified call-count mocks that would need realistic registry churn
+if this mechanism were revisited. Preserve the nine raw profiles and screening
+script in the H004-R1 instrumentation archive.
+
+### H004-R1: reopen async dispatcher source emission under the established protocol
+
+H004's original five-pair calibration failure remains a failure. After H007's
+independent 25-pair warm-bytecode protocol passed and its startup change was
+accepted, fresh profiles of three 256-provider plain compilations again locate
+about 79% of profiled compile time in dispatcher generation and 57% in AST
+location repair. These figures motivate an experiment; they are not candidate
+speedups. The profiler recorded pre-amend commit
+`c3994a45dccb9db0f07aac5cf10ce8678cb5b5f2`; its tree is exactly identical to
+accepted commit `932802ec608c5320062549d1a82d602efcdcd25d`
+(`f410979658b2bdf075ac16e93fee8510ffb76d24`). The amendment added only commit
+message evidence. H005 remains parked.
+
+Hypothesis: assembling async dispatcher ASTs and repairing every location costs
+material first-compile time. Generate only async dispatcher functions through the
+existing source compiler, preserving the synchronous generated code exactly.
+Reuse the existing cache predicate and workflow order, with no slot-method,
+cache-policy, globals, fallback, fusion or public API changes. Numeric slots and
+fixed internal names are the only interpolated source fragments.
+
+Risks: preserve identity before equality lookup, sentinel guards, dynamic cached
+slot calls, root cache ownership, cached `None`, transient bound-method capture,
+exact alias publication, key-then-method publication before awaiting, failure
+retry and suspension/reentrancy. Add focused correctness checks for these cache
+publication rules, including the single-REQUEST transient cache-enabled shape.
+Cached-workflow calls and failed unknown-key lookup must preserve a usable
+transient entry; completion after suspension must not overwrite a newer entry.
+Capture and compare complete generated synchronous code payloads across existing compiler branch tests before and after the change.
+
+Before any candidate implementation, freeze the new compiler-owned controller,
+selections, operational QA and this protocol in a tested instrumentation commit.
+Use that full commit as every calibration checkpoint. After recording a passing
+calibration in an evidence-only commit, use the latter full commit as the A/B
+checkpoint. Library and harness inputs must be identical between those commits.
+The controller is `run_h004r1_series.py.txt` in the instrumentation archive; it
+reuses H007's established warm-bytecode, same-subject-path, fixed-cache method
+and adds validated compile-memory observations. Official cache path:
+`benchmark-results/campaign-2026-09-05/h004r1-bytecode`. Runtime, optional package
+versions, lock, machine and AC/low-power=1 conditions remain the H007 conditions.
+Docker and CPU-heavy agents must be stopped before timing. No role shares a
+Python process with another; exact compiler-only patch reversal separates roles.
+
+Run exactly one fresh calibration in this order, stopping on any failed gate:
+
+1. Startup A/A: five adjacent alternating role pairs, five fresh processes per
+   cell per role, all eight installed/absent startup cells.
+2. Timing A/A: 25 adjacent alternating pairs, the frozen 14-cell H007 calibration
+   selection, including the previously noisy THREAD/REQUEST and registration cells.
+3. Compile-memory A/A: five alternating pairs, one fresh process per role with
+   all three sizes (16/64/256), retained/peak bytes and existing identity counts.
+
+Every calibration cell must have both absolute headline and paired effect at
+most 2%. A failure defers H004-R1 without a candidate, offset, filtering, sample
+extension, unchanged retry or environment switch. H007's successful calibration
+is not a replacement for these new gates.
+
+Only after all three gates pass, implement and freeze one compiler-only patch.
+Run focused correctness before these A/B phases, in this fixed order:
+
+1. Cold compilation: 25 pairs, all three frozen sizes. Both 64 and 256 must gain
+   at least 5% in headline and paired throughput, with at least 20/25 positive
+   pairs each. This preserves the original 80% win requirement. Size 16 remains
+   protected by the 2% rule.
+2. Compile memory: five pairs, all three sizes, retained and peak bytes protected
+   by 2%; function, code, async slot and namespace identity counts stay unchanged.
+3. Steady behavior: 25 pairs over all 37 remaining frozen workloads (17 canonical,
+   nine async, four cached-scope, five dispatch-pattern and two registration).
+4. Startup: five pairs with five children per cell per role, all eight totals
+   protected by 2%, preserving H007's accepted benefit.
+
+H is the benefit-positive ratio of role medians; P is the median of adjacent-pair
+benefit-positive effects. Startup uses means of all five children within each
+cell/role/pair. Timing uses each process's ops/s from all retained rounds. Memory
+uses bytes. Never pool different series or discard observations. The 40 timing
+cells/settings are unchanged from `h007-timing-cells.json`; focused and steady
+selections partition that catalog. A geometric mean is descriptive only.
+
+A failed primary rejects immediately. After all initially viable A/B phases,
+allow one predeclared focused confirmation wave for protected flags, in timing,
+memory, startup order. Timing uses 25 pairs of flagged cells; startup uses five
+pairs of five children for flagged totals; memory retains all three sizes over
+five pairs but only flagged metrics determine confirmation. Both H and P at
+least -2% pass; both below -2% reject; a split defers. No second wave, extension,
+rounding into a pass, favorable-cell exclusion or pooling is permitted. Stop
+when a definitive rejection makes further measurement unnecessary. All raw
+results, including failed/operational runs, remain archived.
+
+Each timing series has a 60-minute budget; startup/memory have 30 minutes. Child
+limits are 180 seconds for timing/memory and 60 seconds for startup, followed by
+bounded owned-group cleanup before source restoration. Require independent
+measurement and semantic review, full lint/types, 100% coverage/public API,
+minimum-Python and free-threaded checks, and FastAPI E2E as final implementation
+verification. Commit a passing candidate with its complete evidence; otherwise
+reverse only its exact patch and prove restoration. A failed calibration ends
+this reopening and triggers a different hypothesis or profiling area.
+
+H004-R1 instrumentation QA: the final controller SHA-256 is
+`5e1f8a12fbdda3f13347fa137d8e4d5c63032f7f998a76246635fc085816fe93`.
+One operational pair of each kind passed with a comment-only compiler patch;
+all source/cache/runtime checks passed. An intentional SIGTERM during a patched
+memory child verified owned-group termination and exact source restoration.
+These runs carry no performance inference. Independent measurement and lifecycle
+reviews found no blocker; their cache-publication clarifications are included
+above. `make lint` passes (188 strictly typed files) and `make test` passes
+1,170 tests with 90 skips and 100% coverage. This evidence-only checkpoint leaves
+all library, tests and executable harness files identical to accepted H007 and
+its final passing five-test FastAPI export. CI on that exact accepted commit is
+also green across Python 3.10-3.15, free-threaded variants and integrations.
+
+Reproduce a series by extracting the archived controller and selections to the
+artifact directory and running the subject's pinned Python on the controller:
+`--subject /Users/maksimzayats/dev/personal/diwire-perf-work`, unique `--output`,
+`--cache benchmark-results/campaign-2026-09-05/h004r1-bytecode`,
+`--installed-python /Users/maksimzayats/dev/personal/diwire-perf-work/.venv/bin/python`,
+`--absent-python /Users/maksimzayats/dev/personal/diwire-perf-envs/py314-minimal/bin/python`,
+full `--checkpoint`, and `--kind startup|timing|memory`. Timing additionally uses
+`--expected-cells` with the frozen calibration/focused/steady selection. A/B adds
+`--patch` with the exact frozen compiler patch. Official runs never use `--smoke`.
+Every manifest records the exact child argv, inputs, cache maps and power state.
