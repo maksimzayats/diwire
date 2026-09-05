@@ -65,3 +65,19 @@ platform/runtime checks. Run `make test-e2e-fastapi` as the last verification st
 
 No runtime candidate measured yet. This initial commit establishes the reviewable
 campaign and draft PR; it makes no performance claim.
+
+### Measurement extension
+
+Added `tests/performance/test_aresolve_workloads.py` outside the frozen canonical
+suite. Nine cases exercise synchronous, coroutine-only and suspending providers,
+warm caches, a mixed graph, and class/generator scope lifecycles through the async
+API. Each measured batch performs 1,000 public operations, with 100 batches per
+round, 3 warmup rounds and 5 measured rounds. Event-loop creation/shutdown and
+identity assertions are outside timing; lifecycle entry and cleanup remain inside
+each operation, and generator counts are verified. Raw rates are batches/second;
+per-operation rates multiply by 1,000. These rates are never mixed into the original
+17-scenario throughput aggregate.
+
+Validation: nine benchmark cases pass with `--benchmark-disable`; `make lint` and
+`make test` pass (1,108 tests, 74 skips, 100% coverage). Raw benchmark JSON already
+retains timing samples; no separate pytest saved-data archive is required.
