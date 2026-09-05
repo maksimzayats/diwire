@@ -2297,7 +2297,10 @@ def _compile_function(
     ast.fix_missing_locations(module)
     module_code = compile(module, filename=_FILENAME, mode="exec")
     function_code = _extract_function_code(module_code=module_code, name=name)
-    function = types.FunctionType(function_code, dict(generated_globals), name=name)
+    function_globals = (
+        generated_globals if type(generated_globals) is dict else dict(generated_globals)
+    )
+    function = types.FunctionType(function_code, function_globals, name=name)
     if defaults:
         function.__defaults__ = defaults
     if kwonly_defaults is not None:
@@ -2326,7 +2329,10 @@ def _compile_function_from_source(
     source = f"{function_keyword} {name}({signature}):\n{rendered_body}\n"
     module_code = compile(source, filename=_FILENAME, mode="exec")
     function_code = _extract_function_code(module_code=module_code, name=name)
-    function = types.FunctionType(function_code, dict(generated_globals), name=name)
+    function_globals = (
+        generated_globals if type(generated_globals) is dict else dict(generated_globals)
+    )
+    function = types.FunctionType(function_code, function_globals, name=name)
     if defaults:
         function.__defaults__ = defaults
     if kwonly_defaults is not None:

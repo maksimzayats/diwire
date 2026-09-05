@@ -182,3 +182,69 @@ review required canonical-helper/configuration fingerprinting and explicit GIL
 metadata for the memory probe; both are included. No compiler change is part of
 this checkpoint. Five fresh-process A/A pairs of cold timings and five separate
 A/A memory-probe pairs will set H002's thresholds before runtime edits.
+
+### Hypothesis 002: share generated globals within each compilation
+
+Baseline checkpoint: `5442fda`. Five alternating cold-compilation A/A pairs are in
+`h002-calibration-timing/`; five separate allocation A/A pairs are in
+`h002-calibration-memory/`. Runtime, dependencies, equal-length paths, hash seed and
+battery/low-power settings match H001. All memory statistics were byte-for-byte identical at 64 and 256 providers;
+16-provider retained bytes varied by 55 bytes (0.0056%), with other metrics identical. Timing headline/paired differences were
+-2.52%/-0.14% at 16 providers, -0.28%/+0.62% at 64, and -0.04%/+0.11% at 256;
+therefore short compile-time boundary cases require confirmation.
+
+Hypothesis: every generated function copies the same O(N)-size globals dictionary,
+retaining O(N squared) metadata across scope classes.
+Change: both function-compilation helpers reuse a plain dictionary supplied by the
+current compilation; other Mapping inputs retain their snapshot conversion. The
+compiler already creates a fresh dictionary for every build. No cross-build cache
+or provider/dispatch change is introduced.
+Target: PRIMARY retained compilation memory at 64 and 256 providers, expected >80%
+reduction. Startup speed is a secondary measurement, not a retrospective substitute.
+Risks: cross-container provider/constructor contamination, old active scopes after
+recompilation, altered Mapping behavior, global lookup speed and collectible cycles.
+Accept: at least 50% retained-memory reduction at BOTH target sizes in every one of
+five paired probes, unchanged generated-function counts, all correctness/review
+gates, and no confirmed >2% regression in peak/retained memory at any size, cold
+compilation time at any size, or the 26 established steady workloads. Trigger five
+focused confirmation pairs if either headline or paired median crosses the 2%
+boundary; use at most one extra five-pair extension for a real boundary ambiguity.
+Claim a startup speed gain only if both headline and paired median exceed 5% with
+at least 4/5 wins. Otherwise report it as neutral or as a measured tradeoff.
+Reject: isolation/lifecycle/Mapping failure, insufficient primary memory gain,
+missing generated functions, confirmed protected loss, or unresolved confirmation.
+
+H002 measured results meet acceptance criteria. Retained bytes fell from 988,479
+to 275,207 at 16 providers (-72.16%), 5,417,276 to 852,452 at 64 (-84.26%), and
+71,286,557 to 3,237,797 at 256 (-95.46%), improving in all five pairs at every
+size. Peak bytes fell 49.40%, 64.74% and 89.19%, respectively. Generated-function
+counts remain 215/695/2,615; each compilation now retains one globals dictionary.
+Cold-compilation throughput at 64 providers improved 6.48% headline/6.44% paired
+median, and at 256 improved 21.57%/21.66%, both 5/5 wins. Median mean compile times
+were 36.925 -> 34.678 ms and 162.950 -> 134.040 ms. The 16-provider result
+(+0.27%/+0.47%, 3/5) is neutral.
+
+The original 17-workload synchronous geometric mean changed -0.16%, a control
+result rather than a claimed runtime gain. Dedicated five-pair confirmations of
+the broad-run flags and borderline workloads found synchronous generator scope
+lifecycle -0.02%/-0.27%, open-generic transient -1.03%/-0.78%, singleton
++1.05%/-0.27%, and async generator lifecycle -0.83%/-1.41%. These small measured
+tradeoffs are within the declared 2% budget. No confirmation extension was used.
+
+All 50 original runs, round-level data, source/runtime fingerprints, raw artifact
+hashes and comparisons are archived in `performance-evidence/2026-09-05/h002.json.gz`.
+Original logs, power/process snapshots and runner scripts remain in
+`benchmark-results/campaign-2026-09-05/`, under `h002-calibration-timing`,
+`h002-calibration-memory`, `h002-ab`, `h002-memory-ab`, and `h002-protected-confirm`.
+Independent measurement review verified the evidence and supported acceptance;
+semantic/lifecycle reviews found no blockers. Tests cover plain-dict sharing,
+Mapping snapshots, colliding provider slots across compilations, overlapping old
+scopes, and cycle collection. The GC test skips only free-threaded Python 3.13,
+whose interpreter immortalizes dynamically created classes after threads start.
+
+Verification: `make lint` passes. `make test` and full suites on Python 3.10 and
+free-threaded Python 3.14 each pass 1,123 tests with 77 skips and 100% coverage.
+The free-threaded run explicitly reports the GIL disabled. The final
+`make test-e2e-fastapi` gate passed all five tests against a clean export of the
+exact staged candidate, using the temporary anonymous Docker configuration.
+Compose removed its containers and network. H002 is accepted.
