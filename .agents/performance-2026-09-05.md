@@ -1221,3 +1221,127 @@ cache maps and restoration checks passed. `make lint` and `make test` remain
 clean (1,170 passed, 90 skipped, 100% coverage); library/tests/harness still match
 the accepted H007 source and its final passing FastAPI verification. Record the
 failed gate as an evidence-only checkpoint before further experimentation.
+
+### H010: direct dependency reduction during cleanup-flag propagation
+
+The user requested wrap-up while this hypothesis was being validated. Finish
+H010's decision and final campaign verification, then stop; open no further
+hypotheses. H004/H004-R1 and H005 remain deferred.
+
+The bounded disposable-process screen retained five alternating pairs per size,
+five compile observations per process, and unchanged library files. At 256
+consumers it measured headline/paired +5.489972399914755% and 5/5 positive pairs;
+at 64, +0.617835410055001%/+0.9752178955195756%. This passes the prospective
+screen only. There was no calibration, so it cannot accept a runtime change.
+The five exception/order comparisons matched the original reducer. Preserve the
+full script/card and all 100 individual observations, including the two negative
+64-provider pairs, as screening evidence separate from formal measurements.
+
+Hypothesis: replacing the generator expression inside each cleanup-flag scan
+with an ordered direct loop removes enough allocation/resumption overhead to
+improve first compilation of a graph that materializes 256 closed generics.
+The entire refresh occupies about 14-15% of its profile; unchanged lookups,
+snapshots and fixed-point passes remain. The 64-provider refresh share is only
+about 4%, so that size is a protection rather than a primary. Require a useful
+5% primary throughput effect; do not lower it to fit the preliminary screen.
+
+The only runtime candidate may edit `src/diwire/_internal/providers.py` to replace
+that reducer. Preserve lookup order, short-circuiting, literal Boolean results,
+mutable flags, dynamic calls, per-pass snapshots, replacement/restore behavior
+and dependency inspection even for providers that already require cleanup.
+Preserve generator exception semantics with a narrow `StopIteration` handler
+around lookup, dependency-spec truth testing and cleanup-attribute access,
+raising chained `RuntimeError("generator raised StopIteration")`. Keep iterator
+acquisition/advancement and cleanup-value truth testing outside that handler.
+No flag cache, early return, deferred propagation or new dependency is allowed.
+
+Instrumentation adds two public generic first-compile cells (64/256 consumers)
+and one public late-generator-registration cell (32 reverse-registered dependent
+classes, requiring multiple cleanup-propagation passes). Types and registrations
+are outside compile timing; GC is collected after registration. The cleanup
+cell retains ordinary generator source validation and registration snapshots
+inside its timed call. Resolution, all entity/identity checks and exactly-once
+resource cleanup occur outside timing. All three use 20 rounds, three warmups
+and one operation per round, including fallback teardown in disabled mode.
+The new 43-cell catalog preserves all 40 existing settings unchanged.
+
+For this different hypothesis, repair startup collection by pairing matching
+fresh children adjacently. Retain 400 observations, the existing five fixed
+groups of five role means per cell, the same headline/paired estimators and 2%
+bounds. Within each group, rotate the eight cells; alternate role order by the
+ordinal child pair (25 pairs per cell). Force matching bytecode before every
+child in both A/A and A/B. This changes temporal separation and preparation
+frequency, not the statistic or sample count. It does not identify the cause
+of H004-R1's failed gate and does not reopen that hypothesis.
+
+Independent review also identified parent-side manifest writes after launching
+a timed child. H010 records a small PID/state journal during the child and writes
+the full manifest only after owned-group cleanup. Cache maps are stored as
+content-addressed sidecars; both full maps are compared in memory. This avoids
+quadratic status growth and serialization overlapping measurements. Earlier
+frozen drivers/results remain unchanged. Validate this new controller with
+comment-only ownership smokes and intentional interruption, then freeze it,
+its selections and this card in a tested measurement-only checkpoint.
+
+Use exactly one fresh calibration sequence, stopping on any failed gate:
+startup (five groups, five adjacent pairs per cell), timing (25 pairs of the
+previous 14 calibration cells plus all three additions), then memory (five
+pairs at all three existing sizes). Every H/P absolute calibration effect must
+be at most 2%; exact source/runtime/cache/identity invariants must pass. A failed
+gate defers H010, ends hypothesis work and proceeds to final campaign reporting.
+No retry, filtering, estimator switch or sample extension is allowed.
+
+After all gates pass, record an evidence-only checkpoint with identical source
+and harness, then implement the single runtime patch and semantic tests. Freeze
+the patch after focused correctness and run these A/B phases in order:
+
+1. Two generic compile cells, 25 alternating pairs. The 256-consumer primary must
+   gain at least 5% in both H/P with at least 20/25 positive pairs. Size 64 is
+   protected by the same 2% regression bound.
+2. Memory, five pairs, all 16/64/256 retained and peak measurements, unchanged
+   function/code/async-slot identity counts and one generated globals namespace.
+3. All 41 remaining timing cells, 25 pairs; every workload protected by 2%.
+4. All eight startup totals, the same fixed adjacent-pair collection and means;
+   every total protected by 2% to preserve accepted startup behavior.
+
+Failure of the primary rejects immediately. For protected flags, allow exactly
+one focused confirmation wave after initially viable phases, in timing, memory,
+startup order. Use 25 timing pairs for flagged cells; five memory pairs retaining
+all sizes/metrics with only flags determining confirmation; five startup groups
+of five adjacent pairs for flagged totals. Both H/P at least -2% pass, both below
+-2% reject, a split defers. Stop on definitive rejection. No pooling, rounding,
+exclusions, second wave or extensions. Budget each timing series at 60 minutes
+and startup/memory at 30; child timeouts and owned-group cleanup remain bounded.
+
+The same Apple M3 Pro/CPython 3.14.6, pinned installed/minimal environments,
+uv.lock and AC/low-power=1 conditions apply. Fixed official cache directory:
+`benchmark-results/campaign-2026-09-05/h010-bytecode`. Use archived
+`run_h010_series.py.txt` with the same explicit subject/executable/checkpoint
+arguments as H004-R1, unique output directories, the H010 17/2/41 selections for
+timing, and only the frozen providers patch for A/B. Every exact argv/input and
+power/cache state is retained. Official runs never use smoke mode.
+
+Accept only after independent fairness/semantic reviews, all protected checks,
+full lint/types/API and 100% coverage, Python 3.10 and free-threaded verification,
+and final FastAPI E2E. Otherwise reverse only the exact candidate patch and
+verify the clean accepted source. No H010 screening number is an accepted gain.
+
+H010 instrumentation validation: the frozen controller SHA-256 is
+`405b64730781793f0e7c70bfe4107d84adc9fb6d4b156f7e06a725398df354b0`.
+Startup/timing/memory ownership smokes validated 24/11/11 observations and
+16/2/2 role blocks, including adjacent work/base startup order and hash-verified
+cache sidecars. Intentional SIGTERM during a patched memory child proved exact
+source restoration and group cleanup using the bounded active-child journal.
+All are operational only. Independent reviews found no remaining controller or
+workload blocker. The journal includes argv, so its size is bounded by the
+selected workload count; it does not grow with observation history.
+
+The first workload implementation exposed typing/narrowing and constant-getattr
+lint issues; these were corrected before freezing or official measurements.
+Both original and final operational artifacts remain distinguishable in the
+archive. Final settings match the frozen catalog. `make lint` passes (190 typed
+files), `make test` passes 1,170 tests with 93 skips and 100% coverage, and all
+three new workloads pass disabled-mode correctness on Python 3.10.19 and
+3.14.6 free-threaded. The final exact staged-source FastAPI export passes all
+five E2E tests. Stop Docker before official measurements. No runtime candidate
+is included in this instrumentation checkpoint.
