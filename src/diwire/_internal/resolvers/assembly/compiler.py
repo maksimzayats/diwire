@@ -1790,7 +1790,22 @@ class ResolversAssemblyCompiler:
                 ],
             )
 
-        body.append(ast.Return(value=ast.Await(value=call) if is_async else call))
+        if is_async and not workflow.requires_async:
+            body.append(
+                ast.Return(
+                    value=ast.Call(
+                        func=ast.Attribute(
+                            value=ast.Name(id="self", ctx=ast.Load()),
+                            attr=f"resolve_{workflow.slot}",
+                            ctx=ast.Load(),
+                        ),
+                        args=[],
+                        keywords=[],
+                    ),
+                ),
+            )
+        else:
+            body.append(ast.Return(value=ast.Await(value=call) if is_async else call))
         return _compile_function(
             name=method_name,
             arguments=arguments,

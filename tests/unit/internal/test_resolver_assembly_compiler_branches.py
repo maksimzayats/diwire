@@ -885,6 +885,62 @@ async def test_build_local_value_async_additional_paths() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("is_cached", [False, True])
+async def test_async_sync_workflow_preserves_lazy_dynamic_delegation_and_cache(
+    *,
+    is_cached: bool,
+) -> None:
+    root_scope = _scope_plan(level=Scope.APP.level, name="app")
+    workflow = _workflow_plan(slot=1, is_cached=is_cached)
+    runtime = _runtime(scopes=(root_scope,), workflows=(workflow,))
+    calls: list[int] = []
+
+    def first_sync_slot() -> int:
+        calls.append(1)
+        return 11
+
+    method = compiler_module.ResolversAssemblyCompiler()._compile_slot_method(
+        runtime=runtime,
+        workflow=workflow,
+        class_plan=root_scope,
+        generated_globals={
+            "_MISSING_CACHE": compiler_module._MISSING_CACHE,
+            "_async_slot_1": compiler_module._build_async_slot_impl(workflow=workflow),
+        },
+        is_async=True,
+    )
+    resolver_type = type(
+        "SyncWorkflowResolver",
+        (),
+        {"_runtime": runtime, "_class_plan": root_scope, "aresolve_1": method},
+    )
+    resolver = resolver_type()
+    resolver.resolve_1 = first_sync_slot
+    resolver._cache_1 = compiler_module._MISSING_CACHE
+    pending = resolver.aresolve_1()
+    assert calls == []
+    assert await pending == 11
+    assert calls == [1]
+
+    resolver.resolve_1 = lambda: 22
+    assert await resolver.aresolve_1() == 22
+    resolver._cache_1 = 33
+    assert await resolver.aresolve_1() == (33 if is_cached else 22)
+
+
+@pytest.mark.asyncio
+async def test_async_slot_helper_delegates_sync_workflow_to_current_sync_slot() -> None:
+    root_scope = _scope_plan(level=Scope.APP.level, name="app")
+    workflow = _workflow_plan(slot=1, is_cached=False)
+    runtime = _runtime(scopes=(root_scope,), workflows=(workflow,))
+    resolver_type = type("SyncHelperResolver", (), {"_runtime": runtime, "_class_plan": root_scope})
+    resolver = resolver_type()
+    resolver.resolve_1 = lambda: 42
+
+    assert await compiler_module._build_async_slot_impl(workflow=workflow)(resolver) == 42
+
+
+@pytest.mark.asyncio
 async def test_async_slot_impl_uncovered_branches() -> None:
     root_scope = _scope_plan(level=1, name="app")
     request_scope = _scope_plan(level=3, name="request")
