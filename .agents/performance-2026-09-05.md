@@ -248,3 +248,95 @@ The free-threaded run explicitly reports the GIL disabled. The final
 `make test-e2e-fastapi` gate passed all five tests against a clean export of the
 exact staged candidate, using the temporary anonymous Docker configuration.
 Compose removed its containers and network. H002 is accepted.
+
+### Hypothesis 003: emit generic slot wrappers from source
+
+Baseline checkpoint: `0196cd264fb1256d8f7788936b8b37ba63693a50`, with the full
+remote Python 3.10-3.15/free-threaded matrix, integrations and docs green.
+The machine changed to AC power with low-power mode 1 before this experiment.
+H001/H002 battery timings remain historical evidence, not pooled observations.
+Five fresh alternating A/A pairs across all 29 workloads are retained in
+`h003-calibration-aa`; five separate allocation A/A pairs in
+`h003-calibration-memory`. Cold-compilation headline/paired changes were
+-0.50%/-0.50% at 16, +0.40%/+0.66% at 64, and +0.30%/+0.30% at 256 providers.
+Steady A/A boundary noise included mixed async -2.00%/-2.09% and async resolution
+of sync transients -1.92%/-2.11%; keep bounded confirmations for either-metric
+flags. Allocation metrics were identical at 64/256; 16-provider median retained
+bytes differed by 55 bytes (0.020%), with raw retained variation up to 110 bytes
+and peak variation up to 55 bytes. No observations were removed.
+
+New ignored runner versions derive the active low-power setting, snapshot before
+and after each run, reject unknown sources, and stop on within-run or between-run
+power transitions. Original runner versions remain alongside their old evidence.
+All H003 timing A/A starting snapshots and observed end state were AC/low-power 1;
+subsequent runs use the strengthened runner. Harness and target commands are
+otherwise unchanged. Docker is stopped before timings.
+
+Profile: three separate 256-provider compiles at the accepted checkpoint spent
+0.294 s of 1.124 s instrumented time in `_compile_slot_method`, including 0.100 s
+in existing sync specialization. AST location walking across the compiler used
+0.690 s. These instrumented values locate cost; they are not benchmark results.
+The profile and script are retained as `h003-baseline-profile.*` and
+`profile_h003_baseline.py.txt` in the artifact directory.
+
+Hypothesis: generic slot wrappers allocate Python AST objects and walk their
+locations despite emitting only a cache precheck and a simple return.
+Change: emit the same generic wrapper through the existing source compiler;
+leave sync specialization, helper selection, namespace and dispatch unchanged.
+Target: cold-compilation throughput at BOTH 64 and 256 providers, expected >5%.
+Risks: source location changes can split a fused cached-load instruction on
+Python 3.14; protect all warm async caches, cache precedence, coroutine laziness,
+dynamic slot replacement, transitive async requirements, locks and cleanup.
+Independent compile-only review of nine representative wrappers found matching
+arguments, flags, constants, names, stack requirements and globals; executable
+bytecode differs only in current-owner cached wrappers and related jump offsets.
+Accept: >=5% headline AND paired median throughput gain at BOTH target sizes,
+at least 4/5 paired wins each, all correctness/review gates, unchanged generated
+function counts, and no confirmed >2% loss in any of the 26 steady workloads,
+16-provider compile throughput, or peak/retained memory at any size.
+Run five focused compilation pairs first, then five pairs of the 26 steady
+workloads and five separate memory pairs. Any protected flag in headline OR
+paired median triggers five focused confirmation pairs; permit at most one
+additional five-pair extension for genuine boundary ambiguity.
+Reject: semantic/API change, insufficient target gain, confirmed protected loss,
+or unresolved confirmation. Reverse only the saved experiment patch on rejection.
+
+H003 preliminary results: 64-provider compilation throughput +7.43% headline/
++7.24% paired and 256-provider +6.98%/+7.50%, all 5/5 wins. Retained memory rose
+0.26%/0.34%/0.43% at 16/64/256 providers, with peak increases at most 0.10% and
+unchanged generated-function counts. Focused tests passed 213 cases and semantic
+review found no issues. These are provisional observations, not acceptance.
+
+The steady series was paused during pair 02 after discovering that existing warm
+async caches are root-owned: dispatch returns before the changed generic slot
+cache prefix, and root slots can also be replaced after warming. Request lifecycle
+timings only measured first use. Canonical sync benchmarks use no locking and
+therefore compile specialized slots. The existing guards did not measure the
+source-location instruction change on a warm generic cache hit.
+
+Reversed only `h003-candidate.patch`, verified the complete source/test diff against
+`0196cd2` was empty, and reran 201 focused checkpoint tests successfully. The ledger
+is the only retained tracked difference before extending measurement. All 44
+original raw artifacts (including the interrupted partial steady run), summaries,
+power metadata and the parked candidate patch are retained in
+`performance-evidence/2026-09-05/h003-pre-guard.json.gz`; none were selectively
+removed. Do not pool these observations with the forthcoming expanded rebaseline.
+
+### Measurement extension: warm request-owned generic caches
+
+Added four cases in `tests/performance/test_cached_scope_workloads.py`: public
+request-scoped async resolution of sync/async/suspending providers and synchronous
+resolution with a thread-safe registration that uses the generic slot path. One
+scope stays open and warm throughout timing. Provider construction counts remain
+one through timing and become two in a subsequent scope; identity checks and
+scope/loop teardown are outside timing. This measures warmed cache access, not
+lock acquisition or contention. Async results use 1,000-operation batches; the
+sync case uses one resolution per callback. Normalize from `operations_per_batch`
+(default one), not directory or filename.
+
+Independent measurement/lifecycle review confirmed that these cases reach the
+previously unmeasured generic cache-hit prefix. Four executable benchmark checks
+pass, as do `make lint` and `make test`: 1,123 passed, 81 skipped, 100% coverage.
+The final `make test-e2e-fastapi` gate passed all five tests in the exact staged
+source export. No runtime optimization is included in this measurement checkpoint;
+H003 will resume from it with unchanged thresholds.
