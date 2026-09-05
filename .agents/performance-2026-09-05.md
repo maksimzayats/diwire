@@ -340,3 +340,26 @@ pass, as do `make lint` and `make test`: 1,123 passed, 81 skipped, 100% coverage
 The final `make test-e2e-fastapi` gate passed all five tests in the exact staged
 source export. No runtime optimization is included in this measurement checkpoint;
 H003 will resume from it with unchanged thresholds.
+
+### Measurement adjustment: warm synchronous cache duration
+
+Expanded five-pair A/A at `42aeed8` covered the four new guards and three cold
+sizes, with a separate five-pair memory calibration. All 20 raw runs and summaries
+are retained in `performance-evidence/2026-09-05/h003-cache-calibration.json.gz`.
+Cold headline/paired medians remained within 0.80%; async guards remained within
+1.95%. The synchronous warm guard had 2.61%/6.32% baseline/candidate CV and paired
+errors up to 9.38% despite identical code. Its measured rounds lasted only
+9.2-10.8 ms. The first two slower candidate processes were consistently slower
+through all rounds, so this is not merely one removable outlier.
+
+Independent review recommends one measurement-only change: increase that guard
+from 100,000 to 1,000,000 iterations, retaining three warmups, five rounds and the
+2% regression boundary. Run one fixed five-pair A/A calibration before restoring
+the runtime candidate. If comparable instability persists, mark this guard
+unresolved and improve conditions or defer H003; do not repeatedly adjust or
+sample until a favorable result appears. Do not pool observations from different
+harness versions. No runtime change is included in this adjustment.
+
+Validation: `make lint`, four executable benchmark checks, and `make test` pass
+(1,123 passed, 81 skipped, 100% coverage). The final `make test-e2e-fastapi` gate
+passes all five tests from an exact staged-source export.

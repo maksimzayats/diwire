@@ -86,7 +86,7 @@ def test_benchmark_diwire_resolve_warm_request_cache_with_thread_lock(benchmark:
             def resolve() -> None:
                 scope.resolve(_ScopedService)
 
-            run_benchmark(benchmark, resolve)
+            run_benchmark(benchmark, resolve, iterations=1_000_000)
             assert calls == 1
             assert first is scope.resolve(_ScopedService)
 
