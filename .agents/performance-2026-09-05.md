@@ -1345,3 +1345,66 @@ three new workloads pass disabled-mode correctness on Python 3.10.19 and
 3.14.6 free-threaded. The final exact staged-source FastAPI export passes all
 five E2E tests. Stop Docker before official measurements. No runtime candidate
 is included in this instrumentation checkpoint.
+
+### H010 result: defer at the first calibration gate and end hypothesis work
+
+The one startup A/A at `9be5102907d882ab99f17c6ff72e0ec72c52eea0` retained all
+400 timed children and eight warmups, grouped through the frozen 400-role-block
+adjacent schedule into five means per role/cell. Seven totals pass. Absent-package
+plain autoregistration fails with headline -1.9177785710838169% and paired
+-2.192856096791207%, exceeding the fixed 2% absolute bound in the paired measure.
+The largest other headline/paired effects are installed explicit registration
+at -0.9010651585106277%/-0.8601987346174234%. Source, runtime, prepared-cache,
+power and cleanup checks passed, with exact accepted-source restoration.
+
+Defer H010 immediately. No timing/memory calibration, runtime candidate, A/B,
+confirmation, filtered observation, extension or retry follows. The earlier
+5.49% prototype screen remains uncalibrated screening evidence, not an accepted
+improvement. Preserve the failed first gate in `h010-calibration.json.gz`. This
+ends hypothesis work under the user's wrap-up request; keep only the four
+previously accepted runtime changes and the reproducible measurement tooling.
+
+### Frozen final cumulative canonical readout
+
+Run a descriptive comparison of initial revision
+`5b73a0d90b0f22e3d7004f08456f2b2ab8b5ac2a` against final runtime checkpoint
+`9be5102907d882ab99f17c6ff72e0ec72c52eea0`. Later wrap-up commits may add only
+reports/evidence; their library source must remain identical to this checkpoint.
+Use the clean, owned `diwire-perf-base` checkout as the sole subject path,
+switching between these detached revisions only after owned-child cleanup.
+Verify clean state, exact revision and input hashes before each role. Restore
+its original clean `db6b866f6f98e3f4bcfc1f0901a471c2b123bbd9` revision afterward.
+The active work checkout and original main checkout remain unchanged by the run.
+
+The canonical 17 workload files, settings, lock, pyproject and reporting helper
+are identical across initial/final revisions. Use one pinned CPython 3.14.6
+interpreter, fixed AC/low-power=1 conditions and a fixed external bytecode cache.
+Force matching source bytecode before each revision's untimed preflight/warmup
+and every measured role; timed bytecode writes remain disabled. Freeze external
+controller/selection/validator inputs too. Keep bounded group cleanup, a small
+active-child journal, verified cache/environment sidecars, and all raw rounds.
+
+After successful operational and interruption QA, run exactly 25 alternating
+pairs of all 17 canonical DIWire cells. Report each headline/paired effect and
+the descriptive geometric mean. This is a cumulative final readout, without
+new calibration, acceptance thresholds, confirmations, exclusions, extensions,
+or optimization follow-up. Earlier hypothesis experiments remain the acceptance
+evidence. Disclose unexpected results when wrapping up. Final lint/tests and
+FastAPI verification follow, then commit/push all remaining reports/evidence
+and update the PR. Do not open another hypothesis.
+
+Independent audit reproduced H010's complete schedule, five-group arithmetic,
+raw hashes and the sole failed total. No later H010 phase exists. The clean
+accepted library remains unchanged. `make lint` and `make test` pass again
+(1,170 tests, 93 skips, 100% coverage).
+
+Final-readout operational QA completed one pair of all 17 cells with exact
+initial/final source fingerprints and identical canonical inputs; source import
+preflights, raw validators and sidecar hashes passed. A separate intentional
+SIGTERM during a final-revision benchmark child verified owned-group removal,
+restoration to the original detached revision and equality of every tracked
+file's SHA-256 inventory. These operational runs are excluded from the final
+readout. The controller also freezes its external helper/validator hashes and
+force-compiles both untimed warmups. Final readout uses the frozen controller
+and cell selection archived in `final-instrumentation.json.gz`, followed by
+exactly one 25-pair official series with no retries or additional hypotheses.
