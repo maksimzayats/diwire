@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
 import signal
 import subprocess
 import sys
@@ -285,6 +286,7 @@ def test_failed_calibration_stops_without_comparisons(
     assert calls == ["timing-aa"]
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Requires POSIX process groups and signals")
 def test_normal_exit_cleans_up_surviving_descendant(tmp_path: Path) -> None:
     experiment = _experiment(tmp_path)
     entry: JsonObject = {}
@@ -295,6 +297,7 @@ def test_normal_exit_cleans_up_surviving_descendant(tmp_path: Path) -> None:
     assert entry["child_cleanup_verified"]
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Requires POSIX process groups and signals")
 def test_launch_interrupt_is_deferred_until_child_is_owned(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -326,6 +329,7 @@ def test_launch_interrupt_is_deferred_until_child_is_owned(
     assert experiment.restoration_allowed
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Requires POSIX process groups and signals")
 def test_initialization_failure_is_persisted(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -391,6 +395,7 @@ def test_validators_accept_archived_raw_rounds_and_memory_identities() -> None:
             assert len(validate_memory(run["data"])) == 6
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Requires POSIX process groups and signals")
 def test_restoration_failure_keeps_primary_error_and_cleanup_evidence(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
