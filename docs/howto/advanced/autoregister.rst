@@ -38,6 +38,10 @@ Pydantic settings auto-registration
 If ``pydantic-settings`` is installed, subclasses of ``BaseSettings`` are auto-registered as
 root-scoped ``Lifetime.SCOPED`` values (singleton behavior) via a no-argument factory.
 
+The optional integration loads when auto-registration first inspects a missing dependency,
+including an ordinary class. Importing ``diwire`` and using explicit registrations in strict
+mode leave this integration unloaded.
+
 See :doc:`../../core/integrations` and :doc:`../examples/pydantic-settings`.
 
 Scope-safety

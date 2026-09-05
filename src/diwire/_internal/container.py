@@ -28,7 +28,6 @@ from diwire._internal.injection import (
     InjectedCallableInspector,
     InjectedParameter,
 )
-from diwire._internal.integrations.pydantic_settings import is_pydantic_settings_subclass
 from diwire._internal.lock_mode import LockMode
 from diwire._internal.markers import (
     Component,
@@ -84,6 +83,20 @@ InjectableF = TypeVar("InjectableF", bound=Callable[..., Any])
 
 logger = logging.getLogger(__name__)
 _MISSING_CLOSED_GENERIC_INJECTION = object()
+
+
+def is_pydantic_settings_subclass(candidate: object) -> bool:
+    """Load optional settings integration when autoregistration needs inspection.
+
+    Args:
+        candidate: Object to inspect for supported settings inheritance.
+
+    """
+    from diwire._internal.integrations.pydantic_settings import (  # noqa: PLC0415
+        is_pydantic_settings_subclass as is_settings_subclass,
+    )
+
+    return is_settings_subclass(candidate)
 
 
 class Container:

@@ -984,3 +984,70 @@ consumer/closed-generic pairs would perform 131 such counts, currently creating
 262 lists/tuples and copying 25,216 references. These are screening counts, not
 measured savings. Investigate after H007 with a dedicated public first-compile
 workload and existing convergence/rollback safeguards; no patch is written yet.
+
+### H007 result: startup gains pass the full protection protocol
+
+The runtime candidate replaces the eager optional-integration import with the
+preregistered typed local-import facade, preserving the container-level symbol
+and call site. The inline PLC0415 exception is limited to that import: importing
+Pydantic only when inspection is needed is the purpose of this change. No cache,
+rebinding, eligibility shortcut, public signature change or extra lock was added.
+The measured patch SHA-256 is
+`3a23d3af99342ea755266ca3e1aa2669dc79e5a17b31af37d49015a1ea6c5caf`.
+
+All comparisons use checkpoint `257d42523a8959c151c40d7baa6b995d9a2755dc`,
+the frozen same-path warm-bytecode protocol and exact patch restoration. Startup
+A/B retained 400 timed observations. With optional settings packages installed:
+
+| Primary | Baseline median | Candidate median | Headline reduction | Paired reduction | Paired wins |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| DIWire import | 127.805 ms | 52.916 ms | 58.5967% | 58.3371% | 5/5 |
+| Explicit registration and first resolution | 131.417 ms | 55.909 ms | 57.4569% | 57.0559% | 5/5 |
+
+Both exceed the 25% primary requirement. These measurements exclude interpreter
+launch and concern an environment with Pydantic/settings installed. They do not
+claim comparable savings when those packages are absent or when autoregistration
+immediately needs the integration.
+
+The initial installed-environment plain-autoregistration total flagged a
+-2.0763015559769116% headline effect with -1.9339160066407235% paired. Retain
+that failure to pass the initial protection screen. After the full timing A/B,
+the single allowed dedicated confirmation measured 132.057 ms versus 132.453 ms,
+or **-0.3001422115332275% headline / -0.041692236037094155% paired**. Both meet
+the 2% bound. Every one of its 50 timed observations remains included, including
+a pair with -8.6784% effect. No initial observations were pooled with confirmation,
+and there was no extension or retry. The other seven startup totals passed their
+initial protection screen.
+
+The full 25-pair timing A/B retained all 50 processes and all 40 workloads.
+Every cell passed both protection metrics, so no timing confirmation was needed.
+The worst headline/paired regression was warm plain recursive registration at
+**-0.8367491366889523% / -1.22988946587963%**. The 17 canonical sync workloads'
+headline geometric mean was +0.14385071260696325%, a control summary only.
+Cold-compile 16/64/256 headline effects were +0.2024%/+0.1675%/+0.2104%.
+Do not describe this as a steady-resolution improvement; the supported gain is
+startup latency while protected workloads remain within the accepted budget.
+
+Source, runtime, dependency, bytecode-cache, power and cleanup checks all passed.
+`performance-evidence/2026-09-05/h007.json.gz` preserves 1,660 files containing
+the full A/B and confirmation evidence, frozen runner, patch, semantic tests,
+runtime validation and test logs. Calibration remains in its separate archive.
+Only the container source changed in measured role transitions.
+
+Eight fresh-process regressions cover strict explicit registration without
+optional imports, absent dependencies, both real-settings import orders and
+root-factory identity, concurrent first use, the existing monkeypatch target,
+and propagation/retry after an import failure. Independent lifecycle review
+approved the final diff. The exact measured runtime/test source passed lint and
+all 1,170 tests with 90 skips and 100% coverage on Python 3.10.19, Python 3.14.6
+and Python 3.14.6 free-threaded (GIL disabled after imports). The first full test
+run exposed missing argument documentation on the helper; that was fixed before
+freezing the measured patch. Documentation explains when the integration loads.
+
+Final independent measurement audit reproduced all 2,000 timing cell measurements,
+13,750 rounds, startup confirmation and archive hashes. The final staged-source
+`make lint` and `make test` pass (1,170 tests, 90 skips, 100% coverage), followed
+by **all five passing `make test-e2e-fastapi` tests** as the final implementation
+verification. Accept H007. The startup import deferral, semantic regressions and
+documentation are committed together; no protected result was rounded into a
+pass or removed. The draft PR remains open for the continuing campaign.
