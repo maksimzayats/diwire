@@ -363,3 +363,121 @@ harness versions. No runtime change is included in this adjustment.
 Validation: `make lint`, four executable benchmark checks, and `make test` pass
 (1,123 passed, 81 skipped, 100% coverage). The final `make test-e2e-fastapi` gate
 passes all five tests from an exact staged-source export.
+
+### Measurement diagnosis: remove the checkout-role confound
+
+The fixed A/A at `db6b866` (`h003-duration-calibration-aa`) stabilized the longer
+synchronous guard: +0.68% headline/+0.14% paired, CV 1.19%/1.55%. However, the warm
+suspending-provider guard measured +4.10%/+3.50%, with all five pairs positive.
+Its previous expanded A/A was also positive in all five pairs (+1.62%/+1.95%).
+Whole rounds differ consistently; these are not removable isolated stalls.
+H003 remains unresolved under the two-checkout protocol. This suggests a
+role-associated confound, but does not establish checkout layout as the cause.
+
+Independent review supports one fixed diagnostic redesign: use the same checkout
+and virtual environment for both fresh-process A/A roles, neutral sequential raw
+artifact names, and an external role/order manifest. Retain all workloads,
+iterations, warmups, rounds and thresholds. Isolate bytecode caches in one empty
+series-wide directory with writes disabled, so later same-path patch transitions
+cannot load stale timestamp-based caches. Record this environment explicitly.
+Run one five-pair A/A series of the three cold sizes and four warm guards. If ANY
+warm guard has headline OR paired bias beyond 2%, defer H003 rather than further
+tuning. If it passes, exact-patch transitions between fresh same-path A/B processes
+can remove this checkout confound by design; no calibration offset is subtracted.
+
+The fixed same-path A/A (`h003-singlepath-calibration-aa`) passes that rule.
+Warm async headline/paired medians are -0.06%/-0.25% (async), -0.49%/-0.34%
+(suspending), +0.24%/+0.23% (sync), and -1.76%/-1.30% (THREAD sync). All raw
+inputs match pristine `db6b866`; the independent audit verified all metadata,
+round counts and manifest entries. Visible stalls remain in the evidence:
+run 010 suspending rounds were 258/317/205/160/160 ns per operation (pair effect
+-27.58%); run 008 cold-16 included a 32.89 ms round; run 006 cold-64 included
+57.33/88.87 ms rounds. No observations were removed, no offset subtracted, and
+no calibration extension used. This validates the revised symmetric protocol for
+candidate testing; it does not prove checkout identity caused the earlier bias.
+
+H003 resumes from `db6b866` with the exact parked compiler patch. Acceptance
+thresholds remain unchanged: >=5% headline AND paired throughput gains at BOTH
+64 and 256 providers, >=4/5 wins at each, correctness/review gates, unchanged
+generated-function counts, and no confirmed >2% protected regression. Protection
+now includes all 30 steady workloads (the original 26 plus four new warm guards),
+cold-16, and peak/retained memory at all sizes. Run fresh five-pair same-path A/B
+for cold compilation plus the four warm guards first, then separate allocation
+and broad steady series. Flagged protections retain the bounded five-pair
+confirmation and at most one genuine-boundary five-pair extension.
+
+The runner installs only the exact owned compiler patch before candidate children,
+verifies expected source and unchanged other inputs, waits for child completion,
+and reverses it after every process and in final cleanup. Neutral artifacts,
+manifest mapping, role-specific tree hashes and an empty bytecode cache preserve
+the new protocol. No provisional results from previous protocols are pooled.
+
+Candidate focused correctness checks pass 217 tests. Runner validation includes
+controlled SIGTERM during a candidate child. An initial check exposed Darwin's
+EPERM response when probing an exited process group; process-status checks now
+distinguish live members from zombies and verify completion after escalation.
+The final interruption check exits 130, leaves both runner/group absent, and
+restores an empty diff against HEAD for all source/tests/configuration. Patch
+bytes are frozen, staged and unstaged inputs are checked, and unresolved live
+child cleanup prevents source reversal until the owner can recover safely.
+Interruption-check artifacts are operational validation, not timing evidence.
+
+### H003 result: accept source emission for generic slot wrappers
+
+The fixed five-pair same-path experiment clears both primary thresholds. Cold
+compilation at 64 providers improves from 47.270 to 44.345 ms (+6.60% throughput,
++6.90% paired median), and at 256 from 183.191 to 171.082 ms (+7.08%, +6.91%).
+Both win all five pairs. Cold-16 improves +5.63%/+5.77% as a secondary result.
+The four warmed generic cache guards remain within the regression budget.
+
+Retained traced memory increases by 720/2,880/13,890 bytes at 16/64/256 providers
+(+0.26%/+0.34%/+0.43%). Peak changes are -0.65%/-0.06%/+0.10%. Generated function
+counts remain 215/695/2,615 and each compilation still has one globals namespace.
+These small memory costs are within the declared 2% protection boundary.
+
+The broad 30-workload series has a -0.50% geometric-mean control result for the
+original 17 synchronous cases; this is not a runtime speedup claim. Three cases
+crossed the headline or paired regression trigger, so the preregistered five-pair
+confirmation included them and two borderline controls. Headline/paired effects:
+
+| Protected workload | Initial headline / paired | Confirmation headline / paired |
+| --- | --- | --- |
+| Sync transient | -1.87% / -2.42% | -0.14% / -0.05% |
+| Async class scope lifecycle | -3.26% / -2.50% | +1.05% / +1.72% |
+| Warm request async provider | -2.07% / -2.56% | -0.99% / +0.32% |
+| Wide transient graph | -1.93% / -1.01% | +0.01% / -0.16% |
+| App-scoped async provider | -1.94% / -1.14% | -0.82% / -0.96% |
+
+No confirmation exceeds 2%; no extension or sample exclusion was used. The
+largest remaining broad paired loss is 1.62% for async resolution of synchronous
+transients. Independent semantic review found no API, cache, locking or cleanup
+change, and the independent measurement audit accepts the performance result.
+
+Authoritative commands, run from the candidate checkout at `db6b866`, use
+`A=benchmark-results/campaign-2026-09-05` and the archived runner source:
+
+```sh
+.venv/bin/python "$A/run_single_path_ab.py.txt" h003-singlepath-focused-ab --patch "$A/h003-candidate.patch"
+.venv/bin/python "$A/run_single_path_ab.py.txt" h003-singlepath-memory-ab --kind memory --patch "$A/h003-candidate.patch"
+.venv/bin/python "$A/run_single_path_ab.py.txt" h003-singlepath-steady-ab --select 'not cold_compile' --patch "$A/h003-candidate.patch"
+.venv/bin/python "$A/run_single_path_ab.py.txt" h003-singlepath-protected-confirm --select 'resolve_transient or resolve_wide_transient_graph or (aresolve_scope_lifecycle and class) or (aresolve_warm_request_cache and async) or (aresolve_provider and SCOPED and async)' --patch "$A/h003-candidate.patch"
+```
+
+Environment: CPython 3.14.6 with GIL, M3 Pro (12 CPUs, 36 GiB), macOS 26.5.2,
+AC power and low-power mode 1, normal desktop background activity. Locked dev/docs
+dependencies, lock SHA-256
+`e47db193cf305a0b72851e7b57fa4d908d1ba427c5964b75715233f0ee60f136`.
+The same-path protocol uses `PYTHONHASHSEED=0`, one empty series bytecode cache
+and `PYTHONDONTWRITEBYTECODE=1`; it is not pooled with earlier protocols or power
+states. `performance-evidence/2026-09-05/h003.json.gz` preserves 60 raw runs: ten
+diagnostic two-path A/A runs separately labelled, and 50 authoritative same-path
+runs (A/A, focused A/B, memory, broad and confirmation). It also includes full
+runner/summarizer sources, exact patch, raw hashes, manifests and summaries.
+
+Validation: 217 focused tests; `UV_NO_SYNC=1 make lint` passes Ruff and strict
+mypy; `UV_NO_SYNC=1 make test` passes 1,123 tests with 81 skips and 100% coverage.
+The same full suite passes on Python 3.10 and free-threaded 3.14 with identical
+counts and 100% coverage; `sys._is_gil_enabled()` is false on the latter. Public
+API signatures pass on the maintained 3.14 runtime. The final
+`make test-e2e-fastapi` gate passes all five tests from an exact staged-source
+export. H003 is accepted; the next hypothesis starts from this green checkpoint.
