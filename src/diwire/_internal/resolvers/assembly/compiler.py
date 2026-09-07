@@ -1751,50 +1751,26 @@ class ResolversAssemblyCompiler:
                 return specialized_sync
 
         method_name = f"aresolve_{workflow.slot}" if is_async else f"resolve_{workflow.slot}"
-        global_name = f"_async_slot_{workflow.slot}" if is_async else f"_sync_slot_{workflow.slot}"
-        arguments = ast.arguments(
-            posonlyargs=[],
-            args=[ast.arg(arg="self")],
-            vararg=None,
-            kwonlyargs=[],
-            kw_defaults=[],
-            kwarg=None,
-            defaults=[],
-        )
-        call = ast.Call(
-            func=ast.Name(id=global_name, ctx=ast.Load()),
-            args=[ast.Name(id="self", ctx=ast.Load())],
-            keywords=[],
-        )
-        body: list[ast.stmt] = []
+        body_lines: list[str] = []
         if workflow.is_cached and workflow.cache_owner_scope_level == class_plan.scope_level:
-            body.extend(
+            body_lines.extend(
                 [
-                    ast.Assign(
-                        targets=[ast.Name(id="cached_value", ctx=ast.Store())],
-                        value=ast.Attribute(
-                            value=ast.Name(id="self", ctx=ast.Load()),
-                            attr=f"_cache_{workflow.slot}",
-                            ctx=ast.Load(),
-                        ),
-                    ),
-                    ast.If(
-                        test=ast.Compare(
-                            left=ast.Name(id="cached_value", ctx=ast.Load()),
-                            ops=[ast.IsNot()],
-                            comparators=[ast.Name(id="_MISSING_CACHE", ctx=ast.Load())],
-                        ),
-                        body=[ast.Return(value=ast.Name(id="cached_value", ctx=ast.Load()))],
-                        orelse=[],
-                    ),
+                    f"cached_value = self._cache_{workflow.slot}",
+                    "if cached_value is not _MISSING_CACHE:",
+                    "    return cached_value",
                 ],
             )
 
-        body.append(ast.Return(value=ast.Await(value=call) if is_async else call))
-        return _compile_function(
+        if is_async and not workflow.requires_async:
+            body_lines.append(f"return self.resolve_{workflow.slot}()")
+        elif is_async:
+            body_lines.append(f"return await _async_slot_{workflow.slot}(self)")
+        else:
+            body_lines.append(f"return _sync_slot_{workflow.slot}(self)")
+        return _compile_function_from_source(
             name=method_name,
-            arguments=arguments,
-            body=body,
+            arg_names=("self",),
+            body_lines=body_lines,
             generated_globals=generated_globals,
             is_async=is_async,
         )
@@ -2282,7 +2258,10 @@ def _compile_function(
     ast.fix_missing_locations(module)
     module_code = compile(module, filename=_FILENAME, mode="exec")
     function_code = _extract_function_code(module_code=module_code, name=name)
-    function = types.FunctionType(function_code, dict(generated_globals), name=name)
+    function_globals = (
+        generated_globals if type(generated_globals) is dict else dict(generated_globals)
+    )
+    function = types.FunctionType(function_code, function_globals, name=name)
     if defaults:
         function.__defaults__ = defaults
     if kwonly_defaults is not None:
@@ -2311,7 +2290,10 @@ def _compile_function_from_source(
     source = f"{function_keyword} {name}({signature}):\n{rendered_body}\n"
     module_code = compile(source, filename=_FILENAME, mode="exec")
     function_code = _extract_function_code(module_code=module_code, name=name)
-    function = types.FunctionType(function_code, dict(generated_globals), name=name)
+    function_globals = (
+        generated_globals if type(generated_globals) is dict else dict(generated_globals)
+    )
+    function = types.FunctionType(function_code, function_globals, name=name)
     if defaults:
         function.__defaults__ = defaults
     if kwonly_defaults is not None:

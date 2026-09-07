@@ -2452,6 +2452,53 @@ def test_build_root_resolver_rebinds_globals_for_new_registrations() -> None:
     assert first_resolver.resolve(_Resource) is first
 
 
+def test_compilation_namespaces_keep_old_overlapping_scopes_and_providers_isolated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(ProviderSpec, "SLOT_COUNTER", 0)
+    first_container = Container()
+    first_calls = 0
+
+    def first_factory() -> str:
+        nonlocal first_calls
+        first_calls += 1
+        return "first"
+
+    first_container.add_factory(first_factory, lifetime=Lifetime.TRANSIENT, scope=Scope.REQUEST)
+    compiler = ResolversAssemblyCompiler()
+    first = compiler.build_root_resolver(
+        root_scope=Scope.APP, registrations=first_container._providers_registrations
+    )
+    first_type = type(first)
+    first_globals = cast("Any", first_type.resolve).__globals__
+    assert cast("Any", first_type.aresolve).__globals__ is first_globals
+    assert cast("Any", first_type.enter_scope).__globals__ is first_globals
+    slot = next(iter(first_container._providers_registrations.values())).slot
+    assert getattr(first_type, f"resolve_{slot}").__globals__ is first_globals
+
+    with first.enter_scope(Scope.REQUEST) as occupied:
+        assert occupied.resolve(str) == "first"
+        monkeypatch.setattr(ProviderSpec, "SLOT_COUNTER", 0)
+        second_container = Container()
+        second_container.add_factory(
+            lambda: "second", provides=str, lifetime=Lifetime.TRANSIENT, scope=Scope.REQUEST
+        )
+        second = compiler.build_root_resolver(
+            root_scope=Scope.APP, registrations=second_container._providers_registrations
+        )
+        assert cast("Any", type(second).resolve).__globals__ is not first_globals
+        # An overlapping old scope must use the old namespace's constructor fallback.
+        with first.enter_scope(Scope.REQUEST) as overlapping:
+            assert overlapping is not occupied
+            with second.enter_scope(Scope.REQUEST) as other:
+                assert type(overlapping) is type(occupied)
+                assert type(overlapping) is not type(other)
+                assert overlapping.resolve(str) == "first"
+                assert other.resolve(str) == "second"
+        assert occupied.resolve(str) == "first"
+    assert first_calls == 3
+
+
 def test_scope_chain_transitions_cover_session_request_action_and_step_paths() -> None:
     class _ActionService:
         pass

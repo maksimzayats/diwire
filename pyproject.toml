@@ -89,6 +89,15 @@ build-backend = "hatchling.build"
 [tool.hatch.version]
 source = "uv-dynamic-versioning"
 
+[tool.hatch.build.targets.sdist]
+exclude = ["/.agents/performance-evidence"]
+
+# Retain the small fixtures used by the distributed validator tests and workflow.
+[tool.hatch.build.targets.sdist.force-include]
+".agents/performance-evidence/2026-09-05/h004-calibration.json.gz" = ".agents/performance-evidence/2026-09-05/h004-calibration.json.gz"
+".agents/performance-evidence/2026-09-05/h005-allocation.json.gz" = ".agents/performance-evidence/2026-09-05/h005-allocation.json.gz"
+".agents/performance-evidence/2026-09-05/h005-linux-protocol.json" = ".agents/performance-evidence/2026-09-05/h005-linux-protocol.json"
+
 [tool.uv-dynamic-versioning]
 vcs = "git"
 style = "pep440"

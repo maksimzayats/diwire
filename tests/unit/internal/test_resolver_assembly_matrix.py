@@ -1157,6 +1157,33 @@ def test_assembly_matrix_signature_wiring_for_variadic_parameters(signature_kind
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("lock_mode", [LockMode.NONE, LockMode.THREAD])
+@pytest.mark.parametrize("lifetime", [Lifetime.SCOPED, Lifetime.TRANSIENT])
+async def test_assembly_matrix_async_first_sync_provider_preserves_lifetime_and_scope(
+    lock_mode: LockMode,
+    lifetime: Lifetime,
+) -> None:
+    container = Container(lock_mode=lock_mode)
+    container.add(_MatrixService, lifetime=lifetime, scope=Scope.REQUEST)
+    resolver = container.compile()
+
+    with pytest.raises(DIWireScopeMismatchError):
+        await resolver.aresolve(_MatrixService)
+
+    async with resolver.enter_scope(Scope.REQUEST) as first_scope:
+        first = await first_scope.aresolve(_MatrixService)
+        second = await first_scope.aresolve(_MatrixService)
+        sync_value = first_scope.resolve(_MatrixService)
+        assert isinstance(first, _MatrixService)
+        assert (first is second) is (lifetime is Lifetime.SCOPED)
+        assert (first is sync_value) is (lifetime is Lifetime.SCOPED)
+
+    async with resolver.enter_scope(Scope.REQUEST) as second_scope:
+        third = await second_scope.aresolve(_MatrixService)
+        assert first is not third
+
+
+@pytest.mark.asyncio
 async def test_assembly_matrix_sync_only_graph_has_sync_async_parity() -> None:
     container = Container()
     container.add_factory(
