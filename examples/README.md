@@ -3818,5 +3818,5 @@ uv run pytest tests/examples/test_examples_expected_output.py
 Or run the full suite:
 
 ```bash
-make test
+just test
 ```

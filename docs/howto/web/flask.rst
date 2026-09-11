@@ -109,4 +109,4 @@ Testing
 -------
 
 - In-process tests: use ``app.test_client()`` and call ``add_request_context(container)`` in app setup.
-- End-to-end (Docker Compose): run ``make test-e2e-flask``.
+- End-to-end (Docker Compose): run ``just test-e2e-flask``.

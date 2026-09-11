@@ -49,10 +49,11 @@ In this benchmark suite on CPython ``3.14.6`` (Apple M3 Pro, strict mode):
 - Resolve-only comparisons (scope-capable libraries): diwire reaches up to **3.53×** (``rodi``), **4.42×** (``dishka``), and **4.38×** (``wireup``).
 - Current benchmark totals: **17** full-suite scenarios and **9** resolve-only scenarios.
 
+Install [Just](https://just.systems/man/en/packages.html).
 Set a new, unique artifact directory before each benchmark session, for example
 ``export BENCHMARK_ARTIFACT_DIR="benchmark-results/local-$(date +%Y%m%d-%H%M%S)"``.
-Then run ``make benchmark`` for a quick diwire-only check, ``make benchmark-comparison`` for the
-raw cross-library suite, or ``make benchmark-report`` / ``make benchmark-report-resolve`` for
+Then run ``just benchmark`` for a quick diwire-only check, ``just benchmark-comparison`` for the
+raw cross-library suite, or ``just benchmark-report`` / ``just benchmark-report-resolve`` for
 report artifacts.
 
 ## Quick start (pure Python auto-wiring)

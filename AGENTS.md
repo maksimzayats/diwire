@@ -7,9 +7,9 @@ the current public API.
 ## Quick commands
 
 - Install deps (dev): `uv sync --group dev`
-- Format: `make format`
-- Lint (all): `make lint`
-- Test (all): `make test`
+- Format: `just format`
+- Lint (all): `just lint`
+- Test (all): `just test`
 
 ## Build
 
@@ -26,7 +26,7 @@ the current public API.
 
 ## Tests
 
-- Run all tests (coverage): `make test`
+- Run all tests (coverage): `just test`
 - Run a single test file: `uv run pytest tests/unit/internal/test_container.py`
 - Run a single test: `uv run pytest tests/unit/internal/test_container.py::test_register`
 - Run tests with keyword filter: `uv run pytest -k "dependency" tests/`
@@ -48,7 +48,7 @@ the current public API.
 
 - The section between `<!-- BEGIN: AUTO-GENERATED EXAMPLES -->` and `<!-- END: AUTO-GENERATED EXAMPLES -->` in `examples/README.md` is generated from Python files in `examples/ex_*`.
 - Do not edit that region by hand.
-- Regenerate it with: `uv run python -m tools.generate_examples_readme` or `make examples-readme`.
+- Regenerate it with: `uv run python -m tools.generate_examples_readme` or `just examples-readme`.
 
 ## Style and formatting
 
@@ -114,8 +114,8 @@ the current public API.
 
 - Always ensure linting and type-checking run clean with no errors.
 - Every new change must preserve 100% test coverage.
-- After making changes, always run `make lint` and `make test` and report results.
-- At the very end of implementation, run `make test-e2e-fastapi` as the final verification step and report the result.
+- After making changes, always run `just lint` and `just test` and report results.
+- At the very end of implementation, run `just test-e2e-fastapi` as the final verification step and report the result.
 
 ## Ruff configuration highlights
 
