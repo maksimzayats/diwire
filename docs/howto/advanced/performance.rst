@@ -30,25 +30,25 @@ For fast local diwire-only checks:
 
 .. code-block:: bash
 
-   make benchmark
+   just benchmark
 
 For full cross-library comparison (raw benchmark run):
 
 .. code-block:: bash
 
-   make benchmark-comparison
+   just benchmark-comparison
 
 To reproduce the published comparison artifacts locally:
 
 .. code-block:: bash
 
-   make benchmark-report
+   just benchmark-report
 
 Resolve-only comparison table (scope-capable libraries):
 
 .. code-block:: bash
 
-   make benchmark-report-resolve
+   just benchmark-report-resolve
 
 Benchmarked library versions:
 
@@ -57,7 +57,7 @@ Benchmarked library versions:
 - rodi: ``2.0.8``
 - wireup: ``2.7.0``
 
-Environment for ``make benchmark-report`` (from
+Environment for ``just benchmark-report`` (from
 ``$BENCHMARK_ARTIFACT_DIR/all.json``):
 
 - Python: CPython ``3.14.3``
@@ -184,8 +184,8 @@ Summary (computed from the table above):
 - Speedup over dishka ranges from **2.74×** to **30.58×**.
 - Speedup over wireup ranges from **1.95×** to **4.94×**.
 
-Results vary by environment, Python version, and hardware. Re-run ``make benchmark-comparison`` for raw comparisons
-or ``make benchmark-report`` for generated comparison artifacts on your target runtime before drawing final
+Results vary by environment, Python version, and hardware. Re-run ``just benchmark-comparison`` for raw comparisons
+or ``just benchmark-report`` for generated comparison artifacts on your target runtime before drawing final
 conclusions for production workloads.
 
 Resolve-only comparisons (scope-capable libraries)
