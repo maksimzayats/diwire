@@ -3376,14 +3376,14 @@ wheels = [
 
 [[package]]
 name = "wireup"
-version = "2.12.0"
+version = "2.12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8b/13/45337aac6078b2e800e8ec26b845eb4c4a76eabc243658da89676da6af23/wireup-2.12.0.tar.gz", hash = "sha256:e21bf35356d5c670a66ab4e349fffdf58ce3e272dd233f6085885137315325e9", size = 8773922, upload-time = "2026-07-09T22:23:53.104Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/20/2c/9827a8510bef18947778d9a53b33e0189933dce5c6ab191048b9b57772d5/wireup-2.12.1.tar.gz", hash = "sha256:cd0214da1931e7ef85a9946243888d582a3123a3a9bdd63847f0ae0ca450e73d", size = 8775702, upload-time = "2026-10-07T18:12:42.344Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2f/6b/330fda3bd0378b1e33738b30d47f25fafa9430ab4472ebb307a23f96d959/wireup-2.12.0-py3-none-any.whl", hash = "sha256:6d418626040e92dde7ecec0460d8712b97cf26466a24d962ed6b2e455739094b", size = 62187, upload-time = "2026-07-09T22:23:55.825Z" },
+    { url = "https://files.pythonhosted.org/packages/67/ec/1362f26b84719cf89c0adca3027c0667ea664b6ab32c754e05bff8b31b43/wireup-2.12.1-py3-none-any.whl", hash = "sha256:b510f04d857961d545129865d9749f3535a6abf05ed999fd7b811ae3123b4ebe", size = 62717, upload-time = "2026-10-07T18:12:39.987Z" },
 ]
 
 [[package]]
