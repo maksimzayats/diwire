@@ -38,7 +38,7 @@ def test_examples_readme_is_in_sync_with_generated_region() -> None:
         "examples/README.md is out of sync with example files.\n"
         "Run one of:\n"
         "  uv run python -m tools.generate_examples_readme\n"
-        "  make examples-readme\n\n"
+        "  just examples-readme\n\n"
         f"diff:\n{diff or '<no diff>'}"
     )
     raise AssertionError(msg)

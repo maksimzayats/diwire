@@ -146,4 +146,4 @@ Testing
 - In-process tests: use :class:`litestar.testing.TestClient` with app middleware set to
   ``RequestContextMiddleware()`` and call ``add_request_context(container)``
   during app setup.
-- End-to-end (Docker Compose): run ``make test-e2e-litestar``.
+- End-to-end (Docker Compose): run ``just test-e2e-litestar``.

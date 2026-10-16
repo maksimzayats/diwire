@@ -153,7 +153,7 @@ Testing
 
 - In-process tests: use :class:`fastapi.testclient.TestClient` and make sure your app adds
   ``RequestContextMiddleware`` and calls ``add_request_context(container)`` during setup.
-- End-to-end (Docker Compose): run ``make test-e2e-fastapi`` to start a real Uvicorn server in a
+- End-to-end (Docker Compose): run ``just test-e2e-fastapi`` to start a real Uvicorn server in a
   container and run HTTP + WebSocket assertions against it.
 
 Runnable example
