@@ -94,6 +94,20 @@ class _Box(_IBox[T]):
 
 
 @dataclass
+class _RuntimeBox(_IBox[T]):
+    shared: bytes
+    type: type[T]
+
+
+def _create_runtime_box(shared: bytes, *, type_arg: type[T]) -> _RuntimeBox[T]:
+    return _RuntimeBox(shared=shared, type=type_arg)
+
+
+async def _create_runtime_box_async(shared: bytes, *, type_arg: type[T]) -> _RuntimeBox[T]:
+    return _RuntimeBox(shared=shared, type=type_arg)
+
+
+@dataclass
 class _BoxA(_IBox[T]):
     type: type[T]
 
@@ -311,6 +325,41 @@ def test_materialized_keyword_only_factory_keeps_wrapper_call() -> None:
         f"resolve_{materialized.slot}",
     )
     assert f"_provider_{materialized.slot}" in slot_method.__code__.co_names
+
+
+@pytest.mark.parametrize("is_async", [False, True])
+async def test_materialized_runtime_kwargs_preserve_call_isolation(*, is_async: bool) -> None:
+    container = Container(lock_mode=LockMode.NONE, use_resolver_context=False)
+    shared = b"shared"
+    container.add_instance(shared)
+    factory = _create_runtime_box_async if is_async else _create_runtime_box
+    container.add_factory(factory, provides=_IBox, lifetime=Lifetime.TRANSIENT)
+
+    async with container:
+        first = await container.aresolve(_IBox[int])
+        second = await container.aresolve(_IBox[int])
+        other = await container.aresolve(_IBox[str])
+        assert isinstance(first, _RuntimeBox)
+        assert isinstance(second, _RuntimeBox)
+        assert isinstance(other, _RuntimeBox)
+        assert first is not second
+        assert first.shared is second.shared is other.shared is shared
+        assert first.type is second.type is int
+        assert other.type is str
+
+        wrapper = container._providers_registrations.get_by_type(_IBox[int]).factory
+        assert wrapper is not None
+        external_kwargs: dict[str, Any] = {"shared": b"override", "type_arg": str}
+        overridden = wrapper(**external_kwargs)
+        defaulted = wrapper(shared=shared)
+        positional = wrapper(shared)
+        if is_async:
+            overridden = await overridden
+            defaulted = await defaulted
+            positional = await positional
+        assert overridden == _RuntimeBox(shared=b"override", type=str)
+        assert defaulted == positional == _RuntimeBox(shared=shared, type=int)
+        assert external_kwargs == {"shared": b"override", "type_arg": str}
 
 
 @pytest.mark.parametrize(
