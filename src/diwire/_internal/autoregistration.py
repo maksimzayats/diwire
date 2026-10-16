@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import decimal
 import inspect
 import pathlib
@@ -17,10 +17,10 @@ class ConcreteTypeAutoregistrationPolicy:
 
     ignored_base_types: tuple[type[Any], ...] = (
         pathlib.PurePath,
-        datetime.datetime,
-        datetime.date,
-        datetime.time,
-        datetime.timedelta,
+        dt.datetime,
+        dt.date,
+        dt.time,
+        dt.timedelta,
         uuid.UUID,
         decimal.Decimal,
     )
