@@ -350,8 +350,9 @@ async def test_materialized_runtime_kwargs_preserve_call_isolation(*, is_async: 
         wrapper = container._providers_registrations.get_by_type(_IBox[int]).factory
         assert wrapper is not None
         external_kwargs: dict[str, Any] = {"shared": b"override", "type_arg": str}
+        missing_type_kwargs = {"shared": shared}
         overridden = wrapper(**external_kwargs)
-        defaulted = wrapper(shared=shared)
+        defaulted = wrapper(**missing_type_kwargs)
         positional = wrapper(shared)
         if is_async:
             overridden = await overridden
@@ -360,6 +361,7 @@ async def test_materialized_runtime_kwargs_preserve_call_isolation(*, is_async: 
         assert overridden == _RuntimeBox(shared=b"override", type=str)
         assert defaulted == positional == _RuntimeBox(shared=shared, type=int)
         assert external_kwargs == {"shared": b"override", "type_arg": str}
+        assert missing_type_kwargs == {"shared": shared}
 
 
 @pytest.mark.parametrize(

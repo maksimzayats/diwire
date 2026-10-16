@@ -2404,10 +2404,9 @@ class Container:
             captured_injected_arguments = dict(injected_arguments)
 
             def _wrapper(*args: Any, **kwargs: Any) -> Any:
-                merged_kwargs = dict(kwargs)
                 for argument_name, argument_value in captured_injected_arguments.items():
-                    merged_kwargs.setdefault(argument_name, argument_value)
-                return provider(*args, **merged_kwargs)
+                    kwargs.setdefault(argument_name, argument_value)
+                return provider(*args, **kwargs)
 
             return _wrapper
 
