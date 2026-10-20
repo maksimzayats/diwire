@@ -170,10 +170,12 @@ def test_attrs_converter_uses_input_type_instead_of_field_type() -> None:
 
 
 def test_pydantic_data_field_does_not_use_variadic_init_annotation() -> None:
-    from pydantic import BaseModel, ConfigDict
+    pydantic_module = pytest.importorskip("pydantic")
+    base_model_type = cast("type[Any]", pydantic_module.BaseModel)
+    config_dict = cast("Any", pydantic_module.ConfigDict)
 
-    class ConcreteService(BaseModel):
-        model_config = ConfigDict(arbitrary_types_allowed=True)
+    class ConcreteService(base_model_type):
+        model_config = config_dict(arbitrary_types_allowed=True)
         data: ServiceA
 
     dependencies = ProviderDependenciesExtractor().extract_from_concrete_type(ConcreteService)

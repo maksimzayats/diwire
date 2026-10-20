@@ -105,3 +105,11 @@ Compressed evidence: `.agents/performance-evidence/2026-10-20/constructor-annota
 Raw local evidence: `/Users/mac/os/.local/diwire/runs/2026-10-20-constructor-annotations/`.
 
 Archive SHA256: `c6e861dffa959b59ca60a9d24ce9c437ea4534f5d4287032f571fdc51a92a048`. The archive contains 104 text entries.
+
+CI follow-up: the first PR head used a direct Pydantic import in the new field
+regression test. The Python 3.15t CI environment omits that optional dependency,
+so the test must use the existing importorskip convention. The follow-up changes
+only this test guard and this note. Runtime source, dependency lock and all
+benchmark files remain byte-identical to the measured candidate. It does not
+remove or change the settings performance blocker. The archive preserves the
+original head's test and gate receipts; later CI receipts remain in local state.
