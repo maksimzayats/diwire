@@ -13,6 +13,7 @@ from typing import (
     Any,
     ClassVar,
     Final,
+    ForwardRef,
     Literal,
     Protocol,
     TypeAlias,
@@ -442,6 +443,17 @@ class ProviderDependenciesExtractor:
             skip_first_parameter=skip_first_parameter,
         )
         annotations, annotation_error = self._resolved_type_hints(provider)
+        if inspect.isclass(provider):
+            # Use concrete signature types; resolved hints handle forward annotations.
+            annotations.update(
+                (
+                    parameter.name,
+                    type(None) if parameter.annotation is None else parameter.annotation,
+                )
+                for parameter in parameters
+                if parameter.annotation is not Parameter.empty
+                and self._is_resolved_signature_annotation(parameter.annotation)
+            )
         dependencies: list[ProviderDependency] = []
 
         for parameter in parameters:
@@ -600,18 +612,55 @@ class ProviderDependenciesExtractor:
         merged_annotations = dict(annotations)
         merged_error = annotation_error
 
-        for callable_member_name in ("__call__", "__new__", "__init__"):
-            callable_member = getattr(concrete_type, callable_member_name)
-            try:
-                member_annotations = get_type_hints(callable_member, include_extras=True)
-            except (AttributeError, NameError, TypeError) as error:
-                if merged_error is None:
-                    merged_error = error
-                continue
-            for parameter_name, parameter_annotation in member_annotations.items():
-                merged_annotations.setdefault(parameter_name, parameter_annotation)
+        callable_member = self._concrete_type_constructor(concrete_type)
+        try:
+            member_annotations = get_type_hints(callable_member, include_extras=True)
+        except (AttributeError, NameError, TypeError) as error:
+            if merged_error is None:
+                merged_error = error
+        else:
+            if (
+                getattr(concrete_type, "__signature__", None) is None
+                and getattr(callable_member, "__signature__", None) is None
+            ):
+                merged_annotations.update(member_annotations)
+            else:
+                # Synthetic field signatures can replace the constructor's parameters.
+                for parameter_name, parameter_annotation in member_annotations.items():
+                    merged_annotations.setdefault(parameter_name, parameter_annotation)
 
         return merged_annotations, merged_error
+
+    def _concrete_type_constructor(self, concrete_type: type[Any]) -> Callable[..., Any]:
+        callable_member = inspect.unwrap(
+            type(concrete_type).__call__, stop=lambda member: hasattr(member, "__signature__")
+        )
+        if callable_member is not type.__call__:
+            return callable_member
+        # Match the construction signature: the nearest Python __new__ or __init__ wins.
+        for base in concrete_type.__mro__:
+            for member_name in ("__new__", "__init__"):
+                if member_name in base.__dict__:
+                    member = inspect.unwrap(
+                        getattr(concrete_type, member_name),
+                        stop=lambda member: hasattr(member, "__signature__"),
+                    )
+                    if inspect.isfunction(member) or inspect.ismethod(member):
+                        return member
+        return object.__init__
+
+    def _is_resolved_signature_annotation(self, annotation: Any) -> bool:
+        if isinstance(annotation, (str, ForwardRef)):
+            return False
+        if isinstance(annotation, list):
+            return all(self._is_resolved_signature_annotation(item) for item in annotation)
+        origin = get_origin(annotation)
+        if origin is Literal:
+            return True
+        arguments = get_args(annotation)
+        if origin is Annotated:
+            arguments = arguments[:1]
+        return all(self._is_resolved_signature_annotation(argument) for argument in arguments)
 
     def _is_required_parameter(self, parameter: Parameter) -> bool:
         return (

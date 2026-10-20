@@ -3,16 +3,19 @@ from __future__ import annotations
 import importlib
 import inspect
 import sys
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from functools import wraps
 from types import ModuleType
-from typing import Any, NamedTuple, cast
+from typing import Annotated, Any, ForwardRef, Literal, NamedTuple, cast
 
 import attrs
 import msgspec
 import pytest
+from typing_extensions import Self
 
+from diwire import Container
 from diwire._internal.providers import ProviderDependenciesExtractor, ProviderDependency
 from diwire.exceptions import DIWireProviderDependencyInferenceError
 
@@ -64,6 +67,234 @@ def test_extracts_dependencies_from_concrete_type() -> None:
         expected_names=["first", "second"],
         expected_types=[ServiceA, ServiceB],
     )
+
+
+@pytest.mark.parametrize("annotation", [ServiceA, "ServiceA", "'ServiceA'"])
+def test_constructor_annotation_takes_priority_over_stored_field(annotation: Any) -> None:
+    class ConcreteService:
+        first: ServiceB
+
+        def __init__(self, first: ServiceA) -> None:
+            self.first = ServiceB()
+
+    ConcreteService.__init__.__annotations__["first"] = annotation
+    dependencies = ProviderDependenciesExtractor().extract_from_concrete_type(ConcreteService)
+    _assert_dependencies(dependencies, expected_names=["first"], expected_types=[ServiceA])
+
+
+def test_inherited_constructor_takes_priority_over_field_and_instance_call() -> None:
+    class Parent:
+        def __init__(self, first: ServiceA) -> None:
+            assert isinstance(first, ServiceA)
+
+    class ConcreteService(Parent):
+        first: ServiceB
+
+        def __call__(self, first: ServiceC) -> None:
+            pass
+
+    dependencies = ProviderDependenciesExtractor().extract_from_concrete_type(ConcreteService)
+    _assert_dependencies(dependencies, expected_names=["first"], expected_types=[ServiceA])
+
+
+def test_new_signature_takes_priority_over_init_and_fields() -> None:
+    class ConcreteService:
+        first: ServiceC
+
+        def __new__(cls, first: ServiceA) -> Self:
+            assert isinstance(first, ServiceA)
+            return super().__new__(cls)
+
+        def __init__(self, first: ServiceB) -> None:
+            pass
+
+    dependencies = ProviderDependenciesExtractor().extract_from_concrete_type(ConcreteService)
+    _assert_dependencies(dependencies, expected_names=["first"], expected_types=[ServiceA])
+
+
+def test_nearer_init_signature_takes_priority_over_inherited_new() -> None:
+    class Parent:
+        def __new__(cls, first: ServiceB) -> Self:
+            assert isinstance(first, ServiceB)
+            return super().__new__(cls)
+
+    class ConcreteService(Parent):
+        first: ServiceC
+
+        def __init__(self, first: ServiceA) -> None:
+            pass
+
+    dependencies = ProviderDependenciesExtractor().extract_from_concrete_type(ConcreteService)
+    _assert_dependencies(dependencies, expected_names=["first"], expected_types=[ServiceA])
+
+
+def test_metaclass_call_signature_takes_priority_over_constructor_and_field() -> None:
+    class Meta(type):
+        def __call__(cls, first: ServiceA) -> object:
+            return object()
+
+    class ConcreteService(metaclass=Meta):
+        first: ServiceC
+
+        def __init__(self, first: ServiceB) -> None:
+            pass
+
+    dependencies = ProviderDependenciesExtractor().extract_from_concrete_type(ConcreteService)
+    _assert_dependencies(dependencies, expected_names=["first"], expected_types=[ServiceA])
+
+
+def test_synthetic_signature_keeps_its_concrete_parameter_type() -> None:
+    class ConcreteService:
+        first: ServiceC
+
+        def __init__(self, first: ServiceB) -> None:
+            pass
+
+    ConcreteService.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+        [inspect.Parameter("first", inspect.Parameter.KEYWORD_ONLY, annotation=ServiceA)],
+    )
+    dependencies = ProviderDependenciesExtractor().extract_from_concrete_type(ConcreteService)
+    _assert_dependencies(dependencies, expected_names=["first"], expected_types=[ServiceA])
+
+
+def test_attrs_converter_uses_input_type_instead_of_field_type() -> None:
+    def convert(first: ServiceA) -> ServiceB:
+        return ServiceB()
+
+    @attrs.define
+    class ConcreteService:
+        first: ServiceB = attrs.field(converter=convert)
+
+    dependencies = ProviderDependenciesExtractor().extract_from_concrete_type(ConcreteService)
+    _assert_dependencies(dependencies, expected_names=["first"], expected_types=[ServiceA])
+
+
+def test_pydantic_data_field_does_not_use_variadic_init_annotation() -> None:
+    from pydantic import BaseModel, ConfigDict
+
+    class ConcreteService(BaseModel):
+        model_config = ConfigDict(arbitrary_types_allowed=True)
+        data: ServiceA
+
+    dependencies = ProviderDependenciesExtractor().extract_from_concrete_type(ConcreteService)
+    _assert_dependencies(dependencies, expected_names=["data"], expected_types=[ServiceA])
+
+
+@pytest.mark.parametrize("annotation", [ServiceA, "ServiceA", "'ServiceA'"])
+def test_container_injects_constructor_input_before_converting_to_stored_field(
+    annotation: Any,
+) -> None:
+    received: list[ServiceA] = []
+
+    class ConcreteService:
+        first: ServiceB
+
+        def __init__(self, first: ServiceA) -> None:
+            received.append(first)
+            self.first = ServiceB()
+
+    ConcreteService.__init__.__annotations__["first"] = annotation
+    dependency = ServiceA()
+    container = Container()
+    container.add_instance(dependency)
+    container.add(ConcreteService)
+    with container as resolver:
+        result = resolver.resolve(ConcreteService)
+        assert received == [dependency]
+        assert isinstance(result.first, ServiceB)
+
+
+@pytest.mark.parametrize(
+    ("signature_type", "resolved_type"),
+    [
+        (list["ServiceA"], list[ServiceA]),
+        (dict[str, list["ServiceA"]], dict[str, list[ServiceA]]),
+        (Callable[["ServiceA"], ServiceB], Callable[[ServiceA], ServiceB]),
+        (ForwardRef("ServiceA"), ServiceA),
+        ("ServiceA", ServiceA),
+        (inspect.Parameter.empty, ServiceA),
+        (list[ServiceA], list[ServiceA]),
+        (Literal["value"], Literal["value"]),
+        (Annotated[ServiceA, "metadata"], Annotated[ServiceA, "metadata"]),
+        (None, type(None)),
+    ],
+)
+def test_synthetic_signature_uses_resolved_types_without_replacing_forward_hints(
+    signature_type: Any,
+    resolved_type: Any,
+) -> None:
+    class ConcreteService:
+        def __init__(self, first: ServiceA) -> None:
+            pass
+
+    ConcreteService.__annotations__["first"] = resolved_type
+    ConcreteService.__init__.__annotations__["first"] = ServiceC
+    ConcreteService.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+        [inspect.Parameter("first", inspect.Parameter.KEYWORD_ONLY, annotation=signature_type)],
+    )
+    dependencies = ProviderDependenciesExtractor().extract_from_concrete_type(ConcreteService)
+    assert dependencies[0].provides == resolved_type
+
+
+@pytest.mark.skipif(sys.version_info < (3, 14), reason="inspect unwraps builtins on Python 3.14+")
+@pytest.mark.parametrize("wrapped_member", ["new", "call"])
+def test_wrapped_builtin_constructor_leaves_init_signature_in_control(wrapped_member: str) -> None:
+    class Meta(type):
+        @wraps(type.__call__)
+        def __call__(cls, *args: Any, **kwargs: Any) -> Any:
+            return super().__call__(*args, **kwargs)
+
+    class ConcreteService:
+        def __init__(self, first: ServiceA) -> None:
+            assert isinstance(first, ServiceA)
+
+    class WithWrappedNew(ConcreteService):
+        @wraps(object.__new__)
+        def __new__(cls, *args: Any, **kwargs: Any) -> Self:
+            del args, kwargs
+            return object.__new__(cls)
+
+    class WithWrappedCall(ConcreteService, metaclass=Meta):
+        pass
+
+    concrete_type = WithWrappedNew if wrapped_member == "new" else WithWrappedCall
+    dependencies = ProviderDependenciesExtractor().extract_from_concrete_type(concrete_type)
+    _assert_dependencies(dependencies, expected_names=["first"], expected_types=[ServiceA])
+
+
+def test_wrapped_constructor_keeps_explicit_method_signature() -> None:
+    def original(self: object, first: ServiceB) -> None:
+        pass
+
+    @wraps(original)
+    def wrapper(self: object, first: ServiceA) -> None:
+        pass
+
+    wrapper.__annotations__ = {"first": ServiceA, "return": None}
+    wrapper.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+        [
+            inspect.Parameter("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+            inspect.Parameter(
+                "first", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=ServiceA
+            ),
+        ],
+    )
+    concrete_type = type("ConcreteService", (), {"__init__": wrapper})
+    dependencies = ProviderDependenciesExtractor().extract_from_concrete_type(concrete_type)
+    _assert_dependencies(dependencies, expected_names=["first"], expected_types=[ServiceA])
+
+
+def test_concrete_signature_survives_unresolved_return_annotation() -> None:
+    class ConcreteService:
+        first: ServiceB
+
+        def __init__(self, first: ServiceA) -> None:
+            pass
+
+    ConcreteService.__init__.__annotations__["first"] = ServiceA
+    ConcreteService.__init__.__annotations__["return"] = "MissingReturnType"
+    dependencies = ProviderDependenciesExtractor().extract_from_concrete_type(ConcreteService)
+    _assert_dependencies(dependencies, expected_names=["first"], expected_types=[ServiceA])
 
 
 def test_extracts_dependencies_from_dataclass_concrete_type() -> None:
