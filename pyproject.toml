@@ -59,7 +59,7 @@ dev-python313t = [
     { include-group = "test" },
     "mypy>=2.3.0,<2.4.0",
     "ast-serialize>=0.6.0,<0.14.0",
-    "pydantic>=2.13.0,<2.14.0",
+    "pydantic>=2.13.0,<2.15.0",
 ]
 
 test = [
