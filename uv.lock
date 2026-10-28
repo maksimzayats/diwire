@@ -2,16 +2,16 @@ version = 1
 revision = 5
 requires-python = ">=3.10"
 resolution-markers = [
+    "python_full_version >= '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version == '3.13.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
     "(python_full_version == '3.12.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t') or (python_full_version >= '3.14' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t')",
-    "python_full_version == '3.11.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
-    "python_full_version < '3.11' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
-    "python_full_version >= '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version >= '3.12' and python_full_version < '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
-    "python_full_version == '3.11.*' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
-    "python_full_version < '3.11' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version >= '3.12' and extra != 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
+    "python_full_version == '3.11.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
+    "python_full_version == '3.11.*' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version == '3.11.*' and extra != 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
+    "python_full_version < '3.11' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
+    "python_full_version < '3.11' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version < '3.11' and extra != 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
 ]
 conflicts = [[
@@ -817,13 +817,13 @@ name = "coverage"
 version = "7.17.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version == '3.13.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
     "(python_full_version == '3.12.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t') or (python_full_version >= '3.14' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t')",
-    "python_full_version == '3.11.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
-    "python_full_version >= '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version >= '3.12' and python_full_version < '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
-    "python_full_version == '3.11.*' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version >= '3.12' and extra != 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
+    "python_full_version == '3.11.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
+    "python_full_version == '3.11.*' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version == '3.11.*' and extra != 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d2/79/e78bd8f75a9b8e32233ce92d4607f0a21ce88a9156cace2884e7175a82f5/coverage-7.17.0.tar.gz", hash = "sha256:cc010a0a7fbdd9bb8bdfd0d3f04a5151275860213cbd7e2b876b29778489c712", size = 991021, upload-time = "2026-10-22T16:06:50.009Z" }
@@ -1189,9 +1189,9 @@ name = "django"
 version = "6.1.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version == '3.13.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
     "(python_full_version == '3.12.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t') or (python_full_version >= '3.14' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t')",
-    "python_full_version >= '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version >= '3.12' and python_full_version < '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version >= '3.12' and extra != 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
 ]
@@ -1260,13 +1260,13 @@ name = "docutils"
 version = "0.22.4"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version == '3.13.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
     "(python_full_version == '3.12.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t') or (python_full_version >= '3.14' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t')",
-    "python_full_version == '3.11.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
-    "python_full_version >= '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version >= '3.12' and python_full_version < '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
-    "python_full_version == '3.11.*' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version >= '3.12' and extra != 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
+    "python_full_version == '3.11.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
+    "python_full_version == '3.11.*' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version == '3.11.*' and extra != 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ae/b6/03bb70946330e88ffec97aefd3ea75ba575cb2e762061e0e62a213befee8/docutils-0.22.4.tar.gz", hash = "sha256:4db53b1fde9abecbb74d91230d32ab626d94f6badfc575d6db9194a49df29968", size = 2291750, upload-time = "2025-12-18T19:00:26.443Z" }
@@ -1898,7 +1898,7 @@ wheels = [
 
 [[package]]
 name = "litestar"
-version = "2.21.1"
+version = "2.25.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -1916,9 +1916,9 @@ dependencies = [
     { name = "sniffio" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a1/fc/7ce2057ffd738be4d2abc5b69229f57181bbff8a84a4576004b021085773/litestar-2.21.1.tar.gz", hash = "sha256:28301438de7c5e77bb68a5d8684dff415b9f252b0dd8413b356e8e6794c6863a", size = 376270, upload-time = "2026-03-07T13:49:16.053Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a9/08/eb40e03558b60ea10651d132aa666825eac040c3773b4a332ba305afb00b/litestar-2.25.0.tar.gz", hash = "sha256:7fad91fcd89367fcd26534ab19b6b05763cc67ab9574baa914546089e1ed1fb4", size = 385679, upload-time = "2026-10-18T19:13:42.048Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f3/67/139c0fa6e1dd9e558910c02a383cd0ae12c2a1d6d3f0ea0d42dbeb03d8b2/litestar-2.21.1-py3-none-any.whl", hash = "sha256:6321340195801454aeac4a12e72c28f54714a4c3e8172c33e577c593cc5982c6", size = 568342, upload-time = "2026-03-07T13:49:13.694Z" },
+    { url = "https://files.pythonhosted.org/packages/47/32/247552ea639cd640db8057c4b6f0f8337dcf0d1f05d003dfdb9d5e77e4c7/litestar-2.25.0-py3-none-any.whl", hash = "sha256:ff16470b6aa3031ea3210bbb474b00b24c636ddfe8e0ee3d09c85aff3058a93f", size = 584699, upload-time = "2026-10-18T19:13:39.897Z" },
 ]
 
 [[package]]
@@ -2653,15 +2653,15 @@ name = "pydantic"
 version = "2.14.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "(python_full_version == '3.12.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t') or (python_full_version >= '3.14' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t')",
-    "python_full_version == '3.11.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
-    "python_full_version < '3.11' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
     "python_full_version >= '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
+    "(python_full_version == '3.12.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t') or (python_full_version >= '3.14' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t')",
     "python_full_version >= '3.12' and python_full_version < '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
-    "python_full_version == '3.11.*' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
-    "python_full_version < '3.11' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version >= '3.12' and extra != 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
+    "python_full_version == '3.11.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
+    "python_full_version == '3.11.*' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version == '3.11.*' and extra != 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
+    "python_full_version < '3.11' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
+    "python_full_version < '3.11' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version < '3.11' and extra != 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
 ]
 dependencies = [
@@ -2799,15 +2799,15 @@ name = "pydantic-core"
 version = "2.50.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "(python_full_version == '3.12.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t') or (python_full_version >= '3.14' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t')",
-    "python_full_version == '3.11.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
-    "python_full_version < '3.11' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
     "python_full_version >= '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
+    "(python_full_version == '3.12.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t') or (python_full_version >= '3.14' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t')",
     "python_full_version >= '3.12' and python_full_version < '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
-    "python_full_version == '3.11.*' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
-    "python_full_version < '3.11' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version >= '3.12' and extra != 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
+    "python_full_version == '3.11.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
+    "python_full_version == '3.11.*' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version == '3.11.*' and extra != 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
+    "python_full_version < '3.11' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
+    "python_full_version < '3.11' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version < '3.11' and extra != 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
 ]
 dependencies = [
@@ -2975,13 +2975,13 @@ name = "pydantic-settings"
 version = "2.16.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version == '3.13.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
     "(python_full_version == '3.12.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t') or (python_full_version >= '3.14' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t')",
-    "python_full_version == '3.11.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
-    "python_full_version >= '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version >= '3.12' and python_full_version < '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
-    "python_full_version == '3.11.*' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version >= '3.12' and extra != 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
+    "python_full_version == '3.11.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
+    "python_full_version == '3.11.*' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version == '3.11.*' and extra != 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
 ]
 dependencies = [
@@ -3488,9 +3488,9 @@ name = "sphinx"
 version = "9.1.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version == '3.13.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t'",
     "(python_full_version == '3.12.*' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t') or (python_full_version >= '3.14' and extra != 'group-6-diwire-dev' and extra == 'group-6-diwire-dev-python313t')",
-    "python_full_version >= '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version >= '3.12' and python_full_version < '3.15' and extra == 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
     "python_full_version >= '3.12' and extra != 'group-6-diwire-dev' and extra != 'group-6-diwire-dev-python313t'",
 ]
