@@ -95,6 +95,7 @@ def compare(labels):
 
 summary={}
 for source,case in (PLAN.items() if os.environ.get('STUDY_MODE','full')=='full' else ()):
+    if os.environ.get('STUDY_CASE') and source!=os.environ['STUDY_CASE']:continue
     run(source,f'semantics-{source}','test_proof_semantics.py',timed=False)
     labels=[]
     for i in range(3):
@@ -128,6 +129,7 @@ for source,case in (PLAN.items() if os.environ.get('STUDY_MODE','full')=='full' 
 # Check broader costs after the primary estimates are fixed.
 for source,file,selection in [('h001','bench_controls.py','unused_async_gen_compile'),('h005','bench_controls.py','origin_registration'),('h004','bench_candidates.py','cleanup'),('h005','bench_candidates.py','origins')]:
     if os.environ.get('STUDY_MODE')=='remaining' and source=='h001':continue
+    if os.environ.get('STUDY_CASE') and source!=os.environ['STUDY_CASE']:continue
     tag=f'{source}-{selection}'
     labels=[]
     for i in range(3):

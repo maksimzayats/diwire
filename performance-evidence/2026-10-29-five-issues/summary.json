@@ -1,0 +1,929 @@
+{
+  "decision": "Five proven targets, ready to file as implementation issues",
+  "baseline": "6f225bf30bc8dc5e9f0f907c126396534ad6aef9",
+  "primary_environment": "Dedicated GitHub Ubuntu 24.04, Linux x86_64, AMD EPYC 9V74, CPython3.14.10, one allowed CPU pinned, locked dependencies",
+  "method": "Three-pair A/A calibration, seven alternating fresh-process A/B pairs, all rounds retained, 5% useful floor, 95% paired bootstrap median interval, <=10% process CV. Secondary ACTION used one fixed 5x-batch confirmation. Broader costs are three-pair screens.",
+  "findings": [
+    {
+      "id": "h001",
+      "title": "Reuse async generator context-manager factories",
+      "workload": "Fresh request scope with one async generator, cached second resolve, and cleanup",
+      "file": "src/diwire/_internal/resolvers/assembly/compiler.py",
+      "line": 3331,
+      "gain_percent": 21.27637105400222,
+      "bootstrap95": [
+        20.125938417584678,
+        21.939497458322798
+      ],
+      "positive_pairs": 7,
+      "max_process_cv_percent": 6.483141328356483,
+      "memory_arm64": {
+        "retained_bytes": {
+          "baseline_median": 1049543,
+          "candidate_median": 1080487,
+          "paired_median_delta": 30944
+        },
+        "peak_bytes": {
+          "baseline_median": 1712111,
+          "candidate_median": 1743111,
+          "paired_median_delta": 31000
+        }
+      },
+      "quality": {
+        "passed": 11,
+        "exit": 0,
+        "full_tests_passed": 1564,
+        "coverage_percent": 100,
+        "lint_typing": "passed",
+        "python310_focused_passed": 166,
+        "python314t_focused_passed": 166
+      },
+      "primary": "test_async_gen[False]"
+    },
+    {
+      "id": "h002",
+      "title": "Cache explicit scope transition plans",
+      "workload": "Repeated explicit STEP scope entry, resolution, and exit with a warm transition cache",
+      "file": "src/diwire/_internal/resolvers/assembly/compiler.py",
+      "line": 2462,
+      "gain_percent": 23.767495164336317,
+      "bootstrap95": [
+        23.62467121223657,
+        25.111585180738505
+      ],
+      "positive_pairs": 7,
+      "max_process_cv_percent": 0.928276889865767,
+      "memory_arm64": {
+        "retained_bytes": {
+          "baseline_median": 87422,
+          "candidate_median": 87737,
+          "paired_median_delta": 315
+        },
+        "peak_bytes": {
+          "baseline_median": 235297,
+          "candidate_median": 235108,
+          "paired_median_delta": -189
+        }
+      },
+      "quality": {
+        "passed": 11,
+        "exit": 0,
+        "full_tests_passed": 1564,
+        "coverage_percent": 100,
+        "lint_typing": "passed",
+        "python310_focused_passed": 166,
+        "python314t_focused_passed": 166
+      },
+      "primary": "test_scope[STEP]"
+    },
+    {
+      "id": "h003",
+      "title": "Resolve all-sync public collections without coroutine wrappers",
+      "workload": "Public aresolve(All[Service]) with 32 synchronous transient components",
+      "file": "src/diwire/_internal/resolvers/assembly/compiler.py",
+      "line": 2963,
+      "gain_percent": 32.8523366854268,
+      "bootstrap95": [
+        30.748879520706417,
+        34.09817734569138
+      ],
+      "positive_pairs": 7,
+      "max_process_cv_percent": 3.601824416245131,
+      "memory_arm64": {
+        "retained_bytes": {
+          "baseline_median": 475796,
+          "candidate_median": 476073,
+          "paired_median_delta": 277
+        },
+        "peak_bytes": {
+          "baseline_median": 1100036,
+          "candidate_median": 1100313,
+          "paired_median_delta": 277
+        }
+      },
+      "quality": {
+        "passed": 11,
+        "exit": 0,
+        "full_tests_passed": 1564,
+        "coverage_percent": 100,
+        "lint_typing": "passed",
+        "python310_focused_passed": 166,
+        "python314t_focused_passed": 166
+      },
+      "primary": "test_public_all[sync]"
+    },
+    {
+      "id": "h004",
+      "title": "Avoid generator allocations while propagating cleanup flags",
+      "workload": "Late resource registration after a reverse-registered chain of 32 consumers; 16 independent actions per measured round",
+      "file": "src/diwire/_internal/providers.py",
+      "line": 265,
+      "gain_percent": 37.2432500910419,
+      "bootstrap95": [
+        36.666817960741426,
+        38.36650355972504
+      ],
+      "positive_pairs": 7,
+      "max_process_cv_percent": 1.7814302130757966,
+      "memory_arm64": {
+        "retained_bytes": {
+          "baseline_median": 318505,
+          "candidate_median": 318876,
+          "paired_median_delta": 424
+        },
+        "peak_bytes": {
+          "baseline_median": 383081,
+          "candidate_median": 383505,
+          "paired_median_delta": 424
+        }
+      },
+      "quality": {
+        "passed": 11,
+        "exit": 0,
+        "full_tests_passed": 1564,
+        "coverage_percent": 100,
+        "lint_typing": "passed",
+        "python310_focused_passed": 166,
+        "python314t_focused_passed": 166
+      },
+      "primary": "test_late_registration_batch"
+    },
+    {
+      "id": "h005",
+      "title": "Index generic templates by their outer type",
+      "workload": "Cold compile with 256 registered generic roots and 64 consumer roots",
+      "file": "src/diwire/_internal/open_generics.py",
+      "line": 299,
+      "gain_percent": 9.072757429800182,
+      "bootstrap95": [
+        8.890731805320273,
+        9.771714639973773
+      ],
+      "positive_pairs": 7,
+      "max_process_cv_percent": 0.9641584349325046,
+      "memory_arm64": {
+        "retained_bytes": {
+          "baseline_median": 3127781,
+          "candidate_median": 3148688,
+          "paired_median_delta": 20848
+        },
+        "peak_bytes": {
+          "baseline_median": 4496684,
+          "candidate_median": 4517093,
+          "paired_median_delta": 20409
+        }
+      },
+      "quality": {
+        "passed": 11,
+        "exit": 0,
+        "full_tests_passed": 1564,
+        "coverage_percent": 100,
+        "lint_typing": "passed",
+        "python310_focused_passed": 166,
+        "python314t_focused_passed": 166
+      },
+      "primary": "test_sparse_generic_compile[256-64]"
+    }
+  ],
+  "hosted_results": {
+    "h001": {
+      "primary": "test_async_gen[False]",
+      "results": {
+        "test_async_gen[False]": {
+          "paired_gains_percent": [
+            21.612581980368795,
+            21.939497458322798,
+            22.66303934352889,
+            20.509177392127675,
+            20.125938417584678,
+            21.27637105400222,
+            18.834036135313205
+          ],
+          "median_gain_percent": 21.27637105400222,
+          "positive_pairs": 7,
+          "bootstrap95": [
+            20.125938417584678,
+            21.939497458322798
+          ],
+          "max_process_cv_percent": 6.483141328356483,
+          "means_seconds": {
+            "baseline": [
+              0.027244975560000453,
+              0.027274556680000048,
+              0.02725124548000167,
+              0.02716753800000049,
+              0.0272930706000011,
+              0.02736775683999781,
+              0.026867823799998972
+            ],
+            "candidate": [
+              0.02240308948000006,
+              0.022367286440000383,
+              0.022216346200000885,
+              0.022543957719999525,
+              0.022720380760002285,
+              0.022566437799999336,
+              0.022609535680001045
+            ]
+          },
+          "passed": true
+        },
+        "test_async_gen[True]": {
+          "paired_gains_percent": [
+            15.204789783458716,
+            16.847947896437066,
+            16.472827537725877,
+            18.689472417823172,
+            16.804081884244205,
+            17.087311859188393,
+            17.684370505199798
+          ],
+          "median_gain_percent": 16.847947896437066,
+          "positive_pairs": 7,
+          "bootstrap95": [
+            16.472827537725877,
+            17.684370505199798
+          ],
+          "max_process_cv_percent": 0.5020184634557879,
+          "means_seconds": {
+            "baseline": [
+              0.036845271480000295,
+              0.03689616084000022,
+              0.03667197664000014,
+              0.03763748804000158,
+              0.03758674008000071,
+              0.036807325359997665,
+              0.037433338640000785
+            ],
+            "candidate": [
+              0.031982412840000335,
+              0.03157621636000101,
+              0.03148543520000146,
+              0.031710890000004495,
+              0.03217930355999897,
+              0.03143579331999945,
+              0.03180824988000154
+            ]
+          }
+        }
+      }
+    },
+    "h002": {
+      "primary": "test_scope[STEP]",
+      "results": {
+        "test_scope[ACTION]": {
+          "paired_gains_percent": [
+            22.924749936776067,
+            23.432759917519185,
+            19.45020810560969,
+            22.6485322610805,
+            20.368947609230514,
+            22.363276321624493,
+            21.06015720992096
+          ],
+          "median_gain_percent": 22.363276321624493,
+          "positive_pairs": 7,
+          "bootstrap95": [
+            20.368947609230514,
+            22.924749936776067
+          ],
+          "max_process_cv_percent": 25.58489325265775,
+          "means_seconds": {
+            "baseline": [
+              0.010812342800000464,
+              0.010984836160001805,
+              0.010606377159997465,
+              0.010749039280002535,
+              0.010740175639998597,
+              0.010729462599997533,
+              0.010571562199995697
+            ],
+            "candidate": [
+              0.00879590384000096,
+              0.008899449519999507,
+              0.008879329159996133,
+              0.008764099400000305,
+              0.008922712920001458,
+              0.008768531639996127,
+              0.00873248676000344
+            ]
+          },
+          "confirmation": {
+            "paired_gains_percent": [
+              23.3123146977535,
+              23.617899360821724,
+              22.510657804976496,
+              25.05977345135204,
+              21.32436862698448,
+              22.84830790477894,
+              25.095723068263865
+            ],
+            "median_gain_percent": 23.3123146977535,
+            "positive_pairs": 7,
+            "bootstrap95": [
+              22.510657804976496,
+              25.05977345135204
+            ],
+            "max_process_cv_percent": 2.2302132320989503,
+            "means_seconds": {
+              "baseline": [
+                0.05127481319999788,
+                0.05126929123999844,
+                0.05186766028000079,
+                0.05240589051999905,
+                0.05089431071999684,
+                0.05168698055999812,
+                0.05250472443999911
+              ],
+              "candidate": [
+                0.0415812592000043,
+                0.041474002960001144,
+                0.04233726372000092,
+                0.041904674119999756,
+                0.041948959879999845,
+                0.042073823759999414,
+                0.04197163831999887
+              ]
+            }
+          }
+        },
+        "test_scope[STEP]": {
+          "paired_gains_percent": [
+            23.772202490765814,
+            25.25276450457181,
+            23.56398369571968,
+            25.111585180738505,
+            23.62467121223657,
+            23.767495164336317,
+            23.74372236794038
+          ],
+          "median_gain_percent": 23.767495164336317,
+          "positive_pairs": 7,
+          "bootstrap95": [
+            23.62467121223657,
+            25.111585180738505
+          ],
+          "max_process_cv_percent": 0.928276889865767,
+          "means_seconds": {
+            "baseline": [
+              0.013430985639997174,
+              0.013427024560004384,
+              0.0133836146800013,
+              0.013365373679999949,
+              0.013288641400000642,
+              0.01337462355999719,
+              0.013268507399999407
+            ],
+            "candidate": [
+              0.01085137484000029,
+              0.010719942679999121,
+              0.010831323399995653,
+              0.010682762640000192,
+              0.010749182399997607,
+              0.01080624887999761,
+              0.010722570119999091
+            ]
+          },
+          "passed": true
+        },
+        "test_scope[REQUEST]": {
+          "paired_gains_percent": [
+            2.737043785661908,
+            0.9336956526793783,
+            -1.222130091925866,
+            0.7597226292331616,
+            -2.8750761210650566,
+            -2.846793002622916,
+            -1.3375060916515968
+          ],
+          "median_gain_percent": -1.222130091925866,
+          "positive_pairs": 3,
+          "bootstrap95": [
+            -2.846793002622916,
+            0.9336956526793783
+          ],
+          "max_process_cv_percent": 1.2521826801251112,
+          "means_seconds": {
+            "baseline": [
+              0.0015267133599985527,
+              0.0015178933199990752,
+              0.001483336960000088,
+              0.00149243556000215,
+              0.0014741423199996007,
+              0.001490084320000733,
+              0.0014772411599960832
+            ],
+            "candidate": [
+              0.001486039800000185,
+              0.0015038519199993062,
+              0.001501689560000159,
+              0.0014811826800018935,
+              0.0015177796399996168,
+              0.0015337469199971565,
+              0.001497267200004444
+            ]
+          }
+        }
+      }
+    },
+    "h003": {
+      "primary": "test_public_all[sync]",
+      "results": {
+        "test_public_all[sync]": {
+          "paired_gains_percent": [
+            34.28603087653257,
+            33.822756319293525,
+            32.48351452836502,
+            34.09817734569138,
+            32.8523366854268,
+            26.255746781469647,
+            30.748879520706417
+          ],
+          "median_gain_percent": 32.8523366854268,
+          "positive_pairs": 7,
+          "bootstrap95": [
+            30.748879520706417,
+            34.09817734569138
+          ],
+          "max_process_cv_percent": 3.601824416245131,
+          "means_seconds": {
+            "baseline": [
+              0.06112985016000039,
+              0.06113179363999961,
+              0.06227369163999583,
+              0.06065428640000164,
+              0.060605621839999915,
+              0.05912721936000253,
+              0.06052548080000406
+            ],
+            "candidate": [
+              0.04552212152000038,
+              0.04568116463999786,
+              0.04700486083999749,
+              0.04523125339999297,
+              0.045618784999999204,
+              0.04683130935999543,
+              0.04629139540000324
+            ]
+          },
+          "passed": true
+        },
+        "test_public_all[async]": {
+          "paired_gains_percent": [
+            1.3843942969773204,
+            -0.22876026504984326,
+            5.8756045748010965,
+            3.083764909201858,
+            -0.4952678447806558,
+            1.7191854502668358,
+            1.9486584118538985
+          ],
+          "median_gain_percent": 1.7191854502668358,
+          "positive_pairs": 5,
+          "bootstrap95": [
+            -0.22876026504984326,
+            3.083764909201858
+          ],
+          "max_process_cv_percent": 0.830429907025912,
+          "means_seconds": {
+            "baseline": [
+              0.13756830727999614,
+              0.13636409856,
+              0.1424845322400006,
+              0.13823594304000608,
+              0.1342000106400019,
+              0.13770728756001063,
+              0.13652816668000242
+            ],
+            "candidate": [
+              0.13568982508000998,
+              0.1366767606799931,
+              0.13457730211999433,
+              0.1341005959199947,
+              0.1348679683199998,
+              0.1353798567600006,
+              0.13391855155999566
+            ]
+          }
+        },
+        "test_public_all[mixed]": {
+          "paired_gains_percent": [
+            -2.636015661748603,
+            0.10295331663772167,
+            0.32907411910825246,
+            -5.947151858617572,
+            -1.7206718829595458,
+            -3.4640517191627196,
+            -0.8275852975072051
+          ],
+          "median_gain_percent": -1.7206718829595458,
+          "positive_pairs": 2,
+          "bootstrap95": [
+            -3.4640517191627196,
+            0.10295331663772167
+          ],
+          "max_process_cv_percent": 1.1399702972999854,
+          "means_seconds": {
+            "baseline": [
+              0.10182565495999142,
+              0.10339653419999195,
+              0.10399421815999403,
+              0.1011203857600026,
+              0.10054128931999685,
+              0.101538251639995,
+              0.10190578999999843
+            ],
+            "candidate": [
+              0.10458246511999732,
+              0.1032901935200016,
+              0.10365312256000152,
+              0.10751443232000384,
+              0.1023015635600018,
+              0.10518180372000416,
+              0.1027561850799998
+            ]
+          }
+        }
+      }
+    },
+    "h004": {
+      "primary": "test_late_registration_batch",
+      "results": {
+        "test_late_registration_batch": {
+          "paired_gains_percent": [
+            38.36650355972504,
+            37.2432500910419,
+            25.350072176546234,
+            38.58717719236484,
+            36.666817960741426,
+            37.77372220544708,
+            36.74540095253227
+          ],
+          "median_gain_percent": 37.2432500910419,
+          "positive_pairs": 7,
+          "bootstrap95": [
+            36.666817960741426,
+            38.36650355972504
+          ],
+          "max_process_cv_percent": 1.7814302130757966,
+          "means_seconds": {
+            "baseline": [
+              0.00914655320001998,
+              0.00909773399997107,
+              0.00917806164999888,
+              0.009197890700005474,
+              0.009129555000004074,
+              0.009203775599991105,
+              0.009113820200002464
+            ],
+            "candidate": [
+              0.006610381099983442,
+              0.006628911799987236,
+              0.007321943649998275,
+              0.0066368987999794625,
+              0.006680154799994398,
+              0.006680356350005923,
+              0.0066648092999969325
+            ]
+          },
+          "passed": true
+        }
+      }
+    },
+    "h005": {
+      "primary": "test_sparse_generic_compile[256-64]",
+      "results": {
+        "test_sparse_generic_compile[64-16]": {
+          "paired_gains_percent": [
+            1.9904921545190968,
+            2.048025475146753,
+            1.3291342363666692,
+            1.8774627477377903,
+            2.203850034805277,
+            3.339744644477949,
+            1.6431746972562111
+          ],
+          "median_gain_percent": 1.9904921545190968,
+          "positive_pairs": 7,
+          "bootstrap95": [
+            1.6431746972562111,
+            2.203850034805277
+          ],
+          "max_process_cv_percent": 0.8552510922229133,
+          "means_seconds": {
+            "baseline": [
+              0.018601642916659483,
+              0.01858655266664755,
+              0.01864108941667079,
+              0.01855653183334501,
+              0.018593698166663824,
+              0.01878190558335291,
+              0.01847419333331383
+            ],
+            "candidate": [
+              0.018238604916698858,
+              0.018213534833336098,
+              0.018396574249995485,
+              0.018214560249987244,
+              0.01819275708335037,
+              0.01817490999998957,
+              0.018175537500023136
+            ]
+          }
+        },
+        "test_sparse_generic_compile[256-64]": {
+          "paired_gains_percent": [
+            8.314354355643205,
+            9.771714639973773,
+            8.890731805320273,
+            9.069744119650803,
+            9.659087251758326,
+            10.50791340593371,
+            9.072757429800182
+          ],
+          "median_gain_percent": 9.072757429800182,
+          "positive_pairs": 7,
+          "bootstrap95": [
+            8.890731805320273,
+            9.771714639973773
+          ],
+          "max_process_cv_percent": 0.9641584349325046,
+          "means_seconds": {
+            "baseline": [
+              0.07063228366664968,
+              0.07105760058334454,
+              0.07095047049998963,
+              0.0706617349166739,
+              0.0708560860833245,
+              0.07142150174999529,
+              0.07054906691667877
+            ],
+            "candidate": [
+              0.06521045533330987,
+              0.06473215874999975,
+              0.06515749258333396,
+              0.06478582624999756,
+              0.0646148785833418,
+              0.06463021474999664,
+              0.06468074024999737
+            ]
+          },
+          "passed": true
+        }
+      }
+    }
+  },
+  "broad_screens": {
+    "broad-h001-unused_async_gen_compile": {
+      "test_unused_async_gen_compile[16]": {
+        "paired_gains_percent": [
+          0.4881835110125188,
+          0.7900010890196985,
+          -0.6427451335913159
+        ],
+        "median_gain_percent": 0.4881835110125188,
+        "positive_pairs": 2,
+        "bootstrap95": [
+          -0.6427451335913159,
+          0.7900010890196985
+        ],
+        "max_process_cv_percent": 1.3610859578482815,
+        "means_seconds": {
+          "baseline": [
+            0.015137684583332126,
+            0.015012182166685761,
+            0.01494323558334069
+          ],
+          "candidate": [
+            0.015064143916655818,
+            0.014894515333348105,
+            0.015039903833326207
+          ]
+        }
+      },
+      "test_unused_async_gen_compile[64]": {
+        "paired_gains_percent": [
+          0.7168325485227056,
+          -0.25342342236931437,
+          0.3771997606405675
+        ],
+        "median_gain_percent": 0.3771997606405675,
+        "positive_pairs": 2,
+        "bootstrap95": [
+          -0.25342342236931437,
+          0.7168325485227056
+        ],
+        "max_process_cv_percent": 2.8876743935356513,
+        "means_seconds": {
+          "baseline": [
+            0.04408917541669174,
+            0.04375350091665572,
+            0.04418646433331711
+          ],
+          "candidate": [
+            0.04377537924998857,
+            0.0438646642500089,
+            0.04402041941664455
+          ]
+        }
+      }
+    },
+    "broad-h005-origin_registration": {
+      "test_origin_registration[16]": {
+        "paired_gains_percent": [
+          3.002830710607851,
+          0.3607968157312458,
+          -2.6208605820007946
+        ],
+        "median_gain_percent": 0.3607968157312458,
+        "positive_pairs": 2,
+        "bootstrap95": [
+          -2.6208605820007946,
+          3.002830710607851
+        ],
+        "max_process_cv_percent": 3.948750271724537,
+        "means_seconds": {
+          "baseline": [
+            0.002125643666666418,
+            0.002057905916667361,
+            0.0020140985833313843
+          ],
+          "candidate": [
+            0.0020636749999993023,
+            0.002050507749999042,
+            0.002068306000000556
+          ]
+        }
+      },
+      "test_origin_registration[64]": {
+        "paired_gains_percent": [
+          0.5816794551469551,
+          1.7553556729200892,
+          -1.4086988109921483
+        ],
+        "median_gain_percent": 0.5816794551469551,
+        "positive_pairs": 2,
+        "bootstrap95": [
+          -1.4086988109921483,
+          1.7553556729200892
+        ],
+        "max_process_cv_percent": 5.657241909836356,
+        "means_seconds": {
+          "baseline": [
+            0.007516240250000195,
+            0.0076680070833325216,
+            0.007396202666667406
+          ],
+          "candidate": [
+            0.007472772666668348,
+            0.007535728250000299,
+            0.007501881583333869
+          ]
+        }
+      },
+      "test_origin_registration[256]": {
+        "paired_gains_percent": [
+          2.0951268290279934,
+          -0.3337908015568325,
+          0.120744101537551
+        ],
+        "median_gain_percent": 0.120744101537551,
+        "positive_pairs": 2,
+        "bootstrap95": [
+          -0.3337908015568325,
+          2.0951268290279934
+        ],
+        "max_process_cv_percent": 3.335409742004526,
+        "means_seconds": {
+          "baseline": [
+            0.03441358691666648,
+            0.03428011416666621,
+            0.034136968083332775
+          ],
+          "candidate": [
+            0.033707374666664215,
+            0.03439492125000143,
+            0.034095799416665074
+          ]
+        }
+      }
+    },
+    "broad-h005-origins": {
+      "test_origins[16]": {
+        "paired_gains_percent": [
+          -0.3434513359675706,
+          1.8213114817723142,
+          -0.20284359456201884
+        ],
+        "median_gain_percent": -0.20284359456201884,
+        "positive_pairs": 1,
+        "bootstrap95": [
+          -0.3434513359675706,
+          1.8213114817723142
+        ],
+        "max_process_cv_percent": 1.1775918270073864,
+        "means_seconds": {
+          "baseline": [
+            0.025540899124997907,
+            0.0259354304999988,
+            0.02548173437499912
+          ],
+          "candidate": [
+            0.025628922000000998,
+            0.0254715148749991,
+            0.0255335274999986
+          ]
+        }
+      },
+      "test_origins[64]": {
+        "paired_gains_percent": [
+          2.232402832667435,
+          3.1008830220042194,
+          1.942584863849195
+        ],
+        "median_gain_percent": 2.232402832667435,
+        "positive_pairs": 3,
+        "bootstrap95": [
+          1.942584863849195,
+          3.1008830220042194
+        ],
+        "max_process_cv_percent": 1.2237795489196261,
+        "means_seconds": {
+          "baseline": [
+            0.0909827217500041,
+            0.09213590087499846,
+            0.09095722337499623
+          ],
+          "candidate": [
+            0.08899597312500163,
+            0.08936480287500004,
+            0.08922397199999921
+          ]
+        }
+      }
+    },
+    "broad-h004-cleanup": {
+      "test_cleanup[64]": {
+        "paired_gains_percent": [
+          1.3790050556922617,
+          0.7086781196911085,
+          3.1259710608134927
+        ],
+        "median_gain_percent": 1.3790050556922617,
+        "positive_pairs": 3,
+        "bootstrap95": [
+          0.7086781196911085,
+          3.1259710608134927
+        ],
+        "max_process_cv_percent": 4.924270373264186,
+        "means_seconds": {
+          "baseline": [
+            0.09178534937499716,
+            0.09093843112500011,
+            0.09294968624999989
+          ],
+          "candidate": [
+            0.09053684175000054,
+            0.0902985053749994,
+            0.09013218037499726
+          ]
+        }
+      },
+      "test_cleanup[256]": {
+        "paired_gains_percent": [
+          1.2738779803932898,
+          5.158922367786034,
+          4.967291380078098
+        ],
+        "median_gain_percent": 4.967291380078098,
+        "positive_pairs": 3,
+        "bootstrap95": [
+          1.2738779803932898,
+          5.158922367786034
+        ],
+        "max_process_cv_percent": 3.0604747305323525,
+        "means_seconds": {
+          "baseline": [
+            0.40159989312500066,
+            0.4004294144999996,
+            0.40213545637500303
+          ],
+          "candidate": [
+            0.39654835099999897,
+            0.3807850113749982,
+            0.38310549037499975
+          ]
+        }
+      }
+    }
+  },
+  "study_run": "https://github.com/maksimzayats/diwire/actions/runs/40891772941",
+  "controls_run": "https://github.com/maksimzayats/diwire/actions/runs/40894254101",
+  "remaining_controls_run": "https://github.com/maksimzayats/diwire/actions/runs/40894626960",
+  "limits": [
+    "Each gain applies to its stated workload.",
+    "ARM64 local and AMD64 hosted timing results are separate.",
+    "Memory probes use three ARM64 pairs and are descriptive.",
+    "The complete canonical performance timing matrix is a merge check."
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "measured_library_file_sha256": "e60c77e3b7d3eef9481802a6c5ba6b7a743353e9fb8209ebd152f199ff731624",
+  "lint_clean_file_sha256": "36438b54694597d278697b94119a038b3087b377815ddc2d83345081aa834e56",
+  "timed_scope_function_ast_identical": true,
+  "change": "Remove unused local assignment in bootstrap and return runtime directly. Bootstrap runs before the scope-entry timer."
+}

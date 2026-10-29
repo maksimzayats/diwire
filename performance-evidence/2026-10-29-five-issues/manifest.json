@@ -1,0 +1,20 @@
+{
+  "README.md": "9e2c1f68b665fcacd869b9e93343badd2f1ec05aa019c84e15f2214e9907294a",
+  "bench_candidates.py.txt": "58a2621ba6d22f05da121a206bf4ea2ecf0ecb23242fa7f71b5f738d4fce206b",
+  "bench_controls.py.txt": "6092b25fe9acae06bff0ed04b7bc3f06df58a4b203091e81132a7d7ed16a8c1f",
+  "bench_targeted.py.txt": "9d7e552196a1dfdeaecf098a530c7dbb5b729c9c4f4b389cc2412baf9c2ead7f",
+  "conftest.py.txt": "c6eb793792149cf45e4835f20f1d39d4649a3cdf70e3301e16d14d3eb67013b0",
+  "h001.patch": "45071043adb8d2ecb2b4ba0c07ce33b2127e8659e630ea404453c8f6bb2839e1",
+  "h002-lint-cleanup-proof.json": "8ec03237979e5620911bcdabe1ee5e94acdbaad37af16bbde19d7b8f98396d5a",
+  "h002-measured.patch.txt": "d8fed8971eeda92e85ecd4da10ea98ccdc049dca32b70ea3fbc3842508d48f28",
+  "h002.patch": "7c4822d628346d91ea1060734c25f8fc9f9561b6700769e7fb17243cfa0f3a8c",
+  "h003.patch": "de0b1fe0a369a3d294b1abdf06718bacbc501557110d3d16ef59a064b5fad4d9",
+  "h004.patch": "b09626cd1a23cd541cbe83590359c8114ac1fd7216d4ce4bc877fe3d26402bd9",
+  "h005.patch": "634bec04304fb639d3eca2aac6c0a81b3f03377786ef35c7b7ffc9f0b171ee67",
+  "hosted-evidence.tar.gz": "060bb692e43db36c7ddf1a3f1e7c7c42f4eb9f408e21ee39fd6c3ecd94103434",
+  "hosted_study.py.txt": "2a4b4421820281cd0a6d89f5f42a20315f441696a2d3eacf50df907d1053919b",
+  "local-evidence.tar.gz": "fb0b08e1fd430544c7f5e96095dd58b755eb48edca66c0ec02e7a140266bc493",
+  "protocol.json": "34c96589f036622e8d425bbcafb13c1585b9d460714bd20ab9d3706da8877511",
+  "summary.json": "67317fa8e6724224500d5896839a69049d929b1b3d155d9c857a44235e140224",
+  "test_proof_semantics.py.txt": "791474db473fa05c6f13791400a2fdade766e8f5b4b052975461f05dc75a53ea"
+}
