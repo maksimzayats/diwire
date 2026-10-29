@@ -2,6 +2,10 @@ name: Five optimization proof study
 on:
   push:
     branches: [research/five-optimization-proofs-20261029]
+    paths:
+      - '.github/workflows/five-proof-research.yaml'
+      - 'performance-evidence/2026-10-29-five-issues/*.py.txt'
+      - 'performance-evidence/2026-10-29-five-issues/*.patch' 
 permissions:
   contents: read
 jobs:

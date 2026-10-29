@@ -17,6 +17,6 @@ def pytest_benchmark_update_json(output_json):
         'platform':platform.platform(), 'affinity':sorted(os.sched_getaffinity(0)),
         'library_sha256':{str(p.relative_to(package)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(package.rglob('*.py'))},
         'lock_sha256':hashlib.sha256((package.parent.parent/'uv.lock').read_bytes()).hexdigest(),
-        'harness_sha256':hashlib.sha256(Path('/study/bench_candidates.py').read_bytes()).hexdigest(),
-        'protocol_sha256':hashlib.sha256(Path('/study/protocol.json').read_bytes()).hexdigest(),
+        'harness_sha256':hashlib.sha256((Path(__file__).parent/'bench_candidates.py').read_bytes()).hexdigest(),
+        'protocol_sha256':hashlib.sha256((Path(__file__).parent/'protocol.json').read_bytes()).hexdigest(),
     }

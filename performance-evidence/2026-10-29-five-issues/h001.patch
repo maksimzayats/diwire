@@ -61,7 +61,7 @@ index 4cf284c..2e2d0d2 100644
                      provider_scope_resolver._cleanup_callbacks.append(
                          (1, provider_async_cm.__aexit__)
 diff --git a/tests/unit/internal/test_resolver_assembly_compiler_branches.py b/tests/unit/internal/test_resolver_assembly_compiler_branches.py
-index 76dad89..93d6636 100644
+index 76dad89..d31bda4 100644
 --- a/tests/unit/internal/test_resolver_assembly_compiler_branches.py
 +++ b/tests/unit/internal/test_resolver_assembly_compiler_branches.py
 @@ -237,6 +237,13 @@ def _runtime(
@@ -69,7 +69,7 @@ index 76dad89..93d6636 100644
          cache_slots_by_owner_level=cache_slots_by_owner_level,
          next_scope_options_by_level=next_scope_options_by_level,
 +        async_cm_by_slot={
-+            workflow.slot: compiler_module.asynccontextmanager(provider_by_slot[workflow.slot])
++            workflow.slot: asynccontextmanager(provider_by_slot[workflow.slot])
 +            for workflow in workflows
 +            if workflow.provider_attribute == "generator"
 +            and workflow.is_provider_async
