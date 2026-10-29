@@ -23,3 +23,8 @@ Important
 
 Always put cleanup in a ``finally`` block.
 Code after ``yield`` is *not* guaranteed to run because closing a generator raises ``GeneratorExit`` at the yield point.
+
+For a background job, keep the async scope inside the task. Cancel the task
+once and await it so the scope can finish async cleanup before cancellation
+reaches the caller. See :doc:`../examples/async` for a runnable job example
+and its shutdown limits.
