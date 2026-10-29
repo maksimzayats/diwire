@@ -40,7 +40,6 @@ Issues = "https://github.com/maksimzayats/diwire/issues"
 
 [dependency-groups]
 dev = [
-    { include-group = "test" },
     "mypy>=2.4.0",
     "pydantic>=2.14.0",
     "litestar>=2.21.1",
@@ -52,17 +51,6 @@ dev = [
     "ty>=0.0.34",
     "pyrefly>=0.63.1",
     "py-spy>=0.4.2",
-]
-
-# Python 3.13t needs older native dependencies. msgspec and Litestar do not support it.
-dev-python313t = [
-    { include-group = "test" },
-    "mypy>=2.3.0,<2.4.0",
-    "ast-serialize>=0.6.0,<0.7.0",
-    "pydantic>=2.13.0,<2.14.0",
-]
-
-test = [
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
     "coverage>=7.15.4",
@@ -116,11 +104,7 @@ vcs = "git"
 style = "pep440"
 
 [tool.uv]
-conflicts = [[{ group = "dev" }, { group = "dev-python313t" }]]
 cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
-
-[tool.uv.dependency-groups]
-dev-python313t = { requires-python = "==3.13.*" }
 
 [tool.uv.sources]
 sphinx-pyodide-runner = { path = "docs/sphinx-pyodide-runner", editable = true }

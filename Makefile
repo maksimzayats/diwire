@@ -1,12 +1,6 @@
 .PHONY: format lint test test-all-pythons test-e2e-fastapi test-e2e-aiohttp test-e2e-litestar test-e2e-flask test-e2e-celery test-e2e-typer docs examples-readme benchmark benchmark-artifact-dir benchmark-diwire benchmark-comparison benchmark-json benchmark-report benchmark-report-all benchmark-json-resolve benchmark-report-resolve
 
-DEV_GROUP ?= dev
-UV_RUN = uv run --no-default-groups --group $(DEV_GROUP)
-ifeq ($(DEV_GROUP),dev-python313t)
-COVERAGE_CONFIG ?= tests/coverage-python313t.toml
-else
-COVERAGE_CONFIG ?= pyproject.toml
-endif
+UV_RUN = uv run --group dev
 
 format:
 	$(UV_RUN) ruff format .
@@ -18,7 +12,7 @@ lint:
 	$(UV_RUN) mypy .
 
 test:
-	$(UV_RUN) --group docs pytest tests/ --benchmark-disable --cov=src/diwire --cov-config=$(COVERAGE_CONFIG) --cov-report=term-missing
+	$(UV_RUN) --group docs pytest tests/ --benchmark-disable --cov=src/diwire --cov-report=term-missing
 
 test-e2e-fastapi:
 	@set +e; \
@@ -64,15 +58,11 @@ test-e2e-celery:
 
 test-all-pythons:
 	@set -e; \
-	for version in 3.10 3.11 3.12 3.13 3.13t 3.14 3.14t 3.15 3.15t; do \
-		group=dev; coverage_config=pyproject.toml; \
-		if [ "$$version" = "3.13t" ]; then \
-			group=dev-python313t; coverage_config=tests/coverage-python313t.toml; \
-		fi; \
+	for version in 3.10 3.11 3.12 3.13 3.14 3.14t 3.15 3.15t; do \
 		UV_PROJECT_ENVIRONMENT=".cache/venvs/python-$$version" \
-		uv run --locked --python "$$version" --no-default-groups --group "$$group" \
+		uv run --locked --python "$$version" --group dev \
 			--group docs pytest tests/ --benchmark-disable --cov=src/diwire \
-			--cov-config="$$coverage_config" --cov-report=term-missing; \
+			--cov-report=term-missing; \
 	done
 
 docs:

@@ -19,16 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       UV_PYTHON: ${{ matrix.python-version }}
-      DEV_GROUP: ${{ matrix.dev-group || 'dev' }}
-      COVERAGE_CONFIG: ${{ matrix.coverage-config || 'pyproject.toml' }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: [ "3.10", "3.11", "3.12", "3.13", "3.13t", "3.14", "3.14t", "3.15", "3.15t" ]
-        include:
-          - python-version: "3.13t"
-            dev-group: dev-python313t
-            coverage-config: tests/coverage-python313t.toml
+        python-version: [ "3.10", "3.11", "3.12", "3.13", "3.14", "3.14t", "3.15", "3.15t" ]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -49,11 +43,11 @@ jobs:
           fi
 
       - name: Install dependencies
-        run: uv sync --locked --no-default-groups --group "$DEV_GROUP" --group docs
+        run: uv sync --locked --group dev --group docs
 
       - name: Verify runtime and available integrations
         run: |
-          uv run --no-default-groups --group "$DEV_GROUP" python - <<'PY'
+          uv run --group dev python - <<'PY'
           import importlib
           import os
           import sys
@@ -65,10 +59,8 @@ jobs:
           assert free_threaded == requested.endswith("t")
           modules = [
               "diwire", "aiohttp", "celery", "django", "fastapi", "flask",
-              "mypy.build", "pydantic", "pydantic_settings", "typer",
+              "litestar", "msgspec", "mypy.build", "pydantic", "pydantic_settings", "typer",
           ]
-          if os.environ["DEV_GROUP"] == "dev":
-              modules.extend(["litestar", "msgspec"])
           for module in modules:
               importlib.import_module(module)
           if free_threaded:
@@ -78,20 +70,20 @@ jobs:
           PY
 
       - name: Check formatting
-        run: uv run --no-default-groups --group "$DEV_GROUP" ruff format --check .
+        run: uv run --group dev ruff format --check .
 
       - name: Lint with ruff
-        run: uv run --no-default-groups --group "$DEV_GROUP" ruff check .
+        run: uv run --group dev ruff check .
 
       - name: Test BB workflow and merge gates
         if: matrix.python-version == '3.14'
         run: node --test .bb/tests/*.test.mjs
 
       - name: Type check with mypy
-        run: uv run --no-default-groups --group "$DEV_GROUP" mypy .
+        run: uv run --group dev mypy .
 
       - name: Run tests with coverage
-        run: uv run --no-default-groups --group "$DEV_GROUP" pytest tests/ --benchmark-disable --cov=src/diwire --cov-config="$COVERAGE_CONFIG" --cov-report=xml --cov-report=term-missing
+        run: uv run --group dev pytest tests/ --benchmark-disable --cov=src/diwire --cov-report=xml --cov-report=term-missing
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.14'
