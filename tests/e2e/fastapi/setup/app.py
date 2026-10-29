@@ -2,7 +2,7 @@ import uvicorn
 from fastapi import FastAPI
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from diwire import Container, Injected, Lifetime, Scope, resolver_context
+from diwire import All, Container, Injected, Lifetime, Scope, resolver_context
 from diwire.integrations.fastapi import RequestContextMiddleware, add_request_context
 from tests.e2e.fastapi.setup.config import FastAPIE2ESettings
 from tests.e2e.fastapi.setup.services import (
@@ -10,6 +10,7 @@ from tests.e2e.fastapi.setup.services import (
     CachedAsyncResource,
     CachedAsyncService,
     CMService,
+    NoneInstanceValue,
     RequestBasedService,
     RequestWithCustomStateService,
     WebSocketBasedService,
@@ -85,9 +86,22 @@ async def cached_async_state() -> dict[str, int]:
     return dict(cached_async_counts)
 
 
+@app.get("/services/none-instance")
+@resolver_context.inject(scope=Scope.REQUEST)
+async def none_instance(value: Injected[NoneInstanceValue]) -> dict[str, bool]:
+    collection = await resolver_context.aresolve(All[NoneInstanceValue])
+    return {
+        "injected": value is None,
+        "sync": resolver_context.resolve(NoneInstanceValue) is None,
+        "async": await resolver_context.aresolve(NoneInstanceValue) is None,
+        "collection": len(collection) == 1 and collection[0] is None,
+    }
+
+
 def main() -> None:
     assert_free_threaded_runtime()
     container = Container()
+    container.add_instance(None, provides=NoneInstanceValue)
     add_request_context(container)
     container.add_factory(
         provide_async_leaf_service,

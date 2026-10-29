@@ -57,6 +57,7 @@ GeneratorProvider: TypeAlias = (
 
 
 MATERIALIZED_PROVIDER_CALL_PLAN_KEY: Final[object] = object()
+_MISSING_INSTANCE: Final[object] = object()
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,8 +123,8 @@ class ProviderSpec:
     provides: UserDependency
     """The dependency type that this provider supplies."""
 
-    instance: UserDependency | None = None
-    """An optional instance of the provided dependency, if applicable."""
+    instance: UserDependency = _MISSING_INSTANCE
+    """The provided instance, including None; a private sentinel means absent."""
     concrete_type: ConcreteTypeProvider[Any] | None = None
     """An optional concrete type of the provided dependency, if applicable."""
     factory: FactoryProvider[Any] | None = None

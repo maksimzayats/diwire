@@ -22,6 +22,7 @@ from diwire._internal.markers import (
 )
 from diwire._internal.open_generics import _close_generic_dependency_with_typevar_defaults
 from diwire._internal.providers import (
+    _MISSING_INSTANCE,
     MATERIALIZED_PROVIDER_CALL_PLAN_KEY,
     Lifetime,
     MaterializedProviderCallPlan,
@@ -633,7 +634,7 @@ class ResolverGenerationPlanner:
         return lock_mode
 
     def _resolve_provider_attribute(self, *, spec: ProviderSpec) -> str:
-        if spec.instance is not None:
+        if spec.instance is not _MISSING_INSTANCE:
             return "instance"
         if spec.concrete_type is not None:
             return "concrete_type"
@@ -651,7 +652,7 @@ class ResolverGenerationPlanner:
         raise DIWireInvalidProviderSpecError(msg)
 
     def _is_cached(self, *, spec: ProviderSpec) -> bool:
-        if spec.instance is not None:
+        if spec.instance is not _MISSING_INSTANCE:
             return True
         return spec.lifetime is not Lifetime.TRANSIENT
 
@@ -663,7 +664,7 @@ class ResolverGenerationPlanner:
     ) -> int | None:
         if not is_cached:
             return None
-        if spec.instance is not None:
+        if spec.instance is not _MISSING_INSTANCE:
             return self._root_scope.level
         if spec.lifetime is Lifetime.SCOPED:
             return spec.scope.level

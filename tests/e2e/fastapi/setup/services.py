@@ -14,6 +14,10 @@ class CustomState(State):
     pass
 
 
+class NoneInstanceValue:
+    pass
+
+
 @dataclass
 class RequestBasedService:
     request: Request

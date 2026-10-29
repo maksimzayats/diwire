@@ -52,6 +52,17 @@ Use :meth:`diwire.Container.add_instance` to bind an already-created object:
    container = Container()
    container.add_instance(Config())
 
+``None`` is also a valid instance value. An explicit key can bind a disabled
+dependency. If you omit ``provides``, the key is ``type(None)``:
+
+.. code-block:: python
+
+   container.add_instance(None, provides=object)
+   assert container.resolve(object) is None
+
+``provides=None`` is still an invalid dependency key. The value and the key have
+different roles.
+
 Factories
 ^^^^^^^^^
 

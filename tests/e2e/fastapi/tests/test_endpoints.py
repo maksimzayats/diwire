@@ -165,3 +165,25 @@ async def test_cached_async_factory_isolated_for_parallel_requests(
         "opened": 24,
         "closed": 24,
     }
+
+
+@pytest.mark.parametrize("parallel", [False, True])
+@pytest.mark.asyncio
+async def test_none_instance_resolves_in_serial_and_parallel_requests(
+    http_client: httpx.AsyncClient,
+    *,
+    parallel: bool,
+) -> None:
+    path = "/services/none-instance"
+    if parallel:
+        responses = await asyncio.gather(*(http_client.get(path) for _ in range(24)))
+    else:
+        responses = [await http_client.get(path) for _ in range(2)]
+    for response in responses:
+        assert response.status_code == 200
+        assert response.json() == {
+            "injected": True,
+            "sync": True,
+            "async": True,
+            "collection": True,
+        }
