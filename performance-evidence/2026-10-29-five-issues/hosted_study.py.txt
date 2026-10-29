@@ -127,6 +127,7 @@ for source,case in (PLAN.items() if os.environ.get('STUDY_MODE','full')=='full' 
         if name!=case['primary'] and (protected['median_gain_percent'] < -5 or protected['max_process_cv_percent']>10):raise SystemExit(f'{source} protected cell failed: {name}')
 # Check broader costs after the primary estimates are fixed.
 for source,file,selection in [('h001','bench_controls.py','unused_async_gen_compile'),('h005','bench_controls.py','origin_registration'),('h004','bench_candidates.py','cleanup'),('h005','bench_candidates.py','origins')]:
+    if os.environ.get('STUDY_MODE')=='remaining' and source=='h001':continue
     tag=f'{source}-{selection}'
     labels=[]
     for i in range(3):

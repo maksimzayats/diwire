@@ -22,7 +22,7 @@ def test_origin_registration(benchmark: Any,count: int) -> None:
         for root in roots:c.add(root,provides=root,lifetime=Lifetime.SCOPED,scope=Scope.APP)
     def teardown(c):
         nonlocal current
-        c.close()
+        if c._root_resolver is not None:c.close()
         current=None
     try:benchmark.pedantic(run,setup=setup,teardown=teardown,iterations=1,rounds=12,warmup_rounds=3)
     finally:
