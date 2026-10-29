@@ -1,5 +1,12 @@
 name: Five optimization proof study
 on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [full, controls]
+        default: full
+        required: true
   push:
     branches: [research/five-optimization-proofs-20261029]
     paths:
@@ -22,6 +29,8 @@ jobs:
       - name: Install fixed runtime and locked dependencies
         run: uv sync --locked --python 3.14.10 --group dev --group docs
       - name: Run frozen independent proof study
+        env:
+          STUDY_MODE: ${{ inputs.mode || 'full' }}
         run: uv run --locked python performance-evidence/2026-10-29-five-issues/hosted_study.py.txt
       - name: Save all complete and partial evidence
         if: always()

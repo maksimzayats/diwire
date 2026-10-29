@@ -31,7 +31,9 @@ def test_origin_registration(benchmark: Any,count: int) -> None:
 @pytest.mark.parametrize('count',[16,64])
 def test_unused_async_gen_compile(benchmark: Any,count: int) -> None:
     keys=tuple(type(f'Resource{i}',(),{}) for i in range(count))
-    async def resource() -> AsyncGenerator[object,None]:yield object()
+    async def resource() -> AsyncGenerator[object,None]:
+        try:yield object()
+        finally:gc.isenabled()
     current=None
     def setup():
         nonlocal current

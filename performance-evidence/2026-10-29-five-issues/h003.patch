@@ -34,7 +34,7 @@ index 4cf284c..337b6b6 100644
                  results.append(await getattr(self, f"aresolve_{slot}")())
              return tuple(results)
 diff --git a/tests/unit/internal/test_resolver_assembly_compiler_branches.py b/tests/unit/internal/test_resolver_assembly_compiler_branches.py
-index 76dad89..eb62a06 100644
+index 76dad89..44de2b8 100644
 --- a/tests/unit/internal/test_resolver_assembly_compiler_branches.py
 +++ b/tests/unit/internal/test_resolver_assembly_compiler_branches.py
 @@ -222,6 +222,7 @@ def _runtime(
@@ -45,3 +45,12 @@ index 76dad89..eb62a06 100644
          dep_eq_slot_by_key={} if dep_eq_slot_by_key is None else dep_eq_slot_by_key,
          dep_type_by_slot={workflow.slot: workflow.provides for workflow in workflows}
          if dep_type_by_slot is None
+@@ -483,7 +484,7 @@ async def test_resolver_aexit_captures_owned_scope_errors() -> None:
+ 
+ @pytest.mark.asyncio
+ async def test_dispatch_fallback_async_and_sync_branches() -> None:
+-    runtime = SimpleNamespace(all_slots_by_key={int: (1,)})
++    runtime = SimpleNamespace(all_slots_by_key={int: (1,)}, all_sync_collection_keys=frozenset())
+ 
+     class _Resolver:
+         _runtime = runtime

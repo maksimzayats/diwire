@@ -1,0 +1,101 @@
+diff --git a/src/diwire/_internal/resolvers/assembly/compiler.py b/src/diwire/_internal/resolvers/assembly/compiler.py
+index 4cf284c..730b296 100644
+--- a/src/diwire/_internal/resolvers/assembly/compiler.py
++++ b/src/diwire/_internal/resolvers/assembly/compiler.py
+@@ -136,6 +136,7 @@ class _ResolverRuntime:
+     scope_obj_by_level: dict[int, Any]
+     scope_level_by_scope_id: dict[int, int]
+     uses_stateless_scope_reuse: bool
++    transition_plans: dict[tuple[int, int], tuple[ScopePlan, ...]]
+     has_cleanup: bool
+     dep_registered_keys: set[Any]
+     all_slots_by_key: dict[Any, tuple[int, ...]]
+@@ -294,7 +295,7 @@ class ResolversAssemblyCompiler:
+         }
+         scope_level_by_scope_id = {id(scope): level for level, scope in scope_obj_by_level.items()}
+ 
+-        return _ResolverRuntime(
++        runtime = _ResolverRuntime(
+             plan=plan,
+             ordered_scopes=ordered_scopes,
+             scopes_by_level=scopes_by_level,
+@@ -305,6 +306,7 @@ class ResolversAssemblyCompiler:
+             scope_obj_by_level=scope_obj_by_level,
+             scope_level_by_scope_id=scope_level_by_scope_id,
+             uses_stateless_scope_reuse=uses_stateless_scope_reuse,
++            transition_plans={},
+             has_cleanup=plan.has_cleanup,
+             dep_registered_keys=dep_registered_keys,
+             all_slots_by_key=all_slots_by_key,
+@@ -317,6 +319,8 @@ class ResolversAssemblyCompiler:
+             next_scope_options_by_level=next_scope_options_by_level,
+         )
+ 
++        return runtime
++
+     def _build_generated_globals(self, *, runtime: _ResolverRuntime) -> dict[str, Any]:
+         generated_globals: dict[str, Any] = {
+             "Any": Any,
+@@ -2426,7 +2430,7 @@ def _resolver_enter_scope(
+     runtime = type(self)._runtime
+     class_plan = type(self)._class_plan
+ 
+-    immediate_next, default_next, explicit_candidates = _next_scope_options(
++    immediate_next, default_next, _explicit_candidates = _next_scope_options(
+         runtime=runtime,
+         class_scope_level=class_plan.scope_level,
+     )
+@@ -2458,8 +2462,7 @@ def _resolver_enter_scope(
+         msg = f"Cannot enter scope level {target_scope_level} from level {class_plan.scope_level}."
+         raise DIWireScopeMismatchError(msg)
+ 
+-    explicit_scope_levels = {candidate.scope_level for candidate in explicit_candidates}
+-    if target_scope_level not in explicit_scope_levels:
++    if target_scope_level not in runtime.scopes_by_level:
+         msg = (
+             f"Scope level {target_scope_level} is not a valid next transition from level "
+             f"{class_plan.scope_level}."
+@@ -2470,11 +2473,15 @@ def _resolver_enter_scope(
+         target_level = int(target_scope_level)
+         return getattr(self._root_resolver, f"_scope_resolver_{target_level}")
+ 
+-    transition_plan = _build_transition_plan_to_target(
+-        runtime=runtime,
+-        class_scope_level=class_plan.scope_level,
+-        target_scope_level=int(target_scope_level),
+-    )
++    transition_key = (class_plan.scope_level, int(target_scope_level))
++    transition_plan = runtime.transition_plans.get(transition_key)
++    if transition_plan is None:
++        transition_plan = _build_transition_plan_to_target(
++            runtime=runtime,
++            class_scope_level=class_plan.scope_level,
++            target_scope_level=int(target_scope_level),
++        )
++        runtime.transition_plans[transition_key] = transition_plan
+ 
+     if len(transition_plan) == 1:
+         return _instantiate_scope_transition(
+diff --git a/tests/unit/internal/test_resolver_assembly_compiler_branches.py b/tests/unit/internal/test_resolver_assembly_compiler_branches.py
+index 76dad89..ff84d36 100644
+--- a/tests/unit/internal/test_resolver_assembly_compiler_branches.py
++++ b/tests/unit/internal/test_resolver_assembly_compiler_branches.py
+@@ -206,7 +206,7 @@ def _runtime(
+             default_next,
+             deeper_scopes,
+         )
+-    return compiler_module._ResolverRuntime(
++    runtime = compiler_module._ResolverRuntime(
+         plan=plan,
+         ordered_scopes=scopes,
+         scopes_by_level={scope.scope_level: scope for scope in scopes},
+@@ -237,7 +237,9 @@ def _runtime(
+         },
+         cache_slots_by_owner_level=cache_slots_by_owner_level,
+         next_scope_options_by_level=next_scope_options_by_level,
++        transition_plans={},
+     )
++    return runtime
+ 
+ 
+ def _eligible_materialized_workflow() -> tuple[

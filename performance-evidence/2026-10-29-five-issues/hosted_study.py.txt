@@ -94,7 +94,7 @@ def compare(labels):
     return result
 
 summary={}
-for source,case in PLAN.items():
+for source,case in (PLAN.items() if os.environ.get('STUDY_MODE','full')=='full' else ()):
     run(source,f'semantics-{source}','test_proof_semantics.py',timed=False)
     labels=[]
     for i in range(3):
@@ -132,5 +132,7 @@ for source,file,selection in [('h001','bench_controls.py','unused_async_gen_comp
     for i in range(3):
         for role in (('h000',source) if i%2==0 else (source,'h000')):run(role,f'broad-{tag}-{i}-{role}',file,selection)
         labels.append((f'broad-{tag}-{i}-h000',f'broad-{tag}-{i}-{source}'))
-    (OUT/f'broad-{tag}.json').write_text(json.dumps(compare(labels),indent=2)+'\n')
-print('ALL_PRIMARY_TARGETS_PASSED',flush=True)
+    broad=compare(labels)
+    (OUT/f'broad-{tag}.json').write_text(json.dumps(broad,indent=2)+'\n')
+    if any(r['median_gain_percent'] < -5 for r in broad.values()):raise SystemExit(f'Broad regression: {tag}')
+print('STUDY_PHASE_COMPLETE',os.environ.get('STUDY_MODE','full'),flush=True)
