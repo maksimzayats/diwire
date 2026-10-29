@@ -5,7 +5,7 @@ const head = "a".repeat(40);
 const base = "b".repeat(40);
 const now = Date.parse("2026-10-27T12:00:00Z");
 const required = [
-  ...["3.10", "3.11", "3.12", "3.13", "3.13t", "3.14", "3.14t", "3.15", "3.15t"].map(v => `Lint & Tests (Python ${v})`),
+  ...["3.10", "3.11", "3.12", "3.13", "3.14", "3.14t", "3.15", "3.15t"].map(v => `Lint & Tests (Python ${v})`),
   ...["3.14", "3.15", "3.15t"].flatMap(version =>
     ["FastAPI", "aiohttp", "Celery", "Litestar", "Flask", "Typer"].map(framework =>
       `E2E ${framework} (Docker Compose, Python ${version})`)),

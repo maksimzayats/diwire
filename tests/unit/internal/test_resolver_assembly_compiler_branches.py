@@ -5,8 +5,6 @@ import asyncio
 import dis
 import gc
 import inspect
-import sys
-import sysconfig
 import threading
 import weakref
 from collections.abc import Mapping
@@ -307,10 +305,6 @@ def test_compiled_function_shares_plain_namespace_and_snapshots_other_mappings(
     assert (cast("FunctionType", compiled).__globals__ is original) is (namespace_kind == "dict")
 
 
-@pytest.mark.skipif(
-    sys.version_info[:2] == (3, 13) and bool(sysconfig.get_config_var("Py_GIL_DISABLED")),
-    reason="Free-threaded Python 3.13 immortalizes generated classes after threads start.",
-)
 def test_generated_classes_are_collected_when_compilation_graph_is_released() -> None:
     def compile_class_refs() -> tuple[weakref.ReferenceType[type[Any]], ...]:
         registrations = ProvidersRegistrations()
