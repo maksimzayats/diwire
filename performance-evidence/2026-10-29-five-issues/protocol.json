@@ -1,0 +1,21 @@
+{
+  "baseline": "6f225bf",
+  "scope": "Issue research, five independent proof patches. No runtime release or PR.",
+  "primary_workloads": {
+    "h001": "test_async_gen[False]",
+    "h002": "test_scope[STEP]",
+    "h003": "test_public_all[sync]",
+    "h004": "test_cleanup[256]",
+    "h005": "test_origins[64]"
+  },
+  "environment": "One Linux ARM64 Docker VM CPU pinned to CPU 0. Same CPython and dependencies in one persistent container. Equal-length source paths. Each timed role is a fresh pytest process.",
+  "timing": "pytest-benchmark pedantic. All raw rounds saved. Runtime batches have 5000 operations, 25 rounds and 5 warmups. Compile cells use 8 rounds and 2 warmups. Compile excludes registration setup and teardown. Scope benchmarks include enter, resolve, exit.",
+  "calibration": "One three-pair identical-source A/A series per hypothesis group with adjacent role processes. All absolute paired medians <=3%. No retry of unchanged protocol.",
+  "screen": "One pair per candidate for engineering errors and direction only; never acceptance.",
+  "official": "Seven independent alternating baseline/candidate process pairs per candidate. Median throughput gain >=5%, >=6/7 positive pairs, paired bootstrap 95% interval lower bound >0. Every individual process raw-round coefficient of variation <=10%.",
+  "protected": "All other cells in same target group. Median gain must be >=-5%. Flagged protected cells get one fixed seven-pair confirmation, no pooling or extension. Broad canonical runtime and startup checks follow promising targets.",
+  "semantics": "Public output, scope caching, provider calls, cleanup counters, ordering and exceptions must match. Existing tests plus focused new behavior checks required.",
+  "claims": "Each issue describes only its measured target. No HTTP speed claim from resolver or compile timings. Proof patch is not final production approval. Include memory and broad results and any limits.",
+  "saturation": "Reject a candidate on semantics failure or failure to clear declared useful gain. After three failed new candidates reassess profiling; continue independent leads until five qualify or an external blocker is proved. No issue for speculation.",
+  "amendment": "V1 A/A failed before any official A/B. Preserve all v1 data. V2 increases runtime batches from 1000 to 5000 operations, rounds 15 to 25, warmups 3 to 5, and pairs each hypothesis group separately to reduce role separation. Compiler workloads remain unchanged. No thresholds are lowered."
+}

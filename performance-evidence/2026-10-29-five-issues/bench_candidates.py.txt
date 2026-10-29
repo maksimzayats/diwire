@@ -1,0 +1,185 @@
+from __future__ import annotations
+
+import asyncio
+import gc
+import types
+from collections.abc import AsyncGenerator
+from dataclasses import make_dataclass
+from typing import Any, Generic, TypeVar
+
+import pytest
+from diwire import All, Container, DependencyRegistrationPolicy, Lifetime, LockMode, MissingPolicy, Scope
+
+T = TypeVar('T')
+
+
+def container() -> Container:
+    return Container(lock_mode=LockMode.NONE, missing_policy=MissingPolicy.ERROR,
+                     dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+                     use_resolver_context=False)
+
+
+def async_measure(benchmark: Any, loop: Any, batch: Any) -> None:
+    benchmark.pedantic(lambda: loop.run_until_complete(batch()), iterations=1, rounds=25, warmup_rounds=5)
+
+
+@pytest.mark.parametrize('with_dep', [False, True])
+def test_async_gen(benchmark: Any, with_dep: bool) -> None:
+    c = container()
+    calls = [0, 0]
+    class Resource:
+        pass
+    class Config:
+        pass
+    c.add(Config, scope=Scope.APP)
+    async def resource() -> AsyncGenerator[Resource, None]:
+        calls[0] += 1
+        try:
+            yield Resource()
+        finally:
+            calls[1] += 1
+    async def dependent(config: Config) -> AsyncGenerator[Resource, None]:
+        assert isinstance(config, Config)
+        calls[0] += 1
+        try:
+            yield Resource()
+        finally:
+            calls[1] += 1
+    dependent.__annotations__ = {'config': Config, 'return': AsyncGenerator[Resource, None]}
+    c.add_generator(dependent if with_dep else resource, provides=Resource,
+                    scope=Scope.REQUEST, lifetime=Lifetime.SCOPED)
+    r = c.compile()
+    loop = asyncio.new_event_loop()
+    async def batch() -> None:
+        before = calls[0]
+        for _ in range(5000):
+            async with r.enter_scope(Scope.REQUEST) as scope:
+                first = await scope.aresolve(Resource)
+                assert first is await scope.aresolve(Resource)
+        assert calls[0] - before == 5000
+        assert calls[0] == calls[1]
+    try:
+        loop.run_until_complete(batch())
+        async_measure(benchmark, loop, batch)
+    finally:
+        loop.run_until_complete(c.aclose())
+        loop.close()
+
+
+@pytest.mark.parametrize('target', ['ACTION', 'STEP', 'REQUEST'])
+def test_scope(benchmark: Any, target: str) -> None:
+    c = container()
+    class Service:
+        pass
+    level = getattr(Scope, target)
+    c.add(Service, scope=level, lifetime=Lifetime.SCOPED)
+    r = c.compile()
+    def batch() -> None:
+        for _ in range(5000):
+            with r.enter_scope(level) as scope:
+                first = scope.resolve(Service)
+                assert first is scope.resolve(Service)
+    try:
+        batch()
+        benchmark.pedantic(batch, iterations=1, rounds=25, warmup_rounds=5)
+    finally:
+        c.close()
+
+
+@pytest.mark.parametrize('kind', ['sync', 'async', 'mixed'])
+def test_public_all(benchmark: Any, kind: str) -> None:
+    c = container()
+    class Service:
+        pass
+    async def provide() -> Service:
+        return Service()
+    count = 32
+    for i in range(count):
+        if kind == 'async' or (kind == 'mixed' and i % 2):
+            c.add_factory(provide, provides=Service, component=i,
+                          scope=Scope.APP, lifetime=Lifetime.TRANSIENT)
+        else:
+            c.add(Service, component=i, scope=Scope.APP, lifetime=Lifetime.TRANSIENT)
+    r = c.compile()
+    key = All[Service]
+    loop = asyncio.new_event_loop()
+    async def check() -> None:
+        a, b = await r.aresolve(key), await r.aresolve(key)
+        assert len(a) == len(b) == count
+        assert all(isinstance(x, Service) for x in a)
+        assert all(x is not y for x,y in zip(a,b))
+    async def batch() -> None:
+        for _ in range(5000):
+            await r.aresolve(key)
+    try:
+        loop.run_until_complete(check())
+        async_measure(benchmark, loop, batch)
+    finally:
+        loop.run_until_complete(c.aclose())
+        loop.close()
+
+
+@pytest.mark.parametrize('count', [64, 256])
+def test_cleanup(benchmark: Any, count: int) -> None:
+    from tests.performance.test_generic_compile_workloads import _Repo, _GenericRepo
+    entities = tuple(type(f'E{i}', (), {}) for i in range(count))
+    keys = tuple(_Repo[e] for e in entities)
+    consumers = tuple(make_dataclass(f'Consumer{i}', [('repo', key)]) for i,key in enumerate(keys))
+    current = None
+    def setup() -> tuple[tuple[Container], dict[str, object]]:
+        nonlocal current
+        c = container()
+        c.add(_GenericRepo, provides=_Repo, scope=Scope.APP, lifetime=Lifetime.SCOPED)
+        for cls in consumers:
+            c.add(cls, scope=Scope.APP, lifetime=Lifetime.SCOPED)
+        current = c
+        gc.collect()
+        return (c,), {}
+    def run(c: Container) -> None:
+        c.compile()
+    def teardown(c: Container) -> None:
+        nonlocal current
+        for entity,key,cls in zip(entities,keys,consumers):
+            value = c.resolve(cls)
+            assert value.repo.entity_type is entity
+            assert value.repo is c.resolve(key)
+        c.close()
+        current = None
+    try:
+        benchmark.pedantic(run, setup=setup, teardown=teardown, iterations=1, rounds=8, warmup_rounds=2)
+    finally:
+        if current is not None:
+            teardown(current)
+
+
+@pytest.mark.parametrize('count', [16, 64])
+def test_origins(benchmark: Any, count: int) -> None:
+    roots = tuple(types.new_class(f'Repo{i}', (Generic[T],)) for i in range(count))
+    keys = tuple(root[int] for root in roots)
+    consumers = tuple(make_dataclass(f'Consumer{i}', [('repo', key)]) for i,key in enumerate(keys))
+    current = None
+    def setup() -> tuple[tuple[Container], dict[str, object]]:
+        nonlocal current
+        c = container()
+        for root in roots:
+            c.add(root, provides=root, scope=Scope.APP, lifetime=Lifetime.SCOPED)
+        for cls in consumers:
+            c.add(cls, scope=Scope.APP, lifetime=Lifetime.SCOPED)
+        current = c
+        gc.collect()
+        return (c,), {}
+    def run(c: Container) -> None:
+        c.compile()
+    def teardown(c: Container) -> None:
+        nonlocal current
+        for root,key,cls in zip(roots,keys,consumers):
+            value = c.resolve(cls)
+            assert isinstance(value.repo, root)
+            assert value.repo is c.resolve(key)
+        c.close()
+        current = None
+    try:
+        benchmark.pedantic(run, setup=setup, teardown=teardown, iterations=1, rounds=8, warmup_rounds=2)
+    finally:
+        if current is not None:
+            teardown(current)

@@ -1,0 +1,61 @@
+diff --git a/src/diwire/_internal/open_generics.py b/src/diwire/_internal/open_generics.py
+index 601b0c4..990da5b 100644
+--- a/src/diwire/_internal/open_generics.py
++++ b/src/diwire/_internal/open_generics.py
+@@ -214,6 +214,8 @@ class _OpenGenericRegistry:
+     def __init__(self) -> None:
+         self._specs_by_key: dict[Any, _OpenGenericSpec] = {}
+         self._registration_counter = 0
++        self._specs_by_origin: dict[Any, list[_OpenGenericSpec]] = {}
++        self._origin_index_safe = True
+ 
+     @dataclass(frozen=True, slots=True)
+     class Snapshot:
+@@ -238,6 +240,14 @@ class _OpenGenericRegistry:
+         """
+         self._specs_by_key = dict(snapshot.specs_by_key)
+         self._registration_counter = snapshot.registration_counter
++        self._specs_by_origin = {}
++        self._origin_index_safe = all(
++            type(get_origin(spec.canonical_key)) is type for spec in self._specs_by_key.values()
++        )
++        for spec in self._specs_by_key.values():
++            origin = get_origin(spec.canonical_key)
++            if type(origin) is type:
++                self._specs_by_origin.setdefault(origin, []).append(spec)
+ 
+     def has_specs(self) -> bool:
+         return bool(self._specs_by_key)
+@@ -294,6 +304,17 @@ class _OpenGenericRegistry:
+             provider_is_inject_wrapper=bool(getattr(provider, INJECT_WRAPPER_MARKER, False)),
+         )
+         self._specs_by_key[canonical_key] = spec
++        origin = get_origin(canonical_key)
++        self._origin_index_safe = self._origin_index_safe and type(origin) is type
++        if type(origin) is type:
++            if origin not in self._specs_by_origin:
++                self._specs_by_origin[origin] = [spec]
++            else:
++                self._specs_by_origin[origin] = [
++                    candidate
++                    for candidate in self._specs_by_key.values()
++                    if get_origin(candidate.canonical_key) is origin
++                ]
+         return spec
+ 
+     def find_best_match(self, dependency: Any) -> _OpenGenericMatch | None:
+@@ -303,7 +324,13 @@ class _OpenGenericRegistry:
+ 
+         matches: list[_OpenGenericMatch] = []
+         validation_error: DIWireInvalidGenericTypeArgumentError | None = None
+-        for spec in self._specs_by_key.values():
++        origin = get_origin(closed_dependency)
++        candidate_specs = (
++            self._specs_by_origin.get(origin, ())
++            if self._origin_index_safe and type(origin) is type
++            else self._specs_by_key.values()
++        )
++        for spec in candidate_specs:
+             typevar_map = _match_typevars(template=spec.canonical_key, concrete=closed_dependency)
+             if typevar_map is None:
+                 continue

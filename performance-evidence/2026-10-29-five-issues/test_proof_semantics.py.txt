@@ -1,0 +1,214 @@
+import asyncio
+import inspect
+from collections.abc import AsyncGenerator, Generator
+from dataclasses import make_dataclass
+from types import SimpleNamespace
+from typing import Annotated, Generic, TypeVar
+
+import pytest
+from diwire import All, Container, DependencyRegistrationPolicy, Lifetime, LockMode, MissingPolicy, Scope
+from diwire._internal.open_generics import OpenGenericRegistry
+from diwire._internal.providers import ProviderDependency, ProviderSpec, ProvidersRegistrations
+
+T=TypeVar('T')
+U=TypeVar('U')
+class Box(Generic[T]):
+    pass
+class Other(Generic[T]):
+    pass
+
+def make_container():
+    return Container(lock_mode=LockMode.NONE, missing_policy=MissingPolicy.ERROR,
+                     dependency_registration_policy=DependencyRegistrationPolicy.IGNORE,
+                     use_resolver_context=False)
+
+def register(registry,key,provider):
+    return registry.register(provides=key,provider_kind='factory',provider=provider,
+                             lifetime=Lifetime.TRANSIENT,scope=Scope.APP,lock_mode=LockMode.NONE,
+                             is_async=False,is_any_dependency_async=False,needs_cleanup=False,dependencies=[])
+
+def factory_a():
+    return object()
+def factory_b():
+    return object()
+
+
+def test_generic_index_replacement_restore_and_special_origins():
+    registry=OpenGenericRegistry()
+    register(registry,Box[T],factory_a)
+    register(registry,Box[list[T]],factory_b)
+    register(registry,Other[T],factory_a)
+    assert registry.find_best_match(Box[list[int]]).spec.provider is factory_b
+    snapshot=registry.snapshot()
+    register(registry,Box[list[T]],factory_a)
+    assert registry.find_best_match(Box[list[int]]).spec.provider is factory_a
+    registry.restore(snapshot)
+    assert registry.find_best_match(Box[list[int]]).spec.provider is factory_b
+    # Nonstandard outer origin must keep the original full matcher.
+    register(registry,Annotated[list[T],'meta'],factory_a)
+    assert registry.find_best_match(Annotated[list[int],'meta']).spec.provider is factory_a
+    assert registry.find_best_match(Other[int]).spec.provider is factory_a
+    snapshot=registry.snapshot()
+    registry.restore(snapshot)
+    assert registry.find_best_match(Box[list[int]]).spec.provider is factory_b
+
+
+def test_generic_index_late_equal_specificity_uses_last_registration():
+    registry=OpenGenericRegistry()
+    register(registry,Box[tuple[T]],factory_a)
+    register(registry,Box[tuple[U]],factory_b)
+    assert registry.find_best_match(Box[tuple[int]]).spec.provider is factory_b
+    register(registry,Box[tuple[T]],factory_a)
+    assert registry.find_best_match(Box[tuple[int]]).spec.provider is factory_a
+
+
+@pytest.mark.parametrize('source', ['lookup', 'spec_bool', 'cleanup_attr'])
+def test_cleanup_reducer_preserves_generator_stopiteration(monkeypatch,source):
+    registry=ProvidersRegistrations()
+    dep=ProviderDependency(provides=int,parameter=inspect.Parameter('value',inspect.Parameter.POSITIONAL_OR_KEYWORD,annotation=int))
+    spec=ProviderSpec(provides=str,instance='value',lifetime=Lifetime.TRANSIENT,scope=Scope.APP,is_async=False,is_any_dependency_async=False,needs_cleanup=False,dependencies=[dep])
+    def missing():
+        raise StopIteration('sentinel')
+    class BadSpec:
+        def __bool__(self):
+            if source=='spec_bool':missing()
+            return True
+        @property
+        def needs_cleanup(self):
+            if source=='cleanup_attr':missing()
+            return False
+    def find(_):
+        if source=='lookup':missing()
+        return BadSpec()
+    monkeypatch.setattr(registry,'find_by_type',find)
+    with pytest.raises(RuntimeError,match='generator raised StopIteration') as error:
+        registry.add(spec)
+    assert isinstance(error.value.__cause__,StopIteration)
+
+
+def test_cleanup_value_truth_test_keeps_stopiteration(monkeypatch):
+    registry=ProvidersRegistrations()
+    dep=ProviderDependency(provides=int,parameter=inspect.Parameter('value',inspect.Parameter.POSITIONAL_OR_KEYWORD,annotation=int))
+    spec=ProviderSpec(provides=str,instance='value',lifetime=Lifetime.TRANSIENT,scope=Scope.APP,is_async=False,is_any_dependency_async=False,needs_cleanup=False,dependencies=[dep])
+    class BadBool:
+        def __bool__(self):
+            raise StopIteration('outside generator')
+    monkeypatch.setattr(registry,'find_by_type',lambda _:SimpleNamespace(needs_cleanup=BadBool()))
+    with pytest.raises(StopIteration,match='outside generator'):
+        registry.add(spec)
+
+
+def test_explicit_step_scope_owns_intermediate_cleanup():
+    c=make_container()
+    events=[]
+    class RequestResource:pass
+    class StepResource:pass
+    def request_resource():
+        events.append('open request')
+        try:yield RequestResource()
+        finally:events.append('close request')
+    def step_resource(request):
+        assert isinstance(request,RequestResource)
+        events.append('open step')
+        try:yield StepResource()
+        finally:events.append('close step')
+    step_resource.__annotations__={'request':RequestResource}
+    c.add_generator(request_resource,provides=RequestResource,scope=Scope.REQUEST)
+    c.add_generator(step_resource,provides=StepResource,scope=Scope.STEP)
+    r=c.compile()
+    try:
+        for _ in range(3):
+            with r.enter_scope(Scope.STEP) as step:
+                assert step.resolve(StepResource) is step.resolve(StepResource)
+        assert events==['open request','open step','close step','close request']*3
+    finally:c.close()
+
+
+def test_public_all_sync_provider_with_async_dependency_keeps_await_and_order():
+    c=make_container()
+    events=[]
+    class Config:pass
+    class Service:
+        def __init__(self,label):self.label=label
+    async def config():
+        await asyncio.sleep(0)
+        events.append('config')
+        return Config()
+    def first(config):
+        assert isinstance(config,Config)
+        events.append('first')
+        return Service('first')
+    first.__annotations__={'config':Config}
+    async def second():
+        events.append('second')
+        return Service('second')
+    c.add_factory(config,provides=Config,lifetime=Lifetime.TRANSIENT,scope=Scope.APP)
+    c.add_factory(first,provides=Service,component=1,lifetime=Lifetime.TRANSIENT,scope=Scope.APP)
+    c.add_factory(second,provides=Service,component=2,lifetime=Lifetime.TRANSIENT,scope=Scope.APP)
+    r=c.compile()
+    async def check():
+        values=await r.aresolve(All[Service])
+        assert [x.label for x in values]==['first','second']
+        assert events==['config','first','second']
+        await c.aclose()
+    asyncio.run(check())
+
+
+def test_async_generator_exception_delivery_and_repeated_scope():
+    c=make_container()
+    events=[]
+    class Resource:pass
+    async def resource():
+        events.append('open')
+        try:yield Resource()
+        except ValueError:events.append('suppressed')
+        finally:events.append('close')
+    c.add_generator(resource,provides=Resource,scope=Scope.REQUEST)
+    r=c.compile()
+    async def check():
+        for _ in range(2):
+            with pytest.raises(ValueError,match='scope error'):
+                async with r.enter_scope(Scope.REQUEST) as scope:
+                    assert isinstance(await scope.aresolve(Resource),Resource)
+                    raise ValueError('scope error')
+        assert events==['open','suppressed','close']*2
+        await c.aclose()
+    asyncio.run(check())
+
+
+def test_generic_index_custom_metaclass_origin_and_restore():
+    class CustomMeta(type):
+        pass
+    class CustomBox(Generic[T], metaclass=CustomMeta):
+        pass
+    registry=OpenGenericRegistry()
+    register(registry,Box[T],factory_a)
+    assert registry.find_best_match(CustomBox[int]) is None
+    register(registry,CustomBox[T],factory_b)
+    assert registry.find_best_match(CustomBox[int]).spec.provider is factory_b
+    snapshot=registry.snapshot()
+    registry.restore(snapshot)
+    assert registry.find_best_match(CustomBox[int]).spec.provider is factory_b
+    assert registry.find_best_match(Box[int]).spec.provider is factory_a
+
+
+def test_async_generator_standalone_helper_keeps_deferred_cleanup():
+    from diwire._internal.resolvers.assembly import compiler
+    events=[]
+    async def generator():
+        events.append('start')
+        try:yield 42
+        finally:events.append('close')
+    workflow=SimpleNamespace(provider_attribute='generator',is_provider_async=True,slot=123)
+    scope=SimpleNamespace(_cleanup_callbacks=[])
+    async def check():
+        pending=compiler._build_local_value_async_no_arguments(
+            resolver=SimpleNamespace(_cleanup_enabled=True),workflow=workflow,
+            provider_scope_resolver=scope,provider=generator)
+        assert events==[]
+        assert await pending==42
+        assert events==['start']
+        _,close=scope._cleanup_callbacks.pop()
+        await close(None,None,None)
+        assert events==['start','close']
+    asyncio.run(check())

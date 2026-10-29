@@ -1,0 +1,49 @@
+from __future__ import annotations
+import gc
+import types
+from typing import Any, Generic, TypeVar
+from collections.abc import AsyncGenerator
+import pytest
+from diwire import Scope, Lifetime
+from bench_candidates import container
+
+T=TypeVar('T')
+
+@pytest.mark.parametrize('count',[16,64,256])
+def test_origin_registration(benchmark: Any,count: int) -> None:
+    roots=tuple(types.new_class(f'ProtectedRepo{i}',(Generic[T],)) for i in range(count))
+    current=None
+    def setup():
+        nonlocal current
+        current=container()
+        gc.collect()
+        return (current,),{}
+    def run(c):
+        for root in roots:c.add(root,provides=root,lifetime=Lifetime.SCOPED,scope=Scope.APP)
+    def teardown(c):
+        nonlocal current
+        c.close()
+        current=None
+    try:benchmark.pedantic(run,setup=setup,teardown=teardown,iterations=1,rounds=12,warmup_rounds=3)
+    finally:
+        if current is not None:teardown(current)
+
+@pytest.mark.parametrize('count',[16,64])
+def test_unused_async_gen_compile(benchmark: Any,count: int) -> None:
+    keys=tuple(type(f'Resource{i}',(),{}) for i in range(count))
+    async def resource() -> AsyncGenerator[object,None]:yield object()
+    current=None
+    def setup():
+        nonlocal current
+        current=container()
+        for key in keys:current.add_generator(resource,provides=key,lifetime=Lifetime.SCOPED,scope=Scope.REQUEST)
+        gc.collect()
+        return (current,),{}
+    def run(c):c.compile()
+    def teardown(c):
+        nonlocal current
+        c.close()
+        current=None
+    try:benchmark.pedantic(run,setup=setup,teardown=teardown,iterations=1,rounds=12,warmup_rounds=3)
+    finally:
+        if current is not None:teardown(current)

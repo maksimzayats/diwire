@@ -1,0 +1,27 @@
+diff --git a/src/diwire/_internal/providers.py b/src/diwire/_internal/providers.py
+index fa2147a..5567b12 100644
+--- a/src/diwire/_internal/providers.py
++++ b/src/diwire/_internal/providers.py
+@@ -270,11 +270,17 @@ class ProvidersRegistrations:
+         while has_changes:
+             has_changes = False
+             for spec in self.values():
+-                dependency_needs_cleanup = any(
+-                    dependency_spec.needs_cleanup
+-                    for dependency in spec.dependencies
+-                    if (dependency_spec := self.find_by_type(dependency.provides))
+-                )
++                dependency_needs_cleanup = False
++                for dependency in spec.dependencies:
++                    try:
++                        dependency_spec = self.find_by_type(dependency.provides)
++                        cleanup = dependency_spec.needs_cleanup if dependency_spec else False
++                    except StopIteration as error:
++                        msg = "generator raised StopIteration"
++                        raise RuntimeError(msg) from error
++                    if cleanup:
++                        dependency_needs_cleanup = True
++                        break
+                 needs_cleanup = (
+                     spec.generator is not None
+                     or spec.context_manager is not None

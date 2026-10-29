@@ -1,0 +1,136 @@
+"""Reproduce the five independent proof experiments on one dedicated Linux runner."""
+import hashlib
+import json
+import os
+import random
+import shutil
+import statistics as stats
+import subprocess
+import sys
+from pathlib import Path
+
+BASE='6f225bf30bc8dc5e9f0f907c126396534ad6aef9'
+PACKAGE=Path(__file__).resolve().parent
+REPO=PACKAGE.parents[1]
+ROOT=Path(os.environ.get('STUDY_ROOT','/tmp/diwire-five-study'))
+ROOT.mkdir()
+OUT=ROOT/'evidence'
+OUT.mkdir()
+CPU=min(os.sched_getaffinity(0))
+os.sched_setaffinity(0,{CPU})
+for name in ('bench_candidates.py','bench_targeted.py','bench_controls.py','test_proof_semantics.py','conftest.py'):
+    shutil.copyfile(PACKAGE/(name+'.txt'),ROOT/name)
+shutil.copyfile(PACKAGE/'protocol.json',ROOT/'protocol.json')
+(ROOT/'bench_normalized.py').write_text((ROOT/'bench_candidates.py').read_text().replace('range(5000)','range(25000)').replace('== 5000','== 25000'))
+(ROOT/'bench_late_batched.py').write_text('''from tests.performance.test_cleanup_registration_workloads import test_benchmark_diwire_late_cleanup_registration as original_test
+class Batched:
+    def __init__(self, benchmark):
+        self.benchmark=benchmark
+        self.extra_info=benchmark.extra_info
+    def pedantic(self,target,*,setup,teardown,**kwargs):
+        def many_setup():return ([setup() for _ in range(16)],),{}
+        def many_run(cases):
+            for args,kw in cases:target(*args,**kw)
+        def many_teardown(cases):
+            for args,kw in cases:teardown(*args,**kw)
+        self.extra_info['independent_registrations_per_round']=16
+        self.benchmark.pedantic(many_run,setup=many_setup,teardown=many_teardown,**kwargs)
+def test_late_registration_batch(benchmark):original_test(Batched(benchmark))
+''')
+for i in range(6):
+    source=f'h00{i}'
+    path=ROOT/'candidates'/source
+    path.parent.mkdir(exist_ok=True)
+    subprocess.run(['git','-C',str(REPO),'worktree','add','--detach',str(path),BASE],check=True)
+    if i:
+        subprocess.run(['git','-C',str(path),'apply',str(PACKAGE/f'{source}.patch')],check=True)
+
+PLAN={
+ 'h001':{'file':'bench_candidates.py','select':'async_gen','primary':'test_async_gen[False]'},
+ 'h002':{'file':'bench_candidates.py','select':'scope','primary':'test_scope[STEP]'},
+ 'h003':{'file':'bench_candidates.py','select':'public_all','primary':'test_public_all[sync]'},
+ 'h004':{'file':'bench_late_batched.py','select':'late_registration_batch','primary':'test_late_registration_batch'},
+ 'h005':{'file':'bench_targeted.py','select':'sparse_generic_compile','primary':'test_sparse_generic_compile[256-64]'},
+}
+protocol={
+ 'baseline':BASE,'cpu':CPU,'python':sys.version,'plan':PLAN,
+ 'scope':'Independent hosted Linux study. Never pool with local ARM64 Docker VM observations.',
+ 'calibration':'3 alternating identical-source process pairs per group, all abs median throughput effects <=3%. No unchanged retries.',
+ 'official':'7 alternating independent process pairs. Primary median >=5%, >=6/7 positive pairs, bootstrap95 lower >0, all primary process round CV<=10%.',
+ 'protection':'Other cells median >=-5%. A secondary cell whose CV exceeds 10% gets one seven-pair longer-batch confirmation (5x same operations); no pooling or primary rerun.',
+ 'late_registration':'Batch 16 independent existing 32-consumer public late-registration actions per round. Setup and teardown remain excluded and verified for every container.',
+ 'sparse_generics':'256 registered generic roots, only 64 roots used by consumers. 64/16 is protected. All type and registration setup excluded.',
+ 'prior_failures':'Local generic compile reducer +4.20% and dense generic index +0.846% failed 5% floor. Local sparse small control failed calibration. Keep all local evidence; no broad compile claim.',
+}
+(OUT/'hosted-protocol.json').write_text(json.dumps(protocol,indent=2)+'\n')
+
+def run(source,label,file,select=None,timed=True):
+    env=dict(os.environ,PYTHONPATH=f'{ROOT}/candidates/{source}/src:{ROOT}/candidates/{source}:{ROOT}',PYTHONHASHSEED='0',DIWIRE_EXPECT_SOURCE=f'{ROOT}/candidates/{source}/src/diwire')
+    cmd=[sys.executable,'-m','pytest',str(ROOT/file),'-q']
+    if timed:cmd += ['--benchmark-only','--benchmark-save-data','--benchmark-json',str(OUT/f'{label}.json')]
+    if select:cmd += ['-k',select]
+    with (OUT/f'{label}.log').open('w') as log:subprocess.run(cmd,cwd=ROOT,env=env,stdout=log,stderr=subprocess.STDOUT,check=True)
+    manifest={'command':cmd,'source':source,'inputs_sha256':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(ROOT.glob('*.py'))},'protocol_sha256':hashlib.sha256((OUT/'hosted-protocol.json').read_bytes()).hexdigest()}
+    (OUT/f'{label}.manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
+    print(label,'complete',flush=True)
+
+def compare(labels):
+    effects={};noise={};means={}
+    for first,second in labels:
+        a={b['name']:b for b in json.loads((OUT/f'{first}.json').read_text())['benchmarks']}
+        b={b['name']:b for b in json.loads((OUT/f'{second}.json').read_text())['benchmarks']}
+        assert set(a)==set(b)
+        for name in a:
+            effects.setdefault(name,[]).append(100*(a[name]['stats']['mean']/b[name]['stats']['mean']-1))
+            noise.setdefault(name,[]).extend([100*x['stats']['stddev']/x['stats']['mean'] for x in (a[name],b[name])])
+            means.setdefault(name,{'baseline':[],'candidate':[]})
+            means[name]['baseline'].append(a[name]['stats']['mean'])
+            means[name]['candidate'].append(b[name]['stats']['mean'])
+    rng=random.Random(20261029)
+    result={}
+    for name,gains in effects.items():
+        boot=sorted(stats.median(rng.choices(gains,k=len(gains))) for _ in range(10000))
+        result[name]={'paired_gains_percent':gains,'median_gain_percent':stats.median(gains),'positive_pairs':sum(g>0 for g in gains),'bootstrap95':[boot[249],boot[9749]],'max_process_cv_percent':max(noise[name]),'means_seconds':means[name]}
+    return result
+
+summary={}
+for source,case in PLAN.items():
+    run(source,f'semantics-{source}','test_proof_semantics.py',timed=False)
+    labels=[]
+    for i in range(3):
+        for role in (('a','b') if i%2==0 else ('b','a')):run('h000',f'cal-{source}-{i}-{role}',case['file'],case['select'])
+        labels.append((f'cal-{source}-{i}-a',f'cal-{source}-{i}-b'))
+    cal=compare(labels)
+    (OUT/f'calibration-{source}.json').write_text(json.dumps(cal,indent=2)+'\n')
+    if any(abs(r['median_gain_percent'])>3 for r in cal.values()):raise SystemExit(f'{source} calibration failed')
+    labels=[]
+    for i in range(7):
+        for role in (('h000',source) if i%2==0 else (source,'h000')):run(role,f'official-{source}-{i}-{role}',case['file'],case['select'])
+        labels.append((f'official-{source}-{i}-h000',f'official-{source}-{i}-{source}'))
+    result=compare(labels)
+    primary=result[case['primary']]
+    primary['passed']=primary['median_gain_percent']>=5 and primary['positive_pairs']>=6 and primary['bootstrap95'][0]>0 and primary['max_process_cv_percent']<=10
+    for name,r in result.items():
+        if name!=case['primary'] and r['max_process_cv_percent']>10:
+            assert case['file']=='bench_candidates.py',name
+            confirmations=[]
+            for i in range(7):
+                for role in (('h000',source) if i%2==0 else (source,'h000')):run(role,f'confirm-{source}-{i}-{role}','bench_normalized.py',name)
+                confirmations.append((f'confirm-{source}-{i}-h000',f'confirm-{source}-{i}-{source}'))
+            r['confirmation']=compare(confirmations)[name]
+    summary[source]={'primary':case['primary'],'results':result}
+    (OUT/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    print('DECISION',source,primary,flush=True)
+    if not primary['passed']:raise SystemExit(f'{source} primary failed')
+    for name,r in result.items():
+        protected=r.get('confirmation',r)
+        if name!=case['primary'] and (protected['median_gain_percent'] < -5 or protected['max_process_cv_percent']>10):raise SystemExit(f'{source} protected cell failed: {name}')
+# Check broader costs after the primary estimates are fixed.
+for source,file,selection in [('h001','bench_controls.py','unused_async_gen_compile'),('h005','bench_controls.py','origin_registration'),('h004','bench_candidates.py','cleanup'),('h005','bench_candidates.py','origins')]:
+    tag=f'{source}-{selection}'
+    labels=[]
+    for i in range(3):
+        for role in (('h000',source) if i%2==0 else (source,'h000')):run(role,f'broad-{tag}-{i}-{role}',file,selection)
+        labels.append((f'broad-{tag}-{i}-h000',f'broad-{tag}-{i}-{source}'))
+    (OUT/f'broad-{tag}.json').write_text(json.dumps(compare(labels),indent=2)+'\n')
+print('ALL_PRIMARY_TARGETS_PASSED',flush=True)

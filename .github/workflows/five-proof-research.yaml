@@ -1,0 +1,29 @@
+name: Five optimization proof study
+on:
+  push:
+    branches: [research/five-optimization-proofs-20261029]
+permissions:
+  contents: read
+jobs:
+  measure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.13.6'
+      - name: Install fixed runtime and locked dependencies
+        run: uv sync --locked --python 3.14.10 --group dev --group docs
+      - name: Run frozen independent proof study
+        run: uv run --locked python performance-evidence/2026-10-29-five-issues/hosted_study.py.txt
+      - name: Save all complete and partial evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: five-proof-study
+          path: /tmp/diwire-five-study/evidence/
+          include-hidden-files: true
+          if-no-files-found: error

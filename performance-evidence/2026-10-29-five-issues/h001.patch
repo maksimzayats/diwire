@@ -1,0 +1,80 @@
+diff --git a/src/diwire/_internal/resolvers/assembly/compiler.py b/src/diwire/_internal/resolvers/assembly/compiler.py
+index 4cf284c..2e2d0d2 100644
+--- a/src/diwire/_internal/resolvers/assembly/compiler.py
++++ b/src/diwire/_internal/resolvers/assembly/compiler.py
+@@ -142,6 +142,7 @@ class _ResolverRuntime:
+     dep_eq_slot_by_key: dict[Any, int]
+     dep_type_by_slot: dict[int, Any]
+     provider_by_slot: dict[int, Any]
++    async_cm_by_slot: dict[int, Any]
+     thread_lock_by_slot: dict[int, threading.Lock]
+     async_lock_by_slot: dict[int, asyncio.Lock]
+     cache_slots_by_owner_level: dict[int, tuple[int, ...]]
+@@ -311,6 +312,11 @@ class ResolversAssemblyCompiler:
+             dep_eq_slot_by_key=dep_eq_slot_by_key,
+             dep_type_by_slot=dep_type_by_slot,
+             provider_by_slot=provider_by_slot,
++            async_cm_by_slot={
++                workflow.slot: asynccontextmanager(provider_by_slot[workflow.slot])
++                for workflow in plan.workflows
++                if workflow.provider_attribute == "generator" and workflow.is_provider_async
++            },
+             thread_lock_by_slot=thread_lock_by_slot,
+             async_lock_by_slot=async_lock_by_slot,
+             cache_slots_by_owner_level=cache_slots_by_owner_level,
+@@ -3303,6 +3309,7 @@ async def _build_local_value_async(
+         if workflow.provider_attribute == "factory" and workflow.is_provider_async:
+             return await provider()
+         return await _build_local_value_async_no_arguments(
++            runtime=runtime,
+             resolver=resolver,
+             workflow=workflow,
+             provider_scope_resolver=provider_scope_resolver,
+@@ -3328,7 +3335,7 @@ async def _build_local_value_async(
+         if workflow.is_provider_async:
+             if resolver._cleanup_enabled:
+                 provider_cm = _call_provider(
+-                    callable_obj=asynccontextmanager(provider),
++                    callable_obj=runtime.async_cm_by_slot[workflow.slot],
+                     argument_parts=argument_parts,
+                 )
+                 value = await provider_cm.__aenter__()
+@@ -3436,6 +3443,7 @@ def _build_local_value_sync_no_arguments(
+ 
+ def _build_local_value_async_no_arguments(
+     *,
++    runtime: _ResolverRuntime | None = None,
+     resolver: Any,
+     workflow: ProviderWorkflowPlan,
+     provider_scope_resolver: Any,
+@@ -3454,7 +3462,11 @@ def _build_local_value_async_no_arguments(
+ 
+             if workflow.is_provider_async:
+                 if resolver._cleanup_enabled:
+-                    provider_async_cm = asynccontextmanager(provider)()
++                    provider_async_cm = (
++                        runtime.async_cm_by_slot[workflow.slot]
++                        if runtime is not None
++                        else asynccontextmanager(provider)
++                    )()
+                     value = await provider_async_cm.__aenter__()
+                     provider_scope_resolver._cleanup_callbacks.append(
+                         (1, provider_async_cm.__aexit__)
+diff --git a/tests/unit/internal/test_resolver_assembly_compiler_branches.py b/tests/unit/internal/test_resolver_assembly_compiler_branches.py
+index 76dad89..93d6636 100644
+--- a/tests/unit/internal/test_resolver_assembly_compiler_branches.py
++++ b/tests/unit/internal/test_resolver_assembly_compiler_branches.py
+@@ -237,6 +237,13 @@ def _runtime(
+         },
+         cache_slots_by_owner_level=cache_slots_by_owner_level,
+         next_scope_options_by_level=next_scope_options_by_level,
++        async_cm_by_slot={
++            workflow.slot: compiler_module.asynccontextmanager(provider_by_slot[workflow.slot])
++            for workflow in workflows
++            if workflow.provider_attribute == "generator"
++            and workflow.is_provider_async
++            and provider_by_slot is not None
++        },
+     )
+ 
+ 

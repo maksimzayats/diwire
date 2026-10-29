@@ -1,0 +1,22 @@
+import hashlib
+import os
+import platform
+import sys
+from pathlib import Path
+import diwire
+
+def pytest_sessionstart(session):
+    expected = os.environ.get('DIWIRE_EXPECT_SOURCE')
+    if expected:
+        assert Path(diwire.__file__).resolve().parent == Path(expected), diwire.__file__
+
+def pytest_benchmark_update_json(output_json):
+    package=Path(diwire.__file__).resolve().parent
+    output_json['study_provenance']={
+        'diwire_file':diwire.__file__, 'python':sys.version,
+        'platform':platform.platform(), 'affinity':sorted(os.sched_getaffinity(0)),
+        'library_sha256':{str(p.relative_to(package)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(package.rglob('*.py'))},
+        'lock_sha256':hashlib.sha256((package.parent.parent/'uv.lock').read_bytes()).hexdigest(),
+        'harness_sha256':hashlib.sha256(Path('/study/bench_candidates.py').read_bytes()).hexdigest(),
+        'protocol_sha256':hashlib.sha256(Path('/study/protocol.json').read_bytes()).hexdigest(),
+    }

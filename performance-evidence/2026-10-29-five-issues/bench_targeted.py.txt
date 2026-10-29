@@ -1,0 +1,38 @@
+from __future__ import annotations
+import gc
+import types
+from dataclasses import make_dataclass
+from typing import Generic,TypeVar,Any
+import pytest
+from diwire import Lifetime,Scope
+from bench_candidates import container
+from tests.performance.test_cleanup_registration_workloads import test_benchmark_diwire_late_cleanup_registration as test_late_cleanup_registration
+
+T=TypeVar('T')
+
+@pytest.mark.parametrize('template_count,consumer_count',[(64,16),(256,64)])
+def test_sparse_generic_compile(benchmark: Any,template_count: int,consumer_count: int) -> None:
+    roots=tuple(types.new_class(f'Repo{i}',(Generic[T],)) for i in range(template_count))
+    selected=roots[-consumer_count:]
+    keys=tuple(root[int] for root in selected)
+    consumers=tuple(make_dataclass(f'Consumer{i}',[('repo',key)]) for i,key in enumerate(keys))
+    current=None
+    def setup():
+        nonlocal current
+        current=container()
+        for root in roots:current.add(root,provides=root,scope=Scope.APP,lifetime=Lifetime.SCOPED)
+        for cls in consumers:current.add(cls,scope=Scope.APP,lifetime=Lifetime.SCOPED)
+        gc.collect()
+        return (current,),{}
+    def run(c):c.compile()
+    def teardown(c):
+        nonlocal current
+        for root,key,cls in zip(selected,keys,consumers):
+            instance=c.resolve(cls)
+            assert isinstance(instance.repo,root)
+            assert instance.repo is c.resolve(key)
+        c.close()
+        current=None
+    try:benchmark.pedantic(run,setup=setup,teardown=teardown,iterations=1,rounds=12,warmup_rounds=3)
+    finally:
+        if current is not None:teardown(current)
