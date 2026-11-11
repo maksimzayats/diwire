@@ -156,6 +156,10 @@ filterwarnings = [
     # These come from pytest-asyncio internals and are not related to test code
     "ignore:unclosed <socket.socket:ResourceWarning",
     "ignore:unclosed event loop:ResourceWarning",
+    # pytest 9.2 applies these filters while it loads plugins, and the anyio plugin
+    # (anyio < 4.15) imports the renamed _pytest.python.CallSpec2. Remove this entry when
+    # anyio is upgraded; anyio >= 4.15 needs starlette >= 1.7 first.
+    "ignore:_pytest.python.CallSpec2 has been renamed:pytest.PytestDeprecationWarning:anyio.pytest_plugin",
 ]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
